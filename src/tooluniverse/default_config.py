@@ -102,6 +102,7 @@ default_tool_files = {
     "loinc": os.path.join(current_dir, "data", "loinc_tools.json"),
     "uniprot": os.path.join(current_dir, "data", "uniprot_tools.json"),
     "cellosaurus": os.path.join(current_dir, "data", "cellosaurus_tools.json"),
+    "ncbi_datasets": os.path.join(current_dir, "data", "ncbi_datasets_tools.json"),
     # 'software': os.path.join(current_dir, 'data', 'software_tools.json'),
     # Package tools - categorized software tools
     "software_bioinformatics": os.path.join(
@@ -384,8 +385,6 @@ default_tool_files = {
     "mgnify_expanded": os.path.join(current_dir, "data", "mgnify_expanded_tools.json"),
     # SGD - Saccharomyces Genome Database (yeast genes, phenotypes, interactions)
     "sgd": os.path.join(current_dir, "data", "sgd_tools.json"),
-    # NCBI Datasets API v2 - Gene info, orthologs, taxonomy, genome metadata
-    "ncbi_datasets": os.path.join(current_dir, "data", "ncbi_datasets_tools.json"),
     # EBI Taxonomy - Taxonomic classification, lineage, name resolution
     "ebi_taxonomy": os.path.join(current_dir, "data", "ebi_taxonomy_tools.json"),
     # Alliance of Genome Resources - Cross-species gene data from 7 model organisms
