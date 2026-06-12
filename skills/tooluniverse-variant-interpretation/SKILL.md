@@ -36,7 +36,7 @@ When asked about a variant's significance, query ClinVar/gnomAD/CIViC FIRST. Nev
 
 ```
 Phase 1: VARIANT IDENTITY        → Normalize HGVS, map gene/transcript/consequence
-Phase 2: CLINICAL DATABASES       → ClinVar, gnomAD, OMIM, ClinGen, COSMIC, SpliceAI
+Phase 2: CLINICAL DATABASES       → ClinVar, gnomAD, OMIM, ClinGen, GeneReviews/MedGen, COSMIC, SpliceAI
 Phase 2.5: REGULATORY CONTEXT     → ChIPAtlas, ENCODE (non-coding variants only)
 Phase 3: COMPUTATIONAL PREDICTIONS → CADD, AlphaMissense, EVE, SIFT/PolyPhen
 Phase 4: STRUCTURAL ANALYSIS      → PDB/AlphaFold2, domains, functional sites (VUS/novel)
@@ -64,7 +64,7 @@ Capture: HGVS notation (c. and p.), gene symbol, canonical transcript (MANE Sele
 
 ## Phase 2: Clinical Databases
 
-Tools: `ClinVar_search_variants`, `gnomad_search_variants`, `gnomad_get_variant`, `OMIM_search`, `OMIM_get_entry`, `ClinGen_search_gene_validity`, `ClinGen_search_dosage_sensitivity`, `ClinGen_search_actionability`, `COSMIC_search_mutations`, `COSMIC_get_mutations_by_gene`, `DisGeNET_search_gene`, `DisGeNET_get_vda`, `SpliceAI_predict_splice`, `SpliceAI_get_max_delta`, `civic_get_variants_by_gene`, `civic_search_evidence_items`, `civic_search_assertions`
+Tools: `ClinVar_search_variants`, `gnomad_search_variants`, `gnomad_get_variant`, `OMIM_search`, `OMIM_get_entry`, `ClinGen_search_gene_validity`, `ClinGen_search_dosage_sensitivity`, `ClinGen_search_actionability`, `MedGen_search_conditions`, `COSMIC_search_mutations`, `COSMIC_get_mutations_by_gene`, `DisGeNET_search_gene`, `DisGeNET_get_vda`, `SpliceAI_predict_splice`, `SpliceAI_get_max_delta`, `civic_get_variants_by_gene`, `civic_search_evidence_items`, `civic_search_assertions`
 
 > **gnomAD two-step workflow**: `gnomad_search_variants` only accepts rsIDs or variant IDs (not gene names). Search by rsID first, then use the returned `variant_id` with `gnomad_get_variant` to get population allele frequencies.
 >
@@ -73,6 +73,8 @@ Tools: `ClinVar_search_variants`, `gnomad_search_variants`, `gnomad_get_variant`
 > **OncoKB note**: Demo mode only supports BRAF, TP53, ROS1. For other genes, set `ONCOKB_API_TOKEN` environment variable.
 
 Use SpliceAI for: intronic variants near splice sites, synonymous variants, exonic variants near splice junctions.
+
+Use GeneReviews/NCBI Bookshelf disease chapters when disease spectrum, inheritance, or mechanism affects ACMG evidence routing. Start with `MedGen_search_conditions(query="<gene or disease> GeneReviews")`; if the chapter is not exposed in ToolUniverse results, use PubMed/EuropePMC or direct NCBI Bookshelf lookup. GeneReviews supports mechanism and clinical-context interpretation, but it is not a VCEP specification and should not be used alone as primary variant-level evidence.
 
 See `CODE_PATTERNS.md` for implementation details.
 
@@ -295,7 +297,7 @@ If a primary tool fails, use these alternatives:
 
 **Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
 
-**Truncating Variant**: Check LOF mechanism, NMD escape, alternative isoforms, ClinGen LOF curation. Apply PVS1 at appropriate strength.
+**Truncating Variant**: Check LOF mechanism, NMD escape, alternative isoforms, and curated disease-mechanism sources before applying PVS1. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. Apply PVS1 only to the disease context where LoF/haploinsufficiency is established.
 
 **Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential. Apply PP3/BP7 based on scores.
 

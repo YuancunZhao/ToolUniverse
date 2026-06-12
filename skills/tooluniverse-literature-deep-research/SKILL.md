@@ -114,6 +114,10 @@ Non-bio: skip bio tools, use ArXiv/DBLP/OSF. Cross-domain: resolve bio entities 
 
 **Methodology stays internal. Report shows findings, not process.**
 
+### Figure-Level Evidence
+
+When a claim depends on a paper figure, supplement image, pedigree, gel, blot, Sanger trace, RT-PCR/minigene panel, functional assay plot, or other visual evidence, use `tooluniverse-literature-figure-evidence-extraction` after locating the article and figure. The literature review step should retrieve the source, caption, page/panel, and surrounding text; the figure-extraction overlay should convert the visual evidence into structured, auditable facts. Downstream domain or ACMG skills should then interpret those facts.
+
 ### 2.1 Query Strategy
 **Step 1: Seeds** (15-30 core papers): domain-specific title searches with date/sort filters.
 **Step 2: Citation expansion**: `PubMed_get_cited_by`, `EuropePMC_get_citations/references`, `PubMed_get_related`, `SemanticScholar_get_recommendations`, `OpenCitations_get_citations`

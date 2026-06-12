@@ -162,6 +162,8 @@
 
 ## PVS1 Application for Truncating Variants
 
+Before using this table, verify that LoF/haploinsufficiency is an established mechanism for the exact gene-disease context. If the gene has dominant and recessive disease associations, mixed mechanisms, structural/complex biology, or unclear HI/LoF support, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` first and document whether PVS1 is allowed.
+
 | Scenario | PVS1 Strength |
 |----------|---------------|
 | Canonical LOF gene, NMD predicted | Very Strong |
