@@ -60,3 +60,28 @@ ClinGen VCEP specifications may modify:
 - or interactions with PS3, PM1, PP3, PS4, and other criteria.
 
 Use current VCEP guidance when available.
+
+## ACGS 2024 Practice Additions
+
+ACGS 2024 is used here as practice guidance for unresolved generic PS1/PM5 edge cases, not as a separate selectable profile.
+
+PS1 additions:
+
+- Full `PS1` is appropriate when the comparison variant is independently Pathogenic.
+- `PS1_Moderate` can be considered when the comparison variant is independently Likely Pathogenic rather than Pathogenic.
+- Initiation codon PS1-style use requires the same predicted effect on translation initiation and independent comparison evidence.
+- Non-coding RNA genes require a disease-specific or VCEP-supported analogous rule; do not automatically transfer protein missense logic.
+
+PM5 additions:
+
+- Full `PM5` is appropriate when the same-residue comparison missense variant is independently Pathogenic.
+- `PM5_Supporting` can be considered when the comparison is Likely Pathogenic or supported by limited case evidence.
+- Compare the variant under assessment with the comparison variant using REVEL, Grantham distance, BLOSUM62, conservation, and protein/domain context when available.
+- PM5 is stronger when the variant under assessment is predicted to be similarly or more disruptive than the comparison variant.
+- In-frame deletion or duplication overlapping a residue with a P/LP missense variant can be considered only under gene-specific same-mechanism reasoning; avoid double counting with PM4.
+
+Shared safeguards:
+
+- PS1/PM5 cannot be used for the variant's own pathogenicity assertion.
+- Confirm that the comparison variant acts through the amino-acid or local protein effect, not through splicing.
+- Do not reuse the same clustering or residue evidence as both PM1 and PM5 unless a VCEP explicitly permits it.

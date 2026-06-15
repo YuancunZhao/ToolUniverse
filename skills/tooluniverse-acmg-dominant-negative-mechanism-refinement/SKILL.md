@@ -94,7 +94,7 @@ Use PVS1 only for a gene-disease context where LoF/haploinsufficiency is establi
 - If both haploinsufficiency and dominant-negative mechanisms are established, separate the evidence by disease, phenotype, transcript, and variant class.
 - If a gene has a recessive LoF disease and a separate dominant missense/in-frame or complex-mediated disease, PVS1 may be allowed only for the recessive LoF context unless curated evidence also supports LoF for the dominant context.
 
-Use `tooluniverse-acmg-pvs1-splicing-refinement` for RNA/splicing details, but apply this overlay first when LoF versus dominant-negative mechanism is unclear.
+Use `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` for baseline PVS1 strength after mechanism is resolved. Use `tooluniverse-acmg-pvs1-splicing-refinement` only for RNA/splicing details after the baseline branch is identified.
 
 ### PS3/BS3
 

@@ -15,6 +15,33 @@ This reference lists ACMG/AMP evidence criteria that should not be applied witho
 | `BP5` | Alternate molecular basis must explain the patient's phenotype. |
 | `BS2` | Healthy observation requires reliable unaffected status, age, penetrance, and disease ascertainment. |
 
+## ACGS 2024 PP4 Practice Guidance
+
+ACGS 2024 is used here as practice guidance, not as a separate selectable classification profile.
+
+PP4 can be considered when the patient's phenotype is specific for:
+
+- a single gene-disease entity;
+- a rare recognizable syndrome with a narrow genetic differential;
+- a rare combination of features where appropriate testing has excluded common alternatives;
+- a validated disease-specific biomarker pattern, including biochemical, imaging, methylation, pathology, or treatment-response evidence.
+
+Default PP4 handling:
+
+| Context | Handling |
+| --- | --- |
+| Broad or nonspecific features only | No PP4 |
+| Compatible phenotype but broad differential remains | Usually no PP4; VCEP-only supporting use |
+| Rare and recognizable phenotype with narrow differential and appropriate testing | `PP4_Supporting` |
+| Highly specific biomarker/clinical pattern with strong gene-disease fit | Consider `PP4_Moderate` |
+| Near-pathognomonic phenotype or validated disease-defining biomarker profile | Consider `PP4_Strong` only with VCEP, MDT, or guideline-level support |
+
+Double-counting guard:
+
+- If phenotype specificity increases PS2/PM6 de novo strength, do not also apply PP4 from the same specificity.
+- If a VCEP embeds phenotype specificity in PS4 case-counting or another criterion, do not add PP4 separately unless the VCEP permits it.
+- Do not apply PP4 from disease background alone when the patient's actual phenotype is missing.
+
 ## Default Behavior When Phenotype Is Missing
 
 - Do not apply the criterion.

@@ -42,6 +42,30 @@ This overlay requires a region-level source. A broad domain label or a high comp
 
 ---
 
+## Example 3b: Critical Residue Rule
+
+**Scenario**: A missense variant alters a residue type with an established disease-specific critical-residue rule, such as a collagen triple-helix glycine, an EGF-repeat cysteine imbalance, or a Cys/His zinc-finger coordination residue.
+
+**Expected behavior**:
+
+- Confirm the residue rule is established for the gene-disease context or a current VCEP.
+- Consider `PM1_Strong` only when guideline/VCEP-level evidence supports that residue class.
+- Do not use generic conservation alone to upgrade PM1 to Strong.
+
+---
+
+## Example 3c: Regional Constraint Source
+
+**Scenario**: DECIPHER regional constraint, CCR, MetaDome, or paralogous-residue evidence suggests the variant lies in an intolerant local region.
+
+**Expected behavior**:
+
+- Map coordinates carefully to the disease-relevant transcript/protein.
+- Record the source, version, region boundaries, and whether benign variation is absent or low.
+- Use as PM1 context only when it is regional/local evidence, not merely whole-gene missense intolerance.
+
+---
+
 ## Example 4: High MPC or AlphaMissense Only
 
 **Scenario**: A missense variant has a high MPC or AlphaMissense score, but no validated MDR membership, hotspot, critical domain, or benign-depleted region evidence is available.
@@ -98,6 +122,18 @@ This overlay requires a region-level source. A broad domain label or a high comp
 - Retain `PP2`.
 - Do not also apply `PM1_Supporting`, unless a current disease-specific VCEP rule permits both.
 - Record the weak regional evidence as context.
+
+---
+
+## Example 8b: BP1 Conflict
+
+**Scenario**: A missense variant is in a gene where LoF is the usual disease mechanism, but the local region also has reported pathogenic missense variants for a different dominant-negative disease context.
+
+**Expected behavior**:
+
+- Do not automatically apply BP1 from the LoF-only context.
+- Resolve the exact disease mechanism and inheritance context first.
+- Apply PM1/PP2/BP1 only in the disease context where the variant class is qualified.
 
 ---
 

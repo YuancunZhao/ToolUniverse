@@ -79,12 +79,30 @@ Use the retrieved disease description only to assess match to user-supplied phen
 
 Apply PP4 only when the supplied phenotype is highly specific for a disease with a single or narrow genetic etiology, or when a current VCEP explicitly defines phenotype specificity rules.
 
+ACGS 2024 practice guidance broadens the operational framing: PP4 can also be considered when the phenotype is a rare, highly characteristic combination of features with only a limited set of known genetic etiologies and the relevant genes have been appropriately assessed. The phenotype does not have to be absolutely pathognomonic for one gene, but it must be specific enough that a genotype-phenotype match is meaningful.
+
+Use this practical strength ladder unless a VCEP defines different disease-specific rules:
+
+| Phenotype evidence | Default PP4 handling |
+| --- | --- |
+| Broad, common, or nonspecific features such as isolated developmental delay, seizures, hearing loss, cardiomyopathy, or cancer predisposition without distinctive pattern | No PP4 |
+| Phenotype is compatible with the gene-disease association but many unrelated etiologies remain plausible | Usually no PP4, or `PP4_Supporting` only under a current VCEP rule |
+| Rare and recognizable phenotype or rare combination of features with a narrow genetic differential and appropriate testing strategy | `PP4_Supporting` |
+| Highly specific clinical, biochemical, imaging, methylation, electrophysiology, histopathology, or treatment-response pattern with strong gene-disease fit | Consider `PP4_Moderate` |
+| Near-pathognomonic disease-defining phenotype or validated disease-specific biomarker profile with very limited etiologies, after appropriate differential testing | Consider `PP4_Strong` only with VCEP, MDT, or guideline-level support |
+
+Evidence types that can support stronger PP4 include pathognomonic biochemical tests, disease-specific MRI patterns, methylation episignatures, muscle biopsy findings, functional clinical biomarkers, or clinical treatment response where those findings are recognized as disease-defining. Record the testing method and whether the differential diagnosis was adequately excluded.
+
+Do not double count phenotype specificity. If PS2/PM6 de novo evidence has already been upgraded because the proband phenotype is highly specific for the gene-disease association, do not also apply PP4 from the same phenotype unless a current VCEP explicitly permits both. If a VCEP folds phenotype specificity into PS4 case counting, do not add PP4 separately from the same affected-case ascertainment.
+
 Do not apply PP4 when:
 
 - No phenotype is supplied.
 - The phenotype is broad, common, or compatible with many unrelated genes.
 - The gene-disease association is weak or disputed.
 - The phenotype matches a different disease mechanism than the variant being interpreted.
+- The only support is that the gene is known for a phenotype, but the patient's actual features were not supplied.
+- The same phenotype specificity has already been used to upgrade PS2/PM6, PS4, or another VCEP-specific criterion.
 
 If phenotype is missing, ask:
 
@@ -154,6 +172,8 @@ BS2 requires reliable unaffected status. Please provide the individual's age, se
 
 Use `tooluniverse-acmg-de-novo-evidence-refinement` for de novo strength. This phenotype overlay only ensures that the proband phenotype matches the gene-disease context before de novo evidence is counted.
 
+When de novo evidence strength is increased because the phenotype is highly specific, treat that phenotype specificity as consumed for PS2/PM6 and do not apply a separate PP4 unless a VCEP explicitly allows separate use.
+
 ---
 
 ## Missing-Information Behavior
@@ -206,4 +226,5 @@ Phenotype-dependent evidence refinement:
 
 - Richards S, Aziz N, Bale S, et al. Standards and guidelines for the interpretation of sequence variants. Genet Med. 2015;17(5):405-424. PMID: 25741868. DOI: 10.1038/gim.2015.30.
 - Strande NT, Riggs ER, Buchanan AH, et al. Evaluating the Clinical Validity of Gene-Disease Associations: An Evidence-Based Framework Developed by the Clinical Genome Resource. Am J Hum Genet. 2017;100(6):895-906. PMID: 28552198. PMCID: PMC5473734.
+- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use as practice guidance for phenotype-specific PP4 stratification and phenotype double-counting safeguards.
 - Current ClinGen VCEP specifications for disease-specific PP4, PS4, segregation, de novo, and phenotype-match rules.

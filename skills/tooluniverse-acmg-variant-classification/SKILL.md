@@ -12,7 +12,7 @@ Each criterion (PS, PM, PP for pathogenic; BS, BP for benign) contributes a weig
 
 The hierarchy is: PVS1 (very strong) > PS (strong) > PM (moderate) > PP (supporting). On the benign side: BA1 (stand-alone) > BS (strong) > BP (supporting). A frameshift in a LOF-intolerant gene (PVS1) plus a ClinVar expert-panel pathogenic entry (PS1) is pathogenic. A single PP criterion alone is not. The combination rule is what matters.
 
-Two common errors to avoid: (1) seeing a "Pathogenic" ClinVar entry and stopping — that is PP5 (supporting) unless it has expert-panel review, not automatic confirmation; (2) treating arbitrary predictor disagreement as benign — PP3/BP4 should follow calibrated predictor rules or a VCEP specification, and non-applied prediction evidence is neutral rather than benign.
+Two common errors to avoid: (1) seeing a "Pathogenic" or "Benign" ClinVar entry and counting PP5/BP6 — ClinGen SVI recommends discontinuing PP5/BP6, so secondary assertions should be used as leads to retrieve primary evidence; (2) treating arbitrary predictor disagreement as benign — PP3/BP4 should follow calibrated predictor rules or a VCEP specification, and non-applied prediction evidence is neutral rather than benign.
 
 Always apply criteria conservatively. When evidence is ambiguous, leave the criterion unmet. Cite the source for every criterion you activate so clinicians can audit the reasoning.
 
@@ -48,8 +48,6 @@ When uncertain about any scientific fact, SEARCH databases first (PubMed, UniPro
 |------|---------------|-------|
 | `VariantValidator_validate_variant` | `variant_description`, `genome_build`, `select_transcripts` | genome_build="GRCh38" |
 | `VariantValidator_gene2transcripts` | `gene_symbol` | Returns MANE Select transcript |
-| `Tark_get_mane_transcripts` | `gene` (or `ensembl_id`/`refseq_id`) | Ensembl Tark MANE Select/Plus Clinical with ENST↔RefSeq pairing; lightweight cross-check of the canonical transcript namespace |
-| `Tark_get_transcript` | `stable_id` (e.g. "ENST00000380152") | Archived transcript record (assembly, biotype, coordinates, per-release versions) to resolve a specific transcript version |
 | `MyVariant_query_variants` | `query` | HGVS or rsID. Returns ClinVar, gnomAD, CADD, REVEL, SIFT, PolyPhen |
 | `EnsemblVEP_annotate_hgvs` | `hgvs_notation` | Consequence, colocated variants, ancestry gnomAD |
 | `gnomad_search_variants` | `query` | rsID to gnomAD variant ID |
@@ -71,7 +69,7 @@ When uncertain about any scientific fact, SEARCH databases first (PubMed, UniPro
 
 Wrong HGVS or wrong transcript cascades errors through every downstream criterion. Validate first.
 
-1. **Get MANE Select transcript**: `VariantValidator_gene2transcripts(gene_symbol="BRCA2")`. Cross-check the canonical transcript with `Tark_get_mane_transcripts(gene="BRCA2")` (returns the ENST↔RefSeq pairing, e.g. ENST00000380152.8 / NM_000059.4); use `Tark_get_transcript(stable_id="ENST00000380152")` when you need to pin a specific transcript version.
+1. **Get MANE Select transcript**: `VariantValidator_gene2transcripts(gene_symbol="BRCA2")`
 2. **Validate variant**: `VariantValidator_validate_variant(variant_description="NM_000059.4:c.5946delT", genome_build="GRCh38", select_transcripts="mane_select")`
 3. **Resolve gene IDs**: `MyGene_query_genes(query="BRCA2")` — extract Ensembl ID and UniProt accession. Filter results by `symbol == 'BRCA2'` (first hit may not match).
 4. **Record**: HGVS coding, HGVS protein, genomic coordinates, variant type (frameshift/missense/nonsense/splice/synonymous/in-frame indel).
@@ -114,6 +112,8 @@ Population AF is among the strongest evidence in either direction. A variant at 
 
 Use ancestry-specific AF, not just global. A variant at 8% in East Asian populations but rare globally is benign in that ancestry context. For BS1, the threshold depends on disease prevalence and inheritance — the default is 1% for common diseases, 0.1% for rare. When absence, extreme rarity, coverage adequacy, PM2 strength, or the `PVS1 + PM2_Supporting` combination affects classification, use `tooluniverse-acmg-pm2-absence-rarity-refinement`. That overlay follows the ClinGen SVI PM2 v1.0 recommendation: PM2 should default to Supporting strength, absence from a database is not evidence unless the allele and locus are adequately represented, BA1/BS1/BS2 override PM2, and valid `PVS1 + PM2_Supporting` can support Likely Pathogenic when no conflicting evidence is present.
 
+When benign-context evidence is possible, use `tooluniverse-acmg-benign-context-refinement` for BA1, BS1, BS2, BP2, and BP5. That overlay absorbs ACGS 2024 practice details without changing PM2: BA1/BS1 require disease prevalence, penetrance, allelic/genetic heterogeneity, inheritance, and max credible ancestry AF; BS2 requires well-phenotyped healthy individuals old enough for the disease's expected onset and penetrance; BP2 requires a clear cis/trans and inheritance context; BP5 requires an alternate P/LP molecular diagnosis that explains the patient's main phenotype. If disease threshold, phenotype, unaffected status, phase, or alternate-diagnosis context is missing, mark the specific benign criterion as `Not Assessed` and ask for the missing fields rather than weakening PM2.
+
 ```python
 gnomad_search_variants(query="rs28897743")          # get gnomAD variant ID
 gnomad_get_variant(variant_id="...")                 # per-ancestry frequencies
@@ -153,7 +153,7 @@ When PS1 may apply because the variant has the same predicted RNA-splicing event
 
 If the gene-disease context may involve dominant-negative mechanism, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PS1/PM5. Same amino acid or same residue evidence should not be transferred between dominant-negative, haploinsufficiency, splicing LoF, and unrelated gain-of-function mechanisms without same-mechanism support.
 
-PP5 applies when ClinVar shows Pathogenic with >= 2-star review (criteria provided, multiple submitters). Weight by the number of concordant submitters. Conflicting ClinVar interpretations mean neither PP5 nor BP6 should be applied. ClinGen has proposed downweighting PP5/BP6 — treat them as supporting, not strong.
+When a reputable source, ClinVar assertion, lab report, expert panel, or database label is the only basis for PP5 or BP6, use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`. That overlay follows Biesecker and Harrison 2018 / ClinGen SVI guidance recommending discontinuation of PP5/BP6. Do not count PP5/BP6 by default. Treat the source assertion as a lead, retrieve primary evidence, and route that evidence to the appropriate criteria. Conflicting ClinVar interpretations should trigger primary-evidence review rather than PP5/BP6 scoring.
 
 ```python
 ClinVar_search_variants(query="BRCA2 c.5946delT")
@@ -163,13 +163,15 @@ civic_get_variants_by_gene(gene_id=19)   # BRCA2 CIViC ID is 19
 
 ---
 
-## Phase 4: Functional Domain and Protein Analysis (PM1, PP2, BP1)
+## Phase 4: Functional Domain and Protein Analysis (PM1, PP2, BP1, PM4, BP3)
 
 Variants in well-established functional domains with known pathogenic variant enrichment are more likely pathogenic. PM1 (moderate pathogenic) requires the variant to be in a hotspot domain with low benign variation — use InterPro domain architecture and UniProt active/binding sites to assess. When a missense variant may qualify for PM1 because it lies in a constrained regional missense-depleted region, hotspot, or subdomain with low benign variation, use `tooluniverse-acmg-pm1-regional-missense-constraint-refinement`. That overlay adapts PMID:38645134 regional missense mutational intolerance guidance for PM1 while keeping prediction-only MPC/AlphaMissense evidence separate from PP3 and resolving PM1/PP2 selection: retain PM1 over PP2 when PM1 is met, retain PP2 over PM1_Supporting when only supporting regional evidence is met, and follow current VCEP rules when they differ.
 
 PP2 and BP1 are mutually exclusive. PP2 (supporting pathogenic) applies to missense in genes where missense is the known mechanism and benign missense rate is low (mis_z > 3.09). BP1 (supporting benign) applies to missense in genes where only truncating variants cause disease (LOF-only mechanism) — a missense in such a gene is unlikely to be pathogenic.
 
 If pathogenic missense variants act through a dominant-negative mechanism, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM1/PP2/BP1. BP1 is unsafe when pathogenic dominant-negative missense variants are established for the same disease context.
+
+When a protein length change may qualify for PM4 or BP3, use `tooluniverse-acmg-pm4-bp3-protein-length-refinement`. That overlay handles in-frame insertions/deletions, single amino-acid indels, repeat regions, stop-loss variants, and last-exon gain-of-function truncating variants. It applies ACGS 2024 practice guidance: a single amino-acid in-frame indel defaults to at most `PM4_Supporting` unless gene-specific evidence justifies moderate strength; PM4 is not used together with PVS1 for the same length-changing effect; BP3 is limited to in-frame indels in repetitive or low-complexity regions without known function; stop-loss variants with predicted nonstop decay route to PVS1 rather than PM4; and last-exon truncating variants in gain-of-function/altered-product contexts may route through PM4 rather than PVS1.
 
 ```python
 UniProt_get_function_by_accession(accession="P51587")        # active sites, binding sites
@@ -184,11 +186,13 @@ gnomad_get_gene_constraints(gene_symbol="BRCA2")              # mis_z for PP2/BP
 
 PVS1 is the strongest single pathogenic criterion. A null variant (nonsense/frameshift/canonical splice/initiation codon) in a gene where LOF is the established mechanism can activate PVS1, but the full strength depends on context.
 
-Apply PVS1 at full strength when: null variant + LOF is known mechanism for the exact gene-disease context + variant is not in the last exon or last 50bp of the penultimate exon + DECIPHER or equivalent transcript-specific evidence does not indicate predicted NMD escape + no rescue transcript exists. Downgrade PVS1 if the variant is in the last exon, in the last 50bp of the penultimate exon, in a DECIPHER-predicted NMD escape region, or otherwise likely to escape NMD. Do not use LoFTEE `50_BP_RULE:PASS` to exclude 5' NMD escape regions such as DECIPHER first-100-bp annotations. Downgrade to PVS1_Supporting if a rescue transcript is possible or SpliceAI >= 0.5 but not a canonical splice site. Do NOT apply PVS1 if LOF mechanism is uncertain.
+Apply PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning a final PVS1 strength. That overlay follows the Abou Tayoun et al. 2018 ClinGen SVI PVS1 decision tree for nonsense, frameshift, canonical splice, initiation codon/start-loss, exon-level deletion/duplication, whole-gene deletion, NMD escape, altered-protein consequence, rescue transcript, and LoF applicability branches. Output should be `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `PVS1_NotAssessed`.
+
+Apply PVS1 at full strength only when the LoF decision tree supports it: predicted null variant + LoF is known mechanism for the exact gene-disease context + the PTC is expected to undergo NMD or the whole-gene/exon event is LoF-equivalent + no rescue transcript or alternative initiation model preserves clinically relevant function. Under the Abou Tayoun et al. 2018 baseline tree, NMD is generally not predicted when the PTC occurs in the 3' most exon or within the 3' most 50 nucleotides of the penultimate exon. Downgrade PVS1 through the truncated-protein branch when NMD is not predicted, and apply additional transcript-specific NMD escape rules only when supported by a VCEP or separate current source. Treat LoFTEE as supporting annotation, not as a substitute for direct transcript-structure review. Do NOT apply PVS1 if LOF mechanism is uncertain.
 
 If the disease mechanism is dominant-negative, mixed, or not explicitly resolved, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PVS1. A null allele in a dominant-negative disease gene should not automatically receive PVS1 unless haploinsufficiency/LoF is established for that exact gene-disease context. If the gene has separate recessive LoF and dominant missense/in-frame disease contexts, keep them separate in the evidence table and state which context receives PVS1.
 
-**PVS1 refinement**: When RNA assay evidence, published RNA-splicing evidence, predicted NMD escape, in-frame exon skipping, complex aberrant transcript profiles, or a plausible rescue transcript affects PVS1 strength, use `tooluniverse-acmg-pvs1-splicing-refinement`. That refinement follows Walker et al. 2023 ClinGen SVI Splicing Subgroup guidance and adds a DECIPHER-style NMD escape check for protein-truncating variants. RNA evidence demonstrating LoF transcript(s) is captured as `PVS1_Strength (RNA)`, RNA evidence demonstrating no splicing impact may support `BP7_Strong (RNA)`, and the same RNA-splicing evidence should not be double-counted as PS3/BS3 or PP3/BP4. If PS1-splicing similarity is also considered, direct RNA observations override prediction-based same-event assumptions; use PS1 only when the comparison variant evidence is independent.
+**RNA/splicing refinement**: When RNA assay evidence, published RNA-splicing evidence, in-frame exon skipping, partial/complex aberrant transcript profiles, or Walker 2023 splicing-specific evidence affects PVS1 or BP7, use `tooluniverse-acmg-pvs1-splicing-refinement` after the 2018 LoF decision-tree branch is identified. RNA evidence demonstrating LoF transcript(s) is captured as `PVS1_Strength (RNA)`, RNA evidence demonstrating no splicing impact may support `BP7_Strong (RNA)`, and the same RNA-splicing evidence should not be double-counted as PS3/BS3 or PP3/BP4. If PS1-splicing similarity is also considered, direct RNA observations override prediction-based same-event assumptions; use PS1 only when the comparison variant evidence is independent.
 
 ```python
 EnsemblVEP_annotate_hgvs(hgvs_notation="...")   # splice_donor_variant, splice_acceptor_variant
@@ -198,7 +202,7 @@ gnomad_get_gene_constraints(gene_symbol="...")    # pLI >= 0.9 or LOEUF < 0.35 =
 
 ---
 
-## Phase 6: Literature and Functional Evidence (PS3, BS3, PP1, PP4)
+## Phase 6: Literature and Clinical/Functional Evidence (PS3, BS3, PS4, PP1, PP4)
 
 Well-designed functional assays showing LOF (PS3) or normal function (BS3) can shift a classification decisively. PS3/BS3 can be downgraded (e.g., PS3_Supporting) for less rigorous assays. Not all functional assays qualify — ClinGen gene-specific guidance defines valid assays. When biochemical, cellular, model-organism, patient-derived, MAVE/DMS, or other functional assay evidence affects PS3/BS3 strength, use `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`. That overlay adapts Brnich et al. 2019 ClinGen SVI functional-evidence guidance: start from no functional evidence, require disease-mechanism fit and assay-instance validation, use control-count or OddsPath calibration for strength, and avoid double-counting the same assay as PP3/BP4 or RNA-specific PVS1/BP7 evidence.
 
@@ -207,6 +211,8 @@ When the asserted or possible functional mechanism is dominant-negative, antimor
 PP1 (co-segregation) upgrades to PP1_Strong at >= 7 informative meioses. When published family segregation, LOD score, informative meioses, reduced penetrance, phenocopy, or possible BS4 non-segregation affects PP1 strength, use `tooluniverse-acmg-pp1-segregation-refinement`. That overlay adapts Strande et al. 2017 ClinGen gene-disease validity principles for variant-level PP1 evidence quality, including qualifying-variant checks, LOD/informative-meiosis strength, and double-counting boundaries. If the segregating variant class may act through dominant-negative, antimorphic, or mixed mechanisms, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before PP1/BS4 so the segregating or non-segregating allele is qualified against the correct disease mechanism.
 
 When a criterion requires patient phenotype, affected/unaffected status, disease specificity, or alternate-diagnosis context, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement`. This applies especially to PP4, PS4, PP1/BS4, PM3, BP5, BS2, and phenotype consistency for PS2/PM6. If the user has not provided phenotype information, mark the criterion as `Not Assessed - phenotype required` and ask for the missing phenotype fields instead of inferring them from gene or variant annotation.
+
+For PS4 affected-case enrichment, use `tooluniverse-acmg-ps4-case-enrichment-refinement`. Prefer formal case-control evidence with odds ratio, confidence interval, ancestry-matched cases and controls, and disease-specific frequency context. When formal case-control data are unavailable, ACGS-style rare-disease counting may support `PS4_Supporting` for one unrelated affected individual with a rare/specific matching phenotype and absent population-control evidence, and `PS4_Moderate` for two or more unrelated affected individuals after duplicate-reporting, phenotype, ancestry, and control checks. Recessive rare biallelic affected-proband evidence belongs in PM3, not PS4.
 
 When ACMG evidence depends on visual material in a paper or supplement, such as pedigrees, segregation diagrams, Sanger traces, RT-PCR/minigene figures, gels, blots, or functional assay plots, use `tooluniverse-literature-figure-evidence-extraction` first to produce structured figure evidence. Then pass those extracted facts to the relevant evidence-specific overlay. Use `tooluniverse-image-analysis` only when the task requires quantitative image-derived measurements or statistics.
 
@@ -217,9 +223,9 @@ PubMed_search_articles(query="BRCA2 c.5946delT segregation family", limit=5)
 
 Criteria requiring clinical data (PS2, PS4, PM3, PM6, BS4, BP2, BP5, BS2, PP4, and some VCEP-specific rules) cannot be assessed automatically. Document as "Not Assessed" unless the user provides the required clinical context, and include a targeted request for the missing information. Use `tooluniverse-acmg-de-novo-evidence-refinement` for PS2/PM6 whenever de novo status, parental testing, parentage confirmation, parental mosaicism, or phenotype consistency is relevant. That overlay follows ClinGen SVI De Novo Criteria v1.1 point scoring. If de novo information comes from literature, use `tooluniverse-literature-deep-research` for text/table/supplement extraction and `tooluniverse-literature-figure-evidence-extraction` for pedigree, Sanger, trio, or visual evidence before scoring. If de novo information is missing, mark `PS2/PM6: Not Assessed - de novo information required` and ask for mother/father genotype, parentage confirmation, testing method, mosaicism assessment, and proband phenotype.
 
-If de novo evidence (PS2/PM6), case enrichment (PS4), in-trans evidence (PM3), or non-segregation (BS4) depends on whether the observed variant class is a qualifying allele for a dominant-negative, recessive LoF, haploinsufficiency, or mixed-mechanism disease, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning the criterion. When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points for confirmed in-trans, phase-unknown, one-parent-supported, VUS-other-allele, and homozygous observations while checking PM2-level rarity and circularity; keep any separate dominant-negative disease context out of PM3 unless the other allele is proven to qualify for the recessive mechanism.
+If de novo evidence (PS2/PM6), case enrichment (PS4), in-trans evidence (PM3), or non-segregation (BS4) depends on whether the observed variant class is a qualifying allele for a dominant-negative, recessive LoF, haploinsufficiency, or mixed-mechanism disease, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning the criterion. When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points for confirmed in-trans, phase-unknown, one-parent-supported, VUS-other-allele, and homozygous observations while checking PM2-level rarity and circularity; keep any separate dominant-negative disease context out of PM3 unless the other allele is proven to qualify for the recessive mechanism. If literature-derived PS4, PM3, PP1/BS4, PS2/PM6, or PS3/BS3 evidence is embedded in tables, supplements, pedigrees, Sanger traces, gels, or plots, use `tooluniverse-literature-deep-research` plus `tooluniverse-literature-figure-evidence-extraction` before scoring.
 
-PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) can be partially assessed from variant type. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 (synonymous, no splice impact) is assessable via SpliceAI < 0.1.
+PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) are routed through `tooluniverse-acmg-pm4-bp3-protein-length-refinement` in Phase 4. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 (synonymous, no splice impact) is assessable via SpliceAI < 0.1 and RNA-specific BP7 through the PVS1/RNA splicing overlay when direct RNA evidence exists.
 
 ---
 
@@ -279,8 +285,8 @@ Applied rule: [e.g., "PVS1 + PM2_Supporting = Likely Pathogenic (LP rule 1)"]
 ## Common Patterns
 
 **Pattern 1: Known pathogenic frameshift** — "Classify BRCA2 c.5946delT"
-Phase 0 (validate) → Phase 1 (gnomAD absent, PM2_Supporting) → Phase 3 (ClinVar Pathogenic, PP5) → Phase 4 (DNA repair domain, PM1) → Phase 5 (frameshift + LOF gene, PVS1) → Phase 6 (literature PS3)
-Result: **Pathogenic** (PVS1 + PS3 + PM1 + PM2_Supporting + PP5)
+Phase 0 (validate) → Phase 1 (gnomAD absent, PM2_Supporting) → Phase 3 (ClinVar Pathogenic assertion used as lead only; no PP5) → Phase 4 (DNA repair domain, PM1) → Phase 5 (frameshift + LOF gene, PVS1) → Phase 6 (literature PS3)
+Result: **Pathogenic** (PVS1 + PS3 + PM1 + PM2_Supporting; PP5 not counted)
 
 **Pattern 2: Missense VUS** — "Is BRCA1 p.Arg1699Gln pathogenic?"
 Phase 0 → Phase 1 (rare, PM2_Supporting) → Phase 2 (REVEL 0.82, PP3_Moderate by calibrated missense-prediction overlay) → Phase 3 (ClinVar VUS) → Phase 4 (BRCT domain, PM1; PM1+PP3 contribution capped at Strong) → Phase 6 (reduced activity, PS3_Moderate)

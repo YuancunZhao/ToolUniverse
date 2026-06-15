@@ -24,7 +24,32 @@ Use this overlay when ACMG evidence cannot be assessed without patient phenotype
 
 - Normalize disease and phenotype terms where possible.
 - Confirm gene-disease validity and phenotype specificity.
-- Apply PP4 only if the phenotype is sufficiently specific or VCEP rules are met.
+- Apply PP4 only if the phenotype is sufficiently specific, a narrow genetic differential has been tested, or VCEP rules are met.
+- Use `PP4_Supporting`, `PP4_Moderate`, or `PP4_Strong` only when the specificity level is justified by disease-specific clinical, biochemical, imaging, methylation, pathology, or guideline/VCEP evidence.
+
+---
+
+## Example 2b: PP4 Double Counting With De Novo Evidence
+
+**Scenario**: A de novo variant was scored using `tooluniverse-acmg-de-novo-evidence-refinement`, and the PS2/PM6 point score was increased because the proband phenotype is highly specific.
+
+**Expected behavior**:
+
+- Do not also apply PP4 from the same phenotype specificity.
+- Record that phenotype specificity was already consumed in PS2/PM6 strength.
+- Apply separate PP4 only if a VCEP explicitly permits separate use.
+
+---
+
+## Example 2c: Nonspecific Phenotype
+
+**Scenario**: The patient has developmental delay and seizures, but no distinctive syndrome-specific features, biomarkers, or narrow differential diagnosis are provided.
+
+**Expected behavior**:
+
+- Do not apply PP4 from broad features alone.
+- Mark `PP4: Not Assessed - phenotype specificity insufficient` or `No PP4`.
+- Ask for key positive/negative features, HPO terms, disease-specific biomarkers, and the testing strategy used to exclude phenocopies.
 
 ---
 

@@ -80,7 +80,7 @@ Do not assign PS1 or PM5 merely because two variants affect the same codon or re
 6. **Apply PS1 or PM5**
    - Use PS1 when the variant under assessment produces the same amino-acid substitution as an independently established pathogenic comparison variant but from a different nucleotide change.
    - Use PM5 when the variant under assessment produces a different missense substitution at the same amino-acid residue as an independently established pathogenic missense comparison variant.
-   - If the comparison variant is only likely pathogenic, follow current VCEP guidance when available; otherwise consider whether downgraded or no evidence is more appropriate and document the uncertainty.
+   - If the comparison variant is only likely pathogenic, follow current VCEP guidance when available; otherwise use ACGS-style downgraded evidence (`PS1_Moderate` for same amino-acid substitution; `PM5_Supporting` for same-residue missense with limited evidence) only when independence and mechanism checks pass.
    - Do not apply both PS1 and PM5 from the same comparison relationship.
 
 ---
@@ -104,6 +104,14 @@ Withhold PS1 when:
 - Splicing evidence contradicts the assumed protein-level equivalence.
 - The comparison variant is pathogenic through a different mechanism, such as splice disruption or haploinsufficiency, while the variant under assessment is only a missense change.
 
+ACGS 2024 additions:
+
+- Use `PS1` when the comparison variant is independently established as Pathogenic.
+- Consider `PS1_Moderate` when the comparison variant is independently established as Likely Pathogenic rather than Pathogenic, provided no circularity or mechanism mismatch exists.
+- For initiation codon variants, use PS1 logic only when the alternate initiation-codon change has the same predicted effect on translation initiation and the comparison variant is independently P/LP in the same disease context.
+- For pathogenic variants in non-coding RNA genes, PS1-style reasoning can apply to the same nucleotide-level functional change only when a disease-specific source or VCEP supports the analogous rule. Do not generalize protein missense PS1 to non-coding genes without such support.
+- If the same amino-acid substitution is produced but one nucleotide change has predicted or observed splicing impact and the other does not, resolve splicing first and withhold protein-level PS1 when the comparison variant's pathogenicity is not amino-acid mediated.
+
 ---
 
 ## PM5 Rules
@@ -125,6 +133,15 @@ Withhold or downgrade PM5 when:
 - The residue is not conserved or not in a disease-relevant functional region and the only support is an uncurated database assertion.
 - Multiple variants at the residue show conflicting benign and pathogenic interpretations without a VCEP rule.
 - The gene has mechanism-specific residue effects and the variant under assessment does not plausibly share the pathogenic mechanism.
+
+ACGS 2024 additions:
+
+- Use `PM5` when the comparison missense variant is independently established as Pathogenic and the variant under assessment causes a different amino-acid substitution at the same residue.
+- Consider `PM5_Supporting` when the comparison variant is Likely Pathogenic or supported by limited case evidence, provided the comparison is independent and amino-acid mediated.
+- Before assigning PM5, compare predicted protein impact between the variant under assessment and the comparison variant using available evidence such as REVEL, Grantham distance, BLOSUM62 substitution similarity, conservation, domain context, or disease-specific predictor guidance. PM5 is strongest when the variant under assessment is plausibly at least as disruptive as the comparison variant.
+- Withhold or downgrade PM5 when the new amino-acid substitution is predicted to be substantially less disruptive than the comparison change and no residue-specific mechanism supports equivalence.
+- For in-frame deletions or duplications that overlap a residue with an independently established P/LP missense variant, PM5-like reasoning may be considered only when the altered residue and local protein mechanism are expected to be affected in a comparable way. Treat this as gene/disease-specific, document why the in-frame event shares the missense mechanism, and avoid PM4/PM5 double counting from the same residue-change rationale.
+- Do not use the same pathogenic clustering or residue evidence as both PM1 and PM5 unless a VCEP explicitly permits both and the evidence sources are independent.
 
 ---
 
@@ -219,6 +236,7 @@ Example evidence table row:
 | `ClinGen_search_gene_validity` / `GenCC_search_gene` | Confirm gene-disease context and inheritance. |
 | `PubMed_search_articles` / `EuropePMC_search_articles` / `EuropePMC_get_full_text` | Retrieve literature supporting comparison variant pathogenicity and mechanism. |
 | `UniProt_get_protein_info`, InterPro tools, AlphaFold or structure tools | Support residue/domain mechanism when PM5 depends on a critical region. |
+| `MyVariant_get_pathogenicity_scores`, `ProtVar_map_variant`, dbNSFP-style annotations | Compare REVEL, substitution metrics, conservation, and protein-context evidence for same-residue substitutions. |
 
 ---
 
@@ -229,6 +247,7 @@ Example evidence table row:
 - Database classifications without accessible evidence should not be treated as independently established pathogenic comparison variants.
 - Same codon does not automatically mean same mechanism.
 - Splicing and protein effects can coexist; avoid counting the same observation twice.
+- REVEL, Grantham, BLOSUM62, conservation, and structure evidence are supporting context for PM5 comparability; they do not independently create PS1 or PM5 without an independently established comparison variant.
 
 ---
 
@@ -236,4 +255,5 @@ Example evidence table row:
 
 - Richards S, Aziz N, Bale S, et al. Standards and guidelines for the interpretation of sequence variants: a joint consensus recommendation of ACMG and AMP. Genet Med. 2015;17(5):405-424. PMID: 25741868. DOI: 10.1038/gim.2015.30.
 - Walker LC, Hoya M, Wiggins GAR, et al. Using the ACMG/AMP framework to capture evidence related to predicted and observed impact on splicing. ClinGen SVI Splicing Subgroup. 2023. PMID: 37352859; PMCID: PMC10357475. Use only for splicing-specific PS1/PVS1 interactions, not ordinary protein-level PS1/PM5.
+- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use as practice guidance for PS1/PM5 downgrading, initiation-codon and non-coding RNA caveats, predicted-impact comparison, and in-frame indel overlap considerations.
 - Current ClinGen VCEP specifications and ClinGen Evidence Repository records for gene/disease-specific PS1 and PM5 modifications.

@@ -1040,13 +1040,13 @@ def calculate_acmg_classification(evidence_codes):
 ### Pathogenic Codes
 | Code | Strength | Trigger |
 |------|----------|---------|
-| PVS1 | Very Strong | Null in LOF gene |
+| PVS1 | Variable | Predicted LoF in an established LoF disease gene; assign strength through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` |
 | PS1 | Strong | Same AA as pathogenic |
 | PS2 | Strong | De novo (confirmed) |
 | PS3 | Strong | Functional studies |
 | PS4 | Strong | Prevalence in affected |
 | PM1 | Moderate | Functional domain |
-| PM2 | Moderate | Absent from controls |
+| PM2 | Supporting | Absent/rare from controls after ClinGen SVI PM2 overlay checks |
 | PM3 | Moderate | Trans with pathogenic |
 | PM4 | Moderate | Protein length change |
 | PM5 | Moderate | Novel at known position |
@@ -1055,7 +1055,9 @@ def calculate_acmg_classification(evidence_codes):
 | PP2 | Supporting | Low missense rate gene |
 | PP3 | Supporting | Computational predictions |
 | PP4 | Supporting | Phenotype specific |
-| PP5 | Supporting | Reputable source |
+| PP5 | Not counted by default | Reputable-source assertion; retrieve primary evidence |
+
+Use `tooluniverse-acmg-variant-classification` and its overlays for final evidence strength. In particular, PM2 defaults to `PM2_Supporting`, PP3/BP4 uses the Pejaver 2022 calibrated missense-prediction overlay, PS4 uses the case-enrichment overlay, PM4/BP3 uses the protein-length overlay, and PP5/BP6 uses the reputable-source overlay, which does not count PP5/BP6 by default.
 
 ### Benign Codes
 | Code | Strength | Trigger |
@@ -1070,7 +1072,7 @@ def calculate_acmg_classification(evidence_codes):
 | BP3 | Supporting | In-frame, no function |
 | BP4 | Supporting | Benign predictions |
 | BP5 | Supporting | Alternate explanation |
-| BP6 | Supporting | Reputable source |
+| BP6 | Not counted by default | Reputable-source assertion; retrieve primary evidence |
 | BP7 | Supporting | Synonymous |
 
 ---

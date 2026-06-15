@@ -69,12 +69,14 @@ Use ToolUniverse retrieval tools before assigning PM1.
 4. **Assess known functional/domain context**
    - Use `InterPro_get_protein_domains`, `UniProt_get_function_by_accession`, `EBIProteins_get_variation`, and structural tools such as AlphaFold/PDB when needed.
    - Broad domain membership alone is not sufficient for PM1 unless the domain or subregion is known to be critical and benign variation is low.
+   - ACGS 2024-supported regional/context sources include DECIPHER protein-view missense constraint tracks, constrained coding regions (CCR), MetaDome regional intolerance, paralogous residue evidence, curated active/binding/catalytic sites, and disease-specific hotspot/domain rules.
 
 5. **Assess regional missense constraint**
    - Use the author-provided MDR/MPC regional constraint data when available.
    - Match the variant to the same transcript/protein coordinate system used by the MDR dataset.
    - Record region boundaries, observed/expected missense ratio, dataset version, and whether the region meets the calibrated threshold.
    - Do not infer MDR membership from gene-level missense constraint alone.
+   - Prefer local or regional constraint over whole-gene intolerance. Whole-gene missense depletion can support PP2 context, but should not substitute for PM1 without residue-level or interval-level evidence.
 
 ---
 
@@ -96,6 +98,13 @@ For the MDR framework from PMID:38645134:
 - Prefer the latest validated release of the MDR/MPC dataset. The bioRxiv API currently reports a 2026 version using 730,947 gnomAD v4.1.1 exomes and an abstract threshold of regions with less than 36% of expected missense variation.
 - Older PubMed-linked abstract metadata may show the earlier 125,748-exome framing and a stricter less-than-20% threshold. If using the older release, record that version explicitly.
 
+ACGS 2024 practice additions:
+
+- PM1 may be supported by one or more of these evidence types when they point to the same local region: enrichment of pathogenic missense variants with low benign variation, disease-relevant paralogous residue pathogenicity, an invariant or highly conserved residue in an established functional domain, and protein modelling showing deleterious alteration of a known functional region.
+- `PM1_Strong` can be considered only for well-established critical residues or motif rules with guideline/VCEP-level support, such as cysteine disruption in FBN1 EGF-like calcium-binding domains, NOTCH3 EGF-repeat cysteine imbalance, glycine substitutions in collagen triple-helical domains, or Cys/His residues in C2H4 zinc-finger motifs when established for the disease.
+- `PM1_Supporting` may be appropriate for functional non-coding loci or weak regional evidence when a disease-specific rule supports local functional importance but moderate evidence is not justified.
+- Use DECIPHER regional constraint, CCR, MetaDome, paralog evidence, and structure/conservation only as PM1 context when the evidence is region-specific and independent of PP3 predictor scores.
+
 ### Reduce or Withhold PM1
 
 Withhold or reduce PM1 when:
@@ -107,6 +116,8 @@ Withhold or reduce PM1 when:
 - The region is constrained only at the gene level, with no residue-level or interval-level evidence.
 - The coordinate mapping between transcript, protein, and MDR interval is uncertain.
 - The only evidence is a high MPC/AlphaMissense/REVEL score without regional membership or hotspot/domain evidence.
+- The evidence is only whole-gene missense intolerance and the local region does not show constraint; in this situation PP2 may be considered instead of PM1 if other PP2 requirements are met.
+- The same same-residue pathogenic comparison evidence is already being used for PM5 and no independent regional/domain evidence remains for PM1.
 
 ---
 
@@ -130,6 +141,12 @@ Use these priority rules after PM1 strength has been assigned and before combini
 - **PM1 and PP3 both used**: when PM1-region evidence and PP3 computational evidence are both retained for a missense variant, the combined regional/predictor evidence contribution must not exceed Strong. Do not stack PM1 plus PP3 into an effective Very Strong contribution.
 
 Rationale: PM1 and PP2 can both describe missense intolerance. PM1 is local or regional; PP2 is gene-wide. When PM1 is moderate, it is the more specific evidence and should be retained over PP2. When PM1 is only supporting, PP2 is the stronger gene-level criterion and should be retained over PM1_Supporting. PP3 can remain when it is based on independent calibrated predictors, but it should not over-amplify the same missense-intolerance signal.
+
+### BP1 Interaction
+
+Use BP1 only when pathogenic missense variation is not an established mechanism for the disease context, such as a gene-disease pair where disease is caused by LoF/truncating variants and missense variation is tolerated or not disease-relevant.
+
+Do not apply BP1 when the variant lies in a PM1-qualified hotspot, critical residue, or constrained subregion for the same disease mechanism. If the gene has both LoF-only and missense/dominant-negative disease contexts, resolve the disease context with `tooluniverse-acmg-dominant-negative-mechanism-refinement` before using PM1, PP2, or BP1.
 
 ---
 
@@ -170,6 +187,7 @@ Always state whether MPC or other prediction scores were used separately under P
 | `UniProt_get_function_by_accession` | Functional sites and curated protein features. |
 | `EBIProteins_get_variation` | Known protein variants from ClinVar, gnomAD/ExAC, COSMIC, and UniProt. |
 | `AlphaMissense_get_variant_score` | Prediction evidence for PP3; not PM1 by itself. |
+| DECIPHER regional constraint, CCR, MetaDome resources when accessible | Regional constraint context; use only with coordinate/version documentation. |
 
 ---
 
@@ -180,9 +198,11 @@ Always state whether MPC or other prediction scores were used separately under P
 - PMID:38645134 is indexed as a bioRxiv preprint. The bioRxiv API reports multiple versions; use and cite the specific version and dataset release.
 - Full text and supplemental materials were not available through automated retrieval in this implementation pass because bioRxiv/PMC access returned challenge pages and Europe PMC fullTextXML returned 404.
 - Current gene-specific VCEP specifications supersede this generic overlay.
+- ACGS 2024 regional resources such as DECIPHER, CCR, MetaDome, and paralog evidence require careful coordinate mapping and should not be treated as deterministic without source/version documentation.
 
 ---
 
 ## Primary Reference
 
 - Wang L, Chao KR, Panchal R, et al. The landscape of regional missense mutational intolerance quantified from 730,947 exomes. bioRxiv. DOI: 10.1101/2024.04.11.588920. PMID: 38645134.
+- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use as practice guidance for DECIPHER/CCR/MetaDome/paralog regional context, critical-residue PM1 strengthening, and PM1/PP2/BP1 double-counting boundaries.

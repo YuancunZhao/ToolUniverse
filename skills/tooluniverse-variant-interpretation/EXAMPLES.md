@@ -165,7 +165,7 @@
 | **PVS1** | Very Strong | Null variant (frameshift) in gene where LOF is established mechanism |
 | **PS4** | Strong | >5 affected individuals documented |
 | **PM2** | Supporting | Absent/extremely rare in general population (outside founders) |
-| **PP5** | Supporting | Expert panel (ENIGMA) reports pathogenic |
+| **PP5** | Not counted | Expert panel assertion used only as a lead to review primary evidence |
 
 ### Evidence Summary
 
@@ -173,11 +173,11 @@
 |------------|--------|
 | 1 Very Strong (PVS1) | None |
 | 1 Strong (PS4) | |
-| 2 Supporting (PM2, PP5) | |
+| 1 Supporting (PM2) | |
 
 ### Classification: **PATHOGENIC**
 
-**Rationale**: Meets ACMG criteria for Pathogenic (1 Very Strong + 1 Strong + 2 Supporting). Well-established pathogenic variant with multiple lines of independent evidence.
+**Rationale**: Meets ACMG criteria for Pathogenic from primary evidence. PP5 is not counted by default under ClinGen SVI reputable-source guidance.
 
 **Confidence**: ★★★ (High) - Expert panel reviewed, extensive clinical data
 

@@ -28,9 +28,55 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 - Confirm the comparison variant is an independently established pathogenic missense variant.
 - Confirm same residue on the same disease-relevant transcript.
 - Confirm the disease mechanism supports amino-acid-mediated pathogenicity at that residue or region.
+- Compare predicted protein impact using available REVEL, Grantham, BLOSUM62, conservation, and domain context.
 - Apply `PM5` if all checks pass.
 
 ---
+
+## Example 2b: Same Residue With Likely Pathogenic Comparison
+
+**Scenario**: The only comparison variant at the same residue is independently classified as likely pathogenic and has limited case evidence.
+
+**Expected behavior**:
+
+- Do not apply full PM5 by default.
+- Consider `PM5_Supporting` if the comparison is independent, amino-acid mediated, and the variant under assessment is predicted to have a similar or greater protein impact.
+- Follow any current VCEP rule if it differs.
+
+---
+
+## Example 2c: Same Amino-Acid Change With Likely Pathogenic Comparison
+
+**Scenario**: The variant under assessment encodes the same amino-acid substitution as a different nucleotide variant that is independently likely pathogenic.
+
+**Expected behavior**:
+
+- Consider `PS1_Moderate` rather than full PS1 if the comparison is LP rather than P.
+- Withhold PS1 if the LP assertion is not independent or is driven by splicing rather than the amino-acid substitution.
+
+---
+
+## Example 2d: In-Frame Indel Overlaps Pathogenic Residue
+
+**Scenario**: An in-frame deletion removes a residue where an independently pathogenic missense variant has been reported.
+
+**Expected behavior**:
+
+- Do not automatically apply PM5.
+- Evaluate whether the in-frame event affects the same disease-relevant residue mechanism.
+- Avoid double counting the same residue-change rationale as both PM4 and PM5.
+- Prefer VCEP or gene-specific guidance when available.
+
+---
+
+## Example 2e: Initiation Codon or Non-Coding RNA Edge Case
+
+**Scenario**: A variant affects the initiation codon or a disease-relevant non-coding RNA locus with a same-change comparison variant.
+
+**Expected behavior**:
+
+- Use PS1-style logic only when the comparison variant has the same predicted molecular effect and a disease-specific source supports the analogy.
+- Do not generalize ordinary protein missense PS1/PM5 without a mechanism-specific rule.
 
 ## Example 3: Same Codon but Different Mechanism
 

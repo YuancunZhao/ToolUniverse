@@ -49,14 +49,12 @@ Phase 6: ACMG CLASSIFICATION      → Evidence codes, classification, recommenda
 
 ## Phase 1: Variant Identity
 
-Tools: `MyVariant_query_variants`, `EnsemblVar_get_variant_consequences`, `NCBIGene_search`, `VariantValidator_gene2transcripts`, `VariantValidator_validate_variant`, `Tark_get_mane_transcripts`, `Tark_get_transcript`
+Tools: `MyVariant_query_variants`, `EnsemblVar_get_variant_consequences`, `NCBIGene_search`, `VariantValidator_gene2transcripts`, `VariantValidator_validate_variant`
 
 **VariantValidator_gene2transcripts**: Look up MANE Select and MANE Plus Clinical transcripts for a gene. Use this to identify the correct canonical transcript before variant annotation.
 - Parameters: `gene_symbol` (e.g. "TP53"), `transcript_set` ("mane" | "refseq" | "ensembl" | "all"), `genome_build` ("GRCh38" default)
 - Returns: Array of `{current_symbol, transcripts: [{reference, annotations: {mane_select, mane_plus_clinical}}]}`
 - Aliases: `gene` and `gene_name` also accepted for `gene_symbol`
-
-**Tark_get_mane_transcripts**: Lightweight MANE Select / MANE Plus Clinical lookup from Ensembl Tark with the ENST↔RefSeq pairing (e.g. `gene="BRCA2"` → ENST00000380152.8 / NM_000059.4). Use as a quick cross-check of the canonical transcript namespace alongside VariantValidator, or to translate an ENST↔NM accession. `Tark_get_transcript` (param `stable_id`, e.g. "ENST00000380152") returns the archived transcript record (assembly, biotype, coordinates, per-release versions) when you need to resolve a specific transcript version.
 
 **VariantValidator_validate_variant**: Validate HGVS variant descriptions and get normalized notation with genomic/transcript/protein consequences.
 - Parameters: `genome_build` ("GRCh37" | "GRCh38"), `variant_description` (HGVS, e.g. "NM_007294.4:c.5266dup"), `select_transcripts` (transcript or "all")
@@ -102,7 +100,7 @@ Before full ACMG classification, check if the variant already has an expert pane
 5. `EnsemblVEP_annotate_hgvs` (VEP with colocated variants) — includes SIFT/PolyPhen
 6. If REVEL is still unavailable, note this as a limitation and rely on CADD + SIFT + PolyPhen consensus. REVEL absence does not prevent classification.
 
-Consensus: Run CADD (all variants) + AlphaMissense + EVE (missense). 2+ concordant damaging = strong PP3; 2+ concordant benign = strong BP4.
+Do not assign PP3/BP4 by uncalibrated majority vote. For missense variants, route predictor evidence through `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`, which follows Pejaver et al. 2022 calibrated thresholds and selects one calibrated predictor before inspecting scores. CADD, AlphaMissense, EVE, SIFT, PolyPhen, REVEL, and other scores can still be retrieved here, but the evidence strength is assigned by the PP3/BP4 overlay or by a current VCEP rule.
 
 See `ACMG_CLASSIFICATION.md` for thresholds.
 
@@ -147,7 +145,7 @@ Returns `mechanism_summary`, per-feature lost/gained tables, and category aggreg
 
 Tools: `CELLxGENE_get_expression_data`, `CELLxGENE_get_cell_metadata`, `GTEx_get_median_gene_expression`
 
-Confirms gene expression in disease-relevant tissues. This can contextualize disease relevance, but it does not by itself satisfy PP4. PP4 and other phenotype-dependent criteria require patient phenotype or affected-status information; use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype specificity, segregation, case enrichment, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is being considered.
+Confirms gene expression in disease-relevant tissues. This can contextualize disease relevance, but it does not by itself satisfy PP4. PP4 and other phenotype-dependent criteria require patient phenotype or affected-status information; use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype specificity, segregation, case enrichment, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is being considered. Use `tooluniverse-acmg-benign-context-refinement` when BA1/BS1/BS2/BP2/BP5 depends on disease threshold, unaffected status, phase, or alternate-diagnosis context.
 
 ## Phase 5: Literature Evidence
 
@@ -157,11 +155,11 @@ Always flag preprints as NOT peer-reviewed.
 
 ## Phase 6: ACMG Classification
 
-Apply all relevant evidence codes (PVS1, PS1, PS3, PM1, PM2, PM5, PP3, PP5 for pathogenic; BA1, BS1, BS3, BP4, BP7 for benign). For PS2/PM6, use `tooluniverse-acmg-de-novo-evidence-refinement`; if de novo data are not supplied, ask for parental genotypes, parentage confirmation, testing method, mosaicism assessment, and proband phenotype. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+Apply all relevant evidence codes (PVS1, PS1, PS3, PS4, PM1, PM2, PM4, PM5, PP3 for pathogenic; BA1, BS1, BS2, BS3, BP2, BP3, BP4, BP5, BP7 for benign). Use `tooluniverse-acmg-variant-classification` as the primary ACMG workflow and route refinements through the overlay skills. For PS2/PM6, use `tooluniverse-acmg-de-novo-evidence-refinement`; if de novo data are not supplied, ask for parental genotypes, parentage confirmation, testing method, mosaicism assessment, and proband phenotype. Use `tooluniverse-acmg-ps4-case-enrichment-refinement` for case enrichment, `tooluniverse-acmg-pm4-bp3-protein-length-refinement` for protein length changes and repeat-region in-frame indels, and `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5. Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary source assertion is encountered; PP5/BP6 are not counted by default. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
 
 ### Gene-Specific Population Frequency Thresholds
 
-BS1 (allele frequency too high for disorder) requires gene-specific calibration, not a universal cutoff:
+BS1 (allele frequency too high for disorder) requires disease-specific calibration, not a universal cutoff. Use `tooluniverse-acmg-benign-context-refinement` when prevalence, penetrance, allelic/genetic heterogeneity, inheritance, or ancestry-specific max AF affects BA1/BS1:
 - **High-penetrance genes** (BRCA1, TP53): BS1 threshold ~0.0001
 - **Moderate-penetrance genes** (PALB2, ATM, CHEK2): BS1 threshold ~0.001
 - **Low-penetrance/common disease genes**: BS1 threshold higher, depends on disease prevalence
@@ -186,7 +184,7 @@ Modern clinical labs use a point-based system instead of the original rule-count
 | Very Strong (PVS1) | +8 | -- |
 | Strong (PS1-PS4) | +4 each | -4 each (BS1-BS4) |
 | Moderate (PM1-PM6) | +2 each | -- |
-| Supporting (PP1-PP5) | +1 each | -1 each (BP1-BP7) |
+| Supporting (PP1-PP4; PP5 not counted by default) | +1 each | -1 each (BP1-BP5, BP7; BP6 not counted by default) |
 | Stand-alone (BA1) | -- | -8 |
 
 **Classification by total points**:
@@ -217,7 +215,7 @@ def classify_acmg(evidence: dict) -> dict:
         evidence = {
             'BS1': 'strong',       # AF too high
             'BS3': 'supporting',   # Epidemiological evidence against pathogenicity
-            'BP6': 'supporting',   # ClinVar benign consensus
+            # BP6 is not counted by default; use tooluniverse-acmg-pp5-bp6-reputable-source-refinement.
             'PP3': 'supporting',   # Computational predictors say damaging
         }
     """
@@ -261,9 +259,9 @@ def classify_acmg(evidence: dict) -> dict:
 result = classify_acmg({
     'BS1': 'strong',       # gnomAD AF 0.00105 exceeds threshold
     'BS3': 'supporting',   # Case-control study shows no association
-    'BP6': 'supporting',   # ClinVar 13 submitters say benign/likely benign
+    # BP6 not counted: ClinVar benign/likely benign consensus is used as a lead to retrieve primary evidence.
 })
-# Output: Likely Benign, total_points=-6, evidence: BS1(strong):-4, BS3(supporting):-1, BP6(supporting):-1
+# Output: VUS or Likely Benign depending on primary evidence; BP6 is not counted without primary-evidence review.
 ```
 
 Use this procedure after collecting all evidence from Phases 1-5 to compute the final classification.
@@ -299,7 +297,7 @@ If a primary tool fails, use these alternatives:
 
 **Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
 
-**Truncating Variant**: Check LOF mechanism, DECIPHER-style NMD escape regions, alternative isoforms, rescue transcripts, and curated disease-mechanism sources before applying PVS1. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. If a premature stop falls in a DECIPHER-predicted NMD escape region, do not assign PVS1 Very Strong solely from the stop-gained consequence; route through `tooluniverse-acmg-pvs1-splicing-refinement` and evaluate the NMD-escape truncated-protein branch. Apply PVS1 only to the disease context where LoF/haploinsufficiency is established.
+**Truncating Variant**: Route PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning strength. Check LoF mechanism, transcript-structure NMD escape rules, alternative initiation, exon deletion/duplication context, rescue transcripts, and curated disease-mechanism sources. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. If RNA assay or Walker 2023 splicing-specific evidence is present, apply `tooluniverse-acmg-pvs1-splicing-refinement` after the baseline LoF branch is identified.
 
 **Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential. Apply PP3/BP7 based on scores.
 

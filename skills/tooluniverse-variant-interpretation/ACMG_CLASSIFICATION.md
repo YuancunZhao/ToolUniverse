@@ -10,10 +10,10 @@
 | PS1 | Strong | Same amino acid change as known pathogenic |
 | PS3 | Strong | Well-established functional studies |
 | PM1 | Moderate | Mutational hot spot / functional domain |
-| PM2 | Moderate | Absent from controls |
+| PM2 | Supporting | Absent/rare from controls after coverage and population checks |
 | PM5 | Moderate | Different missense at same residue as pathogenic |
-| PP3 | Supporting | Multiple computational predictions |
-| PP5 | Supporting | Reputable source reports pathogenic |
+| PP3 | Variable | Calibrated computational prediction evidence |
+| PP5 | Not counted by default | Reputable-source assertion; retrieve primary evidence with `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` |
 
 ### Benign Evidence
 
@@ -23,6 +23,7 @@
 | BS1 | Strong | MAF greater than expected |
 | BS3 | Strong | Functional studies show no effect |
 | BP4 | Supporting | Multiple computational predictions benign |
+| BP6 | Not counted by default | Reputable-source assertion; retrieve primary evidence with `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` |
 | BP7 | Supporting | Synonymous with no splice impact |
 
 ## Classification Algorithm
@@ -56,6 +57,8 @@
 | Conflicting | Multiple interpretations |
 
 ## gnomAD Frequency Thresholds (Rare Disease)
+
+Use `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2. PM2 remains ClinGen SVI-style `PM2_Supporting` by default. Use `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5 when disease prevalence, penetrance, inheritance, unaffected status, phase, or alternate diagnosis affects benign evidence.
 
 | Frequency | ACMG Code | Interpretation |
 |-----------|-----------|----------------|
@@ -111,6 +114,8 @@ Gene-disease validity and disease association scores do not substitute for patie
 | **Moderate** | Domain interface, binding site | PM1 (supporting) |
 | **Low** | Surface, flexible region | No support |
 
+Use `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` before assigning PM1 from regional missense constraint, DECIPHER/CCR/MetaDome/paralog evidence, hotspots, domains, or critical residues. Use `tooluniverse-acmg-pm4-bp3-protein-length-refinement` for in-frame insertions/deletions, repeat-region indels, stop-loss variants, and last-exon altered-product contexts.
+
 ## Structural Impact Confidence (AlphaFold pLDDT)
 
 | pLDDT Range | Interpretation |
@@ -122,6 +127,8 @@ Gene-disease validity and disease association scores do not substitute for patie
 
 ## Prediction Thresholds
 
+For ACMG PP3/BP4, do not use this table as evidence-strength thresholds. Use `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`, which follows Pejaver et al. 2022 calibrated missense prediction thresholds and VCEP overrides. The table below is only a retrieval/orientation aid.
+
 | Predictor | Damaging | Benign |
 |-----------|----------|--------|
 | **AlphaMissense** | >0.564 | <0.34 |
@@ -132,9 +139,15 @@ Gene-disease validity and disease association scores do not substitute for patie
 
 ## PP3/BP4 Application Notes
 
-- **PP3**: Multiple concordant damaging predictions (AlphaMissense + CADD + EVE agreement = strong PP3)
-- **BP4**: Multiple concordant benign predictions
-- **Note**: AlphaMissense alone achieves ~90% accuracy on ClinVar pathogenic variants
+- **PP3/BP4**: Assign only through calibrated predictor thresholds from `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or a current VCEP rule.
+- **Avoid majority voting**: Multiple concordant uncalibrated predictors do not automatically create Strong PP3/BP4.
+- **Tool availability**: If a required calibrated score is unavailable through ToolUniverse, record the gap and do not substitute developer-default SIFT/PolyPhen/CADD thresholds as ACMG evidence.
+
+## PS4 and Phenotype-Dependent Evidence
+
+Use `tooluniverse-acmg-ps4-case-enrichment-refinement` for case-control evidence, odds ratio/confidence interval interpretation, unrelated affected case counts, ancestry matching, gnomAD control caveats, and rare-disease ACGS-style PS4 case counting. Recessive biallelic affected-proband observations should route to PM3 rather than PS4.
+
+Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 phenotype consistency requires patient phenotype, affected status, or disease specificity.
 
 ## SpliceAI Thresholds
 
@@ -164,10 +177,13 @@ Gene-disease validity and disease association scores do not substitute for patie
 
 ## PVS1 Application for Truncating Variants
 
-Before using this table, verify that LoF/haploinsufficiency is an established mechanism for the exact gene-disease context. If the gene has dominant and recessive disease associations, mixed mechanisms, structural/complex biology, or unclear HI/LoF support, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` first and document whether PVS1 is allowed.
+Before using this table, run `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` and verify that LoF/haploinsufficiency is an established mechanism for the exact gene-disease context. If the gene has dominant and recessive disease associations, mixed mechanisms, structural/complex biology, or unclear HI/LoF support, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` first and document whether PVS1 is allowed.
+
+Use `tooluniverse-acmg-pvs1-splicing-refinement` only after the baseline PVS1 decision-tree branch is identified and RNA assay or Walker 2023 splicing-specific evidence is present.
 
 | Scenario | PVS1 Strength |
 |----------|---------------|
-| Canonical LOF gene, NMD predicted and no DECIPHER/equivalent NMD escape or rescue transcript evidence | Very Strong |
-| LOF gene, last exon, DECIPHER-predicted NMD escape, or other NMD escape evidence | Reduce strength; often Moderate or lower depending truncated-protein critical-region evidence |
+| Canonical LOF gene, NMD predicted and no transcript-structure NMD escape or rescue transcript evidence | Very Strong |
+| LOF gene, PTC in the 3' most exon or within the 3' most 50 nucleotides of the penultimate exon under the Abou Tayoun 2018 baseline tree | Reduce strength through the truncated-protein branch; often Strong or Moderate depending critical-region loss, protein fraction removed, exon relevance, and population LoF context |
+| Start-loss, exon deletion/duplication, whole-gene deletion, or in-frame exon loss | Use the PVS1 LoF decision-tree overlay; route CNV/SV event definition to structural-variant analysis |
 | Non-LOF gene | Not applicable |
