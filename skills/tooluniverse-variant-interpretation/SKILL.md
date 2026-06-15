@@ -145,7 +145,7 @@ Returns `mechanism_summary`, per-feature lost/gained tables, and category aggreg
 
 Tools: `CELLxGENE_get_expression_data`, `CELLxGENE_get_cell_metadata`, `GTEx_get_median_gene_expression`
 
-Confirms gene expression in disease-relevant tissues. Supports PP4 if highly restricted; challenges classification if not expressed in affected tissue.
+Confirms gene expression in disease-relevant tissues. This can contextualize disease relevance, but it does not by itself satisfy PP4. PP4 and other phenotype-dependent criteria require patient phenotype or affected-status information; use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype specificity, segregation, case enrichment, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is being considered.
 
 ## Phase 5: Literature Evidence
 
@@ -155,7 +155,7 @@ Always flag preprints as NOT peer-reviewed.
 
 ## Phase 6: ACMG Classification
 
-Apply all relevant evidence codes (PVS1, PS1, PS3, PM1, PM2, PM5, PP3, PP5 for pathogenic; BA1, BS1, BS3, BP4, BP7 for benign). See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+Apply all relevant evidence codes (PVS1, PS1, PS3, PM1, PM2, PM5, PP3, PP5 for pathogenic; BA1, BS1, BS3, BP4, BP7 for benign). For PS2/PM6, use `tooluniverse-acmg-de-novo-evidence-refinement`; if de novo data are not supplied, ask for parental genotypes, parentage confirmation, testing method, mosaicism assessment, and proband phenotype. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
 
 ### Gene-Specific Population Frequency Thresholds
 
@@ -297,7 +297,7 @@ If a primary tool fails, use these alternatives:
 
 **Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
 
-**Truncating Variant**: Check LOF mechanism, NMD escape, alternative isoforms, and curated disease-mechanism sources before applying PVS1. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. Apply PVS1 only to the disease context where LoF/haploinsufficiency is established.
+**Truncating Variant**: Check LOF mechanism, DECIPHER-style NMD escape regions, alternative isoforms, rescue transcripts, and curated disease-mechanism sources before applying PVS1. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. If a premature stop falls in a DECIPHER-predicted NMD escape region, do not assign PVS1 Very Strong solely from the stop-gained consequence; route through `tooluniverse-acmg-pvs1-splicing-refinement` and evaluate the NMD-escape truncated-protein branch. Apply PVS1 only to the disease context where LoF/haploinsufficiency is established.
 
 **Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential. Apply PP3/BP7 based on scores.
 

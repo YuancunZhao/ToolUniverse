@@ -1,12 +1,12 @@
 ---
 name: tooluniverse-acmg-pvs1-splicing-refinement
-description: Refine ACMG/AMP PVS1 strength assignment for RNA splicing evidence using Walker et al. 2023 ClinGen SVI Splicing Subgroup guidance. Use with ToolUniverse ACMG variant classification when RNA assay, published RNA-splicing evidence, rescue transcript, in-frame exon skipping, or detailed splice-impact evidence affects PVS1/BP7 assignment.
+description: Refine ACMG/AMP PVS1 strength assignment for RNA splicing evidence and NMD-escape/rescue-transcript context using Walker et al. 2023 ClinGen SVI Splicing Subgroup guidance plus DECIPHER-style NMD escape checks. Use with ToolUniverse ACMG variant classification when RNA assay, published RNA-splicing evidence, rescue transcript, predicted NMD escape, in-frame exon skipping, or detailed splice-impact evidence affects PVS1/BP7 assignment.
 disable-model-invocation: true
 ---
 
 # ACMG PVS1 Splicing Refinement
 
-This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PVS1 and PVS1 strength assignment when splicing evidence is relevant. It uses the Walker et al. 2023 ClinGen SVI Splicing Subgroup recommendations to interpret RNA-splicing assay evidence, rescue transcript models, in-frame transcript effects, and double-counting boundaries with PS3/BS3 and PP3/BP4.
+This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PVS1 and PVS1 strength assignment when splicing evidence, NMD escape, or rescue transcript context is relevant. It uses the Walker et al. 2023 ClinGen SVI Splicing Subgroup recommendations to interpret RNA-splicing assay evidence, rescue transcript models, in-frame transcript effects, and double-counting boundaries with PS3/BS3 and PP3/BP4. It also adds an explicit DECIPHER-style predicted NMD escape check for protein-truncating variants before assigning full-strength PVS1.
 
 This skill does not replace the full ACMG workflow. Use the standard ToolUniverse ACMG tools to retrieve variant, transcript, population, clinical, and literature evidence, then apply this refinement when the PVS1/splicing branch is under-specified.
 
@@ -22,6 +22,8 @@ Use this skill when any of the following are present:
 - Predicted or observed exon skipping, pseudoexon inclusion, intron retention, partial splicing, or complex aberrant transcript profiles.
 - In-frame exon skipping where critical residue/domain retention changes PVS1 strength.
 - Possible rescue transcripts or alternative transcripts that may preserve functional protein.
+- Nonsense, frameshift, or splice-derived premature termination variants where predicted NMD escape regions may alter PVS1 strength.
+- User-supplied or DECIPHER-derived "Region of predicted NMD escape" evidence.
 - Need to decide whether RNA-splicing evidence should be captured as `PVS1_Strength (RNA)`, `BP7_Strong (RNA)`, or explanatory text.
 
 Do not use this skill to refine unrelated ACMG evidence criteria. PS3/BS3, PP3/BP4, BA1/BS1/PM2, PM1, PS1, and PM5 should only be refined here when required to avoid double counting splicing evidence.
@@ -45,6 +47,7 @@ Use English queries and database-verified evidence.
 
 2. **Annotate splicing consequence**
    - Use `EnsemblVEP_annotate_hgvs` for consequence terms and transcript context.
+   - Use `ensembl_vep_region` with `LoF=1` when available to retrieve LoFTEE fields, but do not treat LoFTEE `50_BP_RULE:PASS` as excluding 5' NMD escape.
    - Use `SpliceAI_predict_splice` or `SpliceAI_get_max_delta` for prediction-only evidence.
    - Treat SpliceAI as prediction evidence, not as RNA assay evidence.
 
@@ -53,16 +56,24 @@ Use English queries and database-verified evidence.
    - Apply PVS1 only when LoF is an established or well-supported disease mechanism for the gene-disease context.
    - If the disease mechanism may be dominant-negative, antimorphic, or mixed by variant class, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PVS1. Do not treat a dominant-negative disease mechanism as ordinary haploinsufficiency.
 
-4. **Retrieve RNA-splicing evidence**
+4. **Check predicted NMD escape and rescue context for protein-truncating variants**
+   - For nonsense, frameshift, canonical splice, or splice-derived premature termination variants, explicitly check whether the premature stop is in a predicted NMD escape region before applying full-strength PVS1.
+   - Preferred evidence is DECIPHER "Region of predicted NMD escape" on the exact transcript/protein coordinate. Capture the transcript/protein, affected residue or cDNA coordinate, NMD escape interval, description, URL or screenshot, and date accessed.
+   - If a ToolUniverse DECIPHER variant/NMD tool is available in the active session, use it first. If no DECIPHER tool is available, use the browser/web page or user-provided DECIPHER screenshot as the source and state that the DECIPHER evidence was manually extracted.
+   - Do not infer "not NMD escaping" from general position heuristics alone when DECIPHER or another curated transcript model provides an NMD escape interval.
+   - Do not use LoFTEE `50_BP_RULE:PASS` to overrule a DECIPHER 5' NMD escape annotation. `50_BP_RULE` addresses the usual 3' terminal exon / penultimate exon boundary rule and may miss first-100-bp or early-CDS NMD escape models.
+   - If the variant falls in a DECIPHER-predicted NMD escape region, route PVS1 through the NMD-escape truncated-protein branch. Evaluate whether the predicted truncated protein loses critical functional regions, whether alternative initiation could rescue function, and whether a disease-specific rule supports PVS1 Very Strong. In the absence of such evidence, reduce from PVS1 Very Strong to an appropriate lower strength or withhold PVS1 if LoF is not established.
+
+5. **Retrieve RNA-splicing evidence**
    - Use `PubMed_search_articles` and `EuropePMC_search_articles` with queries combining gene, variant notation, "RNA", "splicing", "RT-PCR", "minigene", "transcript", "exon skipping", or "pseudoexon".
    - If RNA evidence is from a paper, capture assay type, sample/source, observed transcript products, estimated abundance if reported, and whether normal controls or known controls were used.
    - When RNA evidence is shown in a figure, gel, Sanger trace, minigene panel, RT-PCR panel, or transcript schematic, use `tooluniverse-literature-figure-evidence-extraction` to extract the visual transcript evidence before applying `PVS1_Strength (RNA)` or `BP7_Strong (RNA)`.
 
-5. **Assess protein consequences of observed RNA products**
+6. **Assess protein consequences of observed RNA products**
    - Determine whether the RNA product is out-of-frame, introduces a premature termination codon, is predicted to undergo NMD, removes initiation codon, disrupts a canonical transcript, or produces an in-frame protein alteration.
    - For in-frame products, use UniProt, InterPro, Pfam-equivalent annotations, AlphaFold/PDB structural context, and known clinically important residues/domains to judge whether critical protein function is lost or retained.
 
-6. **Assess rescue transcript model**
+7. **Assess rescue transcript model**
    - Identify physiologic alternative transcripts that naturally exclude the affected exon or otherwise avoid the variant effect.
    - A plausible rescue transcript must preserve reading frame and critical protein domains. Tissue expression is helpful; Walker et al. propose 10% of overall gene expression as a conservative operational threshold when gene-specific data are unavailable.
    - If a plausible rescue model exists, reduce PVS1 strength or withhold PVS1 as described below.
@@ -91,12 +102,15 @@ Do not automatically apply high PVS1 strength when any of the following apply:
 - LoF is not an established disease mechanism for the gene-disease context.
 - The relevant disease is established as dominant-negative and haploinsufficiency/LoF is not established for the same disease context.
 - RNA impact is limited, mixed, or not clearly disease-relevant.
+- DECIPHER or another transcript-specific source predicts NMD escape and the truncated protein consequences have not been shown to cause LoF at full PVS1 strength.
 - The RNA assay is not interpretable for the relevant tissue/transcript or does not resolve the clinically relevant isoform.
 - The variant affects a non-constitutive exon and a plausible rescue transcript preserves reading frame and critical domains.
 - The observed in-frame transcript is compatible with retained protein function.
 - The assay shows complex aberrant profiles and the proportion of LoF transcript is unclear.
 
 When a plausible rescue transcript model is present, use reduced PVS1 strength or `PVS1_N/A` rather than full PVS1. Record the transcript evidence and why the rescue model changes the strength.
+
+When a predicted NMD escape region is present, report it explicitly and separate three questions: (1) whether NMD is expected, (2) whether any translated truncated product would lose critical protein function, and (3) whether the gene-disease mechanism supports LoF for the evaluated inheritance model. Do not collapse these into a single "nonsense = PVS1 Very Strong" statement.
 
 ---
 
@@ -181,6 +195,7 @@ Always state which prediction codes were not applied to avoid double counting. I
 | `VariantValidator_gene2transcripts` | Identify MANE Select and clinically relevant transcripts. |
 | `VariantValidator_validate_variant` | Validate HGVS and transcript/protein/genomic consequences. |
 | `EnsemblVEP_annotate_hgvs` | Retrieve consequence and transcript context. |
+| `ensembl_vep_region` with `LoF=1` | Retrieve LoFTEE fields as auxiliary evidence; does not replace DECIPHER NMD escape checks. |
 | `SpliceAI_predict_splice` / `SpliceAI_get_max_delta` | Prediction-only splice evidence; not RNA assay evidence. |
 | `MyVariant_query_variants` | Aggregated variant annotation, ClinVar, gnomAD, CADD/dbNSFP fields. |
 | `ClinGen_search_gene_validity` | Gene-disease validity and disease mechanism context. |
@@ -195,6 +210,7 @@ Always state which prediction codes were not applied to avoid double counting. I
 
 - This skill is a rule-refinement layer, not a new deterministic MCP tool.
 - Gene-specific VCEP specifications should supersede generic guidance when available and current.
+- This skill can route DECIPHER evidence, but ToolUniverse currently may not expose a DECIPHER variant/NMD tool in every session. If no tool is available, DECIPHER extraction must be done through the browser, a saved page, or user-supplied screenshot and documented as such.
 - PVS1 strength for partial splicing, complex transcript profiles, and in-frame events may require gene-specific domain maps or assay calibration.
 - RNA source, assay design, transcript expression, and control validation can change evidence weight.
 - This skill intentionally does not refine unrelated ACMG criteria beyond avoiding splicing-evidence double counting.

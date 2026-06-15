@@ -1,0 +1,209 @@
+---
+name: tooluniverse-acmg-phenotype-dependent-evidence-refinement
+description: Refine ACMG/AMP evidence criteria that require patient phenotype, disease specificity, affected status, or phenotype-match context. Use with ToolUniverse ACMG classification when PP4, PS4, PP1/BS4, PM3, BP5, BS2, PS2/PM6 phenotype consistency, or other clinical-context-dependent criteria cannot be assessed without phenotype information.
+disable-model-invocation: true
+---
+
+# ACMG Phenotype-Dependent Evidence Refinement
+
+This skill extends `tooluniverse-acmg-variant-classification` by defining a lightweight intake and routing layer for ACMG evidence criteria that require phenotype, affected status, or disease-match context.
+
+It does not create new evidence codes and does not replace evidence-specific overlays. It prevents ToolUniverse from guessing phenotype-dependent evidence when the user has not provided enough clinical context.
+
+---
+
+## When to Use This Skill
+
+Use this skill when an ACMG classification may depend on:
+
+- `PP4`: phenotype or family history highly specific for a disease with a single genetic etiology.
+- `PS4`: significantly increased prevalence of the variant in affected individuals compared with controls.
+- `PP1` or `BS4`: segregation or non-segregation in affected and unaffected relatives.
+- `PM3`: affected proband observations for recessive in-trans or phase-unknown variants.
+- `BP5`: an alternate molecular basis for the patient's disease.
+- `BS2`: observation in healthy adult individuals where disease penetrance and phenotype status matter.
+- `PS2` or `PM6`: de novo evidence where phenotype consistency affects whether the observation is relevant.
+- Any VCEP rule requiring phenotype specificity, HPO terms, disease onset, penetrance, severity, or affected/unaffected status.
+
+Do not infer these criteria from variant annotation alone.
+
+---
+
+## Required Phenotype Intake
+
+Before applying phenotype-dependent evidence, collect the minimum clinical context needed for the criterion under consideration.
+
+Ask the user for missing information when it is not present in the prompt, literature excerpt, case table, or supplied report.
+
+Minimum useful phenotype fields:
+
+- Proband phenotype summary.
+- HPO terms, if available.
+- Suspected disease or disease spectrum.
+- Age at onset and current age.
+- Disease severity and key positive/negative features.
+- Inheritance model being evaluated.
+- Family history and affected/unaffected relative status, if relevant.
+- Whether the phenotype is highly specific for the gene/disease or broadly nonspecific.
+- Any known alternate molecular diagnosis.
+
+If these fields are missing, report the affected criteria as `Not Assessed - phenotype required` and ask targeted follow-up questions.
+
+---
+
+## ToolUniverse Evidence Retrieval
+
+Use ToolUniverse tools to contextualize the supplied phenotype; do not use them to invent a patient phenotype.
+
+Recommended tools:
+
+| Tool | Use |
+|------|-----|
+| `ClinGen_search_gene_validity` | Confirm gene-disease validity and disease scope. |
+| `GenCC_search_gene` | Cross-check gene-disease validity, inheritance, and mechanism. |
+| `MedGen_search_conditions`, `MedGen_get_condition`, `MedGen_get_clinical_features` | Disease synonyms, OMIM cross-references, inheritance, and HPO clinical features. |
+| `Mondo_get_disease`, `Mondo_get_disease_phenotypes` | Normalize disease names and retrieve disease-associated HPO phenotypes. |
+| `HPO_get_diseases_by_phenotype`, `HPO_get_genes_by_phenotype` | Map supplied HPO terms to diseases and candidate genes. |
+| `MyDisease_get_disease` | Retrieve disease annotations, HPO links, DisGeNET context, and cross-references. |
+| `MonarchV3_get_entity`, `MonarchV3_get_associations` | Cross-check gene-disease and disease-phenotype associations. |
+| `PubMed_search_articles` / `EuropePMC_search_articles` | Case-series phenotype, disease specificity, and variant prevalence evidence. |
+| `ClinVar_search_variants` / `ClinVar_get_variant` | Variant-level clinical assertions; not sufficient by itself for patient phenotype. |
+
+Use the retrieved disease description only to assess match to user-supplied phenotype.
+
+---
+
+## Criterion Routing
+
+### PP4
+
+Apply PP4 only when the supplied phenotype is highly specific for a disease with a single or narrow genetic etiology, or when a current VCEP explicitly defines phenotype specificity rules.
+
+Do not apply PP4 when:
+
+- No phenotype is supplied.
+- The phenotype is broad, common, or compatible with many unrelated genes.
+- The gene-disease association is weak or disputed.
+- The phenotype matches a different disease mechanism than the variant being interpreted.
+
+If phenotype is missing, ask:
+
+```text
+PP4 requires phenotype specificity. Please provide the proband's key clinical features or HPO terms, suspected disease, age at onset, and any known alternate diagnosis.
+```
+
+### PS4
+
+Apply PS4 only when affected-case enrichment is supported by case-control, cohort, or well-curated case-count evidence and the affected individuals have a phenotype matching the gene-disease context.
+
+Do not apply PS4 from isolated case reports without appropriate enrichment or VCEP-approved counting rules.
+
+If affected phenotype details are missing, ask:
+
+```text
+PS4 requires affected-case context. Please provide the disease/phenotype used for case ascertainment, number of affected carriers, ancestry or cohort details, and the control comparison or VCEP case-count rule.
+```
+
+### PP1 and BS4
+
+Use `tooluniverse-acmg-pp1-segregation-refinement` for segregation scoring, but use this phenotype overlay first when affected/unaffected status or phenotype specificity is unclear.
+
+If family phenotype is missing, ask:
+
+```text
+PP1/BS4 requires family phenotype status. Please provide which relatives are affected or unaffected, their genotype status, age at evaluation, phenotype details, penetrance assumptions, and whether phenocopy is plausible.
+```
+
+### PM3
+
+Use `tooluniverse-acmg-pm3-in-trans-refinement` for PM3 scoring. This phenotype overlay checks whether the proband is affected with the recessive disease being evaluated.
+
+If proband phenotype is missing, ask:
+
+```text
+PM3 requires an affected proband in the relevant recessive disease context. Please provide the proband phenotype, suspected diagnosis, zygosity/phase of both variants, and whether the phenotype matches the gene-disease association.
+```
+
+### BP5
+
+Apply BP5 only when an alternate molecular basis plausibly explains the patient's phenotype better than the variant under assessment.
+
+Do not apply BP5 when:
+
+- No phenotype is supplied.
+- The alternate finding is unrelated to the patient's phenotype.
+- The alternate diagnosis does not fully explain the relevant disease features.
+
+If alternate diagnosis context is missing, ask:
+
+```text
+BP5 requires phenotype and alternate-diagnosis context. Please provide the patient's phenotype and the alternate pathogenic/likely pathogenic variant or molecular diagnosis proposed to explain it.
+```
+
+### BS2
+
+Apply BS2 only when the variant is observed in an individual who is truly unaffected for a disease where age, penetrance, sex, and ascertainment make that observation incompatible with pathogenicity.
+
+If unaffected status is unclear, ask:
+
+```text
+BS2 requires reliable unaffected status. Please provide the individual's age, sex if relevant, clinical evaluation, family history, penetrance/onset expectations, and whether the individual was specifically assessed for the disease.
+```
+
+### PS2 and PM6 Phenotype Consistency
+
+Use `tooluniverse-acmg-de-novo-evidence-refinement` for de novo strength. This phenotype overlay only ensures that the proband phenotype matches the gene-disease context before de novo evidence is counted.
+
+---
+
+## Missing-Information Behavior
+
+If the user has not provided required phenotype information:
+
+1. Do not apply the phenotype-dependent criterion.
+2. Mark the criterion as `Not Assessed - phenotype required`.
+3. Ask only for the fields needed for the criterion being considered.
+4. Continue assessing criteria that do not require phenotype.
+
+Example:
+
+```markdown
+Not assessed:
+- PP4: phenotype specificity cannot be evaluated without proband clinical features or HPO terms.
+- PS2/PM6 phenotype consistency: de novo status may be relevant, but proband phenotype was not provided.
+
+Please provide the proband phenotype or HPO terms, suspected disease, age at onset, and any known alternate diagnosis.
+```
+
+---
+
+## Output Format
+
+```markdown
+Phenotype-dependent evidence refinement:
+- Supplied phenotype: [summary / not provided]
+- Normalized phenotype terms: [HPO/MONDO/MedGen if available]
+- Gene-disease context: [disease, inheritance, validity]
+- Phenotype match: [highly specific / compatible / nonspecific / mismatched / not assessable]
+- Criteria affected: [PP4, PS4, PP1, BS4, PM3, BP5, BS2, PS2/PM6, other]
+- Missing information: [fields]
+- Applied evidence: [criterion and strength / Not Assessed - phenotype required]
+- Follow-up question to user: [targeted question if needed]
+```
+
+---
+
+## Limitations
+
+- This skill does not diagnose the patient and does not infer unprovided phenotype.
+- Literature and databases provide disease background, not patient-specific evidence.
+- PP4 and phenotype-dependent VCEP rules are disease-specific and should not be generalized across genes.
+- Reduced penetrance, variable expressivity, age-dependent onset, phenocopy, and alternate diagnoses can change evidence strength.
+
+---
+
+## Primary References
+
+- Richards S, Aziz N, Bale S, et al. Standards and guidelines for the interpretation of sequence variants. Genet Med. 2015;17(5):405-424. PMID: 25741868. DOI: 10.1038/gim.2015.30.
+- Strande NT, Riggs ER, Buchanan AH, et al. Evaluating the Clinical Validity of Gene-Disease Associations: An Evidence-Based Framework Developed by the Clinical Genome Resource. Am J Hum Genet. 2017;100(6):895-906. PMID: 28552198. PMCID: PMC5473734.
+- Current ClinGen VCEP specifications for disease-specific PP4, PS4, segregation, de novo, and phenotype-match rules.

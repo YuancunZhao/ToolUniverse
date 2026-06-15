@@ -1,13 +1,14 @@
 # Quick Start: ACMG PVS1 Splicing Refinement
 
-Use this skill together with `tooluniverse-acmg-variant-classification` when RNA-splicing evidence changes PVS1 or BP7 assignment.
+Use this skill together with `tooluniverse-acmg-variant-classification` when RNA-splicing evidence, predicted NMD escape, or rescue transcript evidence changes PVS1 or BP7 assignment.
 
 ## Basic Workflow
 
 1. Run the usual ACMG variant classification evidence retrieval.
-2. If RNA assay or detailed splicing evidence is present, invoke this skill for the PVS1/splicing branch.
-3. Decide whether the evidence should be captured as `PVS1_Strength (RNA)`, `BP7_Strong (RNA)`, prediction-only PP3/BP4 evidence, explanatory text, or no code.
-4. Remove duplicate splicing-use of PS3/BS3 or PP3/BP4 when RNA evidence already supplies the PVS1/BP7 splicing code.
+2. For protein-truncating variants, check DECIPHER-style predicted NMD escape regions before assigning full-strength PVS1. If ToolUniverse has no DECIPHER tool, use browser/page evidence or user-supplied DECIPHER screenshots and document the source.
+3. If RNA assay or detailed splicing evidence is present, invoke this skill for the PVS1/splicing branch.
+4. Decide whether the evidence should be captured as `PVS1_Strength (RNA)`, `BP7_Strong (RNA)`, prediction-only PP3/BP4 evidence, explanatory text, or no code.
+5. Remove duplicate splicing-use of PS3/BS3 or PP3/BP4 when RNA evidence already supplies the PVS1/BP7 splicing code.
 
 ## Example 1: Out-of-frame exon skipping with NMD
 
@@ -124,3 +125,22 @@ Use this skill together with `tooluniverse-acmg-variant-classification` when RNA
 - Do not apply PS3 for the same RNA assay.
 - Do not apply PP3 for the same splice mechanism.
 - State that prediction/functional splicing codes were not counted separately to avoid double counting.
+
+## Example 9: Early nonsense in a DECIPHER-predicted NMD escape region
+
+**Input evidence**
+
+- Nonsense variant in a gene where recessive LoF is a plausible disease mechanism.
+- DECIPHER shows a "Region of predicted NMD escape" overlapping the variant, such as a first-100-bp / early amino-acid interval.
+- VEP LoFTEE may still report `lof=HC` and `50_BP_RULE:PASS`.
+
+**Expected behavior**
+
+- Do not use LoFTEE `50_BP_RULE:PASS` to overrule the DECIPHER 5' NMD escape region.
+- Do not assign PVS1 Very Strong solely because the variant is a nonsense variant.
+- Evaluate the NMD-escape truncated-protein branch: how much protein remains, whether critical domains are lost, whether alternative initiation/rescue is plausible, and whether gene-specific guidance supports full PVS1.
+- In the absence of evidence supporting full-strength LoF from the truncated product, reduce PVS1 strength or withhold PVS1 as appropriate.
+
+**Report wording**
+
+`PVS1: reduced from Very Strong because DECIPHER predicts NMD escape for the region overlapping the premature stop. The variant is interpreted through the NMD-escape truncated-protein branch; LoFTEE 50_BP_RULE:PASS is treated as auxiliary and does not exclude the DECIPHER 5' escape annotation.`

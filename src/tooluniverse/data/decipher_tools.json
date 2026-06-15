@@ -1,0 +1,173 @@
+[
+  {
+    "name": "DECIPHER_get_sequence_variant_nmd",
+    "description": "Fetch a public DECIPHER exact sequence-variant page by GRCh38 chr-pos-ref-alt and assess first-100bp predicted NMD escape overlap for PVS1 refinement. Example: 15-56464157-T-A with c.94A>T.",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant_id": {
+          "type": "string",
+          "description": "GRCh38 sequence variant ID in chr-pos-ref-alt format, without chr prefix preferred. Example: 15-56464157-T-A."
+        },
+        "transcript_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional transcript identifier from upstream validation, e.g. ENST00000260453 or NM_018365.4. Used for provenance only in v1."
+        },
+        "protein_position": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Optional 1-based protein position of the premature stop, e.g. 32 for p.Lys32Ter. Used to test overlap with aa 1-34 NMD escape."
+        },
+        "coding_hgvs": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional coding HGVS such as NM_018365.4:c.94A>T or c.94A>T. Used to derive coding/protein position for first-100bp escape overlap."
+        }
+      },
+      "required": [
+        "variant_id"
+      ]
+    },
+    "type": "DECIPHERSequenceVariantNMDTool",
+    "test_examples": [
+      {
+        "variant_id": "15-56464157-T-A",
+        "transcript_id": "NM_018365.4",
+        "coding_hgvs": "NM_018365.4:c.94A>T",
+        "protein_position": 32
+      }
+    ],
+    "return_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "data"
+          ],
+          "properties": {
+            "status": {
+              "const": "success"
+            },
+            "data": {
+              "type": "object",
+              "required": [
+                "variant_id",
+                "page_url",
+                "nmd_escape",
+                "provenance"
+              ],
+              "properties": {
+                "variant_id": {
+                  "type": "string"
+                },
+                "page_url": {
+                  "type": "string"
+                },
+                "genome_build": {
+                  "type": "string"
+                },
+                "genomic_position": {
+                  "type": "object"
+                },
+                "query_context": {
+                  "type": "object"
+                },
+                "basic_variant_context": {
+                  "type": "object"
+                },
+                "nmd_escape": {
+                  "type": "object",
+                  "properties": {
+                    "interpretation_status": {
+                      "type": "string"
+                    },
+                    "overlaps_nmd_escape": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "nmd_escape_regions": {
+                      "type": "array"
+                    },
+                    "matched_region": {
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "evidence_source": {
+                      "type": "string"
+                    },
+                    "matched_by": {
+                      "type": [
+                        "array",
+                        "null"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "provenance": {
+                  "type": "object"
+                }
+              }
+            },
+            "url": {
+              "type": "string"
+            },
+            "status_code": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "error"
+          ],
+          "properties": {
+            "status": {
+              "const": "error"
+            },
+            "error": {
+              "type": "string"
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status_code": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "data": {
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+]

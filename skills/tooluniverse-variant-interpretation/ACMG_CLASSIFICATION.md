@@ -76,11 +76,13 @@
 
 | GDA Score | Evidence Level | ACMG Support |
 |-----------|----------------|--------------|
-| >0.7 | Strong | PP4 (phenotype) |
+| >0.7 | Strong | Gene-disease context only; PP4 still requires patient phenotype |
 | 0.4-0.7 | Moderate | Supporting |
 | <0.4 | Weak | Insufficient |
 
 ## ClinGen Validity Levels (for ACMG PM1/PP4)
+
+Gene-disease validity and disease association scores do not substitute for patient-level phenotype evidence. When PP4, PS4, PP1/BS4, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is considered, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement`; if phenotype is missing, mark the criterion as not assessed and request the needed clinical fields.
 
 | Classification | Meaning | ACMG Impact |
 |----------------|---------|-------------|
@@ -166,6 +168,6 @@ Before using this table, verify that LoF/haploinsufficiency is an established me
 
 | Scenario | PVS1 Strength |
 |----------|---------------|
-| Canonical LOF gene, NMD predicted | Very Strong |
-| LOF gene, last exon | Moderate |
+| Canonical LOF gene, NMD predicted and no DECIPHER/equivalent NMD escape or rescue transcript evidence | Very Strong |
+| LOF gene, last exon, DECIPHER-predicted NMD escape, or other NMD escape evidence | Reduce strength; often Moderate or lower depending truncated-protein critical-region evidence |
 | Non-LOF gene | Not applicable |
