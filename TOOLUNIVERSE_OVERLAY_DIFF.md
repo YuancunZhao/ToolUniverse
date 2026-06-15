@@ -4,8 +4,8 @@ Last updated: 2026-06-15
 
 Baseline comparison:
 
-- Upstream: `mims-harvard/ToolUniverse`, `upstream/main` at `574a7027`
-- Overlay branch: `YuancunZhao/ToolUniverse`, `codex/skills-overlay` at `073b2199`
+- Upstream: `mims-harvard/ToolUniverse`, `upstream/main` at `7d6a182f`
+- Overlay branch: `YuancunZhao/ToolUniverse`, `codex/skills-overlay` after merging upstream `7d6a182f`
 - Diff command: `git diff --name-status upstream/main...codex/skills-overlay -- skills`
 
 Summary:
@@ -14,7 +14,7 @@ Summary:
 - Modified upstream skills: 3
 - Deleted upstream skills: 0
 - Changed files under `skills/`: 34
-- Net diff: 4615 insertions, 23 deletions
+- Net diff: 5592 insertions, 26 deletions
 
 ## Added Skills
 
