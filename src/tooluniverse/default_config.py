@@ -299,7 +299,6 @@ default_tool_files = {
     "kegg": os.path.join(current_dir, "data", "kegg_tools.json"),
     "ensembl": os.path.join(current_dir, "data", "ensembl_tools.json"),
     "clinvar": os.path.join(current_dir, "data", "clinvar_tools.json"),
-    "decipher": os.path.join(current_dir, "data", "decipher_tools.json"),
     "clinvar_submitted": os.path.join(
         current_dir, "data", "clinvar_submitted_tools.json"
     ),
