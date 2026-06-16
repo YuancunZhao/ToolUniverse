@@ -13,8 +13,8 @@ Summary:
 - Added skills: 21
 - Modified upstream skills: 4
 - Deleted upstream skills: 0
-- Changed files under `skills/`: 63
-- Net intended overlay diff: approximately 8050 insertions, 90 deletions
+- Changed files under `skills/`: 66
+- Net intended overlay diff: approximately 8070 insertions, 190 deletions
 
 ## Added Skills
 
@@ -421,6 +421,29 @@ Behavior added:
 - Clarifies non-circular routing boundaries: BA1 exception list is the BA1 stand-alone gate; benign-context handles BS1/BS2/BP2/BP5 and BA1 follow-up context; phenotype-dependent handles intake; PP1 handles PP1/BS4/PP4 combined scoring; PVS1 LoF tree remains the baseline; Walker/RNA splicing remains a refinement; PS1-splicing remains comparison-variant evidence; PP5/BP6 is a source-review utility and not ordinary counted evidence.
 - Reduces repeated precondition text in evidence-specific overlays by pointing to the routing core, without changing criterion-specific thresholds, evidence strengths, double-counting rules, or VCEP precedence.
 - Preserves locked rules: PM2 remains ClinGen SVI `PM2_Supporting` by default, and PP3/BP4 remains Pejaver 2022 calibrated missense prediction evidence.
+
+## Variant Interpretation Simplification Update: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/CHECKLIST.md
+M skills/tooluniverse-variant-interpretation/CODE_PATTERNS.md
+M skills/tooluniverse-variant-interpretation/EXAMPLES.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior added:
+
+- Makes `tooluniverse-variant-interpretation` an intake, retrieval, and reporting skill rather than an independent ACMG classifier.
+- Removes local ACMG classification helper logic and points final evidence strength assignment to `tooluniverse-acmg-variant-classification`.
+- Converts predictor examples and threshold tables into retrieval/orientation guidance only; PP3/BP4 strength remains assigned by the Pejaver 2022 overlay or current VCEP rules.
+- Converts SpliceAI helper examples into prediction-context output only; RNA/splicing evidence routes to PVS1/RNA, PS1-splicing, or prediction-specific overlays as appropriate.
+- Treats COSMIC somatic recurrence as cancer-context or literature/domain lead, not direct germline ACMG PS3.
+- Aligns checklist and examples with the same routing model: predictor evidence, PM2, BA1/BS1, SpliceAI, PVS1/RNA, PP1/BS4/PP4, and final classification are routed to overlays instead of being locally assigned by examples.
+- Does not change any ACMG overlay threshold, PM2 default strength, PP3/BP4 locked rule, PP5/BP6 non-counting behavior, or VCEP precedence.
 
 ## Update Procedure
 

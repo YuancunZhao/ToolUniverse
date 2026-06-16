@@ -297,7 +297,7 @@
 
 **Homozygotes**: 0
 
-**Interpretation**: Absent from gnomAD (>140,000 individuals). Supports PM2 (absent from controls).
+**Interpretation**: Absent from gnomAD (>140,000 individuals). Route rarity evidence to the PM2 overlay; PM2 defaults to Supporting when the locus and population representation checks pass.
 
 *Source: `gnomad_search_variants`, accessed 2026-02-04*
 
@@ -327,7 +327,7 @@
 | p.R175S | Pathogenic |
 | **p.R175C** | VUS (being reclassified) |
 
-**PM5 Applies**: Multiple different missense changes at R175 are pathogenic.
+**PM5 route**: Multiple different missense changes at R175 are reported as pathogenic. Route the comparison-variant evidence to the PS1/PM5 amino-acid equivalence overlay before assigning strength.
 
 ### OMIM
 
@@ -349,7 +349,7 @@
 | CADD | 29.5 (Phred) | Top 0.1% deleterious |
 | REVEL | 0.92 | Pathogenic range |
 
-**Concordance**: 4/4 predictors indicate damaging → **PP3 applies**
+**Prediction route**: Predictor outputs are consistently damaging. Route the predictor set to the PP3/BP4 missense-prediction overlay or TP53 VCEP rules before assigning PP3 strength.
 
 *Source: `MyVariant_query_variants`*
 
@@ -426,10 +426,10 @@
 
 | Code | Strength | Rationale |
 |------|----------|-----------|
-| **PM2** | Moderate | Absent from gnomAD (>140,000 individuals) |
-| **PM5** | Moderate | Different missense at same position (R175H) is pathogenic |
-| **PM1** | Moderate | Critical DNA-binding domain, zinc coordination region |
-| **PP3** | Supporting | All 4 predictors concordantly damaging |
+| **PM2** | Supporting | PM2 overlay: absent from gnomAD with representation review |
+| **PM5** | Moderate | PS1/PM5 overlay: different pathogenic missense at same residue |
+| **PM1** | Moderate | PM1 overlay: critical DNA-binding domain, zinc coordination region |
+| **PP3** | Overlay-assigned | PP3/BP4 overlay or VCEP: calibrated predictor evidence, not local consensus |
 
 ### Evidence Summary
 
@@ -437,12 +437,12 @@
 |------------|--------|
 | 0 Very Strong | None |
 | 0 Strong | |
-| 3 Moderate (PM2, PM5, PM1) | |
-| 1 Supporting (PP3) | |
+| 2 Moderate (PM5, PM1) | |
+| Supporting/variable predictor evidence after overlay review | |
 
 ### Classification: **LIKELY PATHOGENIC**
 
-**Rationale**: 3 Moderate + 1 Supporting meets ACMG criteria for Likely Pathogenic. Strong structural evidence at known hotspot position supports classification upgrade from VUS.
+**Rationale**: Final classification is produced by `tooluniverse-acmg-variant-classification` after PM2, PS1/PM5, PM1, and PP3/BP4 overlay review. Do not calculate the classification from local predictor consensus.
 
 **Confidence**: ★★☆ (Moderate) - Structural evidence strong, but lacks direct R175C functional data
 
@@ -534,7 +534,7 @@
 | East Asian | 0.03 |
 | African | 0.08 |
 
-**Interpretation**: Far too common to cause rare disease like CF (prevalence 1/3,000). **BA1 applies**.
+**Interpretation**: Far too common to cause rare disease like CF (prevalence 1/3,000). Route to BA1 exception-list review first; if BA1 is valid, do not also count PM2 or BS1 for the same disease context.
 
 ---
 
@@ -544,9 +544,9 @@
 
 | Code | Strength | Rationale |
 |------|----------|-----------|
-| **BA1** | Stand-Alone | AF >5% in gnomAD |
-| **BS1** | Strong | AF far exceeds disease frequency |
-| **BP4** | Supporting | Benign computational predictions |
+| **BA1** | Stand-Alone | BA1 exception-list overlay confirms AF >5%, adequate dataset, and no exception |
+| **BS1** | Not used when BA1 valid | High-frequency context is consumed by BA1 for the same disease context |
+| **BP4** | Overlay-assigned if needed | Benign predictor evidence routes to PP3/BP4 overlay; BA1 alone is sufficient here |
 
 ### Classification: **BENIGN**
 
@@ -602,7 +602,7 @@
 | MaxEntScan (WT) | 8.2 | Strong donor site |
 | MaxEntScan (Mut) | 4.1 | Weakened |
 
-**Interpretation**: +3 position variants can affect splicing. SpliceAI score of 0.89 suggests high likelihood of splice disruption.
+**Interpretation**: +3 position variants can affect splicing. SpliceAI score of 0.89 is prediction context; route it to the relevant splicing/prediction overlay and do not treat it as RNA assay evidence.
 
 ---
 
@@ -612,13 +612,13 @@
 
 | Code | Strength | Rationale |
 |------|----------|-----------|
-| **PM2** | Supporting | Absent from gnomAD |
-| **PP3** | Supporting | SpliceAI predicts splice disruption |
-| **PM4** | Supporting | If causes in-frame deletion, alters protein |
+| **PM2** | Supporting | PM2 overlay: absent from gnomAD after representation review |
+| **PP3** | Overlay-assigned | SpliceAI prediction routed to splicing/prediction overlay |
+| **PM4** | Not assessed from prediction alone | Requires defined protein-length consequence; route to PM4/BP3 only if the transcript effect is established |
 
 ### Classification: **VUS (Favor Pathogenic)**
 
-**Rationale**: Insufficient evidence for Likely Pathogenic (would need 1 Strong + 1 Moderate or 3 Moderate). Splice prediction is suggestive but not confirmed.
+**Rationale**: Insufficient evidence for Likely Pathogenic. Splice prediction is suggestive but not confirmed by RNA evidence; final classification remains VUS after ACMG workflow review.
 
 ---
 
@@ -635,6 +635,6 @@
 - Offer participation in research studies
 
 ### Reclassification Potential
-- RNA showing exon skipping → Upgrade to Likely Pathogenic (PVS1)
-- Segregation in 2+ affected → Add PP1
+- RNA showing a LoF transcript -> route to PVS1/RNA splicing refinement
+- Segregation evidence -> route to PP1/BS4/PP4 combined guidance
 ```

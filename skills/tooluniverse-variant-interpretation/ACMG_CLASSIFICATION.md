@@ -1,4 +1,6 @@
-# ACMG Classification Reference
+# ACMG Classification Quick Index
+
+This file is a quick index for retrieval and reporting. It is not a standalone ACMG classifier. Use `tooluniverse-acmg-variant-classification` for final evidence-code assignment and classification, with `tooluniverse-acmg-overlay-routing-core` coordinating disease context, mechanism, phenotype/source/literature intake, and evidence-specific overlays.
 
 ## Evidence Codes
 
@@ -28,13 +30,7 @@
 
 ## Classification Algorithm
 
-| Classification | Evidence Required |
-|----------------|-------------------|
-| Pathogenic | 1 Very Strong + 1 Strong; OR 2 Strong; OR 1 Strong + 3 Moderate |
-| Likely Pathogenic | 1 Very Strong + 1 Moderate; OR 1 Strong + 2 Moderate; OR 1 Strong + 2 Supporting |
-| Likely Benign | 1 Strong + 1 Supporting; OR 2 Supporting |
-| Benign | 1 Stand-alone; OR 2 Strong |
-| VUS | Criteria not met |
+Do not use this reference as an independent classification algorithm. The final classification must be produced through `tooluniverse-acmg-variant-classification`, which applies the overlay routing core, VCEP precedence, source-evidence rules, duplicate-evidence guards, and criterion-specific strength refinements.
 
 ## Classification Confidence
 
@@ -60,25 +56,19 @@
 
 Use `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2. PM2 remains ClinGen SVI-style `PM2_Supporting` by default. Use `tooluniverse-acmg-ba1-exception-list-refinement` before applying BA1. Use `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5 when disease prevalence, penetrance, inheritance, unaffected status, phase, or alternate diagnosis affects benign evidence.
 
-| Frequency | ACMG Code | Interpretation |
+| Frequency context | Route | Interpretation |
 |-----------|-----------|----------------|
-| Absent | PM2_Supporting | Absent from controls |
-| <0.00001 | PM2_Supporting | Extremely rare |
-| <0.0001 | - | Rare (use with caution) |
-| >0.05 with BA1 exception-list clearance | BA1 | Stand-alone benign |
-| High for disease but BA1 not valid | BS1 | Too common for disease after disease-specific review |
+| Absent or rare after coverage review | PM2 overlay | Use `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting strength |
+| >0.05 candidate | BA1 exception-list overlay | BA1 only after Ghosh 2018 exception-list and dataset-adequacy review |
+| High for disease but BA1 not valid | Benign-context overlay | Route BS1 assessment through disease-specific prevalence, penetrance, heterogeneity, inheritance, and ancestry AF review |
 
-## COSMIC Somatic Evidence
+## COSMIC Somatic Context
 
-| COSMIC Finding | Interpretation | ACMG Support |
-|----------------|----------------|--------------|
-| Recurrent hotspot (>100 samples) | Known oncogenic driver | PS3 (functional) |
-| Moderate frequency (10-100) | Likely oncogenic | PM1 (hotspot) |
-| Rare somatic (<10) | Unknown significance | No support |
+COSMIC recurrence is somatic cancer context and a literature or cancer-interpretation lead. Do not map COSMIC recurrence directly to germline functional evidence. For tumor-specific interpretation, route to the cancer variant interpretation workflow; for germline ACMG, use COSMIC only to guide literature review, mechanism review, or hotspot/domain context that is then assessed by the appropriate overlay.
 
 ## DisGeNET Score Interpretation
 
-| GDA Score | Evidence Level | ACMG Support |
+| GDA Score | Evidence Level | ACMG use |
 |-----------|----------------|--------------|
 | >0.7 | Strong | Gene-disease context only; PP4 still requires patient phenotype |
 | 0.4-0.7 | Moderate | Supporting |
@@ -108,7 +98,7 @@ Gene-disease validity and disease association scores do not substitute for patie
 
 ## Structural Impact Categories
 
-| Impact Level | Description | ACMG Support |
+| Impact Level | Description | ACMG use |
 |--------------|-------------|--------------|
 | **Critical** | Active site, catalytic residue | PM1 (strong) |
 | **High** | Buried residue, disulfide, structural core | PM1 (moderate) |
@@ -141,7 +131,7 @@ For ACMG PP3/BP4, do not use this table as evidence-strength thresholds. Use `to
 ## PP3/BP4 Application Notes
 
 - **PP3/BP4**: Assign only through calibrated predictor thresholds from `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or a current VCEP rule.
-- **Avoid majority voting**: Multiple concordant uncalibrated predictors do not automatically create Strong PP3/BP4.
+- **Avoid local predictor combining**: Multiple concordant uncalibrated predictors do not automatically create PP3/BP4 evidence.
 - **Tool availability**: If a required calibrated score is unavailable through ToolUniverse, record the gap and do not substitute developer-default SIFT/PolyPhen/CADD thresholds as ACMG evidence.
 
 ## PS4 and Phenotype-Dependent Evidence
@@ -150,29 +140,24 @@ Use `tooluniverse-acmg-ps4-case-enrichment-refinement` for case-control evidence
 
 Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 phenotype consistency requires patient phenotype, affected status, disease specificity, diagnostic yield, or tested/excluded loci. Use `tooluniverse-acmg-pp1-segregation-refinement` when PP4 and PP1/BS4 must be combined rather than counted independently.
 
-## SpliceAI Thresholds
+## SpliceAI Prediction Context
 
-| Max Delta Score | Interpretation | ACMG Support |
-|-----------------|----------------|--------------|
-| >=0.8 | High pathogenicity | PP3 (strong) for splice-altering |
-| 0.5-0.8 | Moderate | PP3 (supporting) |
-| 0.2-0.5 | Low | Weak evidence |
-| <0.2 | Likely benign | BP7 (if synonymous) |
+Use SpliceAI scores as prediction context, not direct evidence strength. Route prediction-only splice evidence through the relevant PP3/BP4 or splicing-prediction pathway, apply `tooluniverse-acmg-ps1-splicing-similarity-refinement` only for independent same-event comparison-variant evidence, and apply `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA assay or detailed RNA/splicing evidence affects PVS1 or BP7.
 
 ## Literature Evidence Weights
 
-| Evidence | ACMG Code | Weight |
+| Evidence | Route | Use |
 |----------|-----------|--------|
-| Functional study (null) | PS3 | Strong |
-| Functional study (reduced) | PS3_Moderate | Moderate |
+| Functional study (null) | PS3/BS3 overlay | Assay strength requires functional-assay refinement |
+| Functional study (reduced) | PS3/BS3 overlay | Assay strength requires functional-assay refinement |
 | Case reports with segregation | PP1/PP4 route | Use ClinGen 2024 combined PP1/BS4/PP4 overlay; avoid PP4/PS4/PP1 double counting |
-| Co-occurrence with pathogenic | BP2 | Supporting against |
+| Co-occurrence with pathogenic | Benign-context overlay | BP2 requires inheritance and cis/trans context |
 
 ## Regulatory Impact Categories
 
-| Category | Criteria | ACMG Support |
+| Category | Criteria | ACMG use |
 |----------|----------|--------------|
-| **High impact** | Disrupts known TF binding motif | PP3 (supporting) |
+| **High impact** | Disrupts known TF binding motif | Regulatory prediction context; route to the appropriate regulatory or ACMG overlay before assigning evidence |
 | **Moderate impact** | In active regulatory region | Consider context |
 | **Low impact** | No regulatory annotation | No support |
 
