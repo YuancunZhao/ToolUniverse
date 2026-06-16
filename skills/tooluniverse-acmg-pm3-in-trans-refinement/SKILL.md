@@ -114,7 +114,7 @@ Minimum proband evidence schema:
 | `classification_independent` | Whether the other allele classification is independent of the assessed variant's PM3 evidence. |
 | `duplicate_or_related_case` | Whether this proband duplicates another report or is a related non-independent case. |
 
-If the literature step cannot fill these fields, return `No PM3` or `PM3 not assessable` rather than guessing.
+If the literature step cannot fill these fields, return `No PM3` or `status: not_assessed` with reason `PM3 proband/phase fields incomplete` rather than guessing.
 
 Literature extraction should preserve exact source wording for phase calls. For example, keep the sentence or table note containing "compound heterozygous", "in trans", parent genotypes, read-backed phasing, or allele 1/allele 2 wording so the PM3 scoring step can audit the phase category.
 

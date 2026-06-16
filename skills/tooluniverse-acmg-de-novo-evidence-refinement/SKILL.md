@@ -49,7 +49,7 @@ Before assigning PS2 or PM6, collect:
 - For each proband, phenotype specificity category and whether genetic heterogeneity is high.
 - Whether the same de novo observation is already counted in published evidence or database assertions.
 
-If these fields are missing, report `PS2/PM6 Not Assessed - de novo information required` and ask targeted follow-up questions.
+If these fields are missing, report `status: not_assessed` with reason `PS2/PM6 de novo information required` and ask targeted follow-up questions.
 
 ---
 
@@ -221,19 +221,19 @@ Always cite the VCEP if it changes generic PS2/PM6 assignment.
 De novo evidence refinement:
 - Proband variant: [HGVS/genomic allele]
 - Proband phenotype: [summary / not provided]
-- Phenotype specificity category: [highly specific / consistent not specific / consistent high heterogeneity / not consistent / not assessable]
+- Phenotype specificity category: [highly specific / consistent not specific / consistent high heterogeneity / not consistent / not_assessed]
 - Mother genotype: [negative/positive/not tested/not provided]
 - Father genotype: [negative/positive/not tested/not provided]
 - Parentage confirmation: [confirmed / not confirmed / not documented]
 - Testing method/sample type: [summary]
-- Mosaicism review: [none reported / suspected / not assessed]
-- Occurrence independence: [independent / duplicate/circularity concern / not assessable]
+- Mosaicism review: [none reported / suspected / not_assessed]
+- Occurrence independence: [independent / duplicate/circularity concern / not_assessed]
 - Points awarded for this occurrence: [value]
 - Total de novo points across independent occurrences: [value]
 - SVI v1.1 threshold met: [Supporting / Moderate / Strong / Very Strong / none]
 - Inheritance adjustment: [none / AR one-level decrease / X-linked carrier rule / germline mosaicism rule / VCEP-specific]
 - VCEP rule: [none found / applied rule]
-- Applied evidence: [PS2 / PM6 / No PS2/PM6 / Not Assessed - de novo information required]
+- Applied evidence: [PS2 / PM6 / No PS2/PM6 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [de novo observation IDs / phenotype specificity / none]
 - Follow-up question: [targeted missing fields if needed]

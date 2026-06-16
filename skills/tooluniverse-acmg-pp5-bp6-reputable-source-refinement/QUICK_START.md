@@ -16,7 +16,7 @@ Default behavior: do not count PP5 or BP6. Use the source assertion as a lead to
 - Record the ClinVar assertion, review status, submitter, date, and condition.
 - Retrieve submitter criteria, cited publications, or evidence summaries if available.
 - Route the underlying evidence to criteria such as PVS1, PS3, PS4, PM3, PP1, PS1/PM5, or PP3/BP4.
-- If no primary evidence is available, report `PP5_NotAssessed - primary evidence required`.
+- If no primary evidence is available, report `applied_evidence: none`, `status: not_assessed`, and `reason: primary evidence required`.
 
 ---
 
@@ -42,7 +42,7 @@ Default behavior: do not count PP5 or BP6. Use the source assertion as a lead to
 - Do not apply `PP5`.
 - Treat the report as a non-counted lead.
 - Ask for the supporting evidence or original report details.
-- Use `PP5_NotAssessed - primary evidence required`.
+- Use `applied_evidence: none`, `status: not_assessed`, and `reason: primary evidence required`.
 
 ---
 
@@ -54,7 +54,7 @@ Default behavior: do not count PP5 or BP6. Use the source assertion as a lead to
 
 - Do not apply `BP6`.
 - Retrieve underlying evidence and route it to BA1, BS1, BS2, BS3, BS4, BP2, BP4, BP5, BP7, or another appropriate benign criterion.
-- If primary evidence is unavailable, report `BP6_NotAssessed - primary evidence required`.
+- If primary evidence is unavailable, report `applied_evidence: none`, `status: not_assessed`, and `reason: primary evidence required`.
 
 ---
 
@@ -78,6 +78,8 @@ PP5/BP6 reputable-source refinement:
 - Source assertion: [source, classification, review status, date]
 - Primary evidence available: [yes / partial / no]
 - Routed underlying criteria: [criteria or none]
-- Applied PP5/BP6 evidence: [No PP5 / No BP6 / PP5_NotUsed / BP6_NotUsed / Not Assessed - primary evidence required]
+- Applied PP5/BP6 evidence: [none]
+- Status: [not_used / not_assessed]
+- Reason: [primary evidence routed / primary evidence required / source assertion not counted]
 - Rationale: [why PP5/BP6 was not counted]
 ```

@@ -66,7 +66,7 @@ Do not apply PM2 when:
 4. **Check database adequacy**
    - Confirm that the variant's genomic region is represented well enough in the queried database.
    - Treat no returned record as "not observed in this source" only after coordinate, allele, build, and representation have been checked.
-   - If coverage or representation is unclear, report `PM2 not assessable` rather than applying PM2.
+   - If coverage or representation is unclear, report `status: not_assessed` with reason `PM2 coverage or representation unclear` rather than applying PM2.
 
 5. **Apply disease-specific context**
    - Check disease prevalence, penetrance, inheritance model, allelic heterogeneity, and VCEP thresholds when available.
@@ -89,7 +89,7 @@ Do not apply PM2 when:
 | Present at extremely low frequency compatible with disease model and VCEP threshold | `PM2_Supporting` |
 | Present above disease-specific BA1/BS1 threshold | No PM2; consider BA1 after exception-list review or BS1 |
 | Present in healthy individuals incompatible with disease model | No PM2; consider BS2 |
-| No reliable population data or poor coverage | PM2 not assessable |
+| No reliable population data or poor coverage | `status: not_assessed`; no PM2 |
 
 Do not apply PM2 at Moderate strength under the generic ACMG framework. Use Moderate or other non-supporting PM2 strength only when a current VCEP specification explicitly defines it.
 
@@ -152,7 +152,7 @@ PM2 absence/rarity refinement:
 - Coverage/representation: [adequate / uncertain / poor / not checked]
 - Disease model: [dominant/recessive/X-linked], prevalence/penetrance context: [summary]
 - Benign frequency conflict: [none / BA1 / BS1 / BS2]
-- Applied evidence: [PM2_Supporting / No PM2 / PM2 not assessable]
+- Applied evidence: [PM2_Supporting / No PM2 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [population frequency / coverage / none]
 - Combination note: [e.g., PVS1 + PM2_Supporting supports Likely Pathogenic under ClinGen SVI PM2 v1.0]

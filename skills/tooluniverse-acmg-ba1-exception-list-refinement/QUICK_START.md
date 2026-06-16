@@ -39,7 +39,7 @@ Default behavior: `AF >0.05` is not enough by itself. Confirm dataset adequacy, 
 
 - Do not automatically apply BA1.
 - Check whether the population dataset is suitable for stand-alone benign filtering and whether the variant is on the exception list.
-- If dataset structure or effective population size is unclear, report `BA1_NotAssessed - population dataset not adequate`.
+- If dataset structure or effective population size is unclear, report `applied_evidence: none`, `status: not_assessed`, and `reason: population dataset not adequate`.
 - Consider BS1 only through disease-specific frequency review.
 
 ---
@@ -77,5 +77,7 @@ BA1 exception-list refinement:
 - Dataset adequacy: [general continental / founder / unclear]
 - Exception-list status: [matched / not matched]
 - Gene-specific BA1 rule: [none / threshold / not assessed]
-- Applied evidence: [BA1 / No BA1 - exception list / No BA1 - gene-specific rule / No BA1 - use BS1 review / BA1_NotAssessed]
+- Applied evidence: [BA1 / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [exception list / gene-specific rule / use BS1 review / population dataset not adequate]
 ```

@@ -31,13 +31,17 @@ Do not use this skill for:
 - Prediction-only evidence such as REVEL, CADD, AlphaMissense, EVE, SpliceAI, or conservation scores. Use PP3/BP4 pathways instead.
 - RNA splicing evidence already assigned through `PVS1_Strength (RNA)` or `BP7_Strong (RNA)` in `tooluniverse-acmg-pvs1-splicing-refinement`.
 - Patient phenotype evidence better captured as PP4.
-- Population, case-control, segregation, or in-trans evidence unless it is only being used to establish assay controls.
+- Population, case-control, segregation, de novo, or in-trans evidence unless it is only being used to establish assay controls.
+- HGMD, ClinVar, LOVD, expert-panel, or literature classification labels unless the actual functional assay behind the label is retrieved and evaluated.
+- Another author's ACMG code assignment, such as "the paper applied PS3", unless the paper reports the assay design, controls, readout, and variant result needed for this overlay.
 
 ---
 
 ## Core Principle
 
 Start from no functional evidence. Increase PS3/BS3 strength only when the assay is biologically applicable to the gene-disease mechanism and the specific assay instance is validated.
+
+PS3/BS3 is not a generic "published evidence" bucket. Literature case reports, affected-case recurrence, family co-segregation, de novo status, PM3-compatible biallelic observations, and reputable-source assertions must be routed to their own overlays. If a paper reports both a functional assay and clinical observations, extract the assay facts for PS3/BS3 and route the clinical observations separately, avoiding double counting.
 
 Functional evidence should be assigned in four steps:
 
@@ -123,7 +127,7 @@ Minimum assay evidence schema:
 | `conflicts` | Other assays or evidence that conflict with the result. |
 | `double_counting_notes` | Evidence codes that must not also use the same functional data. |
 
-If the literature step cannot fill the required fields, return `PS3/BS3 not assessable` rather than guessing.
+If the literature step cannot fill the required fields, return `status: not_assessed` with reason `PS3/BS3 assay fields incomplete` rather than guessing.
 
 ---
 

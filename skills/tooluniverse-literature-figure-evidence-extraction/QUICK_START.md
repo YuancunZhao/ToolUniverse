@@ -77,7 +77,7 @@ Use this overlay when a paper figure or supplement contains visual evidence need
 
 - Figure type: `gel_or_western_blot`.
 - Record visible bands but mark label interpretation as ambiguous.
-- Confidence: low or not assessable.
+- Confidence: low or not_interpretable.
 - Do not let the downstream ACMG overlay activate evidence without independent support.
 
 ---
@@ -120,7 +120,7 @@ Figure evidence extraction:
 - Text/caption context: [caption/body/OCR context]
 - Structured interpretation: [schema-specific result]
 - Relevant ACMG overlays: [overlay names]
-- Confidence: [high/medium/low/not assessable]
+- Confidence: [high/medium/low/not_interpretable]
 - Ambiguities: [issues]
 - ACMG assignment: Not assigned by this figure-extraction skill.
 ```

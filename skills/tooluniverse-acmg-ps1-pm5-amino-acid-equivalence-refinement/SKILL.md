@@ -73,6 +73,7 @@ Do not assign PS1 or PM5 merely because two variants affect the same codon or re
    - The comparison variant must be pathogenic or likely pathogenic without using the variant under assessment as evidence.
    - Do not use the variant under assessment to establish the comparison variant's pathogenicity, and then use the comparison variant back as PS1/PM5 evidence.
    - Exclude comparison variants whose P/LP status depends only on the same patient, same family, same unpublished case, reciprocal PM5/PS1 inference, or an unsupported database assertion.
+   - If the comparison variant is known only from ClinVar, HGMD, LOVD, a paper's ACMG label, or an expert-panel assertion without reviewable primary evidence, first route that source through `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`. Do not use the label alone as independent PS1/PM5 support.
 
 5. **Confirm mechanism match**
    - Confirm that the comparison variant's evidence supports an amino-acid-mediated missense mechanism.
@@ -128,6 +129,8 @@ Apply `PM5` when all of the following are true:
 - Transcript/protein residue equivalence is confirmed.
 - The comparison evidence is not circular.
 
+An expert-panel or database comparison variant can be used only after its independent P/LP status and amino-acid-mediated mechanism are reviewable. If the only available support is a reputable-source label with no accessible primary evidence, report PM5 as `not_assessed` or `not_used` as a source lead rather than applying PM5.
+
 Withhold or downgrade PM5 when:
 
 - The comparison variant is not independently pathogenic.
@@ -158,7 +161,7 @@ Do not use PS1/PM5 when:
 - Both variants are from the same family or case series and neither has independent pathogenic evidence.
 - The comparison variant's classification is an unreviewed database assertion with no accessible evidence and no independent support.
 
-If independence cannot be confirmed, report `PS1/PM5 not assessable` or `No PS1/PM5` rather than forcing the criterion.
+If independence cannot be confirmed, report `status: not_assessed` with reason `PS1/PM5 comparison independence not confirmed`, or `No PS1/PM5` when evidence is sufficient to withhold the criterion.
 
 ---
 
@@ -206,11 +209,11 @@ PS1/PM5 amino-acid equivalence refinement:
 - Comparison variant: [HGVS c.], [HGVS p.], source [ClinVar/ClinGen/VCEP/literature]
 - Relationship: [same amino-acid substitution / same residue different substitution / same codon only]
 - Comparison classification: [P/LP/VUS/etc.], review status: [expert panel/multiple submitters/etc.]
-- Independence check: [independent / circularity concern / not assessable]
+- Independence check: [independent / circularity concern / not_assessed]
 - Mechanism check: [amino-acid mediated / splicing-mediated / mixed / uncertain]
-- Splicing/DNA-level confounding: [none found / present / not assessable]
+- Splicing/DNA-level confounding: [none found / present / not_assessed]
 - VCEP rule: [none found / applied rule]
-- Applied evidence: [PS1 / PM5 / No PS1/PM5 / not assessable]
+- Applied evidence: [PS1 / PM5 / No PS1/PM5 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [comparison variant / residue evidence / none]
 ```

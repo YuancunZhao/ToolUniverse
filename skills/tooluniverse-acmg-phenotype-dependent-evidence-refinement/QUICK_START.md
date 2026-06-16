@@ -11,7 +11,7 @@ Use this overlay when ACMG evidence cannot be assessed without patient phenotype
 **Expected behavior**:
 
 - Do not apply PP4.
-- Mark `PP4: Not Assessed - phenotype required`.
+- Report `applied_evidence: none`, `status: not_assessed`, and `reason: phenotype required`.
 - Ask for proband phenotype, HPO terms, suspected disease, age at onset, and alternate diagnoses.
 
 ---
@@ -48,7 +48,7 @@ Use this overlay when ACMG evidence cannot be assessed without patient phenotype
 **Expected behavior**:
 
 - Do not apply PP4 from broad features alone.
-- Mark `PP4: Not Assessed - phenotype specificity insufficient` or `No PP4`.
+- Report `status: not_assessed` when phenotype specificity cannot be evaluated, or `status: not_applicable` when the supplied phenotype is nonspecific and no PP4 is justified.
 - Ask for key positive/negative features, HPO terms, disease-specific biomarkers, and the testing strategy used to exclude phenocopies.
 
 ---
@@ -130,9 +130,11 @@ Please provide: proband phenotype or HPO terms, suspected disease, age at onset/
 Phenotype-dependent evidence refinement:
 - Supplied phenotype: [summary / not provided]
 - Gene-disease context: [summary]
-- Phenotype match: [highly specific / compatible / nonspecific / mismatched / not assessable]
+- Phenotype match: [highly specific / compatible / nonspecific / mismatched / unknown]
 - Diagnostic-yield context: [yield / testing method / not available]
 - Criteria affected: [PP4/PS4/PP1/BS4/PM3/BP5/BS2/PS2/PM6]
-- Applied evidence: [criterion / Not Assessed - phenotype required]
+- Applied evidence: [criterion / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [phenotype basis or missing phenotype fields]
 - Follow-up request: [targeted missing fields]
 ```

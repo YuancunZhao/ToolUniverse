@@ -42,8 +42,8 @@ Default outputs:
 - `No BP6`
 - `PP5_NotUsed`
 - `BP6_NotUsed`
-- `PP5_NotAssessed - primary evidence required`
-- `BP6_NotAssessed - primary evidence required`
+- `status: not_assessed` with reason `PP5 primary evidence required`
+- `status: not_assessed` with reason `BP6 primary evidence required`
 
 Do not output `PP5` or `BP6` as counted evidence unless a current disease-specific VCEP or explicitly approved local policy requires legacy ACMG 2015 usage.
 
@@ -65,7 +65,7 @@ Use ToolUniverse tools to turn reputable-source assertions into primary-evidence
 3. **Extract or request primary evidence**
    - If the assertion has criteria, evidence summaries, citations, submitter comments, or links, retrieve the original evidence.
    - Use `PubMed_search_articles`, `EuropePMC_search_articles`, `tooluniverse-literature-deep-research`, and `tooluniverse-literature-figure-evidence-extraction` for paper-derived cases, figures, tables, functional assays, segregation, or de novo evidence.
-   - If primary evidence is unavailable, record `PP5_NotAssessed - primary evidence required` or `BP6_NotAssessed - primary evidence required`.
+   - If primary evidence is unavailable, record `status: not_assessed` with reason `PP5/BP6 primary evidence required`.
 
 4. **Route to underlying criteria**
    - Functional data: `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`.
@@ -91,7 +91,7 @@ Instead:
 - record the source and classification as a non-counted lead;
 - retrieve the primary data supporting that classification;
 - apply the underlying ACMG criteria directly if evidence is sufficient;
-- if no primary evidence can be evaluated, report `PP5_NotAssessed - primary evidence required` or `PP5_NotUsed`.
+- if no primary evidence can be evaluated, report `status: not_assessed` with reason `PP5 primary evidence required`, or `PP5_NotUsed`.
 
 ### BP6
 
@@ -102,7 +102,7 @@ Instead:
 - record the source and classification as a non-counted lead;
 - retrieve the primary data supporting that classification;
 - apply the underlying benign criteria directly if evidence is sufficient;
-- if no primary evidence can be evaluated, report `BP6_NotAssessed - primary evidence required` or `BP6_NotUsed`.
+- if no primary evidence can be evaluated, report `status: not_assessed` with reason `BP6 primary evidence required`, or `BP6_NotUsed`.
 
 ### ClinVar and Expert Sources
 
@@ -117,6 +117,8 @@ Use curated classifications to:
 - prioritize primary evidence extraction.
 
 If a ClinGen/VCEP classification supplies explicit criteria and evidence, evaluate those underlying criteria rather than adding PP5/BP6.
+
+Do not promote a reputable-source label directly into another evidence code. For example, an expert-source pathogenic classification does not itself establish PS3, PM1, PM5, PP1, PS4, PM3, PVS1, or PP3. The label should trigger primary evidence retrieval and then the relevant overlay should decide whether the underlying evidence qualifies.
 
 ---
 
@@ -151,9 +153,9 @@ PP5/BP6 reputable-source refinement:
 - Disease context: [condition and inheritance]
 - Source assertion: [source, classification, review status, date]
 - Primary evidence available: [yes / partial / no]
-- Conflict status: [none / conflicting classifications / not assessed]
+- Conflict status: [none / conflicting classifications / not_assessed]
 - Routed underlying criteria: [PS3/BS3, PS4, PM3, PP1/BS4, PVS1, PM2/BA1/BS1, etc.]
-- Applied PP5/BP6 evidence: [No PP5 / No BP6 / PP5_NotUsed / BP6_NotUsed / Not Assessed - primary evidence required]
+- Applied PP5/BP6 evidence: [No PP5 / No BP6 / PP5_NotUsed / BP6_NotUsed / none]
 - Status: [not_used / not_assessed / applied only by VCEP or explicit legacy policy]
 - Consumed evidence: [source assertion only / primary evidence routed elsewhere / none]
 - Rationale: [brief explanation]

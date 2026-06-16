@@ -23,12 +23,26 @@ Use this skill when users:
 3. **Population Context** - gnomAD frequencies with ancestry-specific data
 4. **Actionable Output** - Clear recommendations, not just classifications
 5. **English-first queries** - Always use English terms in tool calls; respond in user's language
+6. **Confidentiality and Human Review** - De-identify patient-level inputs, separate public from restricted evidence, disclose AI-assisted drafting when used for notes or curation drafts, and require qualified human review before clinical or ClinGen/VCEP use
 
 ---
 
 ## LOOK UP, DON'T GUESS
 
 When asked about a variant's significance, query ClinVar/gnomAD/CIViC FIRST. Never classify a variant without checking databases. When you're not sure about a fact, your first instinct should be to SEARCH for it using tools, not to reason harder from memory.
+
+---
+
+## Confidentiality and AI-Assisted Drafting
+
+Before processing patient-level phenotype, family, segregation, de novo, phase, or unpublished curation evidence:
+
+- Ask the user to provide de-identified data only; do not request or retain names, dates of birth, medical record numbers, direct contact information, or other patient-identifiable data.
+- Treat unpublished VCEP drafts, meeting notes, internal deliberations, and confidential case-level data as restricted evidence. Do not present them as public ClinGen guidance.
+- If AI-assisted output will be used as meeting notes, curation notes, or a clinical interpretation draft, include an explicit statement that AI tools assisted drafting/evidence retrieval and that a designated human reviewer must verify and finalize the content.
+- Do not automatically publish, distribute, or finalize variant classifications, evidence tables, or meeting notes without human review.
+
+These safeguards follow the governance principles in ClinGen's AI note-taking policy v1.0 and complement the routing-core safeguards; they do not change ACMG evidence criteria.
 
 ---
 
@@ -98,7 +112,7 @@ Before full ACMG classification, check if the variant already has an expert pane
 3. `AlphaMissense_get_variant_score` (0-1, needs UniProt ID) — missense only
 4. `EVE_get_variant_score` (0-1) — missense only
 5. `EnsemblVEP_annotate_hgvs` (VEP with colocated variants) — includes SIFT/PolyPhen
-6. If REVEL is still unavailable, note this as a limitation and rely on CADD + SIFT + PolyPhen consensus. REVEL absence does not prevent classification.
+6. If REVEL is still unavailable, note this as a limitation and route any available calibrated predictor score to the PP3/BP4 overlay or current VCEP rule. REVEL absence does not prevent classification, but it may mean PP3/BP4 is `not_assessed` or not applied.
 
 Do not assign PP3/BP4 by local predictor voting. For missense variants, route predictor evidence through `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`, which follows Pejaver et al. 2022 calibrated thresholds and selects one calibrated predictor before inspecting scores. CADD, AlphaMissense, EVE, SIFT, PolyPhen, REVEL, and other scores can still be retrieved here, but the evidence strength is assigned by the PP3/BP4 overlay or by a current VCEP rule.
 

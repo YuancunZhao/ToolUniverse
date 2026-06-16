@@ -31,7 +31,7 @@ Use this skill when:
 - BP5 may apply because another molecular diagnosis explains the patient's phenotype.
 - Disease prevalence, penetrance, age of onset, inheritance, ancestry, or phenotype affects benign evidence.
 
-Do not apply benign-context evidence when the required disease or phenotype context is missing.
+Do not apply benign-context evidence when the required context is missing. Separate disease-context-only inputs from patient-level phenotype inputs: BA1 and BS1 need disease prevalence, inheritance, penetrance, heterogeneity, ancestry, and frequency-threshold context, but not the current patient's phenotype. BS2, BP2, and BP5 may need patient or healthy-carrier clinical context depending on the evidence source.
 
 ---
 
@@ -52,7 +52,8 @@ Do not apply benign-context evidence when the required disease or phenotype cont
    - Use conservative assumptions when precise prevalence or penetrance data are unavailable.
 
 4. **Assess phenotype and alternate diagnosis**
-   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype, healthy status, or alternate molecular diagnosis affects BS2, BP2, or BP5.
+   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when patient phenotype, healthy status, or alternate molecular diagnosis affects BS2, BP2, or BP5.
+   - Do not request patient phenotype for BA1/BS1 frequency review unless a VCEP explicitly requires phenotype-specific threshold selection beyond disease context.
    - Use MedGen/HPO/MONDO/Monarch tools and literature only to contextualize supplied phenotype, not to invent patient phenotype.
 
 5. **Assess phase and genotype context**
@@ -89,7 +90,7 @@ ACGS 2024 practice examples:
 - For recessive disorders, at least two appropriately phenotyped healthy homozygotes can support BS2.
 - For late-onset or reduced-penetrance disorders, require more healthy observations and more detailed phenotyping.
 
-If unaffected status, age, penetrance, or clinical evaluation is unclear, mark BS2 as not assessable and ask for those fields.
+If unaffected status, age, penetrance, or clinical evaluation is unclear, mark BS2 as `status: not_assessed` and ask for those fields.
 
 ---
 
@@ -129,10 +130,10 @@ Benign-context refinement:
 - Variant: [HGVS/genomic allele]
 - Disease context: [disease, inheritance, penetrance, age of onset]
 - Population data: [global AF, max ancestry AF, AC/AN, homozygotes/hemizygotes, quality]
-- Frequency threshold: [BA1/BS1 threshold source or not assessable]
+- Frequency threshold: [BA1/BS1 threshold source or not_assessed]
 - Healthy-observation evidence: [individuals, age, phenotype, genotype]
 - Phase/alternate diagnosis: [cis/trans, other P/LP variant, phenotype explanation]
-- Applied evidence: [BA1 / BS1 / BS1_Strong / BS2 / BP2 / BP5 / No benign-context evidence / Not Assessed]
+- Applied evidence: [BA1 / BS1 / BS1_Strong / BS2 / BP2 / BP5 / No benign-context evidence / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [population frequency / healthy observations / phase / alternate diagnosis / none]
 - Missing information: [fields needed]

@@ -10,7 +10,7 @@ This file is a quick index for retrieval and reporting. It is not a standalone A
 |------|----------|-------------|
 | PVS1 | Very Strong | Null variant in gene where LOF is mechanism |
 | PS1 | Strong | Same amino acid change as known pathogenic |
-| PS3 | Strong | Well-established functional studies |
+| PS3 | Overlay-assigned | Functional assay evidence routed to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
 | PM1 | Moderate | Mutational hot spot / functional domain |
 | PM2 | Supporting | Absent/rare from controls after coverage and population checks |
 | PM5 | Moderate | Different missense at same residue as pathogenic |

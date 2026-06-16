@@ -44,7 +44,7 @@ Use this overlay when affected-case enrichment, case-control evidence, or rare-d
 **Expected behavior**:
 
 - Do not apply PS4 at full strength.
-- Report `PS4 not assessable` or downgrade only if a VCEP/local rule supports it.
+- Report `applied_evidence: none` with `status: not_assessed`, or downgrade only if a VCEP/local rule supports it.
 - Ask for ancestry-matched control data if needed.
 
 ---
@@ -59,5 +59,7 @@ PS4 case-enrichment refinement:
 - Control source and ancestry match: [summary]
 - Population frequency: [AF/AC/AN]
 - Duplicate-report status: [summary]
-- Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / No PS4 / Not Assessed]
+- Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [case-enrichment basis / duplicate or unrelatedness concern / missing literature or cohort fields]
 ```

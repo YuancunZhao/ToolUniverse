@@ -57,5 +57,7 @@ PM4/BP3 protein-length refinement:
 - Region: [functional / repeat no known function / unclear]
 - Mechanism: [LoF / GOF / dominant-negative / unclear]
 - PVS1 conflict: [none / route to PVS1]
-- Applied evidence: [PM4 / PM4_Supporting / BP3 / No PM4/BP3 / not assessable]
+- Applied evidence: [PM4 / PM4_Supporting / BP3 / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [protein-length mechanism / PVS1 route / missing region or mechanism data]
 ```

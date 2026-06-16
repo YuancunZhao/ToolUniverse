@@ -13,7 +13,7 @@ This is the baseline Abou Tayoun et al. 2018 / ClinGen SVI PVS1 decision tree ov
 3. Determine variant class: nonsense, frameshift, canonical splice, start-loss, exon deletion, whole-gene deletion, duplication, or in-frame event.
 4. Determine whether NMD is expected or whether the PTC falls in an NMD-escape branch.
 5. Check critical domain/residue loss, alternative initiation, rescue transcripts, and disease-specific exceptions.
-6. Assign `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `PVS1_NotAssessed`.
+6. Assign `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `applied_evidence: none` with `status: not_assessed` when required inputs are missing.
 7. Route RNA evidence to Walker 2023 splicing refinement only when RNA assay or detailed splicing evidence exists.
 
 ---
@@ -143,7 +143,7 @@ This is the baseline Abou Tayoun et al. 2018 / ClinGen SVI PVS1 decision tree ov
 - Use `PVS1_Strong` when the duplication is presumed in tandem, the reading frame is presumed disrupted, and NMD is predicted.
 - Use `PVS1_N/A` when the duplication is proven not to be in tandem.
 - Use `PVS1_N/A` when the duplication has no or unknown impact on reading frame and NMD.
-- Use `PVS1_NotAssessed` when duplication length or breakpoints are too uncertain to predict reading-frame impact.
+- Use `applied_evidence: none` with `status: not_assessed` when duplication length or breakpoints are too uncertain to predict reading-frame impact.
 
 ---
 
@@ -180,8 +180,10 @@ PVS1 LoF decision tree refinement:
 - Transcript: [ID and relevance]
 - Variant class: [nonsense/frameshift/splice/start-loss/exon deletion/whole-gene deletion/duplication/in-frame]
 - LoF mechanism: [established / not established / mixed / not assessed]
-- NMD: [expected / NMD escape / not applicable / not assessable]
+- NMD: [expected / NMD escape / not applicable / unknown]
 - Critical-region loss: [yes / plausible / no / unknown]
 - Rescue/alternative initiation: [none / plausible / present / not assessed]
-- Applied evidence: [PVS1 / PVS1_Strong / PVS1_Moderate / PVS1_Supporting / PVS1_N/A / PVS1_NotAssessed]
+- Applied evidence: [PVS1 / PVS1_Strong / PVS1_Moderate / PVS1_Supporting / PVS1_N/A / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [concise explanation, including missing inputs when status is not_assessed]
 ```

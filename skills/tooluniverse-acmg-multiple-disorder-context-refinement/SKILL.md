@@ -70,9 +70,10 @@ Use ToolUniverse evidence retrieval before deciding whether to lump or split.
    - If mechanisms differ or are unclear, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` and the relevant evidence-specific overlays.
    - Compare whether the variant class under assessment fits the target disease mechanism.
 
-5. **Map patient phenotype or target indication**
-   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype, affected status, diagnostic yield, or tested/excluded loci affect PP4, PS4, PP1/BS4, PM3, PS2/PM6, BS2, or BP5.
-   - If the user has not supplied the target disease/phenotype, mark disease-context routing as `Not Assessed - disease context required` and ask for the disease being classified.
+5. **Map patient phenotype, literature case definition, or target indication**
+   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when patient phenotype, affected status, diagnostic yield, tested/excluded loci, family data, de novo data, healthy-carrier context, or alternate diagnosis affects PP4, rare-disease PS4 case counting, PP1/BS4, PM3, PS2/PM6, BS2, BP2, or BP5.
+   - For formal PS4 case-control, cohort, or meta-analysis evidence, retrieve the study's case definition and disease ascertainment through the PS4 overlay; do not request patient phenotype unless the study definition is missing or ambiguous.
+   - If the user has not supplied the target disease/entity for classification, mark disease-context routing as `status: not_assessed` with reason `disease context required` and ask for the disease being classified. A target disease/entity is not the same as a full patient phenotype.
 
 6. **Choose aggregation category**
    - Apply one of the seven categories below.
@@ -113,7 +114,7 @@ Handling:
 - Evidence can generally be aggregated across observations.
 - Case-counting strength must account for phenotype specificity and frequency.
 - Fewer cases may be needed when the full, specific phenotype is present; more cases are needed for isolated or common features.
-- Route PP4/PS4/PP1 questions through phenotype-dependent and case-enrichment overlays.
+- Route PP4, rare-disease PS4 case-counting, and PP1 questions through phenotype-dependent and case-enrichment overlays. Formal PS4 case-control/cohort evidence routes directly to the PS4 overlay unless the study disease definition is unclear.
 
 ### 4. Multiple Conditions With Distinct, Mutually Exclusive Mechanisms
 
@@ -218,7 +219,7 @@ Multiple-disorder context refinement:
 - ClinGen gene-disease validity: [target dyad and other dyads]
 - ClinGen dosage sensitivity: [HI/TS scores and interpretation]
 - Lumping/splitting category: [1-7]
-- Evidence aggregation decision: [aggregate / split / aggregate with phenotype-specific case-counting / not assessable]
+- Evidence aggregation decision: [aggregate / split / aggregate with phenotype-specific case-counting / not_assessed]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Variant class fit: [target disease mechanism fit]
 - Evidence codes affected: [PVS1, PS1/PM5, PS3/BS3, PS4, PP1/BS4, PP4, PM3, BA1/BS1/PM2, etc.]

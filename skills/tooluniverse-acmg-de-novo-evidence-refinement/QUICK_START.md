@@ -148,6 +148,8 @@ De novo evidence refinement:
 - Parentage confirmation: [confirmed / not confirmed / not documented]
 - Points: [per occurrence and total]
 - SVI threshold: [Supporting / Moderate / Strong / Very Strong / none]
-- Applied evidence: [PS2 / PM6 / No PS2/PM6 / Not Assessed - de novo information required]
+- Applied evidence: [PS2 / PM6 / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [point total and parentage basis / de novo information required]
 - Follow-up request: [targeted missing fields]
 ```

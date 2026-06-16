@@ -98,7 +98,7 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 
 - Do not use Variant A as PM5 evidence for Variant B.
 - Report the comparison as non-independent.
-- Assign `No PM5` or `PM5 not assessable`.
+- Assign `applied_evidence: none` with `status: not_applicable`, or `status: not_assessed` if independence cannot be evaluated.
 
 ---
 
@@ -146,8 +146,10 @@ PS1/PM5 amino-acid equivalence refinement:
 - Comparison variant: [HGVS c.], [HGVS p.], source [ClinVar/ClinGen/VCEP/literature]
 - Relationship: [same amino-acid substitution / same residue different substitution / same codon only]
 - Comparison classification and review status: [summary]
-- Independence: [confirmed / circularity concern / not assessable]
+- Independence: [confirmed / circularity concern / unknown]
 - Mechanism: [amino-acid mediated / splicing-mediated / mixed / uncertain]
-- Splicing confounding: [none / present / not assessable]
-- Applied evidence: [PS1 / PM5 / No PS1/PM5 / not assessable]
+- Splicing confounding: [none / present / unknown]
+- Applied evidence: [PS1 / PM5 / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [comparison independence, mechanism, splicing confounding, or missing data]
 ```

@@ -69,7 +69,7 @@ Strength guidance:
 | Multi-residue in-frame deletion/insertion in conserved non-repeat functional region | `PM4` |
 | Single amino-acid in-frame deletion/insertion | `PM4_Supporting` by default |
 | Single amino-acid in-frame deletion/insertion with strong gene-specific/VCEP/functional-domain evidence | `PM4` may be considered |
-| In-frame change outside conserved or functional region | No PM4 or PM4 not assessable |
+| In-frame change outside conserved or functional region | No PM4, or `status: not_assessed` if required region context is missing |
 | Exon-scale deletion/duplication causing LoF | Route to PVS1, not PM4 |
 
 PM4 may also be appropriate for last-exon truncating variants in genes where disease is caused by gain-of-function or altered protein products, rather than haploinsufficiency. In those cases, document why PVS1 is not the correct mechanism.
@@ -121,7 +121,7 @@ Do not apply BP3 when:
 
 ## Missing-Information Behavior
 
-If region function, repeat status, conservation, or mechanism is unclear, report `PM4/BP3 not assessable` and ask for targeted data.
+If region function, repeat status, conservation, or mechanism is unclear, report `status: not_assessed` with reason `PM4/BP3 protein-region context required` and ask for targeted data.
 
 ```text
 PM4/BP3 requires protein-region context. Please provide the transcript/protein change, whether the affected segment is repetitive, known domain or motif annotations, conservation or indel predictor evidence, population frequency, and any disease-specific mechanism or VCEP rule.
@@ -140,7 +140,7 @@ PM4/BP3 protein-length refinement:
 - Mechanism review: [LoF / GOF / dominant-negative / altered product / unclear]
 - PVS1 conflict: [none / route to PVS1 / PM4 retained because altered product mechanism]
 - Population/conservation evidence: [summary]
-- Applied evidence: [PM4 / PM4_Supporting / BP3 / No PM4/BP3 / not assessable]
+- Applied evidence: [PM4 / PM4_Supporting / BP3 / No PM4/BP3 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [protein length/domain/repeat evidence / none]
 ```

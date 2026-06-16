@@ -61,7 +61,7 @@ Do not use high PP4 strength for incomplete phenotyping, broad endophenotypes, o
 ## Default Behavior When Phenotype Is Missing
 
 - Do not apply the criterion.
-- Mark it as `Not Assessed - phenotype required`.
+- Use `applied_evidence: none` with `status: not_assessed` and `reason: phenotype required`.
 - Ask the user for the minimal missing information.
 - Continue assessing evidence criteria that do not require phenotype.
 

@@ -38,7 +38,7 @@ Do not use this skill to:
 
 Extract only auditable facts and conservative interpretations. Every extracted conclusion must include source location, visual basis, text/caption basis when available, confidence, and ambiguity notes.
 
-If the figure is unclear, cropped, too low resolution, missing labels, or contradicted by caption/body text, return `not assessable` or `low confidence` rather than guessing.
+If the figure is unclear, cropped, too low resolution, missing labels, or contradicted by caption/body text, return `not_interpretable` or `low confidence` rather than guessing.
 
 ---
 
@@ -98,7 +98,7 @@ Extract:
 - Proband ID and affected status.
 - Assessed variant and other allele when present.
 - Maternal and paternal genotypes, if visible or stated.
-- Whether variants are confirmed in trans, presumed in trans from one-parent testing, phase unknown, homozygous, or not assessable.
+- Whether variants are confirmed in trans, presumed in trans from one-parent testing, phase unknown, homozygous, or not_interpretable from the figure.
 - Whether a de novo claim is supported by tested parents.
 - Which family members are informative for co-segregation or non-segregation.
 

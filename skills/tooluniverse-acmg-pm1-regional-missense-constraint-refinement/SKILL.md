@@ -67,6 +67,7 @@ Use ToolUniverse retrieval tools before assigning PM1.
    - Use `gnomad_get_gene_constraints`, `gnomad_get_region`, `MyVariant_query_variants`, `ProtVar_get_population`, and ClinVar tools.
    - Confirm that the queried region is not enriched with benign or high-frequency missense variants.
    - Confirm that ClinVar pathogenic variants, if used, are relevant to the same disease mechanism and not dominated by low-confidence assertions.
+   - Treat ClinVar, HGMD, LOVD, and published ACMG labels as source leads, not as PM1 evidence by themselves. If they are used to support regional pathogenic enrichment, retrieve the primary evidence where feasible and avoid reusing the same assertions for PS1/PM5.
 
 4. **Assess known functional/domain context**
    - Use `InterPro_get_protein_domains`, `UniProt_get_function_by_accession`, `EBIProteins_get_variation`, and structural tools such as AlphaFold/PDB when needed.
@@ -120,6 +121,7 @@ Withhold or reduce PM1 when:
 - The only evidence is a high MPC/AlphaMissense/REVEL score without regional membership or hotspot/domain evidence.
 - The evidence is only whole-gene missense intolerance and the local region does not show constraint; in this situation PP2 may be considered instead of PM1 if other PP2 requirements are met.
 - The same same-residue pathogenic comparison evidence is already being used for PM5 and no independent regional/domain evidence remains for PM1.
+- The only support is that another publication, database, or expert panel already applied PM1, without reviewable hotspot, constrained-region, critical-residue, or low-benign-variation evidence.
 
 ---
 

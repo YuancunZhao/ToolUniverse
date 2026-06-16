@@ -982,7 +982,7 @@ Do not use a local helper function to calculate final ACMG classification from e
 | PVS1 | Variable | Predicted LoF in an established LoF disease gene; assign strength through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` |
 | PS1 | Strong | Same AA as pathogenic |
 | PS2 | Strong | De novo (confirmed) |
-| PS3 | Strong | Functional studies |
+| PS3 | Overlay-assigned | Functional assay evidence routes to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
 | PS4 | Strong | Prevalence in affected |
 | PM1 | Moderate | Functional domain |
 | PM2 | Supporting | Absent/rare from controls after ClinGen SVI PM2 overlay checks |

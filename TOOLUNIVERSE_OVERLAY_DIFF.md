@@ -14,7 +14,7 @@ Summary:
 - Modified upstream skills: 4
 - Deleted upstream skills: 0
 - Changed files under `skills/`: 66
-- Net intended overlay diff: approximately 8070 insertions, 190 deletions
+- Net intended overlay diff: approximately 8090 insertions, 190 deletions
 
 ## Added Skills
 
@@ -234,7 +234,7 @@ Behavior added:
 - Covers LoF/HI applicability, nonsense/frameshift PTC with NMD, NMD escape, canonical splice predicted transcript consequence, start-loss, exon deletion/duplication, whole-gene deletion, rescue transcript, and in-frame LoF branches.
 - Uses the Abou Tayoun et al. 2018 baseline NMD rule: NMD is generally not predicted when the PTC is in the 3' most exon or within the 3' most 50 nucleotides of the penultimate exon.
 - Preserves exact Figure 1 branches for initiation codon variants, tandem/presumed-tandem duplications, >10% versus <10% protein removal, canonical splice +/-20 nucleotide caveat, and PM4/PVS1 non-overlap.
-- Defines standard outputs: `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, and `PVS1_NotAssessed`.
+- Defines standard outputs: `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, and `applied_evidence: none` with `status: not_assessed` when required inputs are missing.
 - Separates responsibilities: baseline PVS1 strength is assigned by the 2018 LoF decision-tree overlay; Walker 2023 RNA/splicing evidence is handled afterward by `tooluniverse-acmg-pvs1-splicing-refinement`.
 - Routes CNV/SV event definition to `tooluniverse-structural-variant-analysis` before PVS1 strength assignment when exon-level or whole-gene copy-number events are involved.
 
@@ -376,7 +376,7 @@ Behavior added:
 - Implements the seven ClinGen categories: semidominant single condition, distinct conditions with same mechanism, spectrum/pleiotropy, mutually exclusive mechanisms, non-mutually exclusive conditions, unclear disease boundary, and multi-gene CNV.
 - Clarifies that gene-disease validity and dosage sensitivity are distinct; definitive gene-disease validity does not automatically establish HI/TS, and non-sufficient dosage does not refute non-dosage mechanisms.
 - Prevents transferring PVS1, PS1/PM5, PS3/BS3, PS4, PP1/BS4, PP4, PM3, BA1/BS1/PM2, or de novo evidence across split disease mechanisms without same-disease/same-mechanism support.
-- Routes multi-gene CNVs to structural-variant analysis and asks for target disease/phenotype when disease-context routing is not assessable.
+- Routes multi-gene CNVs to structural-variant analysis and asks for target disease/phenotype when disease-context routing cannot be completed from the supplied information.
 
 ## ACMG Overlay Routing Core and Consistency Update: 2026-06-16
 
@@ -427,6 +427,7 @@ Behavior added:
 Changed files:
 
 ```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
 M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
 M skills/tooluniverse-variant-interpretation/CHECKLIST.md
 M skills/tooluniverse-variant-interpretation/CODE_PATTERNS.md
@@ -443,7 +444,106 @@ Behavior added:
 - Converts SpliceAI helper examples into prediction-context output only; RNA/splicing evidence routes to PVS1/RNA, PS1-splicing, or prediction-specific overlays as appropriate.
 - Treats COSMIC somatic recurrence as cancer-context or literature/domain lead, not direct germline ACMG PS3.
 - Aligns checklist and examples with the same routing model: predictor evidence, PM2, BA1/BS1, SpliceAI, PVS1/RNA, PP1/BS4/PP4, and final classification are routed to overlays instead of being locally assigned by examples.
+- Adds ClinGen AI note-taking policy-inspired governance safeguards to the routing core and variant-interpretation checklist: de-identify patient-level inputs, separate public from restricted evidence, disclose AI-assisted drafting when used for notes/curation drafts, require human review, and avoid automatic publication or finalization.
 - Does not change any ACMG overlay threshold, PM2 default strength, PP3/BP4 locked rule, PP5/BP6 non-counting behavior, or VCEP precedence.
+
+## PS4 Clinical-Context Clarification: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+```
+
+Behavior clarified:
+
+- Clarifies that PS4 is mixed evidence, not uniformly user-clinical-data-dependent.
+- Formal case-control, cohort, or meta-analysis PS4 can be assessed from literature or cohort data when the source defines cases, disease context, controls, ancestry handling, and enrichment statistics sufficiently.
+- Rare-disease affected-case counting still requires affected-case phenotype specificity, unrelatedness, duplicate-report checks, and population-control context from the paper, database, or user.
+- Updates phenotype-dependent routing so PS4 only enters patient-phenotype intake when disease/case ascertainment is missing or when rare-disease case-count evidence needs case-level context.
+- Does not change PS4 thresholds, ACGS rare-disease case-count handling, PM3 routing for recessive biallelic probands, or VCEP precedence.
+
+## Clinical Phenotype Dependency Audit: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-multiple-disorder-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+```
+
+Behavior clarified:
+
+- Adds a shared clinical-context dependency matrix separating `user_patient_phenotype_required`, `literature_case_context_required`, `literature_or_cohort_case_definition_required`, and `disease_context_only` inputs.
+- Confirms that patient-level phenotype is required or may be required for PP4, PP1/BS4, PS2/PM6, PM3, BS2, BP2, BP5, and rare-disease PS4 case counting when those facts are not already present in a source.
+- Confirms that formal PS4 case-control/cohort/meta-analysis evidence requires study case definition and statistics, not user-supplied patient phenotype when the publication is adequate.
+- Clarifies that BA1/BS1/PM2, PVS1, PM1/PP2/BP1, PP3/BP4, PM4/BP3, and PS1/PM5 usually need disease, mechanism, transcript, threshold, protein-region, prediction, or comparison-variant context rather than patient phenotype.
+- Does not change any evidence thresholds, strength mappings, VCEP precedence, or double-counting rules.
+
+## External-Agent Overlay Compliance Guardrails: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-acmg-ps3-bs3-functional-assay-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp5-bp6-reputable-source-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/SKILL.md
+M skills/tooluniverse-variant-interpretation/CHECKLIST.md
+```
+
+Behavior clarified:
+
+- Adds explicit external-agent compliance outcomes for each considered criterion: `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, and `overlay_deferred_to_vcep`.
+- Requires imported agents to record overlay routing before final classification rather than using the base ACMG workflow as a manual checklist.
+- Strengthens PS3/BS3 guardrails: segregation, case recurrence, de novo evidence, PM3-compatible biallelic evidence, HGMD/ClinVar labels, and another paper's ACMG code cannot be counted as PS3 unless the actual functional assay is retrieved and evaluated.
+- Strengthens PP3/BP4 guardrails against local predictor voting such as "CADD + SIFT + PolyPhen all agree"; counted evidence must come from Pejaver 2022 calibrated thresholds or a current VCEP rule.
+- Strengthens PP5/BP6 and PS1/PM5 guardrails so reputable-source labels are source leads only and cannot be directly promoted into PM5, PM1, PS3, PP3, or other counted evidence without primary evidence review.
+- Strengthens PM1 guardrails against broad domain membership or another source's PM1 label without reviewable hotspot, constrained-region, critical-residue, or low-benign-variation evidence.
+- Does not change any evidence threshold, strength mapping, locked PM2/PP3 rules, VCEP precedence, or final ACMG combining rule.
+
+## ACMG Overlay Consistency and Compliance Cleanup: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-ba1-exception-list-refinement/SKILL.md
+M skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-de-novo-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-dominant-negative-mechanism-refinement/SKILL.md
+M skills/tooluniverse-acmg-multiple-disorder-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm2-absence-rarity-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm3-in-trans-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp5-bp6-reputable-source-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps3-bs3-functional-assay-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/SKILL.md
+M skills/tooluniverse-acmg-pvs1-lof-decision-tree-refinement/SKILL.md
+M skills/tooluniverse-acmg-pvs1-splicing-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+```
+
+Behavior clarified:
+
+- Removes the residual misleading main-workflow example that implied a ClinVar expert-panel source label could directly count as PS1.
+- Removes the old variant-interpretation fallback suggesting CADD/SIFT/PolyPhen consensus could substitute for missing REVEL; missing calibrated prediction now routes to PP3/BP4 overlay or `status: not_assessed`.
+- Normalizes structured missing-information output to `status: not_assessed` with the explanatory text placed in `reason`, rather than using uncontrolled free-text values inside evidence fields.
+- Converts legacy source-review and PVS1 missing-input display labels to `applied_evidence: none` plus `status: not_assessed` in structured output guidance.
+- Tightens common examples so ClinVar/CIViC/HGMD-style assertions are source leads, PP3/BP4 is assigned by calibrated overlay/VCEP, PM1 requires overlay-confirmed eligible regional evidence, and PS3 requires actual functional assay evidence.
+- Does not change evidence thresholds, strength mappings, VCEP precedence, PM2 default `PM2_Supporting`, PP3/BP4 Pejaver 2022 handling, or the final ACMG combining rule.
 
 ## Update Procedure
 

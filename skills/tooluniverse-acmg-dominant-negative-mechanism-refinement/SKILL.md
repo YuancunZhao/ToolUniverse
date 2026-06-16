@@ -183,7 +183,7 @@ Dominant-negative mechanism refinement:
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Routed to: [evidence-specific overlay]
 - Evidence routing:
-  - PVS1: [allowed / withhold / separate HI mechanism / not assessed]
+  - PVS1: [allowed / withhold / separate HI mechanism / not_assessed]
   - PS3/BS3: [DN-capable assay required / current assay sufficient / current assay insufficient]
   - PS1/PM5: [same-mechanism comparison required / comparison acceptable / comparison withheld]
   - PM1/PP2/PP3/BP1: [missense-mediated mechanism supported / generic predictor only / BP1 unsafe]

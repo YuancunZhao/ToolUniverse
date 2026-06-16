@@ -10,6 +10,13 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] Executive summary completed (not `[Interpreting...]`)
 - [ ] Data sources section populated
 
+### Confidentiality, Transparency, and Human Review
+- [ ] Patient-level data are de-identified; no names, dates of birth, medical record numbers, direct contact details, or other identifiers included
+- [ ] Public evidence is separated from unpublished drafts, meeting notes, internal deliberations, or restricted case-level evidence
+- [ ] AI-assisted drafting/evidence-retrieval statement included when the output is used for notes, curation drafts, or clinical interpretation drafts
+- [ ] Final report states that clinical or ClinGen/VCEP use requires qualified human review
+- [ ] No automatic publication, distribution, or final classification without human review
+
 ### Phase 1: Variant Identity
 - [ ] Gene symbol identified
 - [ ] HGVS c. notation provided
@@ -108,6 +115,8 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] PP3/BP4 from local predictor consensus rather than the calibrated overlay or VCEP
 - [ ] PVS1 without the LoF decision-tree overlay and mechanism gate
 - [ ] PS3/BS3 without functional-assay refinement
+- [ ] PS3/BS3 from segregation, case recurrence, HGMD/ClinVar labels, or another author's ACMG code rather than actual functional assay data
+- [ ] PM1, PM5, PS3, or PP3 assigned directly from a reputable-source label without primary evidence extraction
 - [ ] Applying the same evidence to multiple codes
 
 ---
@@ -120,6 +129,12 @@ Pre-delivery verification checklist for variant interpretation reports.
 | Context routing | `tooluniverse-acmg-overlay-routing-core` used when disease, mechanism, phenotype, source, or literature context affects evidence |
 | Evidence assignment | Criterion-specific overlays used for refined strengths |
 | Final classification | `tooluniverse-acmg-variant-classification` produces the final call |
+
+### External-Agent Overlay Audit
+- [ ] Every counted ACMG code has an overlay route recorded as `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, or `overlay_deferred_to_vcep`
+- [ ] Source assertions from ClinVar, HGMD, LOVD, expert panels, lab reports, or published ACMG classifications are routed through PP5/BP6 source review before being used as leads
+- [ ] Failed tool calls are retried or marked as missing; manual summaries are not used to replace essential counted evidence
+- [ ] Literature-derived clinical evidence is routed to the correct overlay: functional assay -> PS3/BS3, segregation -> PP1/BS4, case enrichment -> PS4, biallelic recessive proband -> PM3, de novo -> PS2/PM6
 
 ### Classification Cross-Check
 - [ ] Evidence codes align with final classification

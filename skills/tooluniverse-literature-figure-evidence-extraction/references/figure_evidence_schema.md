@@ -1,6 +1,6 @@
 # Figure Evidence Extraction Schema
 
-This reference defines structured fields for visual evidence extracted from literature figures. Use the smallest schema that fits the figure. If required fields are unreadable or absent, return `not assessable` for that interpretation.
+This reference defines structured fields for visual evidence extracted from literature figures. Use the smallest schema that fits the figure. If required fields are unreadable or absent, return `not_interpretable` for that interpretation.
 
 ---
 
@@ -14,7 +14,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `gene_disease_context` | Gene, disease, inheritance, and source context if available. |
 | `visual_observations` | Factual observations visible in the figure. |
 | `text_context` | Caption, body text, OCR, or supplement text used to interpret the visual. |
-| `confidence` | `high`, `medium`, `low`, or `not assessable`. |
+| `confidence` | `high`, `medium`, `low`, or `not_interpretable`. |
 | `ambiguities` | Missing labels, low resolution, cropped panel, conflict, or unclear inference. |
 
 ---
@@ -30,7 +30,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `mother_genotype` | Carrier of assessed variant, carrier of other allele, negative, not tested, unclear. |
 | `father_genotype` | Carrier of assessed variant, carrier of other allele, negative, not tested, unclear. |
 | `phase_evidence_basis` | Pedigree, Sanger trace, caption text, explicit in-trans wording, reads, or unknown. |
-| `phase_conclusion` | Confirmed in trans, presumed in trans from one-parent testing, phase unknown, homozygous, not assessable. |
+| `phase_conclusion` | Confirmed in trans, presumed in trans from one-parent testing, phase unknown, homozygous, not_interpretable. |
 | `pm3_ready` | Whether enough fields are present for PM3 overlay scoring. |
 
 ---
@@ -47,7 +47,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `unaffected_non_carriers` | Count/list. |
 | `informative_meioses` | Count if readable or stated. |
 | `lod_score` | Published/calculated LOD if shown. |
-| `segregation_conclusion` | Supports segregation, possible non-segregation, uninformative, not assessable. |
+| `segregation_conclusion` | Supports segregation, possible non-segregation, uninformative, not_interpretable. |
 | `pp1_ready` | Whether enough fields are present for PP1/BS4 overlay review. |
 
 ---
@@ -64,7 +64,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `maternal_result` | Negative, carrier, unclear, not tested. |
 | `paternal_result` | Negative, carrier, unclear, not tested. |
 | `parentage_confirmed` | Confirmed, not confirmed, not stated. |
-| `de_novo_conclusion` | Confirmed de novo, assumed de novo, inherited, not assessable. |
+| `de_novo_conclusion` | Confirmed de novo, assumed de novo, inherited, not_interpretable. |
 
 ---
 
@@ -77,7 +77,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `readout` | Measurement, units, direction of abnormality. |
 | `controls` | Wild-type/normal, abnormal/null, benign/pathogenic variant controls if shown. |
 | `replicates_or_error_bars` | Replicates, SD/SEM/CI, not shown, unclear. |
-| `variant_result` | Normal, abnormal, intermediate, conflicting, not assessable. |
+| `variant_result` | Normal, abnormal, intermediate, conflicting, not_interpretable. |
 | `quantitative_values` | Values if visible or extracted; otherwise qualitative trend. |
 | `statistics` | p-values, significance markers, thresholds, or not shown. |
 | `ps3_bs3_ready` | Whether enough fields are present for PS3/BS3 overlay review. |
@@ -108,7 +108,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `variant_or_target` | Variant, amplicon, protein, transcript, or target. |
 | `observed_signal` | Peak, band, product size, intensity trend, absent/present signal. |
 | `control_signal` | WT/control/null/marker lane if shown. |
-| `interpretation_supported` | Genotype confirmation, parental origin, transcript product, protein abundance, functional trend, not assessable. |
+| `interpretation_supported` | Genotype confirmation, parental origin, transcript product, protein abundance, functional trend, not_interpretable. |
 | `limitations` | Cropped lanes, unreadable peaks, overexposure, missing marker, missing labels, low resolution. |
 
 ---
@@ -121,5 +121,5 @@ This reference defines structured fields for visual evidence extracted from lite
 | `variant_position` | Residue or region. |
 | `domain_or_region` | Domain, motif, active site, hotspot, constrained region, unclear. |
 | `comparison_variants` | Known P/LP/B/LB variants shown in same region. |
-| `map_interpretation` | Region supports PM1/PS1/PM5 context, uninformative, not assessable. |
+| `map_interpretation` | Region supports PM1/PS1/PM5 context, uninformative, not_interpretable. |
 | `recommended_overlay` | PM1, PS1, PM5, or other downstream overlay. |

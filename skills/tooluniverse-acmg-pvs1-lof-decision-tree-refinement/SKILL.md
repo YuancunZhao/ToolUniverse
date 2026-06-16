@@ -48,7 +48,7 @@ Do not apply PVS1 solely because a variant is annotated as stop-gained, frameshi
 - whether alternative initiation or biologically relevant rescue transcripts preserve function;
 - whether a VCEP or disease-specific rule supersedes the generic tree.
 
-Output one of: `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `PVS1_NotAssessed`.
+Output one of: `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `applied_evidence: none` with `status: not_assessed`.
 
 ---
 
@@ -94,7 +94,7 @@ Use ToolUniverse tools before assigning PVS1 strength.
 
 ### Applicability Gate
 
-Use `PVS1_NotAssessed` when required inputs are missing:
+Use `status: not_assessed` when required inputs are missing:
 
 - no disease context;
 - no transcript/protein consequence;
@@ -204,7 +204,7 @@ For duplications:
 - Use `PVS1_Strong` when the duplication is presumed in tandem, the reading frame is presumed disrupted, and NMD is predicted to occur.
 - Use `PVS1_N/A` when the duplication is proven not to be in tandem.
 - Use `PVS1_N/A` when there is no or unknown impact on reading frame and NMD.
-- If duplication length or breakpoints are too uncertain to predict reading-frame impact and NMD, use `PVS1_NotAssessed`.
+- If duplication length or breakpoints are too uncertain to predict reading-frame impact and NMD, use `status: not_assessed` with reason `PVS1 duplication frame/NMD impact uncertain`.
 
 ### In-Frame Deletion/Duplication or Exon Skipping
 
@@ -236,13 +236,13 @@ PVS1 LoF decision tree refinement:
 - Variant: [HGVS c./p./g.]
 - Transcript: [MANE/disease-relevant transcript]
 - Variant class: [nonsense/frameshift/canonical splice/start-loss/exon deletion/whole-gene deletion/duplication/other]
-- Gene-disease mechanism: [LoF/HI established / not established / mixed / not assessed]
-- PTC/NMD assessment: [NMD expected / NMD escape / not applicable / not assessable]
+- Gene-disease mechanism: [LoF/HI established / not established / mixed / not_assessed]
+- PTC/NMD assessment: [NMD expected / NMD escape / not applicable / not_assessed]
 - Altered protein assessment: [critical region lost / substantial region lost / non-critical region / preserved function / unknown]
-- Rescue/alternative transcript assessment: [none found / plausible / established / not assessed]
+- Rescue/alternative transcript assessment: [none found / plausible / established / not_assessed]
 - CNV/SV routing: [not applicable / structural-variant-analysis used / needed]
 - RNA routing: [not applicable / Walker 2023 overlay used / needed]
-- Applied evidence: [PVS1 / PVS1_Strong / PVS1_Moderate / PVS1_Supporting / PVS1_N/A / PVS1_NotAssessed]
+- Applied evidence: [PVS1 / PVS1_Strong / PVS1_Moderate / PVS1_Supporting / PVS1_N/A / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [LoF decision tree / CNV definition / transcript evidence / none]
 - Rationale: [brief explanation with sources]

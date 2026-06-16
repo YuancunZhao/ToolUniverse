@@ -37,7 +37,7 @@ PM2 is not a moderate pathogenic criterion under the generic ClinGen SVI recomme
 **Expected behavior**:
 
 - Do not apply PM2.
-- Report `PM2 not assessable`.
+- Report `applied_evidence: none`, `status: not_assessed`, and `reason: population representation or allele matching is uncertain`.
 - Use fallback sources only to clarify representation, not to force PM2.
 
 ---
@@ -114,6 +114,8 @@ PM2 absence/rarity refinement:
 - Coverage/representation: [adequate/uncertain/poor]
 - Disease model and threshold: [summary]
 - Benign frequency conflict: [none/BA1/BS1/BS2]
-- Applied evidence: [PM2_Supporting / No PM2 / PM2 not assessable]
+- Applied evidence: [PM2_Supporting / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [coverage adequate / benign frequency conflict / population representation or allele matching is uncertain]
 - Combination: [none / PVS1 + PM2_Supporting => Likely Pathogenic]
 ```

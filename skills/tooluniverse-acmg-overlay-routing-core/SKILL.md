@@ -12,6 +12,30 @@ Use it to decide which context overlays must run before evidence-specific overla
 
 ---
 
+## External-Agent Compliance Rules
+
+When this skill set is imported into another agent, do not treat the base ACMG workflow as a free-form checklist. The base workflow retrieves and organizes evidence; criterion-specific overlays assign refined evidence strengths.
+
+For every ACMG criterion that could affect the final classification, the agent must record one of these routing outcomes:
+
+- `overlay_applied`: the relevant overlay was used and assigned or withheld evidence.
+- `overlay_not_applicable`: the overlay was not relevant to the variant class, disease mechanism, or evidence type.
+- `overlay_not_assessed`: required evidence was unavailable and the missing fields are listed.
+- `overlay_deferred_to_vcep`: a current VCEP or disease-specific specification superseded the generic overlay.
+
+Do not assign refined evidence strength directly in the base workflow for criteria covered by overlays, including PM2, PP3/BP4, PS1/PM5, PM1/PP2/BP1, PS3/BS3, PS4, PP1/BS4/PP4, PM3, PS2/PM6, PM4/BP3, PVS1, BA1/BS1/BS2/BP2/BP5, PP5/BP6, and dominant-negative mechanism-sensitive criteria.
+
+Treat these as routing failures unless corrected before final classification:
+
+- Applying `PS3` or `BS3` from literature reports, HGMD/ClinVar labels, segregation, de novo observations, case enrichment, or another author's ACMG classification without reviewing the actual functional assay.
+- Applying `PP3/BP4` from local predictor voting, such as "CADD + SIFT + PolyPhen all agree", rather than the calibrated PP3/BP4 overlay or a current VCEP rule.
+- Applying `PM5`, `PS1`, `PM1`, `PM2`, or `PS3` directly from a ClinVar, HGMD, LOVD, expert-panel, or paper classification label without extracting and routing the underlying primary evidence.
+- Using manual summaries to replace failed ToolUniverse calls when the missing tool result is essential to a counted criterion.
+
+If an external agent cannot invoke a named overlay, it should still follow that overlay's SKILL.md instructions and explicitly state that the overlay logic was applied manually. If neither is possible, mark the criterion `not_assessed` instead of assigning strength.
+
+---
+
 ## Routing Order
 
 Apply this order before assigning final evidence codes:
@@ -29,7 +53,9 @@ Apply this order before assigning final evidence codes:
    - This step routes mechanism-sensitive criteria such as PVS1, PS1/PM5, PS3/BS3, PM1/PP2/BP1/PP3, PM4/BP3, PS4, PP1/BS4, PM3, and PS2/PM6.
 
 4. **Clinical context intake**
-   - If phenotype, affected/unaffected status, disease specificity, diagnostic yield, phase, family data, de novo data, alternate diagnosis, or healthy-carrier context is required, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement`.
+   - First classify the needed context as patient-level phenotype, family/proband clinical-genotype context, literature/cohort case definition, or disease-context-only information.
+   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` only when a criterion truly needs supplied or extracted phenotype, affected/unaffected status, disease specificity, diagnostic yield, phase, family data, de novo data, alternate diagnosis, or healthy-carrier context.
+   - Do not route criteria to phenotype intake merely because they need disease prevalence, inheritance, penetrance, mechanism, or a literature-defined disease entity.
    - Use criterion-specific overlays for scoring after the required clinical fields are collected.
 
 5. **Source and literature intake**
@@ -54,7 +80,7 @@ Use these status values in reports and structured summaries:
 | `not_applicable` | The criterion does not apply to the variant class, disease mechanism, or disease context. |
 | `not_used` | Evidence is recorded as a lead or context but is intentionally not counted. |
 
-Do not use free-text variants such as "not assessable" or "not assessed" as the only status in structured output. Put the free-text explanation in `reason`.
+Do not use free-text missing-data phrases as the only status in structured output. Put the explanation in `reason` and use the controlled `status` values.
 
 ---
 
@@ -108,13 +134,42 @@ Do not introduce underscore-separated variants of very-strong strength names. Fo
 
 ---
 
+## Clinical Context Dependency Classes
+
+Use these classes before asking the user for phenotype. Patient-level phenotype is requested only when the criterion cannot be scored from public literature, cohort metadata, or disease-context resources.
+
+| Class | Meaning | Typical criteria |
+| --- | --- | --- |
+| `user_patient_phenotype_required` | The current patient's or family's phenotype, affected/unaffected status, age, alternate diagnosis, or clinical evaluation is needed and is not available from a cited source. Ask the user for targeted fields. | PP4 for the current case, BP5, BS2, BP2 when alternate diagnosis or phenotype explanation is needed, PS2/PM6 for a user-reported de novo event, PP1/BS4 for a user-supplied family, PM3 for a user-supplied affected proband. |
+| `literature_case_context_required` | Case phenotype, affected status, family data, phase, or disease ascertainment may be extracted from papers, tables, supplements, pedigrees, or databases. Ask the user only if extraction fails or the source is unavailable. | Published PS2/PM6, PM3, PP1/BS4, PP4, rare-disease PS4 affected-case counting, pedigree-based evidence. |
+| `literature_or_cohort_case_definition_required` | Formal study-level case definition, disease ascertainment, controls, ancestry handling, and statistics are needed. Patient-level phenotype from the user is not required when the study definition is sufficient. | Formal PS4 case-control, cohort, or meta-analysis evidence. |
+| `disease_context_only` | Disease entity, inheritance, prevalence, penetrance, mechanism, transcript, or threshold context is needed, but not a patient phenotype. Retrieve from ClinGen, GenCC, MONDO/MedGen, GeneReviews, VCEP guidance, population data, or literature. | BA1/BS1/PM2 frequency thresholds, PVS1 LoF mechanism gate, PM1/PP2/BP1 regional or mechanism context, PP3/BP4 prediction context, PM4/BP3 protein-region context, PS1/PM5 comparison-variant context. |
+
+If a criterion falls into more than one class, use the narrowest missing-information request. For example, formal PS4 should ask for the case-control study details, not the current patient's phenotype; rare-disease PS4 case counting should ask for affected-case phenotype and unrelatedness only when those facts are missing from the publication or database.
+
+---
+
+## Confidentiality, Transparency, and Human Review
+
+Use these safeguards whenever patient-level data, unpublished deliberations, draft specifications, or meeting-derived evidence are involved. These safeguards are based on ClinGen's AI note-taking policy v1.0 and are governance requirements, not ACMG evidence rules.
+
+- **De-identify inputs**: do not send names, dates of birth, medical record numbers, direct contact information, or other patient-identifiable data to unsecured tools. Use de-identified phenotype, genotype, phase, and family-relationship descriptors whenever possible.
+- **Separate public from restricted evidence**: published PMIDs, public ClinGen guidance, ClinVar/gnomAD/UniProt/OMIM records, and public supplements can be cited directly. Unpublished VCEP drafts, private meeting notes, internal deliberations, and confidential patient-level material should be summarized only when the user has permission and should not be redistributed as public guidance.
+- **Disclose AI assistance**: if the output is used as meeting notes, a curation draft, or a clinical interpretation draft, include an AI-assistance statement such as: "AI tools were used to assist evidence retrieval and drafting; the final interpretation requires review and approval by the designated human curator or qualified professional."
+- **Require human oversight**: do not present ToolUniverse overlay output as a final ClinGen/VCEP decision, clinical laboratory classification, or medical recommendation without qualified human review.
+- **Avoid unattended automation**: do not use this workflow to automatically publish, distribute, or finalize notes, evidence tables, or variant classifications without human review.
+
+---
+
 ## Common Routing Map
 
 | Situation | Route |
 | --- | --- |
 | Multiple gene-associated disorders or mechanisms | Multiple-disorder context, then mechanism overlay if needed. |
 | Possible dominant-negative or altered-product mechanism | Mechanism overlay before evidence-specific criteria. |
-| Missing phenotype, family, de novo, phase, healthy-carrier, or alternate-diagnosis context | Phenotype-dependent intake before criterion scoring. |
+| Missing patient phenotype, family, de novo, phase, healthy-carrier, or alternate-diagnosis context | Phenotype-dependent intake before criterion scoring. |
+| Formal PS4 case-control, cohort, or meta-analysis evidence | PS4 overlay; phenotype-dependent intake only if the study case definition or disease ascertainment is missing or ambiguous. |
+| Disease prevalence, penetrance, inheritance, mechanism, transcript, or threshold context only | Disease-context retrieval and the evidence-specific overlay; do not request patient phenotype solely for these inputs. |
 | Secondary source assertion only | PP5/BP6 source refinement, then retrieve primary evidence. |
 | Literature evidence in figures or supplements | Literature deep research plus figure evidence extraction. |
 | Baseline LoF PVS1 | PVS1 LoF decision-tree overlay. |

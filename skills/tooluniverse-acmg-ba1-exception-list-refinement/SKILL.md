@@ -70,7 +70,7 @@ If BA1 applies, the variant can be classified Benign without further evidence ev
 
 5. **Assess founder and dataset caveats**
    - Be cautious when AF >0.05 is observed only in founder or bottlenecked populations, such as Finnish or Ashkenazi Jewish datasets.
-   - If relatedness, effective population size, or population structure makes the dataset unsuitable, report `BA1_NotAssessed - population dataset not adequate` or route to BS1 if disease-specific thresholds support it.
+   - If relatedness, effective population size, or population structure makes the dataset unsuitable, report `status: not_assessed` with reason `BA1 population dataset not adequate`, or route to BS1 if disease-specific thresholds support it.
    - Do not use population datasets with substantial relatedness unless a population genetic assessment supports effective population size.
 
 6. **Route conflicts**
@@ -99,7 +99,7 @@ Use `No BA1 - exception list` when the variant matches one of the Ghosh 2018 exc
 
 Use `No BA1 - gene/variant-specific threshold` when a VCEP or expert specification defines a lower BA1 threshold or excludes the generic BA1 threshold.
 
-Use `BA1_NotAssessed - population dataset not adequate` when AF appears high but population dataset quality, observed allele number, relatedness, founder effect, or allele normalization is not adequate.
+Use `status: not_assessed` with reason `BA1 population dataset not adequate` when AF appears high but population dataset quality, observed allele number, relatedness, founder effect, or allele normalization is not adequate.
 
 Use `No BA1 - use BS1 review` when AF is high for the disease context but does not meet stand-alone BA1 conditions.
 
@@ -150,7 +150,7 @@ BA1 exception-list refinement:
 - General continental population: [yes / no / founder or bottlenecked / unclear]
 - Exception-list match: [none / matched entry]
 - Gene/VCEP-specific BA1 rule: [none / threshold / exception / not assessed]
-- Applied evidence: [BA1 / No BA1 - exception list / No BA1 - gene-specific rule / No BA1 - use BS1 review / BA1_NotAssessed]
+- Applied evidence: [BA1 / No BA1 - exception list / No BA1 - gene-specific rule / No BA1 - use BS1 review / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Routed to: [none / tooluniverse-acmg-benign-context-refinement for BS1]
 - Rationale: [brief explanation with sources]

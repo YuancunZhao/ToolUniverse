@@ -59,7 +59,7 @@ Use English queries and database-verified evidence.
    - If the disease mechanism may be dominant-negative, antimorphic, or mixed by variant class, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PVS1. Do not treat a dominant-negative disease mechanism as ordinary haploinsufficiency.
 
 4. **Import the baseline PVS1 branch**
-   - Use `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` to determine whether the baseline branch is `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `PVS1_NotAssessed`.
+   - Use `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` to determine whether the baseline branch is `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `status: not_assessed`.
    - If the RNA assay shows a transcript product that differs from the predicted DNA consequence, re-enter the baseline LoF decision tree using the observed transcript product.
    - Apply NMD escape rules through the baseline overlay unless RNA evidence specifically changes the transcript consequence.
    - Use existing ToolUniverse tools rather than a dedicated DECIPHER scraper: `VariantValidator_validate_variant` for normalized c./p./g. consequence and PTC position; `EnsemblVEP_annotate_hgvs` or `ensembl_vep_region` for transcript consequence, exon/intron fields, and LoFTEE context; Ensembl transcript lookup/overlap tools for exon/CDS structure when VEP output does not provide enough detail.

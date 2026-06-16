@@ -138,7 +138,7 @@ Use these evidence labels in ToolUniverse ACMG output:
 - `PVS1_Moderate`
 - `PVS1_Supporting`
 - `PVS1_N/A`
-- `PVS1_NotAssessed`
+- `applied_evidence: none` with `status: not_assessed` when required inputs are missing
 
 ## ToolUniverse Routing
 

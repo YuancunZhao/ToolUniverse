@@ -36,6 +36,8 @@ For missense `PP3/BP4`, do not use uncalibrated majority voting across many pred
 
 If no tool was pre-specified and multiple tools were inspected after seeing scores, do not cherry-pick the strongest result. Either use the laboratory or VCEP pre-specified hierarchy, or record the prediction evidence as non-applied context.
 
+External-agent rule: phrases such as "all predictors agree", predictor-majority statements, "CADD high plus SIFT/PolyPhen damaging", or "conservation supports pathogenicity" are not valid PP3/BP4 assignments by themselves. They may be reported as prediction context, but the counted ACMG code must come from this calibrated overlay or a current VCEP rule.
+
 ## Recommended Evidence Retrieval
 
 Start with variant normalization and consequence confirmation:

@@ -38,7 +38,7 @@ Use this overlay for BA1, BS1, BS2, BP2, and BP5 when benign evidence depends on
 
 - Do not automatically apply BA1.
 - Use `tooluniverse-acmg-ba1-exception-list-refinement` to assess dataset adequacy, observed allele count, and exception-list status.
-- If dataset structure is unclear, report `BA1_NotAssessed - population dataset not adequate`.
+- If dataset structure is unclear, report `applied_evidence: none`, `status: not_assessed`, and `reason: population dataset not adequate`.
 
 ---
 
@@ -49,7 +49,7 @@ Use this overlay for BA1, BS1, BS2, BP2, and BP5 when benign evidence depends on
 **Expected behavior**:
 
 - Apply BS2 when age, phenotype evaluation, and penetrance make pathogenicity incompatible.
-- If age or phenotype evaluation is missing, mark BS2 not assessable.
+- If age or phenotype evaluation is missing, mark BS2 as `status: not_assessed` with the missing field in `reason`.
 
 ---
 
@@ -83,5 +83,7 @@ Benign-context refinement:
 - Population threshold: [BA1/BS1 source and BA1 exception-list result]
 - Healthy observations: [summary]
 - Phase/alternate diagnosis: [summary]
-- Applied evidence: [BA1 / BS1 / BS2 / BP2 / BP5 / No evidence / Not Assessed]
+- Applied evidence: [BA1 / BS1 / BS2 / BP2 / BP5 / none]
+- Status: [applied / not_applicable / not_assessed]
+- Reason: [threshold source / healthy-observation basis / phase basis / alternate-diagnosis basis / missing required clinical context]
 ```

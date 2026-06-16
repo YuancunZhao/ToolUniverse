@@ -10,7 +10,7 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence r
 
 It uses ACGS 2024 rare-disease practice guidance to refine how PS4 is considered when formal case-control studies are unavailable. It does not replace VCEP specifications, disease-specific case-count rules, or formal statistical enrichment analysis when those are available.
 
-Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS4-specific logic.
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS4-specific logic. Formal case-control or cohort PS4 evidence is literature/cohort evidence; it does not require user-supplied patient phenotype when the source defines the affected cohort and disease context sufficiently.
 
 ---
 
@@ -53,9 +53,10 @@ Prefer formal case-control or cohort evidence with an odds ratio, confidence int
    - Use `tooluniverse-literature-deep-research` for publications, case tables, supplements, and multi-paper de-duplication.
    - Use `tooluniverse-literature-figure-evidence-extraction` if affected cases or segregation/case status are shown in pedigrees, tables rendered as images, or figure panels.
 
-4. **Assess phenotype and unrelatedness**
-   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` to confirm that affected individuals have a phenotype matching the gene-disease context.
-   - Count only unrelated affected probands unless a VCEP specifies otherwise.
+4. **Assess disease context, phenotype, and unrelatedness**
+   - For formal case-control, cohort, or meta-analysis evidence, extract the study's disease/case definition, affected-cohort ascertainment, controls, ancestry handling, and statistics from the publication or cohort metadata. User-supplied patient phenotype is not required if the study definition is sufficient.
+   - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when affected-case phenotype specificity, patient-level disease match, or rare-disease case-count context is unclear.
+   - For rare-disease affected-case counting, count only unrelated affected probands unless a VCEP specifies otherwise.
    - De-duplicate the same individual reported across ClinVar, literature, DECIPHER, or database records.
 
 5. **Choose PS4 versus another criterion**
@@ -72,12 +73,14 @@ Prefer formal case-control or cohort evidence with an odds ratio, confidence int
 Apply PS4 based on formal enrichment when:
 
 - Cases and controls are defined clearly.
-- Case phenotype matches the disease being classified.
+- The affected cohort or case definition matches the disease being classified.
 - Controls are ancestry-matched or population stratification is addressed.
 - The variant is significantly enriched in cases compared with controls.
 - Confidence intervals and sample sizes support the claimed strength.
 
 Use VCEP thresholds when available. Without a VCEP, report odds ratio, confidence interval, p value, case/control counts, and any ancestry mismatch before assigning strength.
+
+Do not require a separate user-supplied proband phenotype for this evidence type. The required clinical context is the study's case definition and disease ascertainment, which should be retrieved from the article, supplement, cohort description, or database record.
 
 ### Rare-Disease Affected-Case Evidence
 
@@ -88,9 +91,11 @@ When formal case-control data are unavailable, ACGS 2024 supports cautious rare-
 | One unrelated affected individual with a rare and specific phenotype, variant absent from gnomAD/population controls, and no better criterion captures the evidence | `PS4_Supporting` |
 | Two or more unrelated affected individuals with rare and specific phenotype, variant absent from gnomAD/population controls, and duplicate reports excluded | `PS4_Moderate` |
 | Recessive affected biallelic cases with genotype/phase suitable for PM3 | Route to PM3, do not count as PS4 |
-| Common, late-onset, low-penetrance, or broad phenotype without formal enrichment analysis | Usually no PS4 or PS4 not assessable |
+| Common, late-onset, low-penetrance, or broad phenotype without formal enrichment analysis | Usually no PS4, or `status: not_assessed` if enrichment context is missing |
 
 Do not use PS4 merely because a database states "Pathogenic" or because a variant appears in a disease database without case details.
+
+Unlike formal case-control evidence, rare-disease affected-case counting requires case-level disease/phenotype specificity and unrelatedness. If those facts are absent from the report or database, mark PS4 as `not_assessed` rather than assuming them.
 
 ---
 
@@ -103,7 +108,7 @@ Before using gnomAD as a control population:
 - Be cautious when the disorder may be present in gnomAD participants, especially adult-onset, cardiovascular, low-penetrance, or incompletely ascertained disease.
 - Do not use population absence if coverage, mapping, build, or allele representation is unclear.
 
-If ancestry matching is poor, report `PS4 not assessable` or downgrade the evidence unless a disease-specific rule supports use.
+If ancestry matching is poor, report `status: not_assessed` with reason `PS4 ancestry/control comparison inadequate`, or downgrade the evidence unless a disease-specific rule supports use.
 
 ---
 
@@ -121,10 +126,10 @@ Avoid double counting the same affected observation:
 
 ## Missing-Information Behavior
 
-If case-enrichment evidence is mentioned but incomplete, mark PS4 as `Not Assessed - case enrichment data required` and ask for targeted fields.
+If case-enrichment evidence is mentioned but incomplete, mark PS4 as `status: not_assessed` with reason `case enrichment data required` and ask only for the fields missing from the evidence type being used.
 
 ```text
-PS4 requires affected-case enrichment or unrelated affected-case evidence. Please provide the number of unrelated affected carriers, phenotype/disease used for ascertainment, ancestry or cohort details, population-control comparison, whether cases are duplicate reports, and whether biallelic recessive cases should instead be scored under PM3.
+PS4 requires affected-case enrichment or unrelated affected-case evidence. For formal case-control/cohort evidence, please provide the disease/case definition, case and control counts, ancestry handling, odds ratio or enrichment statistics, confidence interval or p value, and cohort source. For rare-disease affected-case counting, please provide the number of unrelated affected carriers, phenotype/disease used for ascertainment, ancestry or cohort details, population-control comparison, whether cases are duplicate reports, and whether biallelic recessive cases should instead be scored under PM3.
 ```
 
 ---
@@ -135,14 +140,14 @@ PS4 requires affected-case enrichment or unrelated affected-case evidence. Pleas
 PS4 case-enrichment refinement:
 - Variant: [HGVS/genomic allele]
 - Disease context: [disease, inheritance, gene validity]
-- Evidence type: [case-control / cohort / rare-disease case count / database-only / not assessable]
+- Evidence type: [case-control / cohort / rare-disease case count / database-only / unclear]
 - Affected carriers: [count, unrelatedness, phenotype specificity]
 - Control source: [gnomAD/case-control cohort/other], ancestry match: [adequate/uncertain/poor]
 - Population frequency: [global AF, max ancestry AF, AC/AN, homozygotes]
-- Duplicate-report check: [none found / concern / not assessable]
+- Duplicate-report check: [none found / concern / not_assessed]
 - Recessive PM3 routing: [not applicable / route to PM3]
 - De novo or segregation routing: [not applicable / route to PS2-PM6 / route to PP1]
-- Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / No PS4 / Not Assessed]
+- Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / No PS4 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [case-control / affected-case count / none]
 ```

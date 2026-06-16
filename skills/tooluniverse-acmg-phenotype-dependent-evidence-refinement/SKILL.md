@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-phenotype-dependent-evidence-refinement
-description: Refine ACMG/AMP evidence criteria that require patient phenotype, disease specificity, affected status, or phenotype-match context. Use with ToolUniverse ACMG classification when PP4, PS4, PP1/BS4, PM3, BP5, BS2, PS2/PM6 phenotype consistency, or other clinical-context-dependent criteria cannot be assessed without phenotype information. Route PP4 that interacts with segregation/non-segregation through the ClinGen 2024 combined PP1/BS4/PP4 guidance in the PP1 overlay.
+description: Refine ACMG/AMP evidence criteria that require patient phenotype, disease specificity, affected status, or phenotype-match context. Use with ToolUniverse ACMG classification when PP4, PS4 rare-disease affected-case counting, PP1/BS4, PM3, BP5, BS2, PS2/PM6 phenotype consistency, or other clinical-context-dependent criteria cannot be assessed without phenotype information. Formal PS4 case-control/cohort evidence does not require user-supplied patient phenotype when the study defines cases and disease context sufficiently. Route PP4 that interacts with segregation/non-segregation through the ClinGen 2024 combined PP1/BS4/PP4 guidance in the PP1 overlay.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 This skill extends `tooluniverse-acmg-variant-classification` by defining a lightweight intake and routing layer for ACMG evidence criteria that require phenotype, affected status, or disease-match context.
 
-It does not create new evidence codes and does not replace evidence-specific overlays. It prevents ToolUniverse from guessing phenotype-dependent evidence when the user has not provided enough clinical context.
+It does not create new evidence codes and does not replace evidence-specific overlays. It prevents ToolUniverse from guessing phenotype-dependent evidence when the user or evidence source has not provided enough clinical context.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, source-review, double-counting, and output-status conventions. This overlay is the clinical-context intake step; criterion-specific scoring remains in the relevant evidence overlay.
 
@@ -21,7 +21,7 @@ When PP4 phenotype specificity is considered together with family segregation or
 Use this skill when an ACMG classification may depend on:
 
 - `PP4`: phenotype or family history highly specific for a disease with a single genetic etiology.
-- `PS4`: significantly increased prevalence of the variant in affected individuals compared with controls.
+- `PS4`: rare-disease affected-case counting, or formal case-control/cohort evidence only when disease ascertainment or phenotype-match context is unclear.
 - `PP1` or `BS4`: segregation or non-segregation in affected and unaffected relatives.
 - `PM3`: affected proband observations for recessive in-trans or phase-unknown variants.
 - `BP5`: an alternate molecular basis for the patient's disease.
@@ -32,11 +32,37 @@ Use this skill when an ACMG classification may depend on:
 
 Do not infer these criteria from variant annotation alone.
 
+Do not use this skill merely because an evidence criterion needs disease prevalence, penetrance, inheritance, molecular mechanism, transcript selection, or a VCEP threshold. Those are disease-context inputs, not patient phenotype. Retrieve them through ToolUniverse disease, gene-validity, population, and literature tools, then route to the evidence-specific overlay.
+
+---
+
+## Dependency Classification
+
+Classify the missing context before asking the user for phenotype.
+
+| Criterion or scenario | Context dependency | Ask the user when |
+| --- | --- | --- |
+| `PP4` for the current case | Patient-level phenotype specificity and differential diagnosis | Proband/family phenotype, HPO terms, age of onset, or alternate diagnosis is missing. |
+| `PP1` / `BS4` for the current family | Family affected/unaffected status, phenotype certainty, penetrance, phenocopy, and genotype status | Pedigree or family fields are missing. |
+| Published `PP1` / `BS4` / `PP4` | Literature case/family context | The paper, table, supplement, or figure cannot provide the required fields. |
+| `PM3` for a user-supplied proband | Affected status, recessive disease match, biallelic genotype, phase, and other-allele classification | Proband disease match, phase, or genotype fields are missing. |
+| Published `PM3` | Literature proband and phase context | Literature extraction cannot resolve affected status, phase, zygosity, or other-allele classification. |
+| `PS2` / `PM6` for a user-reported de novo event | Proband phenotype consistency, parental testing, parentage confirmation, and recurrence context | Trio/de novo or phenotype-consistency fields are missing. |
+| Published `PS2` / `PM6` | Literature proband, parental testing, and phenotype context | The source does not state variant-level parental testing and phenotype consistency. |
+| Formal `PS4` case-control/cohort/meta-analysis | Study-level case definition, disease ascertainment, controls, ancestry handling, and statistics | Study case/control definitions or enrichment statistics are missing; do not ask for the current patient's phenotype. |
+| Rare-disease `PS4` case counting | Affected-case phenotype specificity, unrelatedness, duplicate-report status, and population-control context | These case-level facts are absent from the source. |
+| `BS2` | Healthy status, age, sex when relevant, penetrance, onset expectations, and clinical evaluation | The supposedly healthy observation is not adequately phenotyped. |
+| `BP5` | Patient phenotype plus alternate molecular diagnosis explaining all or most relevant features | Phenotype or alternate diagnosis details are missing. |
+| `BP2` | Phase plus inheritance and phenotype explanation when another pathogenic variant is invoked | Cis/trans state, fully penetrant disease context, or alternate diagnosis explanation is missing. |
+| BA1/BS1/PM2, PVS1, PM1/PP2/BP1, PP3/BP4, PM4/BP3, PS1/PM5 | Disease context, mechanism, transcript, population threshold, protein-region, prediction, or comparison-variant context only | Do not request patient phenotype unless a VCEP or disease-specific rule explicitly needs it. |
+
+Use the narrowest missing-information prompt. If a publication or database supplies the required case context, extract and cite it instead of asking the user to provide it again.
+
 ---
 
 ## Required Phenotype Intake
 
-Before applying phenotype-dependent evidence, collect the minimum clinical context needed for the criterion under consideration.
+Before applying phenotype-dependent evidence, collect only the minimum clinical context needed for the criterion under consideration.
 
 Ask the user for missing information when it is not present in the prompt, literature excerpt, case table, or supplied report.
 
@@ -52,13 +78,13 @@ Minimum useful phenotype fields:
 - Whether the phenotype is highly specific for the gene/disease or broadly nonspecific.
 - Any known alternate molecular diagnosis.
 
-If these fields are missing, report the affected criteria as `Not Assessed - phenotype required` and ask targeted follow-up questions.
+If fields needed for the criterion are missing, report `status: not_assessed` with reason `phenotype required` or a more specific reason and ask targeted follow-up questions. Do not ask for user-supplied patient phenotype for formal literature case-control PS4 when the publication itself provides adequate case definition, disease context, and control comparison.
 
 ---
 
 ## ToolUniverse Evidence Retrieval
 
-Use ToolUniverse tools to contextualize the supplied phenotype; do not use them to invent a patient phenotype.
+Use ToolUniverse tools to contextualize the supplied or source-extracted phenotype; do not use them to invent a patient phenotype.
 
 Recommended tools:
 
@@ -74,7 +100,7 @@ Recommended tools:
 | `PubMed_search_articles` / `EuropePMC_search_articles` | Case-series phenotype, disease specificity, and variant prevalence evidence. |
 | `ClinVar_search_variants` / `ClinVar_get_variant` | Variant-level clinical assertions; not sufficient by itself for patient phenotype. |
 
-Use the retrieved disease description only to assess match to user-supplied phenotype.
+Use the retrieved disease description only to assess match to user-supplied or source-extracted phenotype.
 
 ---
 
@@ -129,14 +155,18 @@ PP4 requires phenotype specificity. Please provide the proband's key clinical fe
 
 ### PS4
 
-Apply PS4 only when affected-case enrichment is supported by case-control, cohort, or well-curated case-count evidence and the affected individuals have a phenotype matching the gene-disease context.
+Apply PS4 only when affected-case enrichment is supported by case-control, cohort, or well-curated case-count evidence and the affected individuals or case cohort match the gene-disease context.
+
+Formal case-control, cohort, or meta-analysis PS4 does not require patient-level phenotype from the user if the publication defines the affected cohort, disease context, controls, ancestry handling, and statistical enrichment adequately. Extract those facts from the paper, tables, supplement, or cohort metadata and route final scoring to `tooluniverse-acmg-ps4-case-enrichment-refinement`.
+
+Rare-disease affected-case counting is different: it requires affected-case phenotype specificity, unrelatedness, duplicate-report checks, and population-control context. Extract these from literature or databases where possible; ask the user only when the required case details are not available from the evidence source.
 
 Do not apply PS4 from isolated case reports without appropriate enrichment or VCEP-approved counting rules.
 
-If affected phenotype details are missing, ask:
+If PS4 case-enrichment details are missing after literature or database review, ask:
 
 ```text
-PS4 requires affected-case context. Please provide the disease/phenotype used for case ascertainment, number of affected carriers, ancestry or cohort details, and the control comparison or VCEP case-count rule.
+PS4 requires affected-case enrichment context. For formal case-control evidence, please provide or identify the study's disease/case definition, case and control counts, ancestry handling, and enrichment statistics. For rare-disease case counting, please provide the disease/phenotype used for case ascertainment, number of unrelated affected carriers, duplicate-report status, population-control context, and any VCEP case-count rule.
 ```
 
 ### PP1 and BS4
@@ -206,10 +236,10 @@ When de novo evidence strength is increased because the phenotype is highly spec
 
 ## Missing-Information Behavior
 
-If the user has not provided required phenotype information:
+If required phenotype or clinical-context information is missing from the user prompt, literature excerpt, case table, supplied report, or database record:
 
 1. Do not apply the phenotype-dependent criterion.
-2. Mark the criterion as `Not Assessed - phenotype required`.
+2. Mark the criterion as `status: not_assessed` with reason `phenotype required` or a more specific reason, such as `case definition required`, `phase required`, or `healthy-status required`.
 3. Ask only for the fields needed for the criterion being considered.
 4. Continue assessing criteria that do not require phenotype.
 
@@ -232,10 +262,10 @@ Phenotype-dependent evidence refinement:
 - Supplied phenotype: [summary / not provided]
 - Normalized phenotype terms: [HPO/MONDO/MedGen if available]
 - Gene-disease context: [disease, inheritance, validity]
-- Phenotype match: [highly specific / compatible / nonspecific / mismatched / not assessable]
+- Phenotype match: [highly specific / compatible / nonspecific / mismatched / not_assessed]
 - Criteria affected: [PP4, PS4, PP1, BS4, PM3, BP5, BS2, PS2/PM6, other]
 - Missing information: [fields]
-- Applied evidence: [criterion and strength / Not Assessed - phenotype required]
+- Applied evidence: [criterion and strength / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Routed to: [criterion-specific overlay if needed]
 - Follow-up question to user: [targeted question if needed]
