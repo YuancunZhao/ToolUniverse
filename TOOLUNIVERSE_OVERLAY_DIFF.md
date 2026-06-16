@@ -1,6 +1,6 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 Baseline comparison:
 
@@ -10,11 +10,11 @@ Baseline comparison:
 
 Summary:
 
-- Added skills: 18
+- Added skills: 21
 - Modified upstream skills: 4
 - Deleted upstream skills: 0
-- Changed files under `skills/`: 52
-- Net intended overlay diff: 6498 insertions, 57 deletions
+- Changed files under `skills/`: 63
+- Net intended overlay diff: approximately 8050 insertions, 90 deletions
 
 ## Added Skills
 
@@ -24,14 +24,17 @@ These are additive overlays intended to refine ACMG/AMP evidence assignment with
 
 | Skill | Purpose | Files |
 | --- | --- | --- |
+| `tooluniverse-acmg-ba1-exception-list-refinement` | Refine BA1 stand-alone benign evidence using Ghosh et al. 2018 ClinGen SVI BA1 definition, 2,000 observed-allele requirement, general continental population dataset checks, founder-population caveats, gene/variant-specific BA1 modifications, and the BA1 exception list. | `SKILL.md`, `QUICK_START.md`, `references/ghosh_2018_ba1_exception_guidance.md` |
 | `tooluniverse-acmg-dominant-negative-mechanism-refinement` | Resolve whether a gene-disease context supports LoF/haploinsufficiency, dominant-negative, antimorphic, gain-of-function, recessive LoF, or mixed mechanism before applying mechanism-sensitive ACMG criteria. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-de-novo-evidence-refinement` | Refine PS2/PM6 de novo evidence using ClinGen SVI De Novo Criteria v1.1 point scoring, parental relationship confirmation, phenotype specificity, recurrent observations, inheritance adjustments, literature extraction, and missing-information prompts. | `SKILL.md`, `QUICK_START.md`, `references/de_novo_ps2_pm6_summary.md` |
+| `tooluniverse-acmg-multiple-disorder-context-refinement` | Refine disease-entity selection and evidence aggregation when one gene has multiple associated disorders, inheritance models, dosage states, phenotype spectra, or mechanisms, using ClinGen multiple-disorder guidance and gene-disease validity/dosage context. | `SKILL.md`, `QUICK_START.md`, `references/clingen_multiple_disorder_guidance.md` |
+| `tooluniverse-acmg-overlay-routing-core` | Shared routing and reporting core for ACMG overlays; standardizes context-overlay order, output status fields, evidence consumption, and boundary rules without changing criterion-specific evidence thresholds. | `SKILL.md`, `QUICK_START.md`, `references/routing_core_conventions.md` |
 | `tooluniverse-acmg-phenotype-dependent-evidence-refinement` | Route phenotype-dependent evidence such as PP4, PS4, PP1/BS4, PM3, BP5, BS2, and PS2/PM6 phenotype consistency, and request missing phenotype fields when not supplied. | `SKILL.md`, `QUICK_START.md`, `references/phenotype_dependent_criteria_summary.md` |
 | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` | Refine PM1 for regional missense intolerance, hotspots, constrained subdomains, and low benign variation while avoiding PP3/PM1 double counting. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pm2-absence-rarity-refinement` | Apply SVI-style PM2 absence/rarity logic, coverage checks, BA1/BS1/BS2 precedence, and PM2 supporting-strength boundaries. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pm3-in-trans-refinement` | Score PM3 for recessive disorders using in-trans, phase-unknown, one-parent-supported, VUS-other-allele, and homozygous evidence while checking rarity and circularity. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pm4-bp3-protein-length-refinement` | Refine PM4/BP3 for in-frame insertions/deletions, single amino-acid indels, repeat regions, stop-loss variants, and last-exon altered-product contexts using ACGS 2024 practice guidance. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_pm4_bp3_summary.md` |
-| `tooluniverse-acmg-pp1-segregation-refinement` | Refine PP1/BS4 segregation evidence using informative meioses, LOD-like reasoning, phenocopy/reduced-penetrance checks, and qualified-variant boundaries. | `SKILL.md`, `QUICK_START.md` |
+| `tooluniverse-acmg-pp1-segregation-refinement` | Refine PP1/BS4 segregation evidence using ClinGen 2024 combined PP1/BS4/PP4 points, diagnostic-yield PP4 interaction, locus-evidence cap, allele/locus apportionment, informative meioses, LOD-like reasoning, phenocopy/reduced-penetrance checks, and qualified-variant boundaries. | `SKILL.md`, `QUICK_START.md`, `references/biesecker_2024_pp1_bs4_pp4_combined_guidance.md` |
 | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` | Replace uncalibrated predictor majority voting with calibrated missense prediction evidence strengths for PP3/BP4. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` | Refine PP5/BP6 reputable-source assertions using ClinGen SVI guidance recommending discontinuation of PP5/BP6; treats secondary classifications as leads to primary evidence rather than counted criteria. | `SKILL.md`, `QUICK_START.md`, `references/biesecker_2018_pp5_bp6_summary.md` |
 | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` | Refine protein-level PS1/PM5 for same amino-acid substitution, same-residue missense comparison variants, same-codon edge cases, mechanism matching, splicing confounding, and circularity. | `SKILL.md`, `QUICK_START.md`, `references/acmg_2015_ps1_pm5_summary.md` |
@@ -59,11 +62,14 @@ Modified file:
 Main behavior changes:
 
 - Adds a Phase 0b gene-disease mechanism check before mechanism-sensitive ACMG criteria.
+- Adds a Phase 0a overlay routing core before disease-specific evidence aggregation and mechanism-sensitive evidence assignment.
 - Adds explicit gates for PVS1 when LoF/haploinsufficiency is uncertain or disease mechanism may be dominant-negative, antimorphic, gain-of-function, or mixed.
-- Routes PM2, PP3/BP4, PP5/BP6, protein-level PS1/PM5, PS1-splicing, PM1, baseline PVS1 LoF decision-tree, PVS1-splicing, PS3/BS3, PP1, PM3, phenotype-dependent criteria, PS2/PM6 de novo evidence, PM4/BP3, and visual-literature evidence to the new overlay skills.
-- Routes PS4 case enrichment, PM4/BP3 protein-length evidence, and BA1/BS1/BS2/BP2/BP5 benign-context evidence to dedicated overlays.
+- Routes PM2, BA1, PP3/BP4, PP5/BP6, protein-level PS1/PM5, PS1-splicing, PM1, baseline PVS1 LoF decision-tree, PVS1-splicing, PS3/BS3, PP1/BS4 with PP4 combined guidance, PM3, phenotype-dependent criteria, PS2/PM6 de novo evidence, PM4/BP3, and visual-literature evidence to the overlay skills through the shared routing core.
+- Routes PS4 case enrichment, PM4/BP3 protein-length evidence, BA1 exception-list evidence, and BA1/BS1/BS2/BP2/BP5 benign-context evidence to dedicated overlays.
 - Specifies that PS2/PM6 uses ClinGen SVI De Novo Criteria v1.1 point scoring and routes literature-derived de novo evidence through literature deep research and figure evidence extraction before scoring.
-- Adds explicit behavior for missing phenotype or de novo information: mark affected criteria as not assessed and ask the user for targeted missing fields.
+- Adds explicit behavior for missing phenotype or de novo information: use routing-core status `not_assessed` and ask the user for targeted missing fields.
+- Adds explicit behavior for missing target disease/phenotype in multi-disorder genes: mark disease-context routing as not assessed and ask before transferring disease-specific evidence.
+- Routes PP4 that interacts with PP1/BS4 to ClinGen 2024 combined PP1/BS4/PP4 points, preserving the +5.0 cap and avoiding PP1/PP4/PS4 double counting.
 - Adds GeneReviews/MedGen as mechanism and inheritance background support, while stating that GeneReviews is not a VCEP specification or primary variant-level evidence by itself.
 - Replaces uncalibrated predictor-majority language with calibrated missense-prediction logic.
 - Adds safeguards against transferring evidence across recessive LoF, haploinsufficiency, dominant-negative, gain-of-function, and splicing mechanisms without a same-mechanism rationale.
@@ -80,11 +86,14 @@ Modified files:
 Main behavior changes:
 
 - Adds GeneReviews/MedGen to the clinical database phase for disease spectrum, inheritance, and mechanism context.
+- Routes context-sensitive ACMG assessment through `tooluniverse-acmg-overlay-routing-core`, which then dispatches multiple-disorder, mechanism, phenotype, source, literature, and evidence-specific overlays in order.
 - Adds explicit guidance to query GeneReviews/NCBI Bookshelf when mechanism affects ACMG routing.
 - Tightens truncating-variant handling: PVS1 requires confirmed LoF/haploinsufficiency for the exact gene-disease context.
 - Routes ambiguous dominant/recessive, structural/complex, mixed-mechanism, or unclear HI/LoF contexts through `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1.
+- Clarifies that ClinGen gene-disease validity and dosage sensitivity are distinct, and that evidence transfer across disorders requires the multiple-disorder overlay.
 - Routes baseline PVS1 strength to `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before Walker 2023 RNA/splicing refinement.
 - Clarifies that gene expression and gene-disease association scores do not substitute for patient-level PP4 or other phenotype-dependent evidence, and routes missing phenotype/de novo context to the new overlays.
+- Clarifies that PP4 phenotype specificity cannot be counted independently from PP1/BS4 when both derive from the same locus, family, or diagnostic-yield evidence.
 - Routes PS4, PM4/BP3, and benign-context criteria to the new overlays.
 - Routes PP5/BP6 reputable-source assertions to the new overlay and documents that they are not counted by default.
 - Removes old uncalibrated predictor-majority PP3/BP4 language and points missense prediction evidence to the Pejaver 2022 overlay.
@@ -119,9 +128,18 @@ Main behavior changes:
 ```text
 A skills/tooluniverse-acmg-dominant-negative-mechanism-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-dominant-negative-mechanism-refinement/SKILL.md
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/QUICK_START.md
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/SKILL.md
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/references/ghosh_2018_ba1_exception_guidance.md
 A skills/tooluniverse-acmg-de-novo-evidence-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-de-novo-evidence-refinement/SKILL.md
 A skills/tooluniverse-acmg-de-novo-evidence-refinement/references/de_novo_ps2_pm6_summary.md
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/QUICK_START.md
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/SKILL.md
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/references/clingen_multiple_disorder_guidance.md
+A skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+A skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+A skills/tooluniverse-acmg-overlay-routing-core/references/routing_core_conventions.md
 A skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
 A skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/references/phenotype_dependent_criteria_summary.md
@@ -136,6 +154,7 @@ A skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/SKILL.md
 A skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/references/acgs_2024_pm4_bp3_summary.md
 A skills/tooluniverse-acmg-pp1-segregation-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-pp1-segregation-refinement/SKILL.md
+A skills/tooluniverse-acmg-pp1-segregation-refinement/references/biesecker_2024_pp1_bs4_pp4_combined_guidance.md
 A skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/SKILL.md
 A skills/tooluniverse-acmg-pp5-bp6-reputable-source-refinement/QUICK_START.md
@@ -159,6 +178,7 @@ A skills/tooluniverse-acmg-pvs1-splicing-refinement/SKILL.md
 A skills/tooluniverse-acmg-benign-context-refinement/QUICK_START.md
 A skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
 A skills/tooluniverse-acmg-benign-context-refinement/references/acgs_2024_benign_context_summary.md
+M skills/tooluniverse-acmg-pm2-absence-rarity-refinement/SKILL.md
 M skills/tooluniverse-acmg-variant-classification/SKILL.md
 M skills/tooluniverse-literature-deep-research/SKILL.md
 A skills/tooluniverse-literature-figure-evidence-extraction/QUICK_START.md
@@ -241,6 +261,31 @@ Behavior added:
 - Removes old examples that counted ClinVar or expert-source labels as PP5/BP6 supporting evidence.
 - Adds double-counting guards so the same functional, population, case, segregation, de novo, PM3, PVS1, or computational evidence is not counted once directly and again through PP5/BP6.
 
+## BA1 Exception List Update: 2026-06-15
+
+Changed files:
+
+```text
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/QUICK_START.md
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/SKILL.md
+A skills/tooluniverse-acmg-ba1-exception-list-refinement/references/ghosh_2018_ba1_exception_guidance.md
+M skills/tooluniverse-acmg-benign-context-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm2-absence-rarity-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior added:
+
+- Adds a dedicated BA1 exception-list overlay based on Ghosh et al. 2018 / ClinGen SVI, PMID:30311383, and the user-provided July 30, 2018 BA1 exception list PDF.
+- Requires BA1 stand-alone benign evidence to pass the updated Ghosh 2018 definition: AF >0.05 in a general continental population dataset with at least 2,000 observed alleles and no gene- or variant-specific BA1 modification.
+- Adds the nine BA1 exception-list variants as a structured reference table with gene, HGVS, ClinVar ID, ClinGen Allele Registry ID, ExAC population, MAF, and disease.
+- Adds founder/bottlenecked population caveats and routes high-frequency but non-BA1 cases to BS1 review through benign-context refinement.
+- Updates PM2 and variant-interpretation routing so PM2 is not applied when BA1 is valid, and BA1 is not applied before exception-list review.
+
 ## ACGS 2024 Overlay Update: 2026-06-15
 
 Changed files:
@@ -280,6 +325,102 @@ Behavior added:
 - Enhances PS1/PM5 with ACGS practice guidance for `PS1_Moderate`, `PM5_Supporting`, initiation codon and non-coding RNA caveats, predicted-impact comparison, in-frame indel overlap, and PM1/PM5 double-counting.
 - Enhances PM1/PP2/BP1 with ACGS regional resources such as DECIPHER regional constraint, CCR, MetaDome, paralogous residue evidence, critical-residue `PM1_Strong` examples, and BP1 conflict handling.
 - Preserves locked priorities: PM2 remains ClinGen SVI `PM2_Supporting`, and PP3/BP4 remains Pejaver 2022 calibrated missense prediction evidence.
+
+## ClinGen 2024 PP1/BS4/PP4 Combined Guidance Update: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-pp1-segregation-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-pp1-segregation-refinement/SKILL.md
+A skills/tooluniverse-acmg-pp1-segregation-refinement/references/biesecker_2024_pp1_bs4_pp4_combined_guidance.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/references/phenotype_dependent_criteria_summary.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior added:
+
+- Incorporates Biesecker et al. 2024 / ClinGen SVI guidance for PP1/BS4 co-segregation and PP4 phenotype specificity, PMID:38103548, PMCID:PMC10806742.
+- Keeps the existing PP1 and phenotype-dependent overlays, but adds a combined PP1/BS4/PP4 rule layer when phenotype specificity and segregation/non-segregation use the same locus, family, or diagnostic-yield evidence.
+- Adds diagnostic-yield-to-points logic for PP4, co-segregation point tables for autosomal-recessive, autosomal-dominant, and X-linked recessive scenarios, and the combined +5.0 PP1/PP4 locus-evidence cap.
+- Clarifies that high-yield locus-homogeneous phenotypes should generally use PP4 locus evidence rather than adding expected perfect PP1 segregation.
+- Adds BS4 caveats for autosomal-recessive compound heterozygous families, where non-segregation may not identify which allele is benign.
+- Adds evidence-apportionment logic for multiple plausible candidate variants on the same allele or linked loci using the Supplemental Table S1 concept.
+- Strengthens double-counting guards: the same affected individual cannot count as both PP4 and PS4, and PP1/PP4 combined evidence cannot be stacked beyond the ClinGen 2024 cap.
+
+## ClinGen Multiple-Disorder Guidance Update: 2026-06-16
+
+Changed files:
+
+```text
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/QUICK_START.md
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/SKILL.md
+A skills/tooluniverse-acmg-multiple-disorder-context-refinement/references/clingen_multiple_disorder_guidance.md
+M skills/tooluniverse-acmg-dominant-negative-mechanism-refinement/SKILL.md
+M skills/tooluniverse-acmg-pvs1-lof-decision-tree-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior added:
+
+- Adds a dedicated multiple-disorder context overlay based on ClinGen January 2024 Guidance Classifying Variants in Genes Associated with Multiple Disorders and Thaxton et al. 2022, PMID:34694049.
+- Adds a Phase 0a gate before ACMG evidence-code assignment to define target disease/entity, inheritance, mechanism, dosage state, and whether evidence can be aggregated or must be split.
+- Implements the seven ClinGen categories: semidominant single condition, distinct conditions with same mechanism, spectrum/pleiotropy, mutually exclusive mechanisms, non-mutually exclusive conditions, unclear disease boundary, and multi-gene CNV.
+- Clarifies that gene-disease validity and dosage sensitivity are distinct; definitive gene-disease validity does not automatically establish HI/TS, and non-sufficient dosage does not refute non-dosage mechanisms.
+- Prevents transferring PVS1, PS1/PM5, PS3/BS3, PS4, PP1/BS4, PP4, PM3, BA1/BS1/PM2, or de novo evidence across split disease mechanisms without same-disease/same-mechanism support.
+- Routes multi-gene CNVs to structural-variant analysis and asks for target disease/phenotype when disease-context routing is not assessable.
+
+## ACMG Overlay Routing Core and Consistency Update: 2026-06-16
+
+Changed files:
+
+```text
+A skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+A skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+A skills/tooluniverse-acmg-overlay-routing-core/references/routing_core_conventions.md
+M skills/tooluniverse-acmg-ba1-exception-list-refinement/SKILL.md
+M skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-de-novo-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-dominant-negative-mechanism-refinement/SKILL.md
+M skills/tooluniverse-acmg-multiple-disorder-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm2-absence-rarity-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm3-in-trans-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp1-segregation-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp5-bp6-reputable-source-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-splicing-similarity-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps3-bs3-functional-assay-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/SKILL.md
+M skills/tooluniverse-acmg-pvs1-lof-decision-tree-refinement/SKILL.md
+M skills/tooluniverse-acmg-pvs1-splicing-refinement/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior added:
+
+- Adds `tooluniverse-acmg-overlay-routing-core` as a lightweight shared routing layer for ACMG overlays.
+- Standardizes the intended context-overlay order: multiple-disorder context, mechanism context, phenotype/source/literature intake, then evidence-specific overlay.
+- Standardizes structured output fields: `applied_evidence`, `status`, `reason`, `consumed_evidence`, and `routed_to`.
+- Standardizes structured status values: `applied`, `no_evidence`, `not_assessed`, `not_applicable`, and `not_used`.
+- Standardizes strength names as `Supporting`, `Moderate`, `Strong`, and `VeryStrong`, while preserving existing evidence labels such as `PM2_Supporting`, `PS2_VeryStrong`, and `PVS1_N/A` for display compatibility.
+- Clarifies non-circular routing boundaries: BA1 exception list is the BA1 stand-alone gate; benign-context handles BS1/BS2/BP2/BP5 and BA1 follow-up context; phenotype-dependent handles intake; PP1 handles PP1/BS4/PP4 combined scoring; PVS1 LoF tree remains the baseline; Walker/RNA splicing remains a refinement; PS1-splicing remains comparison-variant evidence; PP5/BP6 is a source-review utility and not ordinary counted evidence.
+- Reduces repeated precondition text in evidence-specific overlays by pointing to the routing core, without changing criterion-specific thresholds, evidence strengths, double-counting rules, or VCEP precedence.
+- Preserves locked rules: PM2 remains ClinGen SVI `PM2_Supporting` by default, and PP3/BP4 remains Pejaver 2022 calibrated missense prediction evidence.
 
 ## Update Procedure
 

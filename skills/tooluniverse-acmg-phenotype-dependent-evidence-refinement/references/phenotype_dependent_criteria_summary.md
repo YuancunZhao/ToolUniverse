@@ -19,6 +19,8 @@ This reference lists ACMG/AMP evidence criteria that should not be applied witho
 
 ACGS 2024 is used here as practice guidance, not as a separate selectable classification profile.
 
+Biesecker et al. 2024 / ClinGen SVI is used when PP4 phenotype specificity interacts with PP1 co-segregation or BS4 non-segregation. In that setting, PP4 and PP1 are coupled locus evidence, not fully independent criteria.
+
 PP4 can be considered when the patient's phenotype is specific for:
 
 - a single gene-disease entity;
@@ -40,7 +42,21 @@ Double-counting guard:
 
 - If phenotype specificity increases PS2/PM6 de novo strength, do not also apply PP4 from the same specificity.
 - If a VCEP embeds phenotype specificity in PS4 case-counting or another criterion, do not add PP4 separately unless the VCEP permits it.
+- If PP4 is combined with PP1 or BS4, route to `tooluniverse-acmg-pp1-segregation-refinement` and apply the ClinGen 2024 combined points cap.
+- A published affected individual can count as PP4 or PS4, but not both.
 - Do not apply PP4 from disease background alone when the patient's actual phenotype is missing.
+
+## ClinGen 2024 PP1/BS4/PP4 Combined Guidance
+
+When PP4 and PP1/BS4 use the same family, phenotype, locus, or diagnostic-yield evidence:
+
+- collect the exact phenotype definition, diagnostic yield, comparable testing method, inheritance, locus homogeneity/heterogeneity, and family affected/genotype status;
+- convert diagnostic yield to PP4 points only when yield is robust for the gene-phenotype dyad;
+- add PP1/BS4 points only when segregation or non-segregation contributes information beyond phenotype/locus specificity;
+- cap combined PP1 plus PP4 evidence at +5.0 points per variant;
+- apportion evidence across multiple plausible variants on an implicated allele before assigning PP1/PP4 strength.
+
+Do not use high PP4 strength for incomplete phenotyping, broad endophenotypes, or diagnostic yields below about 20% unless a VCEP permits it.
 
 ## Default Behavior When Phenotype Is Missing
 
@@ -58,3 +74,8 @@ Double-counting guard:
 - Family history and affected/unaffected relative status when relevant.
 - Alternate molecular diagnosis when BP5 is considered.
 - Penetrance, sex limitation, and age-dependent onset context when BS2 or segregation is considered.
+- Diagnostic yield and tested/excluded loci when PP4 interacts with PP1/BS4.
+
+## References
+
+- Biesecker LG, Byrne AB, Harrison SM, Pesaran T, Schaffer AA, Shirts BH, Tavtigian SV, Rehm HL; ClinGen Sequence Variant Interpretation Working Group. ClinGen guidance for use of the PP1/BS4 co-segregation and PP4 phenotype specificity criteria for sequence variant pathogenicity classification. Am J Hum Genet. 2024;111(1):24-38. PMID: 38103548. PMCID: PMC10806742. DOI: 10.1016/j.ajhg.2023.11.009.

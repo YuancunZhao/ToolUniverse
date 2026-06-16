@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence r
 
 PM3 is clinical/genotype evidence and should not be applied automatically without proband-level context. Use ToolUniverse tools to validate variants, check allele frequencies, retrieve prior classifications, and search literature, then apply the point-based PM3 framework when the user or source provides biallelic genotype and phase information.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM3 point model.
+
 ---
 
 ## When to Use This Skill
@@ -189,6 +191,8 @@ PM3 refinement:
 - Points: [per-proband points]
 - Total PM3 points: [sum]
 - Applied evidence: [PM3_Supporting / PM3 / PM3_Strong / PM3_VeryStrong / No PM3]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [proband IDs / phase evidence / other-allele classification / none]
 ```
 
 Example evidence table row:

@@ -145,7 +145,7 @@ Returns `mechanism_summary`, per-feature lost/gained tables, and category aggreg
 
 Tools: `CELLxGENE_get_expression_data`, `CELLxGENE_get_cell_metadata`, `GTEx_get_median_gene_expression`
 
-Confirms gene expression in disease-relevant tissues. This can contextualize disease relevance, but it does not by itself satisfy PP4. PP4 and other phenotype-dependent criteria require patient phenotype or affected-status information; use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype specificity, segregation, case enrichment, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is being considered. Use `tooluniverse-acmg-benign-context-refinement` when BA1/BS1/BS2/BP2/BP5 depends on disease threshold, unaffected status, phase, or alternate-diagnosis context.
+Confirms gene expression in disease-relevant tissues. This can contextualize disease relevance, but it does not by itself satisfy PP4. PP4 and other phenotype-dependent criteria require patient phenotype or affected-status information; use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype specificity, diagnostic yield, tested/excluded loci, segregation, case enrichment, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is being considered. When PP4 interacts with PP1/BS4, route to `tooluniverse-acmg-pp1-segregation-refinement` for ClinGen 2024 combined PP1/BS4/PP4 points and the +5.0 cap. Use `tooluniverse-acmg-ba1-exception-list-refinement` before applying BA1 from AF >0.05. Use `tooluniverse-acmg-benign-context-refinement` when BA1/BS1/BS2/BP2/BP5 depends on disease threshold, unaffected status, phase, or alternate-diagnosis context.
 
 ## Phase 5: Literature Evidence
 
@@ -155,11 +155,11 @@ Always flag preprints as NOT peer-reviewed.
 
 ## Phase 6: ACMG Classification
 
-Apply all relevant evidence codes (PVS1, PS1, PS3, PS4, PM1, PM2, PM4, PM5, PP3 for pathogenic; BA1, BS1, BS2, BS3, BP2, BP3, BP4, BP5, BP7 for benign). Use `tooluniverse-acmg-variant-classification` as the primary ACMG workflow and route refinements through the overlay skills. For PS2/PM6, use `tooluniverse-acmg-de-novo-evidence-refinement`; if de novo data are not supplied, ask for parental genotypes, parentage confirmation, testing method, mosaicism assessment, and proband phenotype. Use `tooluniverse-acmg-ps4-case-enrichment-refinement` for case enrichment, `tooluniverse-acmg-pm4-bp3-protein-length-refinement` for protein length changes and repeat-region in-frame indels, and `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5. Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary source assertion is encountered; PP5/BP6 are not counted by default. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+Apply all relevant evidence codes (PVS1, PS1, PS3, PS4, PM1, PM2, PM4, PM5, PP3 for pathogenic; BA1, BS1, BS2, BS3, BP2, BP3, BP4, BP5, BP7 for benign). Use `tooluniverse-acmg-variant-classification` as the primary ACMG workflow and `tooluniverse-acmg-overlay-routing-core` to coordinate context overlays before evidence-specific overlays. The routing core standardizes the order: multiple-disorder context, mechanism context, clinical-context intake, source/literature intake, then criterion-specific scoring. Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary source assertion is encountered; PP5/BP6 are not counted by default. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
 
 ### Gene-Specific Population Frequency Thresholds
 
-BS1 (allele frequency too high for disorder) requires disease-specific calibration, not a universal cutoff. Use `tooluniverse-acmg-benign-context-refinement` when prevalence, penetrance, allelic/genetic heterogeneity, inheritance, or ancestry-specific max AF affects BA1/BS1:
+BA1 stand-alone benign evidence requires Ghosh 2018 exception-list review before use. BS1 (allele frequency too high for disorder) requires disease-specific calibration, not a universal cutoff. Use `tooluniverse-acmg-benign-context-refinement` when prevalence, penetrance, allelic/genetic heterogeneity, inheritance, or ancestry-specific max AF affects BA1/BS1:
 - **High-penetrance genes** (BRCA1, TP53): BS1 threshold ~0.0001
 - **Moderate-penetrance genes** (PALB2, ATM, CHEK2): BS1 threshold ~0.001
 - **Low-penetrance/common disease genes**: BS1 threshold higher, depends on disease prevalence
@@ -297,7 +297,7 @@ If a primary tool fails, use these alternatives:
 
 **Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
 
-**Truncating Variant**: Route PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning strength. Check LoF mechanism, transcript-structure NMD escape rules, alternative initiation, exon deletion/duplication context, rescue transcripts, and curated disease-mechanism sources. If the gene has dominant and recessive disease associations, structural/complex biology, mixed mechanisms, or unclear HI/LoF support for the exact disease context, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PVS1. If RNA assay or Walker 2023 splicing-specific evidence is present, apply `tooluniverse-acmg-pvs1-splicing-refinement` after the baseline LoF branch is identified.
+**Truncating Variant**: Use `tooluniverse-acmg-overlay-routing-core` first when disease boundary or mechanism is unclear. Then route PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning strength. If RNA assay or Walker 2023 splicing-specific evidence is present, apply `tooluniverse-acmg-pvs1-splicing-refinement` after the baseline LoF branch is identified.
 
 **Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential. Apply PP3/BP7 based on scores.
 

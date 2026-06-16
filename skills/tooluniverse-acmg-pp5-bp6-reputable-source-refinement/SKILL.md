@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence p
 
 The ClinGen SVI recommendation by Biesecker and Harrison 2018, PMID:29543229, recommends that laboratories discontinue use of PP5 and BP6 as soon as practically achievable. In this ToolUniverse overlay, PP5 and BP6 are not counted as ACMG evidence by default. Reputable-source assertions should instead be used as leads to retrieve primary evidence and then assign the appropriate underlying criteria.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared source-review, double-counting, and output-status conventions. This overlay is a source-review utility by default, not a counted evidence overlay.
+
 This skill is an overlay only. It does not create a new MCP tool and does not replace disease-specific VCEP specifications.
 
 ---
@@ -152,6 +154,8 @@ PP5/BP6 reputable-source refinement:
 - Conflict status: [none / conflicting classifications / not assessed]
 - Routed underlying criteria: [PS3/BS3, PS4, PM3, PP1/BS4, PVS1, PM2/BA1/BS1, etc.]
 - Applied PP5/BP6 evidence: [No PP5 / No BP6 / PP5_NotUsed / BP6_NotUsed / Not Assessed - primary evidence required]
+- Status: [not_used / not_assessed / applied only by VCEP or explicit legacy policy]
+- Consumed evidence: [source assertion only / primary evidence routed elsewhere / none]
 - Rationale: [brief explanation]
 ```
 

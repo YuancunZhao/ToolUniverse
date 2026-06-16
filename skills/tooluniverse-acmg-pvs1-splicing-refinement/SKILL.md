@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for PVS1/BP7 assig
 
 This skill does not replace the baseline PVS1 loss-of-function decision tree. Use `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` first for Abou Tayoun et al. 2018 PVS1 branches such as nonsense, frameshift, canonical splice prediction, start-loss, exon deletion/duplication, whole-gene deletion, NMD escape, alternative initiation, and LoF mechanism applicability. Then use this Walker 2023 RNA/splicing overlay when direct RNA evidence or detailed splicing interpretation changes the branch, evidence label, or double-counting behavior.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this RNA/splicing-specific logic.
+
 ---
 
 ## When to Use This Skill
@@ -183,6 +185,16 @@ For no-splicing-impact RNA evidence:
 ```
 
 Always state which prediction codes were not applied to avoid double counting. If PS1-splicing similarity was considered, also state whether it was not assessed, withheld because direct RNA contradicted the predicted event, or applied using independent comparison-variant evidence.
+
+Also include a routing-core summary:
+
+```markdown
+PVS1 splicing refinement:
+- Applied evidence: [PVS1_Strength (RNA) / BP7_Strong (RNA) / PVS1_N/A / no splicing evidence]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [RNA assay / published RNA evidence / prediction only / none]
+- Routed to: [PS1-splicing / PS3-BS3 / none]
+```
 
 ---
 

@@ -12,6 +12,8 @@ The SVI recommendation reduces PM2 from Moderate strength to Supporting strength
 
 Use ToolUniverse tools to retrieve population frequency, ancestry-specific allele counts, homozygote/hemizygote observations, and coverage context. Then apply this refinement in the ACMG evidence table.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM2-specific logic.
+
 ---
 
 ## When to Use This Skill
@@ -25,7 +27,7 @@ Use this skill when:
 - The variant is not found in gnomAD and you need to decide whether this is true absence or a coverage/representation gap.
 - A recessive PM3 assessment requires checking PM2-level rarity for the assessed variant and the other allele.
 
-Do not use this skill to refine unrelated population criteria beyond their boundary with PM2. BA1, BS1, and BS2 still require their own disease-specific thresholds and clinical context.
+Do not use this skill to refine unrelated population criteria beyond their boundary with PM2. BA1, BS1, and BS2 still require their own disease-specific thresholds and clinical context. Use `tooluniverse-acmg-ba1-exception-list-refinement` before applying BA1 stand-alone benign evidence.
 
 ---
 
@@ -72,7 +74,7 @@ Do not apply PM2 when:
    - For recessive disorders, carrier frequency can be higher, but the variant should still be rare enough for the disease model.
 
 6. **Resolve conflict with benign frequency criteria**
-   - If BA1 applies, classification should follow BA1 and PM2 is not applied.
+   - If BA1 applies after BA1 exception-list review, classification should follow BA1 and PM2 is not applied.
    - If BS1 applies, PM2 is not applied.
    - If BS2 applies because the variant is observed in healthy individuals incompatible with disease penetrance/inheritance, PM2 is not applied.
    - If population data are compatible with rarity but not absence, apply only `PM2_Supporting` unless a VCEP says otherwise.
@@ -85,7 +87,7 @@ Do not apply PM2 when:
 |------------------------|------------------|
 | Absent from adequately covered and ancestry-relevant population datasets | `PM2_Supporting` |
 | Present at extremely low frequency compatible with disease model and VCEP threshold | `PM2_Supporting` |
-| Present above disease-specific BA1/BS1 threshold | No PM2; consider BA1/BS1 |
+| Present above disease-specific BA1/BS1 threshold | No PM2; consider BA1 after exception-list review or BS1 |
 | Present in healthy individuals incompatible with disease model | No PM2; consider BS2 |
 | No reliable population data or poor coverage | PM2 not assessable |
 
@@ -151,6 +153,8 @@ PM2 absence/rarity refinement:
 - Disease model: [dominant/recessive/X-linked], prevalence/penetrance context: [summary]
 - Benign frequency conflict: [none / BA1 / BS1 / BS2]
 - Applied evidence: [PM2_Supporting / No PM2 / PM2 not assessable]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [population frequency / coverage / none]
 - Combination note: [e.g., PVS1 + PM2_Supporting supports Likely Pathogenic under ClinGen SVI PM2 v1.0]
 ```
 

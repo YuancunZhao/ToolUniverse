@@ -6,7 +6,7 @@ Source:
 
 ## BA1/BS1
 
-- Generic BA1 5% is usually too high for rare diseases; disease-specific thresholds are preferred.
+- Generic BA1 stand-alone evidence should first pass Ghosh et al. 2018 / ClinGen SVI BA1 exception-list review. For rare diseases, disease-specific thresholds are often more relevant than the generic 5% value.
 - BS1 should use disease prevalence, penetrance, inheritance, genetic heterogeneity, and allelic heterogeneity.
 - Maximum ancestry AF should be used.
 - High-penetrance autosomal dominant disorders may allow `BS1_Strong` as stand-alone likely benign evidence when the threshold is exceeded.

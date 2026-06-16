@@ -103,7 +103,7 @@ result = tu.tools.gnomad_search_variants(
 **ACMG Frequency Thresholds**:
 | Frequency | Code | Application |
 |-----------|------|-------------|
-| >5% | BA1 | Benign (stand-alone) |
+| >5% | BA1 candidate | Benign stand-alone only after Ghosh 2018 BA1 exception-list and dataset-adequacy review |
 | >1% | BS1 | Strong benign |
 | Absent | PM2 | Supporting pathogenic |
 
@@ -124,6 +124,8 @@ result = tu.tools.gnomad_search_variants(
 
 Authoritative curation of gene-disease relationships from ClinGen.
 
+When disease context, mechanism, clinical context, source assertions, or literature extraction affects ACMG evidence assignment, use `tooluniverse-acmg-overlay-routing-core` before criterion-specific overlays. Gene-disease validity and dosage sensitivity are separate evidence types: definitive gene-disease validity does not automatically establish haploinsufficiency/triplosensitivity, and a non-sufficient dosage score does not refute recessive, gain-of-function, dominant-negative, or other non-dosage disease mechanisms.
+
 ### Gene Validity
 
 | Tool | Purpose | Key Parameters |
@@ -140,9 +142,9 @@ result = tu.tools.ClinGen_search_gene_validity(gene="BRCA1")
 **Validity Classification Interpretation**:
 | Classification | ACMG Impact | Usage |
 |----------------|-------------|-------|
-| **Definitive** | Supports PS4, PP4 | Strong gene-disease evidence |
-| **Strong** | Supports PP4 | Good evidence for classification |
-| **Moderate** | Supports PP4 (weak) | Use with caution |
+| **Definitive** | Background for PS4, PP4 | Strong gene-disease evidence; still requires patient phenotype and criterion-specific overlay |
+| **Strong** | Background for PP4 | Good gene-disease evidence; still requires phenotype specificity |
+| **Moderate** | Do not use alone for PP4 | Use with caution and prefer VCEP guidance |
 | **Limited** | Do not apply PP4 | Insufficient evidence |
 | **Disputed/Refuted** | Contra-evidence | Gene likely NOT causative |
 
@@ -176,7 +178,7 @@ result = tu.tools.ClinGen_search_dosage_sensitivity(gene="MECP2")
 | `ClinGen_get_actionability_pediatric` | Pediatric actionability | `gene` (optional) |
 
 **Why ClinGen is Critical**:
-- Required for **PP4** (phenotype specificity)
+- Required for **PP4** (phenotype specificity); when PP4 interacts with PP1/BS4, use the ClinGen 2024 combined PP1/BS4/PP4 overlay
 - Establishes gene-disease validity before classification
 - Dosage scores critical for **PVS1** in CNV interpretation
 - Actionability informs return of incidental findings
@@ -571,7 +573,7 @@ vda = tu.tools.DisGeNET_get_vda(
 **DisGeNET Score for ACMG**:
 | Score | Strength | ACMG Code |
 |-------|----------|-----------|
-| >0.7 | Strong gene-disease | PP4 (phenotype specific) |
+| >0.7 | Strong gene-disease | Background only; PP4 still requires supplied phenotype and, when applicable, combined PP1/BS4/PP4 review |
 | 0.4-0.7 | Moderate evidence | Supporting |
 | <0.4 | Weak/Literature only | Insufficient |
 
@@ -1051,22 +1053,22 @@ def calculate_acmg_classification(evidence_codes):
 | PM4 | Moderate | Protein length change |
 | PM5 | Moderate | Novel at known position |
 | PM6 | Moderate | De novo (unconfirmed) |
-| PP1 | Supporting | Segregation |
+| PP1 | Supporting | Segregation; strength and PP4 interaction require combined PP1/BS4/PP4 overlay |
 | PP2 | Supporting | Low missense rate gene |
 | PP3 | Supporting | Computational predictions |
-| PP4 | Supporting | Phenotype specific |
+| PP4 | Supporting | Phenotype specific; do not double count with PP1/BS4 or PS4 |
 | PP5 | Not counted by default | Reputable-source assertion; retrieve primary evidence |
 
-Use `tooluniverse-acmg-variant-classification` and its overlays for final evidence strength. In particular, PM2 defaults to `PM2_Supporting`, PP3/BP4 uses the Pejaver 2022 calibrated missense-prediction overlay, PS4 uses the case-enrichment overlay, PM4/BP3 uses the protein-length overlay, and PP5/BP6 uses the reputable-source overlay, which does not count PP5/BP6 by default.
+Use `tooluniverse-acmg-variant-classification` and its overlays for final evidence strength. In particular, BA1 uses the Ghosh 2018 BA1 exception-list overlay before stand-alone benign classification, PM2 defaults to `PM2_Supporting`, PP3/BP4 uses the Pejaver 2022 calibrated missense-prediction overlay, PS4 uses the case-enrichment overlay, PM4/BP3 uses the protein-length overlay, and PP5/BP6 uses the reputable-source overlay, which does not count PP5/BP6 by default.
 
 ### Benign Codes
 | Code | Strength | Trigger |
 |------|----------|---------|
-| BA1 | Stand-alone | MAF >5% |
+| BA1 | Stand-alone | AF >0.05 after Ghosh 2018 exception-list and dataset-adequacy review |
 | BS1 | Strong | High frequency |
 | BS2 | Strong | Homozygotes healthy |
 | BS3 | Strong | No functional effect |
-| BS4 | Strong | No segregation |
+| BS4 | Strong | No segregation; apply only after penetrance, phenocopy, phase, and inheritance review |
 | BP1 | Supporting | Missense in LOF gene |
 | BP2 | Supporting | Observed trans |
 | BP3 | Supporting | In-frame, no function |

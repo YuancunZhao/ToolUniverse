@@ -12,6 +12,8 @@ It uses the regional missense mutational intolerance framework described in PMID
 
 This skill does not replace gene-specific VCEP rules and does not create a new ToolUniverse MCP tool. Use ToolUniverse tools to retrieve variant, protein, clinical, population, and domain evidence, then apply this refinement when PM1 is under-specified.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM1-specific logic.
+
 ---
 
 ## When to Use This Skill
@@ -167,6 +169,16 @@ PM1 not applied: variant is [inside broad domain/outside MDR/uncertain coordinat
 ```
 
 Always state whether MPC or other prediction scores were used separately under PP3 or excluded to avoid double counting.
+
+Also include a routing-core summary:
+
+```markdown
+PM1 regional missense-constraint refinement:
+- Applied evidence: [PM1 / PM1_Supporting / PP2 retained instead / No PM1]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [regional constraint / hotspot / critical residue / none]
+- Double-counting restriction: [PM1 plus PP3 cap / PM1-PP2 selection / none]
+```
 
 ---
 

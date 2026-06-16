@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-phenotype-dependent-evidence-refinement
-description: Refine ACMG/AMP evidence criteria that require patient phenotype, disease specificity, affected status, or phenotype-match context. Use with ToolUniverse ACMG classification when PP4, PS4, PP1/BS4, PM3, BP5, BS2, PS2/PM6 phenotype consistency, or other clinical-context-dependent criteria cannot be assessed without phenotype information.
+description: Refine ACMG/AMP evidence criteria that require patient phenotype, disease specificity, affected status, or phenotype-match context. Use with ToolUniverse ACMG classification when PP4, PS4, PP1/BS4, PM3, BP5, BS2, PS2/PM6 phenotype consistency, or other clinical-context-dependent criteria cannot be assessed without phenotype information. Route PP4 that interacts with segregation/non-segregation through the ClinGen 2024 combined PP1/BS4/PP4 guidance in the PP1 overlay.
 disable-model-invocation: true
 ---
 
@@ -9,6 +9,10 @@ disable-model-invocation: true
 This skill extends `tooluniverse-acmg-variant-classification` by defining a lightweight intake and routing layer for ACMG evidence criteria that require phenotype, affected status, or disease-match context.
 
 It does not create new evidence codes and does not replace evidence-specific overlays. It prevents ToolUniverse from guessing phenotype-dependent evidence when the user has not provided enough clinical context.
+
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, source-review, double-counting, and output-status conventions. This overlay is the clinical-context intake step; criterion-specific scoring remains in the relevant evidence overlay.
+
+When PP4 phenotype specificity is considered together with family segregation or non-segregation, this skill performs phenotype intake only. Use `tooluniverse-acmg-pp1-segregation-refinement` for Biesecker et al. 2024 ClinGen combined PP1/BS4/PP4 points, diagnostic-yield conversion, locus-evidence cap, and evidence apportionment.
 
 ---
 
@@ -24,6 +28,7 @@ Use this skill when an ACMG classification may depend on:
 - `BS2`: observation in healthy adult individuals where disease penetrance and phenotype status matter.
 - `PS2` or `PM6`: de novo evidence where phenotype consistency affects whether the observation is relevant.
 - Any VCEP rule requiring phenotype specificity, HPO terms, disease onset, penetrance, severity, or affected/unaffected status.
+- Any case where PP4 may be linked to PP1/BS4 because the same phenotype/locus evidence is being used for segregation.
 
 Do not infer these criteria from variant annotation alone.
 
@@ -79,6 +84,8 @@ Use the retrieved disease description only to assess match to user-supplied phen
 
 Apply PP4 only when the supplied phenotype is highly specific for a disease with a single or narrow genetic etiology, or when a current VCEP explicitly defines phenotype specificity rules.
 
+If PP4 is being considered together with PP1 co-segregation or BS4 non-segregation, route to `tooluniverse-acmg-pp1-segregation-refinement` after collecting phenotype, diagnostic yield, inheritance, and family data. Under Biesecker et al. 2024, PP4 and PP1 are coupled forms of locus evidence and are capped together at +5.0 points; they should not be counted as fully independent criteria.
+
 ACGS 2024 practice guidance broadens the operational framing: PP4 can also be considered when the phenotype is a rare, highly characteristic combination of features with only a limited set of known genetic etiologies and the relevant genes have been appropriately assessed. The phenotype does not have to be absolutely pathognomonic for one gene, but it must be specific enough that a genotype-phenotype match is meaningful.
 
 Use this practical strength ladder unless a VCEP defines different disease-specific rules:
@@ -93,7 +100,17 @@ Use this practical strength ladder unless a VCEP defines different disease-speci
 
 Evidence types that can support stronger PP4 include pathognomonic biochemical tests, disease-specific MRI patterns, methylation episignatures, muscle biopsy findings, functional clinical biomarkers, or clinical treatment response where those findings are recognized as disease-defining. Record the testing method and whether the differential diagnosis was adequately excluded.
 
+For diagnostic-yield PP4 under the ClinGen 2024 combined guidance:
+
+- use a robust diagnostic yield for the exact gene-phenotype dyad and comparable testing method;
+- round down to the nearest supported diagnostic-yield point value;
+- avoid PP4 when diagnostic yield is below about 20% unless a VCEP permits it;
+- do not use high PP4 strength from incomplete phenotyping, young age before hallmark features emerge, or broad endophenotypes such as isolated thoracic aortic aneurysm, arrhythmia, intellectual disability, seizures, nonsyndromic hearing loss, or cancer predisposition without a distinctive pattern;
+- when the same affected case could support PP4 or PS4, choose one evidence path and document the choice.
+
 Do not double count phenotype specificity. If PS2/PM6 de novo evidence has already been upgraded because the proband phenotype is highly specific for the gene-disease association, do not also apply PP4 from the same phenotype unless a current VCEP explicitly permits both. If a VCEP folds phenotype specificity into PS4 case counting, do not add PP4 separately from the same affected-case ascertainment.
+
+If PP1 is also used, do not stack PP4 and PP1 beyond the ClinGen 2024 combined cap. The PP1 overlay should report the combined points and the chosen code split, such as `PP1_Strong + PP4_Supporting` or `PP4_Strong + PP1`.
 
 Do not apply PP4 when:
 
@@ -125,6 +142,17 @@ PS4 requires affected-case context. Please provide the disease/phenotype used fo
 ### PP1 and BS4
 
 Use `tooluniverse-acmg-pp1-segregation-refinement` for segregation scoring, but use this phenotype overlay first when affected/unaffected status or phenotype specificity is unclear.
+
+Collect these PP1/BS4/PP4 combined-guidance fields before routing:
+
+- exact disease or phenotype constellation used for diagnostic yield;
+- HPO terms and key positive/negative findings;
+- gene-disease dyad and inheritance model;
+- whether the phenotype suggests locus homogeneity or locus heterogeneity;
+- diagnostic yield and testing method used to derive it;
+- genes/loci tested and whether alternative loci were excluded;
+- affected and unaffected relatives, genotype status, age, sex when relevant, and phenotype certainty;
+- phase and whether more than one plausible candidate variant is present on an implicated allele.
 
 If family phenotype is missing, ask:
 
@@ -208,6 +236,8 @@ Phenotype-dependent evidence refinement:
 - Criteria affected: [PP4, PS4, PP1, BS4, PM3, BP5, BS2, PS2/PM6, other]
 - Missing information: [fields]
 - Applied evidence: [criterion and strength / Not Assessed - phenotype required]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Routed to: [criterion-specific overlay if needed]
 - Follow-up question to user: [targeted question if needed]
 ```
 

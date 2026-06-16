@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence a
 
 Use ToolUniverse tools to retrieve variant, gene-disease, assay, and literature evidence. This skill then applies the PS3/BS3 rule refinement inside the ACMG evidence assignment workflow. It does not replace the main ACMG workflow and does not add a new MCP tool.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS3/BS3 assay logic.
+
 ---
 
 ## When to Use This Skill
@@ -244,6 +246,8 @@ PS3/BS3 functional assay refinement:
 - Multiple assay handling: [most validated assay / conflict resolved / no functional code]
 - Double counting: [PS3/BS3 replaces same-source PP3/BP4 or PVS1/BP7 RNA use where relevant]
 - Applied evidence: [PS3_Supporting / PS3_Moderate / PS3 / PS3_VeryStrong / BS3_Supporting / BS3_Moderate / BS3 / No PS3/BS3]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [functional assay / RNA assay routed elsewhere / none]
 ```
 
 Example evidence table row:

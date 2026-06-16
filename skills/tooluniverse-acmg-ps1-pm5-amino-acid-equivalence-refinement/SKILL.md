@@ -15,6 +15,8 @@ This overlay is for protein-level missense evidence. It is separate from `toolun
 
 Use ToolUniverse tools to normalize the variant, identify comparison variants, verify transcript/protein equivalence, review clinical assertions, and check whether the pathogenic mechanism is amino-acid mediated rather than DNA-level or splicing-mediated. Then assign PS1, PM5, or no evidence in the ACMG evidence table.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this protein-level PS1/PM5 logic.
+
 ---
 
 ## When to Use This Skill
@@ -209,6 +211,8 @@ PS1/PM5 amino-acid equivalence refinement:
 - Splicing/DNA-level confounding: [none found / present / not assessable]
 - VCEP rule: [none found / applied rule]
 - Applied evidence: [PS1 / PM5 / No PS1/PM5 / not assessable]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [comparison variant / residue evidence / none]
 ```
 
 Example evidence table row:

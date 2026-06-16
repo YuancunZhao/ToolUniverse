@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence r
 
 It uses ACGS 2024 rare-disease practice guidance to refine how PS4 is considered when formal case-control studies are unavailable. It does not replace VCEP specifications, disease-specific case-count rules, or formal statistical enrichment analysis when those are available.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS4-specific logic.
+
 ---
 
 ## When to Use This Skill
@@ -141,6 +143,8 @@ PS4 case-enrichment refinement:
 - Recessive PM3 routing: [not applicable / route to PM3]
 - De novo or segregation routing: [not applicable / route to PS2-PM6 / route to PP1]
 - Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / No PS4 / Not Assessed]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [case-control / affected-case count / none]
 ```
 
 ---

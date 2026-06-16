@@ -53,6 +53,31 @@ Use this overlay when ACMG evidence cannot be assessed without patient phenotype
 
 ---
 
+## Example 2d: PP4 Coupled With PP1
+
+**Scenario**: The user provides a highly specific phenotype, diagnostic yield for the gene-disease dyad, and a family pedigree showing co-segregation.
+
+**Expected behavior**:
+
+- Do not independently apply full PP4 and full PP1.
+- Collect diagnostic yield, testing method, locus heterogeneity/homogeneity, phase, affected status, and candidate variants.
+- Route to `tooluniverse-acmg-pp1-segregation-refinement` for ClinGen 2024 combined PP1/BS4/PP4 points and the +5.0 cap.
+- Report the chosen code split, for example `PP1_Strong + PP4_Supporting` or `PP4_Strong + PP1`.
+
+---
+
+## Example 2e: PP4 Versus PS4
+
+**Scenario**: A published affected individual with a robust phenotype and the variant could be counted either as PP4 phenotype-specific evidence or as one affected case for PS4.
+
+**Expected behavior**:
+
+- Do not count the same affected individual as both PP4 and PS4.
+- Choose the evidence path that is better supported by the data and current VCEP rules.
+- Family members of that case may still contribute PP1 if their segregation data are independently informative.
+
+---
+
 ## Example 3: Segregation Without Affected Status
 
 **Scenario**: A family table lists genotypes but does not say who is affected or their clinical features.
@@ -106,6 +131,7 @@ Phenotype-dependent evidence refinement:
 - Supplied phenotype: [summary / not provided]
 - Gene-disease context: [summary]
 - Phenotype match: [highly specific / compatible / nonspecific / mismatched / not assessable]
+- Diagnostic-yield context: [yield / testing method / not available]
 - Criteria affected: [PP4/PS4/PP1/BS4/PM3/BP5/BS2/PS2/PM6]
 - Applied evidence: [criterion / Not Assessed - phenotype required]
 - Follow-up request: [targeted missing fields]

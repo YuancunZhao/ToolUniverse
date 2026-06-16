@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-benign-context-refinement
-description: Refine ACMG/AMP benign-context evidence BA1, BS1, BS2, BP2, and BP5 using ACGS 2024 practice guidance, disease-specific frequency thresholds, healthy-observation context, alternate molecular diagnosis, cis/trans context, penetrance, and phenotype requirements.
+description: Refine ACMG/AMP benign-context evidence BA1, BS1, BS2, BP2, and BP5 using ACGS 2024 practice guidance, disease-specific frequency thresholds, BA1 exception-list routing, healthy-observation context, alternate molecular diagnosis, cis/trans context, penetrance, and phenotype requirements.
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,9 @@ This skill extends `tooluniverse-acmg-variant-classification` for benign evidenc
 - `BP2`: observed in trans with a pathogenic variant for a fully penetrant dominant disorder, or in cis with a pathogenic variant in any inheritance pattern.
 - `BP5`: variant found in a case with an alternate molecular basis for disease.
 
-This overlay does not change the PM2 overlay. Population rarity/absence still follows `tooluniverse-acmg-pm2-absence-rarity-refinement`.
+This overlay does not change the PM2 overlay. Population rarity/absence still follows `tooluniverse-acmg-pm2-absence-rarity-refinement`. Before applying BA1 stand-alone benign evidence, use `tooluniverse-acmg-ba1-exception-list-refinement`.
+
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions. In this overlay, BA1 exception-list review is a prerequisite for BA1 only; BS1/BS2/BP2/BP5 remain here.
 
 ---
 
@@ -23,6 +25,7 @@ This overlay does not change the PM2 overlay. Population rarity/absence still fo
 Use this skill when:
 
 - BA1 or BS1 may apply from population frequency.
+- A variant has AF >0.05 and BA1 may be applied after exception-list review.
 - BS2 may apply from healthy adult observations, homozygotes, hemizygotes, or curated unaffected carriers.
 - BP2 may apply because another pathogenic variant explains a fully penetrant dominant disease or because the variant is in cis with a pathogenic variant.
 - BP5 may apply because another molecular diagnosis explains the patient's phenotype.
@@ -43,6 +46,7 @@ Do not apply benign-context evidence when the required disease or phenotype cont
    - Record global AF, maximum ancestry AF, AC/AN, homozygote/hemizygote count, data quality flags, and coverage concerns.
 
 3. **Assess disease-specific thresholds**
+   - Before applying BA1, use `tooluniverse-acmg-ba1-exception-list-refinement` to check the Ghosh 2018 updated BA1 definition, 2,000 observed-allele requirement, general continental population status, exception list, founder-population caveats, and gene/variant-specific BA1 modifications.
    - Use VCEP thresholds when available.
    - Use disease prevalence, penetrance, allelic heterogeneity, genetic heterogeneity, and inheritance model to evaluate maximum credible frequency.
    - Use conservative assumptions when precise prevalence or penetrance data are unavailable.
@@ -59,7 +63,9 @@ Do not apply benign-context evidence when the required disease or phenotype cont
 
 ## BA1 and BS1
 
-Apply BA1 when allele frequency exceeds a stand-alone benign threshold for the disease context. The generic 5% threshold is usually too high for rare diseases, so use disease-specific/VCEP thresholds when available.
+Apply BA1 only after `tooluniverse-acmg-ba1-exception-list-refinement` confirms that stand-alone BA1 is valid. Under Ghosh et al. 2018, generic BA1 requires AF >0.05 in a qualifying general continental population dataset with at least 2,000 observed alleles at the site, and no gene-specific or variant-specific BA1 modification.
+
+Do not apply BA1 when the variant is on the ClinGen BA1 exception list, when high frequency is only supported by an inadequate/founder dataset, or when a VCEP/gene-specific rule supersedes the generic 0.05 threshold.
 
 Apply BS1 when allele frequency is greater than expected for the disorder but does not meet BA1.
 
@@ -127,6 +133,8 @@ Benign-context refinement:
 - Healthy-observation evidence: [individuals, age, phenotype, genotype]
 - Phase/alternate diagnosis: [cis/trans, other P/LP variant, phenotype explanation]
 - Applied evidence: [BA1 / BS1 / BS1_Strong / BS2 / BP2 / BP5 / No benign-context evidence / Not Assessed]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [population frequency / healthy observations / phase / alternate diagnosis / none]
 - Missing information: [fields needed]
 ```
 
@@ -143,6 +151,7 @@ Benign-context refinement:
 | `MyVariant_query_variants` | Aggregated population and ClinVar context. |
 | `ClinVar_search_variants` / `ClinVar_get_variant` | Existing classifications and alternate P/LP variants. |
 | `MedGen_search_conditions`, HPO/MONDO/Monarch tools | Disease and phenotype context. |
+| `tooluniverse-acmg-ba1-exception-list-refinement` | Ghosh 2018 BA1 stand-alone threshold, exception list, founder-population caveats, and gene/variant-specific BA1 modifications. |
 | `tooluniverse-acmg-phenotype-dependent-evidence-refinement` | Patient phenotype, healthy status, and alternate-diagnosis checks. |
 
 ---
@@ -150,5 +159,6 @@ Benign-context refinement:
 ## Primary References
 
 - Richards S, Aziz N, Bale S, et al. Standards and guidelines for the interpretation of sequence variants. Genet Med. 2015;17(5):405-424. PMID: 25741868.
+- Ghosh R, Harrison SM, Rehm HL, Plon SE, Biesecker LG; ClinGen Sequence Variant Interpretation Working Group. Updated recommendation for the benign stand-alone ACMG/AMP criterion. Human Mutation. 2018;39(11):1525-1530. PMID:30311383. DOI:10.1002/humu.23642.
 - ACGS Best Practice Guidelines for Variant Classification in Rare Disease 2024, v1.2, BA1/BS1/BS2/BP2/BP5 sections.
 - Whiffin N, Minikel E, Walsh R, et al. Using high-resolution variant frequencies to empower clinical genome interpretation. Genet Med. 2017;19(10):1151-1158.

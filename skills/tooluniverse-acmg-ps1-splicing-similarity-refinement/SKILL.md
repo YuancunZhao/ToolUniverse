@@ -10,6 +10,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for one evidence r
 
 This is a PS1 overlay, not a PVS1 overlay. It can interact with PVS1 because canonical splice donor/acceptor variants often have a PVS1 baseline, but the PS1 evidence here is the comparison to another classified variant with the same predicted splicing event.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS1-splicing comparison logic.
+
 ---
 
 ## When to Use This Skill
@@ -215,6 +217,8 @@ PS1 splicing similarity refinement:
 - Same-event check: [met/not met], rationale [short]
 - Exonic protein check: [not applicable / reviewed / conflicting mechanism]
 - Applied evidence: [PS1 / PS1_Moderate / PS1_Supporting / No PS1]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [comparison variant / splice prediction / RNA evidence / none]
 ```
 
 Example evidence table row:

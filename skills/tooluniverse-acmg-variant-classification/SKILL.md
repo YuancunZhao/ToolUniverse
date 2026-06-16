@@ -78,19 +78,27 @@ Accepted inputs: HGVS coding (NM_000059.4:c.5946delT), HGVS protein (BRCA2 p.Val
 
 ---
 
+## Phase 0a: Overlay Routing Core
+
+Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays when disease context, mechanism, phenotype, family data, source assertions, literature extraction, or double-counting could affect evidence assignment.
+
+The shared routing order is:
+
+1. `tooluniverse-acmg-multiple-disorder-context-refinement` when one gene has multiple disorders, inheritance models, dosage states, phenotype spectra, or mechanisms.
+2. `tooluniverse-acmg-dominant-negative-mechanism-refinement` when LoF, HI, GoF, dominant-negative, antimorphic, recessive LoF, altered-product, or mixed mechanism affects evidence use.
+3. `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when phenotype, affected/unaffected status, disease specificity, diagnostic yield, phase, family data, de novo data, healthy-carrier context, or alternate diagnosis is required.
+4. `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`, `tooluniverse-literature-deep-research`, and `tooluniverse-literature-figure-evidence-extraction` when source assertions or literature-derived primary evidence need extraction before scoring.
+5. The evidence-specific overlay for the criterion being assessed.
+
+Use the routing core's canonical output fields where practical: `applied_evidence`, `status`, `reason`, `consumed_evidence`, and `routed_to`. Use `status` values `applied`, `no_evidence`, `not_assessed`, `not_applicable`, or `not_used`.
+
+---
+
 ## Phase 0b: Gene-Disease Mechanism Check
 
-When the disease mechanism may be dominant-negative, antimorphic, gain-of-function, haploinsufficiency, or mixed by variant class, resolve the mechanism before assigning evidence criteria. Use `tooluniverse-acmg-dominant-negative-mechanism-refinement` when dominant-negative or antimorphic mechanism is possible, and also when a PVS1-eligible variant is being interpreted in a gene-disease context where LoF/haploinsufficiency is not already clearly established for the exact target disease, inheritance model, transcript/isoform, and variant class. That overlay routes PVS1, PS3/BS3, PS1/PM5, PM1/PP2/PP3/BP1, PP1/PS2/PM6/BS4, PM4/BP3, PS4, and PM3 without creating a new evidence code.
+Use the routing core before mechanism-sensitive criteria. In short, run multiple-disorder context first if evidence may cross disease boundaries, then run dominant-negative/mechanism refinement if variant class, product expression, LoF/HI, GoF, DN, or mixed mechanism could change criterion use.
 
-**PVS1 gate**: Before applying PVS1, document either (a) a direct LoF/haploinsufficiency mechanism source for the exact gene-disease context, or (b) a dominant-negative mechanism refinement result showing that PVS1 is allowed for that disease context. Invoke the refinement when any of these are true:
-
-- The gene has both dominant and recessive disease associations, different phenotypes by inheritance, or reported mixed mechanisms.
-- The target disease is autosomal dominant and the gene lacks sufficient ClinGen dosage/HI support.
-- The gene encodes a structural, cytoskeletal, nuclear-envelope, multimeric, channel/receptor, collagen-like, transcription-factor, or other complex-forming protein where an altered product could plausibly interfere with a complex or pathway.
-- Pathogenic missense/in-frame variants and truncating/LoF variants appear to produce different phenotypes, severity, penetrance, or inheritance patterns.
-- PVS1 plus PM2_Supporting would determine the final classification and the LoF mechanism has not been explicitly verified from curated sources.
-
-**Mechanism-sensitive evidence gate**: Before applying any evidence criterion whose validity depends on variant class, disease mechanism, or whether an altered product interferes with wild-type function, invoke `tooluniverse-acmg-dominant-negative-mechanism-refinement` unless the mechanism is already unambiguous from curated sources. This applies especially to PS1/PM5, PS3/BS3, PM1/PP2/PP3/BP1, PP1/PS2/PM6/BS4, PM4/BP3, PS4, and PM3. Do not transfer evidence between recessive LoF, haploinsufficiency, dominant-negative, gain-of-function, splicing LoF, and other mechanisms without a same-mechanism rationale.
+PVS1 must have a direct LoF/haploinsufficiency source for the exact gene-disease context, or a mechanism-refinement result showing PVS1 is allowed for that context. Do not transfer evidence between recessive LoF, haploinsufficiency, dominant-negative, gain-of-function, splicing LoF, and other mechanisms without a same-mechanism rationale.
 
 Do not infer dominant-negative mechanism from autosomal dominant inheritance alone. Use curated mechanism sources, VCEP guidance, G2P/ClinGen/GenCC, dosage sensitivity, GeneReviews/NCBI Bookshelf disease chapters, functional assay literature, and protein biology.
 
@@ -108,11 +116,11 @@ PubMed_search_articles(query="GENE disease dominant-negative")
 
 ## Phase 1: Population Frequency (BA1, BS1, BS2, PM2)
 
-Population AF is among the strongest evidence in either direction. A variant at >5% in any population is almost certainly benign (BA1 — stand-alone, no further analysis needed). Absent from gnomAD supports pathogenicity (PM2, now usually applied as PM2_Supporting per ClinGen guidance).
+Population AF is among the strongest evidence in either direction. A variant at >5% may qualify for BA1 stand-alone benign evidence, but only after `tooluniverse-acmg-ba1-exception-list-refinement` confirms the Ghosh et al. 2018 BA1 definition: AF >0.05 in a qualifying general continental population dataset with at least 2,000 observed alleles, no exception-list match, no inadequate founder-population-only signal, and no gene- or variant-specific BA1 modification. Absent from gnomAD supports pathogenicity only through PM2, now usually applied as `PM2_Supporting` per ClinGen guidance.
 
 Use ancestry-specific AF, not just global. A variant at 8% in East Asian populations but rare globally is benign in that ancestry context. For BS1, the threshold depends on disease prevalence and inheritance — the default is 1% for common diseases, 0.1% for rare. When absence, extreme rarity, coverage adequacy, PM2 strength, or the `PVS1 + PM2_Supporting` combination affects classification, use `tooluniverse-acmg-pm2-absence-rarity-refinement`. That overlay follows the ClinGen SVI PM2 v1.0 recommendation: PM2 should default to Supporting strength, absence from a database is not evidence unless the allele and locus are adequately represented, BA1/BS1/BS2 override PM2, and valid `PVS1 + PM2_Supporting` can support Likely Pathogenic when no conflicting evidence is present.
 
-When benign-context evidence is possible, use `tooluniverse-acmg-benign-context-refinement` for BA1, BS1, BS2, BP2, and BP5. That overlay absorbs ACGS 2024 practice details without changing PM2: BA1/BS1 require disease prevalence, penetrance, allelic/genetic heterogeneity, inheritance, and max credible ancestry AF; BS2 requires well-phenotyped healthy individuals old enough for the disease's expected onset and penetrance; BP2 requires a clear cis/trans and inheritance context; BP5 requires an alternate P/LP molecular diagnosis that explains the patient's main phenotype. If disease threshold, phenotype, unaffected status, phase, or alternate-diagnosis context is missing, mark the specific benign criterion as `Not Assessed` and ask for the missing fields rather than weakening PM2.
+When benign-context evidence is possible, use `tooluniverse-acmg-benign-context-refinement` for BA1, BS1, BS2, BP2, and BP5. That overlay absorbs ACGS 2024 practice details without changing PM2 and routes BA1 through `tooluniverse-acmg-ba1-exception-list-refinement`: BA1/BS1 require disease prevalence, penetrance, allelic/genetic heterogeneity, inheritance, and max credible ancestry AF; BS2 requires well-phenotyped healthy individuals old enough for the disease's expected onset and penetrance; BP2 requires a clear cis/trans and inheritance context; BP5 requires an alternate P/LP molecular diagnosis that explains the patient's main phenotype. If disease threshold, phenotype, unaffected status, phase, or alternate-diagnosis context is missing, mark the specific benign criterion as `Not Assessed` and ask for the missing fields rather than weakening PM2.
 
 ```python
 gnomad_search_variants(query="rs28897743")          # get gnomAD variant ID
@@ -208,9 +216,9 @@ Well-designed functional assays showing LOF (PS3) or normal function (BS3) can s
 
 When the asserted or possible functional mechanism is dominant-negative, antimorphic, or mixed, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` first to decide whether the assay must test WT+variant interference, heterozygous/endogenous context, complex assembly, or pathway output. Then use the PS3/BS3 overlay for strength.
 
-PP1 (co-segregation) upgrades to PP1_Strong at >= 7 informative meioses. When published family segregation, LOD score, informative meioses, reduced penetrance, phenocopy, or possible BS4 non-segregation affects PP1 strength, use `tooluniverse-acmg-pp1-segregation-refinement`. That overlay adapts Strande et al. 2017 ClinGen gene-disease validity principles for variant-level PP1 evidence quality, including qualifying-variant checks, LOD/informative-meiosis strength, and double-counting boundaries. If the segregating variant class may act through dominant-negative, antimorphic, or mixed mechanisms, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before PP1/BS4 so the segregating or non-segregating allele is qualified against the correct disease mechanism.
+PP1/BS4 should be routed through `tooluniverse-acmg-pp1-segregation-refinement` when published family segregation, LOD/likelihood evidence, informative meioses, diagnostic yield, locus homogeneity/heterogeneity, reduced penetrance, phenocopy, or non-segregation affects evidence strength. That overlay owns PP1/BS4/PP4 combined scoring, the +5.0 cap, and evidence apportionment when segregation and phenotype specificity interact.
 
-When a criterion requires patient phenotype, affected/unaffected status, disease specificity, or alternate-diagnosis context, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement`. This applies especially to PP4, PS4, PP1/BS4, PM3, BP5, BS2, and phenotype consistency for PS2/PM6. If the user has not provided phenotype information, mark the criterion as `Not Assessed - phenotype required` and ask for the missing phenotype fields instead of inferring them from gene or variant annotation.
+When a criterion requires patient phenotype, affected/unaffected status, disease specificity, diagnostic yield, tested/excluded loci, or alternate-diagnosis context, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` for intake. If PP4 may combine with PP1/BS4, route scoring to the PP1 overlay.
 
 For PS4 affected-case enrichment, use `tooluniverse-acmg-ps4-case-enrichment-refinement`. Prefer formal case-control evidence with odds ratio, confidence interval, ancestry-matched cases and controls, and disease-specific frequency context. When formal case-control data are unavailable, ACGS-style rare-disease counting may support `PS4_Supporting` for one unrelated affected individual with a rare/specific matching phenotype and absent population-control evidence, and `PS4_Moderate` for two or more unrelated affected individuals after duplicate-reporting, phenotype, ancestry, and control checks. Recessive rare biallelic affected-proband evidence belongs in PM3, not PS4.
 
@@ -221,9 +229,9 @@ PubMed_search_articles(query="BRCA2 c.5946delT functional assay", limit=10)
 PubMed_search_articles(query="BRCA2 c.5946delT segregation family", limit=5)
 ```
 
-Criteria requiring clinical data (PS2, PS4, PM3, PM6, BS4, BP2, BP5, BS2, PP4, and some VCEP-specific rules) cannot be assessed automatically. Document as "Not Assessed" unless the user provides the required clinical context, and include a targeted request for the missing information. Use `tooluniverse-acmg-de-novo-evidence-refinement` for PS2/PM6 whenever de novo status, parental testing, parentage confirmation, parental mosaicism, or phenotype consistency is relevant. That overlay follows ClinGen SVI De Novo Criteria v1.1 point scoring. If de novo information comes from literature, use `tooluniverse-literature-deep-research` for text/table/supplement extraction and `tooluniverse-literature-figure-evidence-extraction` for pedigree, Sanger, trio, or visual evidence before scoring. If de novo information is missing, mark `PS2/PM6: Not Assessed - de novo information required` and ask for mother/father genotype, parentage confirmation, testing method, mosaicism assessment, and proband phenotype.
+Criteria requiring clinical data (PS2, PS4, PM3, PM6, BS4, BP2, BP5, BS2, PP4, and some VCEP-specific rules) cannot be assessed automatically. Use routing-core status `not_assessed` and request targeted missing fields rather than inferring clinical data from variant annotation. Use `tooluniverse-acmg-de-novo-evidence-refinement` for PS2/PM6 whenever de novo status, parental testing, parentage confirmation, parental mosaicism, or phenotype consistency is relevant.
 
-If de novo evidence (PS2/PM6), case enrichment (PS4), in-trans evidence (PM3), or non-segregation (BS4) depends on whether the observed variant class is a qualifying allele for a dominant-negative, recessive LoF, haploinsufficiency, or mixed-mechanism disease, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning the criterion. When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points for confirmed in-trans, phase-unknown, one-parent-supported, VUS-other-allele, and homozygous observations while checking PM2-level rarity and circularity; keep any separate dominant-negative disease context out of PM3 unless the other allele is proven to qualify for the recessive mechanism. If literature-derived PS4, PM3, PP1/BS4, PS2/PM6, or PS3/BS3 evidence is embedded in tables, supplements, pedigrees, Sanger traces, gels, or plots, use `tooluniverse-literature-deep-research` plus `tooluniverse-literature-figure-evidence-extraction` before scoring.
+When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points while checking PM2-level rarity, phase, other-allele classification, and circularity. Recessive biallelic probands with genotype/phase evidence should route to PM3 rather than PS4 unless a VCEP specifies otherwise.
 
 PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) are routed through `tooluniverse-acmg-pm4-bp3-protein-length-refinement` in Phase 4. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 (synonymous, no splice impact) is assessable via SpliceAI < 0.1 and RNA-specific BP7 through the PVS1/RNA splicing overlay when direct RNA evidence exists.
 
@@ -293,7 +301,7 @@ Phase 0 → Phase 1 (rare, PM2_Supporting) → Phase 2 (REVEL 0.82, PP3_Moderate
 Result: **Likely Pathogenic** (PS3_Moderate + PM1 + PM2_Supporting + PP3_Moderate, with PM1+PP3 cap applied)
 
 **Pattern 3: Common benign variant** — "ACMG for rs1800497"
-Phase 1 (gnomAD AF=0.21, BA1) → short-circuit. Result: **Benign** (BA1 stand-alone)
+Phase 1 (gnomAD AF=0.21, BA1 exception-list overlay confirms no exception and adequate general population data) → short-circuit. Result: **Benign** (BA1 stand-alone)
 
 **Pattern 4: Deep-intronic variant** — "Classify NM_000059.4:c.7977+100A>G"
 Phase 1 (check AF) → Phase 5 (SpliceAI < 0.1) → Result: **Likely Benign** or VUS depending on frequency

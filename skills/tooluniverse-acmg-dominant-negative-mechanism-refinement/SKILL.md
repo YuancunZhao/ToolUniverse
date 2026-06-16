@@ -8,6 +8,10 @@ disable-model-invocation: true
 
 Use this overlay when a gene-disease relationship, variant class, functional assay, or literature source suggests a dominant-negative mechanism. This is a mechanism-routing layer for ACMG/AMP interpretation. It does not create a new ACMG evidence code and does not replace evidence-specific overlays.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared routing order and output-status conventions. This overlay is the mechanism-context step in that shared routing order.
+
+If the main question is whether evidence from one gene-associated disorder can be used for another disorder, invoke `tooluniverse-acmg-multiple-disorder-context-refinement` first. Then use this dominant-negative overlay only for mechanism-specific routing within the selected disease entity, inheritance model, and variant class.
+
 Dominant-negative is used here in the broad clinical genetics sense: a variant allele produces an altered product that interferes with the wild-type allele product, a multimeric complex, a protein interaction network, or a pathway output. Antimorphic is treated as the closest formal synonym when used in literature.
 
 ## When to Invoke
@@ -176,6 +180,8 @@ Dominant-negative mechanism refinement:
 - Sources: [ClinGen/G2P/VCEP/PMID/UniProt/functional assay]
 - Variant class fit: [fits / partial / does not fit / unclear], rationale [short]
 - Product-expression assumption: [missense/in-frame expressed product / NMD predicted / NMD escape / unknown]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Routed to: [evidence-specific overlay]
 - Evidence routing:
   - PVS1: [allowed / withhold / separate HI mechanism / not assessed]
   - PS3/BS3: [DN-capable assay required / current assay sufficient / current assay insufficient]

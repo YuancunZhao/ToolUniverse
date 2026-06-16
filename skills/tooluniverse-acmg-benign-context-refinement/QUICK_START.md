@@ -10,9 +10,35 @@ Use this overlay for BA1, BS1, BS2, BP2, and BP5 when benign evidence depends on
 
 **Expected behavior**:
 
-- Apply BA1 or BS1/BS1_Strong according to the threshold source.
+- Before applying BA1, use `tooluniverse-acmg-ba1-exception-list-refinement`.
+- Apply BA1 only if the Ghosh 2018 BA1 definition is met and no exception applies.
+- Apply BS1/BS1_Strong according to the threshold source when BA1 is not valid but frequency is still too high for the disease.
 - Do not apply PM2.
 - Report maximum ancestry AF, not global AF alone.
+
+---
+
+## Example 1A: BA1 Exception-List Variant
+
+**Scenario**: A variant has AF >0.05 but matches the ClinGen BA1 exception list, such as GJB2 c.109G>A (p.Val37Ile).
+
+**Expected behavior**:
+
+- Do not apply BA1.
+- Report `No BA1 - exception list`.
+- Evaluate other ACMG criteria normally without using BA1 or BS1 circularly.
+
+---
+
+## Example 1B: High AF Only in Founder Population
+
+**Scenario**: A variant exceeds 0.05 only in a Finnish, Ashkenazi Jewish, or other bottlenecked/founder population.
+
+**Expected behavior**:
+
+- Do not automatically apply BA1.
+- Use `tooluniverse-acmg-ba1-exception-list-refinement` to assess dataset adequacy, observed allele count, and exception-list status.
+- If dataset structure is unclear, report `BA1_NotAssessed - population dataset not adequate`.
 
 ---
 
@@ -54,7 +80,7 @@ Use this overlay for BA1, BS1, BS2, BP2, and BP5 when benign evidence depends on
 ```markdown
 Benign-context refinement:
 - Disease context: [disease, inheritance, penetrance]
-- Population threshold: [BA1/BS1 source]
+- Population threshold: [BA1/BS1 source and BA1 exception-list result]
 - Healthy observations: [summary]
 - Phase/alternate diagnosis: [summary]
 - Applied evidence: [BA1 / BS1 / BS2 / BP2 / BP5 / No evidence / Not Assessed]

@@ -13,6 +13,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for de novo eviden
 
 The SVI recommendation uses a point-based system. Each unrelated de novo occurrence receives points based on phenotype specificity and parental relationship confirmation. The total points across independent observations determine the evidence strength.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS2/PM6 point model.
+
 ---
 
 ## When to Use This Skill
@@ -232,6 +234,8 @@ De novo evidence refinement:
 - Inheritance adjustment: [none / AR one-level decrease / X-linked carrier rule / germline mosaicism rule / VCEP-specific]
 - VCEP rule: [none found / applied rule]
 - Applied evidence: [PS2 / PM6 / No PS2/PM6 / Not Assessed - de novo information required]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [de novo observation IDs / phenotype specificity / none]
 - Follow-up question: [targeted missing fields if needed]
 ```
 

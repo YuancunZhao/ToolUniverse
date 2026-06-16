@@ -10,6 +10,8 @@ Use this overlay when ACMG/AMP classification depends on computational missense 
 
 This skill does not create a new MCP tool. It uses ToolUniverse evidence-retrieval tools first, then applies calibrated rule interpretation inside the ACMG evidence assignment workflow.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PP3/BP4-specific logic.
+
 ## Scope
 
 Use this overlay for:
@@ -120,15 +122,19 @@ If the downstream combiner supports Tavtigian-style points, count `BP4_Moderate`
 
 ## Output Format
 
-Report:
-
-- Variant and transcript/protein consequence.
-- Selected prediction tool and why it was selected.
-- Raw score, score source, and version/build if available.
-- Calibrated interval and assigned evidence code.
-- Any VCEP override or absence of VCEP-specific guidance.
-- Any double-counting restriction, especially PM1 plus PP3 cap.
-- Whether `BP4_Moderate` requires special downstream combiner handling.
+```markdown
+PP3/BP4 missense-prediction refinement:
+- Variant: [HGVS c./p.], transcript [ID]
+- Consequence: [missense / other]
+- Selected prediction tool: [REVEL / BayesDel noAF / MutPred2 / VEST4 / other]
+- Raw score and source: [score, version/build if available]
+- Calibrated interval: [Pejaver 2022 interval]
+- Applied evidence: [PP3_Strong / PP3_Moderate / PP3_Supporting / BP4_VeryStrong / BP4_Strong / BP4_Moderate / BP4_Supporting / none]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [selected predictor score / none]
+- Double-counting restriction: [PM1 plus PP3 cap / same assay not reused / none]
+- Combiner note: [BP4_Moderate handling if relevant]
+```
 
 Example:
 

@@ -13,6 +13,8 @@ This skill extends `tooluniverse-acmg-variant-classification` for protein length
 
 It uses ACGS 2024 practice guidance to avoid mechanical PM4/BP3 assignment and to route truncating, stop-loss, and gain-of-function cases away from inappropriate PVS1/PM4 double counting.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM4/BP3-specific logic.
+
 ---
 
 ## When to Use This Skill
@@ -139,6 +141,8 @@ PM4/BP3 protein-length refinement:
 - PVS1 conflict: [none / route to PVS1 / PM4 retained because altered product mechanism]
 - Population/conservation evidence: [summary]
 - Applied evidence: [PM4 / PM4_Supporting / BP3 / No PM4/BP3 / not assessable]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [protein length/domain/repeat evidence / none]
 ```
 
 ---

@@ -19,7 +19,7 @@
 
 | Code | Strength | Description |
 |------|----------|-------------|
-| BA1 | Stand-alone | MAF >5% |
+| BA1 | Stand-alone | AF >0.05 only after Ghosh 2018 BA1 exception-list and dataset-adequacy review |
 | BS1 | Strong | MAF greater than expected |
 | BS3 | Strong | Functional studies show no effect |
 | BP4 | Supporting | Multiple computational predictions benign |
@@ -58,14 +58,15 @@
 
 ## gnomAD Frequency Thresholds (Rare Disease)
 
-Use `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2. PM2 remains ClinGen SVI-style `PM2_Supporting` by default. Use `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5 when disease prevalence, penetrance, inheritance, unaffected status, phase, or alternate diagnosis affects benign evidence.
+Use `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2. PM2 remains ClinGen SVI-style `PM2_Supporting` by default. Use `tooluniverse-acmg-ba1-exception-list-refinement` before applying BA1. Use `tooluniverse-acmg-benign-context-refinement` for BA1/BS1/BS2/BP2/BP5 when disease prevalence, penetrance, inheritance, unaffected status, phase, or alternate diagnosis affects benign evidence.
 
 | Frequency | ACMG Code | Interpretation |
 |-----------|-----------|----------------|
 | Absent | PM2_Supporting | Absent from controls |
 | <0.00001 | PM2_Supporting | Extremely rare |
 | <0.0001 | - | Rare (use with caution) |
-| >0.01 | BS1/BA1 | Too common for rare disease |
+| >0.05 with BA1 exception-list clearance | BA1 | Stand-alone benign |
+| High for disease but BA1 not valid | BS1 | Too common for disease after disease-specific review |
 
 ## COSMIC Somatic Evidence
 
@@ -85,7 +86,7 @@ Use `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2. PM2 remains ClinG
 
 ## ClinGen Validity Levels (for ACMG PM1/PP4)
 
-Gene-disease validity and disease association scores do not substitute for patient-level phenotype evidence. When PP4, PS4, PP1/BS4, PM3 affected-proband context, BP5, BS2, or PS2/PM6 phenotype consistency is considered, use `tooluniverse-acmg-phenotype-dependent-evidence-refinement`; if phenotype is missing, mark the criterion as not assessed and request the needed clinical fields.
+Gene-disease validity and disease association scores do not substitute for patient-level phenotype evidence. Use `tooluniverse-acmg-overlay-routing-core` before disease- or mechanism-sensitive evidence assignment. The routing core sends multiple-disorder questions to `tooluniverse-acmg-multiple-disorder-context-refinement`, clinical-context intake to `tooluniverse-acmg-phenotype-dependent-evidence-refinement`, and PP1/BS4/PP4 combined scoring to `tooluniverse-acmg-pp1-segregation-refinement`.
 
 | Classification | Meaning | ACMG Impact |
 |----------------|---------|-------------|
@@ -147,7 +148,7 @@ For ACMG PP3/BP4, do not use this table as evidence-strength thresholds. Use `to
 
 Use `tooluniverse-acmg-ps4-case-enrichment-refinement` for case-control evidence, odds ratio/confidence interval interpretation, unrelated affected case counts, ancestry matching, gnomAD control caveats, and rare-disease ACGS-style PS4 case counting. Recessive biallelic affected-proband observations should route to PM3 rather than PS4.
 
-Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 phenotype consistency requires patient phenotype, affected status, or disease specificity.
+Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 phenotype consistency requires patient phenotype, affected status, disease specificity, diagnostic yield, or tested/excluded loci. Use `tooluniverse-acmg-pp1-segregation-refinement` when PP4 and PP1/BS4 must be combined rather than counted independently.
 
 ## SpliceAI Thresholds
 
@@ -164,7 +165,7 @@ Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, P
 |----------|-----------|--------|
 | Functional study (null) | PS3 | Strong |
 | Functional study (reduced) | PS3_Moderate | Moderate |
-| Case reports with segregation | PP1 | Supporting to Moderate |
+| Case reports with segregation | PP1/PP4 route | Use ClinGen 2024 combined PP1/BS4/PP4 overlay; avoid PP4/PS4/PP1 double counting |
 | Co-occurrence with pathogenic | BP2 | Supporting against |
 
 ## Regulatory Impact Categories
@@ -177,7 +178,7 @@ Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, P
 
 ## PVS1 Application for Truncating Variants
 
-Before using this table, run `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` and verify that LoF/haploinsufficiency is an established mechanism for the exact gene-disease context. If the gene has dominant and recessive disease associations, mixed mechanisms, structural/complex biology, or unclear HI/LoF support, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` first and document whether PVS1 is allowed.
+Before using this table, run `tooluniverse-acmg-overlay-routing-core`, then `tooluniverse-acmg-pvs1-lof-decision-tree-refinement`, and verify that LoF/haploinsufficiency is an established mechanism for the exact gene-disease context.
 
 Use `tooluniverse-acmg-pvs1-splicing-refinement` only after the baseline PVS1 decision-tree branch is identified and RNA assay or Walker 2023 splicing-specific evidence is present.
 

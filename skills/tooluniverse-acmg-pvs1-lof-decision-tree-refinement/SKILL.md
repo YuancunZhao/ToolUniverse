@@ -12,6 +12,8 @@ Use this as the baseline PVS1 decision tree for predicted loss-of-function varia
 
 This skill is an overlay only. It does not create a new MCP tool and does not replace disease-specific VCEP specifications.
 
+Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this baseline PVS1 decision tree.
+
 ---
 
 ## When to Use This Skill
@@ -34,6 +36,8 @@ Do not use this skill as an RNA assay interpretation overlay. If RNA assay evide
 ## Core Principle
 
 PVS1 is valid only when the variant is predicted to cause loss of function and loss of function is an established disease mechanism for the exact gene-disease context.
+
+If the gene has multiple associated disorders, inheritance models, phenotype spectra, dosage states, or molecular mechanisms, first use `tooluniverse-acmg-multiple-disorder-context-refinement` to define the disease entity and evidence-aggregation boundary. Then apply this PVS1 decision tree only to the LoF-compatible target disease context.
 
 Do not apply PVS1 solely because a variant is annotated as stop-gained, frameshift, splice-site, start-loss, or deletion. First confirm:
 
@@ -239,6 +243,8 @@ PVS1 LoF decision tree refinement:
 - CNV/SV routing: [not applicable / structural-variant-analysis used / needed]
 - RNA routing: [not applicable / Walker 2023 overlay used / needed]
 - Applied evidence: [PVS1 / PVS1_Strong / PVS1_Moderate / PVS1_Supporting / PVS1_N/A / PVS1_NotAssessed]
+- Status: [applied / no_evidence / not_assessed / not_applicable]
+- Consumed evidence: [LoF decision tree / CNV definition / transcript evidence / none]
 - Rationale: [brief explanation with sources]
 ```
 
