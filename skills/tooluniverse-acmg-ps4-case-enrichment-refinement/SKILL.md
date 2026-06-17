@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-ps4-case-enrichment-refinement
-description: Refine ACMG/AMP PS4 case-enrichment evidence for rare-disease variant classification using ACGS 2024 practice guidance, case-control evidence, affected case counts, ancestry matching, gnomAD control caveats, recessive PM3 routing, literature extraction, and duplicate-report checks.
+description: Refine ACMG/AMP PS4 case-enrichment evidence for rare-disease variant classification using formal case-control/cohort evidence, VCEP-specific rules, practice/local rare-disease affected-case refinements, ancestry matching, gnomAD control caveats, recessive PM3 routing, literature extraction, and duplicate-report checks.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: `PS4`, the increased prevalence of a variant in affected individuals compared with controls.
 
-It uses ACGS 2024 rare-disease practice guidance to refine how PS4 is considered when formal case-control studies are unavailable. It does not replace VCEP specifications, disease-specific case-count rules, or formal statistical enrichment analysis when those are available.
+Formal case-control or cohort enrichment and current VCEP specifications are the primary PS4 paths. ACGS 2024 rare-disease affected-case guidance is used only as `practice/local refinement` when formal enrichment data are unavailable and local policy accepts that approach. It does not replace VCEP specifications, disease-specific case-count rules, or formal statistical enrichment analysis when those are available.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PS4-specific logic. Formal case-control or cohort PS4 evidence is literature/cohort evidence; it does not require user-supplied patient phenotype when the source defines the affected cohort and disease context sufficiently.
 
@@ -34,6 +34,12 @@ Do not use this skill to count de novo evidence; use `tooluniverse-acmg-de-novo-
 PS4 requires affected-case enrichment, not just a variant mention.
 
 Prefer formal case-control or cohort evidence with an odds ratio, confidence interval, and matched controls. In rare-disease practice, where such data are often unavailable, PS4 may be applied cautiously from unrelated affected-case observations when the phenotype is rare and specific and the variant is absent or sufficiently rare in population databases.
+
+Guidance authority:
+
+- Formal case-control/cohort enrichment follows `ACMG/AMP baseline` PS4 language unless a current VCEP supplies `VCEP-specific` thresholds.
+- ACGS rare-disease affected-case counting is `practice/local refinement`, not a generic ClinGen/SVI primary PS4 rule.
+- Database or publication assertions that PS4 was applied are `source lead only` until the case evidence is extracted and routed.
 
 ---
 
@@ -84,9 +90,9 @@ Do not require a separate user-supplied proband phenotype for this evidence type
 
 ### Rare-Disease Affected-Case Evidence
 
-When formal case-control data are unavailable, ACGS 2024 supports cautious rare-disease use:
+When formal case-control data are unavailable, ACGS 2024 may be used as `practice/local refinement` only if local policy accepts rare-disease affected-case counting:
 
-| Evidence | Default PS4 assignment |
+| Evidence | Practice/local PS4 assignment |
 | --- | --- |
 | One unrelated affected individual with a rare and specific phenotype, variant absent from gnomAD/population controls, and no better criterion captures the evidence | `PS4_Supporting` |
 | Two or more unrelated affected individuals with rare and specific phenotype, variant absent from gnomAD/population controls, and duplicate reports excluded | `PS4_Moderate` |
@@ -96,6 +102,16 @@ When formal case-control data are unavailable, ACGS 2024 supports cautious rare-
 Do not use PS4 merely because a database states "Pathogenic" or because a variant appears in a disease database without case details.
 
 Unlike formal case-control evidence, rare-disease affected-case counting requires case-level disease/phenotype specificity and unrelatedness. If those facts are absent from the report or database, mark PS4 as `not_assessed` rather than assuming them.
+
+### Founder, Haplotype, and Mutation-Positive Cohort Evidence
+
+Founder haplotypes, shared ancestry, repeated case-series recurrence, and mutation-positive cohort summaries require extra caution:
+
+- A shared founder haplotype can show recurrence but may reduce independence between cases.
+- A cohort denominator such as "gene mutation-positive probands" is not the same as all affected disease cases and must not be used as a formal case-control denominator unless the study design supports that comparison.
+- gnomAD can be used as population-control context only after ancestry match, disease ascertainment, and possible inclusion of affected individuals are considered.
+- Founder recurrence should usually be routed to rare-disease affected-case counting, downgraded, or marked `status: not_assessed` unless formal cohort/case-control statistics or a VCEP rule support stronger PS4 use.
+- Do not calculate an OR against gnomAD from a founder or mutation-positive cohort without reporting case ascertainment, control suitability, ancestry match, and duplicate/relatedness review.
 
 ---
 
@@ -144,11 +160,13 @@ PS4 case-enrichment refinement:
 - Affected carriers: [count, unrelatedness, phenotype specificity]
 - Control source: [gnomAD/case-control cohort/other], ancestry match: [adequate/uncertain/poor]
 - Population frequency: [global AF, max ancestry AF, AC/AN, homozygotes]
+- Founder/haplotype context: [none / founder suspected / shared haplotype / mutation-positive cohort], independence impact [summary]
 - Duplicate-report check: [none found / concern / not_assessed]
 - Recessive PM3 routing: [not applicable / route to PM3]
 - De novo or segregation routing: [not applicable / route to PS2-PM6 / route to PP1]
 - Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / No PS4 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - Consumed evidence: [case-control / affected-case count / none]
 ```
 

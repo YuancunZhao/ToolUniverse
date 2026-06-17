@@ -49,7 +49,7 @@ This overlay requires a region-level source. A broad domain label or a high comp
 **Expected behavior**:
 
 - Confirm the residue rule is established for the gene-disease context or a current VCEP.
-- Consider `PM1_Strong` only when guideline/VCEP-level evidence supports that residue class.
+- Consider `PM1_Strong` only when VCEP-specific or accepted practice/local guideline evidence supports that residue class, and label the guidance authority explicitly.
 - Do not use generic conservation alone to upgrade PM1 to Strong.
 
 ---
@@ -161,4 +161,5 @@ PM1 refinement:
 - PM1/PP3 cap: [not applicable / capped at Strong]
 - Double-counting check: [MDR not reused as PP3; population rarity not reused as PM1]
 - Applied evidence: [PM1 / PP2 / PM1_Supporting / No PM1]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement]
 ```

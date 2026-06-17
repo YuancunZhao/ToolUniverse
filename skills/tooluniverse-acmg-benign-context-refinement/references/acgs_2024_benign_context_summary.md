@@ -4,6 +4,8 @@ Source:
 
 - ACGS Best Practice Guidelines for Variant Classification in Rare Disease 2024, v1.2.
 
+Authority note: BA1 exception-list review is governed by Ghosh et al. 2018 / ClinGen SVI. The ACGS details summarized here are `practice/local refinement` for BS1/BS2/BP2/BP5 and disease-threshold context unless adopted by a current VCEP.
+
 ## BA1/BS1
 
 - Generic BA1 stand-alone evidence should first pass Ghosh et al. 2018 / ClinGen SVI BA1 exception-list review. For rare diseases, disease-specific thresholds are often more relevant than the generic 5% value.

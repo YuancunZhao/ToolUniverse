@@ -38,6 +38,8 @@ If no tool was pre-specified and multiple tools were inspected after seeing scor
 
 External-agent rule: phrases such as "all predictors agree", predictor-majority statements, "CADD high plus SIFT/PolyPhen damaging", or "conservation supports pathogenicity" are not valid PP3/BP4 assignments by themselves. They may be reported as prediction context, but the counted ACMG code must come from this calibrated overlay or a current VCEP rule.
 
+If the selected calibrated score is unavailable and no VCEP or pre-specified local hierarchy applies, report `applied_evidence: none` with `status: not_assessed` or `no_evidence`. Do not use SIFT plus PolyPhen plus CADD, conservation, or any predictor voting pattern as a fallback for `PP3_Supporting`.
+
 ## Recommended Evidence Retrieval
 
 Start with variant normalization and consequence confirmation:
@@ -105,10 +107,12 @@ Intervals use standard mathematical notation: `[` or `]` includes the endpoint; 
 6. Map the score to the calibrated interval table.
 7. Apply exactly one computational evidence code from the selected tool: `PP3_Strong`, `PP3_Moderate`, `PP3_Supporting`, `BP4_VeryStrong`, `BP4_Strong`, `BP4_Moderate`, `BP4_Supporting`, or no code.
 8. If the selected score is missing, incompatible, outside evidence intervals, or conflicts with a VCEP rule, do not apply `PP3/BP4`.
+9. If only developer-default labels or a mixed predictor summary are available, record them in prediction context and keep counted evidence as none.
 
 ## Double Counting and Conflicts
 
 - Do not stack multiple missense predictors for extra strength.
+- Do not downgrade this rule into a majority vote when the calibrated selected score is missing.
 - Do not use mechanistic missense predictors, such as protein-stability predictors, in addition to the selected calibrated missense impact predictor unless a VCEP explicitly permits it.
 - Do not treat a high missense predictor score as evidence that the variant acts through a dominant-negative mechanism.
 - `PM2` and `BS1` may be combined with `PP3/BP4` when the selected predictor does not use allele frequency; use REVEL or BayesDel without allele frequency for this reason.

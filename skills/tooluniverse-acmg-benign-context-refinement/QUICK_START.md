@@ -13,6 +13,7 @@ Use this overlay for BA1, BS1, BS2, BP2, and BP5 when benign evidence depends on
 - Before applying BA1, use `tooluniverse-acmg-ba1-exception-list-refinement`.
 - Apply BA1 only if the Ghosh 2018 BA1 definition is met and no exception applies.
 - Apply BS1/BS1_Strong according to the threshold source when BA1 is not valid but frequency is still too high for the disease.
+- Mark BA1/Ghosh review as `ClinGen/SVI primary`; mark ACGS BS1/BS2/BP2/BP5 operational details as `practice/local refinement` unless a VCEP adopts them.
 - Do not apply PM2.
 - Report maximum ancestry AF, not global AF alone.
 
@@ -85,5 +86,6 @@ Benign-context refinement:
 - Phase/alternate diagnosis: [summary]
 - Applied evidence: [BA1 / BS1 / BS2 / BP2 / BP5 / none]
 - Status: [applied / not_applicable / not_assessed]
+- Guidance authority: [ClinGen/SVI primary / ACMG/AMP baseline / VCEP-specific / practice/local refinement]
 - Reason: [threshold source / healthy-observation basis / phase basis / alternate-diagnosis basis / missing required clinical context]
 ```

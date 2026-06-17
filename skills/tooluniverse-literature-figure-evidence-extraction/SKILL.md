@@ -38,7 +38,7 @@ Do not use this skill to:
 
 Extract only auditable facts and conservative interpretations. Every extracted conclusion must include source location, visual basis, text/caption basis when available, confidence, and ambiguity notes.
 
-If the figure is unclear, cropped, too low resolution, missing labels, or contradicted by caption/body text, return `not_interpretable` or `low confidence` rather than guessing.
+If the figure is unclear, cropped, too low resolution, missing labels, or contradicted by caption/body text, return `not_interpretable` or `low confidence` rather than guessing. Low-confidence or `not_interpretable` extraction is a downstream lead only; it must not upgrade ACMG evidence strength without corroborating text, readable source material, or a higher-confidence extraction.
 
 ---
 
@@ -65,6 +65,7 @@ If the figure is unclear, cropped, too low resolution, missing labels, or contra
    - Use the general output format below and the figure-type schema in `references/figure_evidence_schema.md`.
    - Include downstream ACMG overlays that may consume the extracted evidence.
    - Do not apply the evidence code here.
+   - For PP1, PS4, PS3/BS3, PM3, or PS2/PM6 downstream use, include source/panel, sample ID, genotype, phenotype or assay readout, confidence, and ambiguity fields. Missing critical fields should be reported as `not_interpretable`.
 
 ---
 
@@ -80,8 +81,9 @@ Figure evidence extraction:
 - Text/caption context: [caption/body/OCR facts used to interpret the figure]
 - Structured interpretation: [schema-specific result]
 - Relevant ACMG overlays: [PM3 / PP1 / BS4 / PS2_PM6 / PS3_BS3 / PVS1_RNA / PS1_splicing / PM1 / other]
-- Confidence: [high / medium / low]
+- Confidence: [high / medium / low / not_interpretable]
 - Ambiguities: [missing labels, unclear phase, unreadable axis, cropped panel, inconsistent caption, etc.]
+- Downstream-use limit: [countable facts / lead only due to low confidence / not_interpretable]
 - ACMG assignment: Not assigned by this figure-extraction skill.
 ```
 
@@ -148,9 +150,9 @@ Use only as supporting extracted facts unless downstream ACMG overlays can evalu
 | High | Figure labels, caption/body text, and visual evidence agree; key fields are legible and source location is clear. |
 | Medium | Main conclusion is supported, but one non-critical label, count, or context detail is missing or inferred from caption/body text. |
 | Low | Figure is partially legible, caption is incomplete, labels are ambiguous, or interpretation depends on weak OCR. |
-| Not assessable | Critical labels, genotype, phase, assay result, or source context cannot be read or verified. |
+| Not interpretable | Critical labels, genotype, phase, assay result, or source context cannot be read or verified. |
 
-Low-confidence or not-assessable extractions should not be used to activate ACMG criteria without independent corroboration.
+Low-confidence or not-interpretable extractions should not be used to activate or upgrade ACMG criteria without independent corroboration.
 
 ---
 

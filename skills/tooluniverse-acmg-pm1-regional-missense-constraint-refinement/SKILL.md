@@ -8,11 +8,13 @@ disable-model-invocation: true
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PM1 evidence for missense variants in constrained, hotspot, or functionally important protein regions.
 
-It uses the regional missense mutational intolerance framework described in PMID:38645134 as a PM1 refinement overlay. The paper identifies missense-depleted regions (MDRs) by comparing observed rare missense variation against expected missense variation and reports that variants within sufficiently missense-depleted regions can meet moderate pathogenic support under ClinGen calibration recommendations.
+It uses the regional missense mutational intolerance framework described in PMID:38645134 as a non-ClinGen regional evidence refinement overlay. The paper identifies missense-depleted regions (MDRs) by comparing observed rare missense variation against expected missense variation and may support PM1 when local policy, a VCEP, or a disease-specific rule accepts the dataset and threshold. Do not describe PMID:38645134 as a generic ClinGen/SVI PM1 recommendation.
 
 This skill does not replace gene-specific VCEP rules and does not create a new ToolUniverse MCP tool. Use ToolUniverse tools to retrieve variant, protein, clinical, population, and domain evidence, then apply this refinement when PM1 is under-specified.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM1-specific logic.
+
+Guidance authority: baseline PM1 comes from `ACMG/AMP baseline`. Current VCEP hotspot/domain rules are `VCEP-specific`. PMID:38645134 MDR membership and ACGS regional resources are `practice/local refinement` unless adopted by a VCEP.
 
 ---
 
@@ -72,7 +74,7 @@ Use ToolUniverse retrieval tools before assigning PM1.
 4. **Assess known functional/domain context**
    - Use `InterPro_get_protein_domains`, `UniProt_get_function_by_accession`, `EBIProteins_get_variation`, and structural tools such as AlphaFold/PDB when needed.
    - Broad domain membership alone is not sufficient for PM1 unless the domain or subregion is known to be critical and benign variation is low.
-   - ACGS 2024-supported regional/context sources include DECIPHER protein-view missense constraint tracks, constrained coding regions (CCR), MetaDome regional intolerance, paralogous residue evidence, curated active/binding/catalytic sites, and disease-specific hotspot/domain rules.
+   - ACGS 2024 `practice/local refinement` regional/context sources include DECIPHER protein-view missense constraint tracks, constrained coding regions (CCR), MetaDome regional intolerance, paralogous residue evidence, curated active/binding/catalytic sites, and disease-specific hotspot/domain rules.
 
 5. **Assess regional missense constraint**
    - Use the author-provided MDR/MPC regional constraint data when available.
@@ -101,7 +103,7 @@ For the MDR framework from PMID:38645134:
 - Prefer the latest validated release of the MDR/MPC dataset. The bioRxiv API currently reports a 2026 version using 730,947 gnomAD v4.1.1 exomes and an abstract threshold of regions with less than 36% of expected missense variation.
 - Older PubMed-linked abstract metadata may show the earlier 125,748-exome framing and a stricter less-than-20% threshold. If using the older release, record that version explicitly.
 
-ACGS 2024 practice additions:
+ACGS 2024 `practice/local refinement` additions:
 
 - PM1 may be supported by one or more of these evidence types when they point to the same local region: enrichment of pathogenic missense variants with low benign variation, disease-relevant paralogous residue pathogenicity, an invariant or highly conserved residue in an established functional domain, and protein modelling showing deleterious alteration of a known functional region.
 - `PM1_Strong` can be considered only for well-established critical residues or motif rules with guideline/VCEP-level support, such as cysteine disruption in FBN1 EGF-like calcium-binding domains, NOTCH3 EGF-repeat cysteine imbalance, glycine substitutions in collagen triple-helical domains, or Cys/His residues in C2H4 zinc-finger motifs when established for the disease.
@@ -122,6 +124,7 @@ Withhold or reduce PM1 when:
 - The evidence is only whole-gene missense intolerance and the local region does not show constraint; in this situation PP2 may be considered instead of PM1 if other PP2 requirements are met.
 - The same same-residue pathogenic comparison evidence is already being used for PM5 and no independent regional/domain evidence remains for PM1.
 - The only support is that another publication, database, or expert panel already applied PM1, without reviewable hotspot, constrained-region, critical-residue, or low-benign-variation evidence.
+- The evidence is only membership in a broad InterPro/Pfam/UniProt domain without a defined disease-relevant hotspot, critical residue, local constraint interval, pathogenic enrichment, or VCEP/gene-specific rule.
 
 ---
 
@@ -178,7 +181,9 @@ Also include a routing-core summary:
 PM1 regional missense-constraint refinement:
 - Applied evidence: [PM1 / PM1_Supporting / PP2 retained instead / No PM1]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - Consumed evidence: [regional constraint / hotspot / critical residue / none]
+- Broad-domain check: [not used alone / supported by local evidence / insufficient]
 - Double-counting restriction: [PM1 plus PP3 cap / PM1-PP2 selection / none]
 ```
 
@@ -212,11 +217,11 @@ PM1 regional missense-constraint refinement:
 - PMID:38645134 is indexed as a bioRxiv preprint. The bioRxiv API reports multiple versions; use and cite the specific version and dataset release.
 - Full text and supplemental materials were not available through automated retrieval in this implementation pass because bioRxiv/PMC access returned challenge pages and Europe PMC fullTextXML returned 404.
 - Current gene-specific VCEP specifications supersede this generic overlay.
-- ACGS 2024 regional resources such as DECIPHER, CCR, MetaDome, and paralog evidence require careful coordinate mapping and should not be treated as deterministic without source/version documentation.
+- ACGS 2024 regional resources such as DECIPHER, CCR, MetaDome, and paralog evidence are `practice/local refinement`, require careful coordinate mapping, and should not be treated as deterministic without source/version documentation.
 
 ---
 
 ## Primary Reference
 
 - Wang L, Chao KR, Panchal R, et al. The landscape of regional missense mutational intolerance quantified from 730,947 exomes. bioRxiv. DOI: 10.1101/2024.04.11.588920. PMID: 38645134.
-- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use as practice guidance for DECIPHER/CCR/MetaDome/paralog regional context, critical-residue PM1 strengthening, and PM1/PP2/BP1 double-counting boundaries.
+- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use only as `practice/local refinement` for DECIPHER/CCR/MetaDome/paralog regional context, critical-residue PM1 strengthening, and PM1/PP2/BP1 double-counting boundaries unless a VCEP adopts the rule.

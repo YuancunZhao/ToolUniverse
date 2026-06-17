@@ -16,6 +16,7 @@ This reference defines structured fields for visual evidence extracted from lite
 | `text_context` | Caption, body text, OCR, or supplement text used to interpret the visual. |
 | `confidence` | `high`, `medium`, `low`, or `not_interpretable`. |
 | `ambiguities` | Missing labels, low resolution, cropped panel, conflict, or unclear inference. |
+| `downstream_use_limit` | `countable_facts`, `lead_only_low_confidence`, or `not_interpretable`. |
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-pm4-bp3-protein-length-refinement
-description: Refine ACMG/AMP PM4 and BP3 evidence for protein length changes, in-frame insertions/deletions, stop-loss variants, last-exon gain-of-function truncating variants, and in-frame changes in repetitive regions using ACGS 2024 practice guidance.
+description: Refine ACMG/AMP PM4 and BP3 evidence for protein length changes, in-frame insertions/deletions, stop-loss variants, last-exon gain-of-function truncating variants, and in-frame changes in repetitive regions using ACMG/AMP baseline language, VCEP-specific rules, and explicitly labeled practice/local refinements.
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,7 @@ This skill extends `tooluniverse-acmg-variant-classification` for protein length
 - `PM4`: protein length changes as a result of in-frame deletions/insertions in a non-repeat region or stop-loss variants.
 - `BP3`: in-frame deletions/insertions in a repetitive region without known function.
 
-It uses ACGS 2024 practice guidance to avoid mechanical PM4/BP3 assignment and to route truncating, stop-loss, and gain-of-function cases away from inappropriate PVS1/PM4 double counting.
+ACMG/AMP 2015 is the baseline authority for PM4/BP3. ACGS 2024 details are used as `practice/local refinement` to avoid mechanical PM4/BP3 assignment and to route truncating, stop-loss, and gain-of-function cases away from inappropriate PVS1/PM4 double counting. Current VCEP specifications supersede both baseline and practice/local refinements.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PM4/BP3-specific logic.
 
@@ -54,6 +54,8 @@ Do not use this skill for canonical LoF assignment; use PVS1 and `tooluniverse-a
 ---
 
 ## PM4 Rules
+
+Guidance authority: PM4 derives from `ACMG/AMP baseline` unless a current VCEP supplies `VCEP-specific` criteria. ACGS single-amino-acid, stop-loss, and last-exon altered-product details should be reported as `practice/local refinement`.
 
 Apply PM4 when:
 
@@ -142,6 +144,7 @@ PM4/BP3 protein-length refinement:
 - Population/conservation evidence: [summary]
 - Applied evidence: [PM4 / PM4_Supporting / BP3 / No PM4/BP3 / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - Consumed evidence: [protein length/domain/repeat evidence / none]
 ```
 

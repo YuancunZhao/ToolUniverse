@@ -41,6 +41,7 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 
 - Do not apply full PM5 by default.
 - Consider `PM5_Supporting` if the comparison is independent, amino-acid mediated, and the variant under assessment is predicted to have a similar or greater protein impact.
+- Mark this downgraded use as `practice/local refinement` unless a VCEP adopts the rule.
 - Follow any current VCEP rule if it differs.
 
 ---
@@ -52,6 +53,7 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 **Expected behavior**:
 
 - Consider `PS1_Moderate` rather than full PS1 if the comparison is LP rather than P.
+- Mark LP-comparison downgrading as `practice/local refinement` unless a VCEP adopts the rule.
 - Withhold PS1 if the LP assertion is not independent or is driven by splicing rather than the amino-acid substitution.
 
 ---
@@ -65,7 +67,7 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 - Do not automatically apply PM5.
 - Evaluate whether the in-frame event affects the same disease-relevant residue mechanism.
 - Avoid double counting the same residue-change rationale as both PM4 and PM5.
-- Prefer VCEP or gene-specific guidance when available.
+- Prefer VCEP or gene-specific guidance when available; otherwise label any analogous use as `practice/local refinement`.
 
 ---
 
@@ -77,6 +79,7 @@ This overlay is for protein-level PS1/PM5. Use `tooluniverse-acmg-ps1-splicing-s
 
 - Use PS1-style logic only when the comparison variant has the same predicted molecular effect and a disease-specific source supports the analogy.
 - Do not generalize ordinary protein missense PS1/PM5 without a mechanism-specific rule.
+- Mark non-standard PS1-style use as `practice/local refinement` or `VCEP-specific`, not as generic ACMG/AMP baseline.
 
 ## Example 3: Same Codon but Different Mechanism
 
@@ -151,5 +154,6 @@ PS1/PM5 amino-acid equivalence refinement:
 - Splicing confounding: [none / present / unknown]
 - Applied evidence: [PS1 / PM5 / none]
 - Status: [applied / not_applicable / not_assessed]
+- Guidance authority: [ACMG/AMP baseline / ClinGen/SVI primary for splicing-specific PS1 / VCEP-specific / practice/local refinement]
 - Reason: [comparison independence, mechanism, splicing confounding, or missing data]
 ```

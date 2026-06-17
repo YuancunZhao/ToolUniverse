@@ -10,6 +10,16 @@ This skill is a lightweight coordination layer for ToolUniverse ACMG/AMP overlay
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
+Every counted evidence item should report its guidance authority. Use one of these authority labels:
+
+- `ClinGen/SVI primary`: a formal ClinGen SVI recommendation or ClinGen guidance document directly governs the evidence assignment.
+- `ACMG/AMP baseline`: the assignment follows Richards et al. 2015 ACMG/AMP baseline language without a later generic ClinGen/SVI recommendation.
+- `VCEP-specific`: a current disease- or gene-specific VCEP specification supersedes generic guidance.
+- `practice/local refinement`: ACGS 2024, non-ClinGen literature, or local guardrail guidance is being used to operationalize an under-specified criterion.
+- `source lead only`: a database, paper label, expert assertion, abstract-only source, or inaccessible source is used only to retrieve primary evidence and is not counted.
+
+Practice/local refinements must be explicitly labeled in the output and must not be described as ClinGen/SVI primary guidance. VCEP-specific rules supersede generic overlays and practice/local refinements.
+
 ---
 
 ## External-Agent Compliance Rules
@@ -25,12 +35,17 @@ For every ACMG criterion that could affect the final classification, the agent m
 
 Do not assign refined evidence strength directly in the base workflow for criteria covered by overlays, including PM2, PP3/BP4, PS1/PM5, PM1/PP2/BP1, PS3/BS3, PS4, PP1/BS4/PP4, PM3, PS2/PM6, PM4/BP3, PVS1, BA1/BS1/BS2/BP2/BP5, PP5/BP6, and dominant-negative mechanism-sensitive criteria.
 
+Final hard-stop audit: every counted evidence item in the final classification must have route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks one of those outcomes, the report must be labeled `draft classification` and the agent must not present a final ACMG classification until the missing route is corrected or the item is removed from counted evidence.
+
+Separate source assertions from counted evidence. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG labels belong in `source assertions` until their primary evidence is retrieved and routed. The final classification may be computed only from `current counted evidence`, not from source labels.
+
 Treat these as routing failures unless corrected before final classification:
 
 - Applying `PS3` or `BS3` from literature reports, HGMD/ClinVar labels, segregation, de novo observations, case enrichment, or another author's ACMG classification without reviewing the actual functional assay.
-- Applying `PP3/BP4` from local predictor voting, such as "CADD + SIFT + PolyPhen all agree", rather than the calibrated PP3/BP4 overlay or a current VCEP rule.
+- Applying `PP3/BP4` from local predictor-majority reasoning across CADD, SIFT, PolyPhen, or similar tools, rather than the calibrated PP3/BP4 overlay or a current VCEP rule.
 - Applying `PM5`, `PS1`, `PM1`, `PM2`, or `PS3` directly from a ClinVar, HGMD, LOVD, expert-panel, or paper classification label without extracting and routing the underlying primary evidence.
 - Using manual summaries to replace failed ToolUniverse calls when the missing tool result is essential to a counted criterion.
+- Counting abstract-only, unavailable full-text, unread supplementary material, or low-confidence figure/OCR evidence as a criterion when the criterion depends on details that are not actually accessible.
 
 If an external agent cannot invoke a named overlay, it should still follow that overlay's SKILL.md instructions and explicitly state that the overlay logic was applied manually. If neither is possible, mark the criterion `not_assessed` instead of assigning strength.
 
@@ -94,12 +109,24 @@ ACMG overlay result:
 - criterion: [ACMG code or context gate]
 - applied_evidence: [evidence label or none]
 - status: [applied / no_evidence / not_assessed / not_applicable / not_used]
+- guidance_authority: [ClinGen/SVI primary / ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - reason: [short evidence-specific rationale]
 - consumed_evidence: [data sources or evidence already used]
 - routed_to: [next overlay if applicable]
 ```
 
 Evidence-specific overlays may add fields needed for their criterion, such as points, OddsPath, phase status, assay validity, transcript consequence, or case-count details.
+
+For final ACMG reports, include an audit table with these fields for each potentially counted item:
+
+```markdown
+ACMG route audit:
+| Criterion | Proposed evidence | Route outcome | Guidance authority | Overlay or VCEP source | Counted? | Reason |
+| --- | --- | --- | --- | --- | --- | --- |
+| [code] | [candidate label] | [overlay_applied / overlay_deferred_to_vcep / overlay_not_assessed / overlay_not_applicable] | [ClinGen/SVI primary / ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only] | [skill or VCEP] | [yes/no] | [one-line rationale] |
+```
+
+Allowed route outcomes are `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, and `overlay_deferred_to_vcep`. Only `overlay_applied` and `overlay_deferred_to_vcep` may be counted.
 
 ---
 
@@ -131,6 +158,8 @@ Do not introduce underscore-separated variants of very-strong strength names. Fo
 - **PS1-splicing**: `tooluniverse-acmg-ps1-splicing-similarity-refinement` is comparison-variant evidence, not direct PVS1 evidence.
 - **PP5/BP6**: reputable-source assertions are source leads by default. Do not count PP5/BP6 unless a current VCEP or explicitly approved local legacy policy requires it.
 - **Double counting**: if the same primary evidence supports multiple possible criteria, choose the criterion-specific path and record the other criteria as `not_used` or `no_evidence` with a reason.
+- **Literature provenance**: evidence from papers must state whether the relevant full text, supplement, and figure/table content were read. Abstract-only or inaccessible papers are source leads, not counted evidence, unless a VCEP explicitly allows abstract-level use.
+- **Figure confidence**: low-confidence or `not_interpretable` visual extraction cannot by itself upgrade evidence strength. Route it as a lead and request the source image/PDF or corroborating text.
 
 ---
 

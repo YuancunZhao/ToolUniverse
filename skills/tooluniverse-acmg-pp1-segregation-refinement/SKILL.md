@@ -43,6 +43,8 @@ Use the most quantitative segregation evidence available:
 4. If no likelihood/LOD score is provided and the combined-guidance inputs are incomplete, use informative meioses or clearly reported segregation events as a conservative fallback.
 5. If neither is available, record the pedigree observation but do not apply PP1.
 
+Do not mix scoring frameworks to obtain a higher strength. Use the Biesecker 2024 combined PP1/BS4/PP4 points approach when its required inputs are available. Use the informative-meioses/LOD fallback only when combined-guidance inputs are incomplete, and state why the fallback was used.
+
 ---
 
 ## Evidence Retrieval Workflow
@@ -68,8 +70,11 @@ Use ToolUniverse retrieval tools before assigning PP1 strength.
 
 4. **Extract the pedigree evidence**
    - Record affected carriers, affected non-carriers, unaffected carriers, unaffected non-carriers, obligate carriers, number of independent families, phase, zygosity, and genotyping method.
+   - Distinguish co-segregating individuals, informative meioses, families, affected carriers, and informative unaffected relatives. These are not interchangeable units.
+   - The proband establishes the variant-case observation but is not an additional segregation event by itself. Count relatives or meioses only when they add informative transmission or non-transmission evidence beyond the proband.
    - Record whether the LOD score is variant-specific, locus-level, or gene-level.
    - Record disease age of onset, penetrance assumptions, phenocopy risk, phenotype certainty, and whether relatives are old enough to be informative.
+   - When the observation comes from OCR, a cropped figure, a user correction, or inferred carrier status, record confidence and provenance before scoring.
 
 5. **Choose the evidence code**
    - When PP4 phenotype specificity and PP1 segregation are based on the same phenotype/locus evidence, apply the Biesecker 2024 combined points cap and convert to allowable PP1/PP4 code combinations.
@@ -137,6 +142,8 @@ Use these points for simple pedigrees when a VCEP or formal segregation analysis
 | X-linked recessive, affected males and informative unaffected males | 1.0 | 2.0 | 3.0 | 4.0 | 5.0 |
 
 Only count unaffected individuals when the disease is fully penetrant for that person's age, sex, and clinical evaluation. Do not count unaffected parents used only to establish phase. For autosomal-recessive unaffected co-segregations, continue adding 0.4 points per informative meiosis above five.
+
+Low-confidence or `not_interpretable` visual extraction can guide follow-up but cannot upgrade PP1 strength without corroborating text, genotype table, clear figure evidence, or user-supplied source material.
 
 ### Locus Homogeneity and PP1
 
@@ -237,10 +244,12 @@ Reduced penetrance and phenocopies can weaken segregation inference. This is esp
 Strande et al. separate case-level and case-control evidence and warn against counting the same evidence twice. Apply the same principle here:
 
 - Do not count the same individuals both as PP1 segregation evidence and as independent proband observations for another case-level evidence summary.
+- Do not count the proband as both a PS4 affected case and extra PP1 segregation evidence from the same family observation.
 - Do not use the same family both as the sole basis for PP1 and as independent case-control enrichment evidence.
 - If a publication includes both family segregation and case-control data, use each individual only once, selecting the most informative evidence path.
 - Do not count the same affected individual as both PP4 diagnostic-yield evidence and PS4 case-count evidence.
 - Do not stack PP1 and PP4 beyond the +5.0 combined cap when both are derived from locus/phenotype segregation evidence.
+- Do not add Biesecker 2024 points and the informative-meioses fallback together for the same pedigree.
 
 ---
 
@@ -289,12 +298,15 @@ For each PP1 decision, explicitly report:
 - Variant identity and qualifying-variant rationale.
 - Diagnostic yield, phenotype specificity, and locus heterogeneity/homogeneity assumptions when PP4 interacts with PP1.
 - LOD score or informative meioses, if available.
+- Counting units used: co-segregating individuals, informative meioses, families, affected carriers, or informative unaffected relatives.
+- Whether the proband was used only as the index case and not as an extra segregation event.
 - Affected carriers and any affected non-carriers.
 - Unaffected carriers and whether they are informative.
 - Combined PP1/PP4 point total, cap, and selected code split when applicable.
 - Evidence apportionment across variants on the same allele or linked loci, if applicable.
 - Penetrance, phenocopy, age-of-onset, and phenotype-certainty assumptions.
 - Whether any related evidence was excluded to avoid double counting.
+- Figure/provenance confidence when evidence comes from a pedigree image, OCR, user-supplied correction, or inferred carrier.
 - Final evidence code: `PP1`, `PP1_Moderate`, `PP1_Strong`, `BS4`, or `No PP1`.
 - Status: [applied / no_evidence / not_assessed / not_applicable]
 - Consumed evidence: [segregation / non-segregation / phenotype specificity / diagnostic yield / none]

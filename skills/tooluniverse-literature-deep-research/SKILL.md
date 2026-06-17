@@ -153,8 +153,20 @@ Full-text: see `FULLTEXT_STRATEGY.md` for three-tier strategy.
 
 **CRITICAL**: PubMed returns 0 for ~30% of valid queries. **Always retry with EuropePMC** when PubMed returns empty. This is not optional.
 
+### 2.4b Full-Text Provenance for ACMG Evidence
+
+When literature evidence is used by ACMG overlays, record provenance for each claim:
+
+- `full_text_read`: the relevant methods/results text was retrieved and read.
+- `supplement_read`: relevant supplements, tables, or appendices were retrieved and read.
+- `figure_readable`: relevant figures were inspected directly or extracted with figure evidence extraction.
+- `abstract_only`: only title/abstract/indexed snippets were available.
+- `source_unavailable`: full text or supplement could not be obtained after the retrieval sequence.
+
+Abstract-only, source-unavailable, and unread-supplement evidence is a literature lead, not counted ACMG evidence, unless a current VCEP explicitly permits that source level. For inaccessible papers, first attempt full-text and supplement retrieval through ToolUniverse/PMC/EuropePMC/OpenAlex/Crossref/CORE/Unpaywall or equivalent routes; if still unavailable, ask the user for the PDF or supplement; only if the user cannot provide it or the source remains inaccessible should it be listed as `missing evidence`.
+
 ### 2.5 Tool Failure / OA Handling
-Retry once -> fallback tool. Key fallbacks: PubMed_get_cited_by -> EuropePMC_get_citations -> OpenCitations. OA: Unpaywall if configured, else Europe PMC/PMC/OpenAlex flags.
+Retry once -> fallback tool. Key fallbacks: PubMed_get_cited_by -> EuropePMC_get_citations -> OpenCitations. OA: Unpaywall if configured, else Europe PMC/PMC/OpenAlex flags. For ACMG evidence, a tool failure does not justify replacing the missing source with a manual summary when the source details are required for a counted criterion; mark the criterion `not_assessed` and request the source.
 
 ---
 

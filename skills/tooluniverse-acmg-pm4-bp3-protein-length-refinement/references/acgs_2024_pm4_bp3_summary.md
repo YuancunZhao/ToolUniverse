@@ -4,6 +4,8 @@ Source:
 
 - ACGS Best Practice Guidelines for Variant Classification in Rare Disease 2024, v1.2.
 
+Authority note: this summary is `practice/local refinement` for generic ToolUniverse overlays. The baseline criterion wording comes from ACMG/AMP 2015, and current VCEP specifications supersede this practice summary.
+
 ## PM4
 
 - Used for in-frame deletions/insertions in non-repeat regions and for stop-loss variants when the effect is protein extension rather than decay.

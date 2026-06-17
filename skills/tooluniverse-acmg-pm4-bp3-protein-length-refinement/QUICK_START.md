@@ -12,6 +12,7 @@ Use this overlay for in-frame indels, stop-loss variants, and protein-length cha
 
 - Apply `PM4_Supporting` by default.
 - Apply full `PM4` only when gene-specific, VCEP, or strong functional-region evidence supports it.
+- Mark single-amino-acid default downgrading as `practice/local refinement` unless a VCEP adopts it.
 
 ---
 
@@ -59,5 +60,6 @@ PM4/BP3 protein-length refinement:
 - PVS1 conflict: [none / route to PVS1]
 - Applied evidence: [PM4 / PM4_Supporting / BP3 / none]
 - Status: [applied / not_applicable / not_assessed]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement]
 - Reason: [protein-length mechanism / PVS1 route / missing region or mechanism data]
 ```

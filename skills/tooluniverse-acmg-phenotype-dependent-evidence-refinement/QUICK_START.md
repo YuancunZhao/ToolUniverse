@@ -26,6 +26,7 @@ Use this overlay when ACMG evidence cannot be assessed without patient phenotype
 - Confirm gene-disease validity and phenotype specificity.
 - Apply PP4 only if the phenotype is sufficiently specific, a narrow genetic differential has been tested, or VCEP rules are met.
 - Use `PP4_Supporting`, `PP4_Moderate`, or `PP4_Strong` only when the specificity level is justified by disease-specific clinical, biochemical, imaging, methylation, pathology, or guideline/VCEP evidence.
+- Mark standalone ACGS-style PP4 stratification as `practice/local refinement`; mark PP1/BS4/PP4 combined scoring as `ClinGen/SVI primary`.
 
 ---
 

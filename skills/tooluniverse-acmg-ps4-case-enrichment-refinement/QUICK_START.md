@@ -11,6 +11,7 @@ Use this overlay when affected-case enrichment, case-control evidence, or rare-d
 **Expected behavior**:
 
 - Apply `PS4_Supporting`.
+- Mark guidance authority as `practice/local refinement` unless a VCEP or local policy explicitly adopts this rare-disease case-count rule.
 - Record phenotype specificity, unrelatedness, population-control source, and duplicate-report check.
 
 ---
@@ -21,7 +22,7 @@ Use this overlay when affected-case enrichment, case-control evidence, or rare-d
 
 **Expected behavior**:
 
-- Apply `PS4_Moderate` by ACGS rare-disease practice guidance unless a VCEP specifies a different case-count rule.
+- Apply `PS4_Moderate` only as `practice/local refinement` under accepted ACGS rare-disease practice guidance, unless a VCEP specifies a different case-count rule.
 - Confirm cases are not duplicate reports.
 
 ---
@@ -61,5 +62,6 @@ PS4 case-enrichment refinement:
 - Duplicate-report status: [summary]
 - Applied evidence: [PS4 / PS4_Moderate / PS4_Supporting / none]
 - Status: [applied / not_applicable / not_assessed]
+- Guidance authority: [ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - Reason: [case-enrichment basis / duplicate or unrelatedness concern / missing literature or cohort fields]
 ```

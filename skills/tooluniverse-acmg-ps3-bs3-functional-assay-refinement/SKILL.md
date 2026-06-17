@@ -34,6 +34,7 @@ Do not use this skill for:
 - Population, case-control, segregation, de novo, or in-trans evidence unless it is only being used to establish assay controls.
 - HGMD, ClinVar, LOVD, expert-panel, or literature classification labels unless the actual functional assay behind the label is retrieved and evaluated.
 - Another author's ACMG code assignment, such as "the paper applied PS3", unless the paper reports the assay design, controls, readout, and variant result needed for this overlay.
+- Abstract-only statements, inaccessible full text, unread supplements, or uninspected assay figures when the missing source contains the assay details needed to judge PS3/BS3.
 
 ---
 
@@ -51,6 +52,8 @@ Functional evidence should be assigned in four steps:
 4. Apply PS3 or BS3 to the individual variant result at the justified strength.
 
 The class of assay alone does not determine strength. Strength is determined by validation, controls, reproducibility, calibration, and the variant's result relative to calibrated thresholds.
+
+Multiple historical functional publications are not cumulative by default. Do not upgrade PS3/BS3 because several papers report broadly consistent functional impairment. Assign PS3/BS3 once using the most disease-relevant and best-validated assay instance, unless a current VCEP, OddsPath calculation, or formally validated combination rule permits combining independent assays.
 
 ---
 
@@ -106,6 +109,8 @@ Recommended sequence:
 6. Apply the four-step SVI framework and the strength rules below.
 7. Report the final PS3/BS3 assignment and the reason any same-source evidence was not double-counted.
 
+For each literature source, record whether the relevant methods/results text, supplement, and figure/table were actually read. If a critical assay paper is inaccessible after full-text retrieval attempts, ask the user for the PDF or supplement. If it remains unavailable, list it as `missing evidence` and do not count it.
+
 Minimum assay evidence schema:
 
 | Field | Required content |
@@ -126,6 +131,7 @@ Minimum assay evidence schema:
 | `variant_result` | The assessed variant's readout and category: abnormal, normal, intermediate, indeterminate, or conflicting. |
 | `conflicts` | Other assays or evidence that conflict with the result. |
 | `double_counting_notes` | Evidence codes that must not also use the same functional data. |
+| `literature_provenance` | `full_text_read`, `supplement_read`, `figure_readable`, `abstract_only`, or `source_unavailable` for each source. |
 
 If the literature step cannot fill the required fields, return `status: not_assessed` with reason `PS3/BS3 assay fields incomplete` rather than guessing.
 
@@ -202,6 +208,7 @@ Functional evidence is not stand-alone evidence for a final Pathogenic or Benign
 - If assays conflict, the assay that better reflects the disease mechanism and is better validated can override the weaker assay.
 - If conflicting assays have similar relevance and validation, do not apply PS3 or BS3 from the conflicting functional evidence.
 - Do not automatically stack two supporting functional assays to create `PS3_Moderate` or `BS3_Moderate`. The SVI group did not reach consensus on stacking different assay classes because independence is difficult to prove and double counting is likely.
+- Do not automatically stack several historical assay publications into `PS3` or `BS3`. If multiple assays are concordant but not formally combinable, use the single best validated assay and cite the others as supporting context only.
 - If a VCEP explicitly permits combining independent functional assays, follow that VCEP rule and document why the assays are independent.
 
 ---
@@ -247,6 +254,7 @@ PS3/BS3 functional assay refinement:
 - Validation controls: [# P/LP], [# B/LB], total [#], classification independence [checked/not checked]
 - Thresholds/calibration: [normal/abnormal/indeterminate ranges, OddsPath if available]
 - Variant result: [readout], [abnormal/normal/intermediate/indeterminate/conflicting]
+- Literature provenance: [full_text_read / supplement_read / figure_readable / abstract_only / source_unavailable]
 - Multiple assay handling: [most validated assay / conflict resolved / no functional code]
 - Double counting: [PS3/BS3 replaces same-source PP3/BP4 or PVS1/BP7 RNA use where relevant]
 - Applied evidence: [PS3_Supporting / PS3_Moderate / PS3 / PS3_VeryStrong / BS3_Supporting / BS3_Moderate / BS3 / No PS3/BS3]

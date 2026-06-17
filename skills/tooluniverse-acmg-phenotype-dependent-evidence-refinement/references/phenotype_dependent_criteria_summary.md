@@ -17,7 +17,7 @@ This reference lists ACMG/AMP evidence criteria that should not be applied witho
 
 ## ACGS 2024 PP4 Practice Guidance
 
-ACGS 2024 is used here as practice guidance, not as a separate selectable classification profile.
+ACGS 2024 is used here as `practice/local refinement`, not as a formal ClinGen/SVI primary recommendation or a separate selectable classification profile.
 
 Biesecker et al. 2024 / ClinGen SVI is used when PP4 phenotype specificity interacts with PP1 co-segregation or BS4 non-segregation. In that setting, PP4 and PP1 are coupled locus evidence, not fully independent criteria.
 
@@ -28,7 +28,7 @@ PP4 can be considered when the patient's phenotype is specific for:
 - a rare combination of features where appropriate testing has excluded common alternatives;
 - a validated disease-specific biomarker pattern, including biochemical, imaging, methylation, pathology, or treatment-response evidence.
 
-Default PP4 handling:
+Practice/local PP4 handling:
 
 | Context | Handling |
 | --- | --- |

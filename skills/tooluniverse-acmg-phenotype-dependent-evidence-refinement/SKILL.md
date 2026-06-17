@@ -112,9 +112,9 @@ Apply PP4 only when the supplied phenotype is highly specific for a disease with
 
 If PP4 is being considered together with PP1 co-segregation or BS4 non-segregation, route to `tooluniverse-acmg-pp1-segregation-refinement` after collecting phenotype, diagnostic yield, inheritance, and family data. Under Biesecker et al. 2024, PP4 and PP1 are coupled forms of locus evidence and are capped together at +5.0 points; they should not be counted as fully independent criteria.
 
-ACGS 2024 practice guidance broadens the operational framing: PP4 can also be considered when the phenotype is a rare, highly characteristic combination of features with only a limited set of known genetic etiologies and the relevant genes have been appropriately assessed. The phenotype does not have to be absolutely pathognomonic for one gene, but it must be specific enough that a genotype-phenotype match is meaningful.
+Biesecker et al. 2024 is `ClinGen/SVI primary` guidance for combined PP1/BS4/PP4 locus evidence. Standalone PP4 strength stratification remains `ACMG/AMP baseline` unless a VCEP provides `VCEP-specific` rules. ACGS 2024 broadens the operational framing as `practice/local refinement`: PP4 can also be considered when the phenotype is a rare, highly characteristic combination of features with only a limited set of known genetic etiologies and the relevant genes have been appropriately assessed. The phenotype does not have to be absolutely pathognomonic for one gene, but it must be specific enough that a genotype-phenotype match is meaningful.
 
-Use this practical strength ladder unless a VCEP defines different disease-specific rules:
+Use this practice/local strength ladder only when local policy accepts ACGS PP4 stratification, unless a VCEP defines different disease-specific rules:
 
 | Phenotype evidence | Default PP4 handling |
 | --- | --- |
@@ -267,6 +267,7 @@ Phenotype-dependent evidence refinement:
 - Missing information: [fields]
 - Applied evidence: [criterion and strength / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
+- Guidance authority: [ClinGen/SVI primary for PP1/BS4/PP4 combined / ACMG/AMP baseline / VCEP-specific / practice/local refinement]
 - Routed to: [criterion-specific overlay if needed]
 - Follow-up question to user: [targeted question if needed]
 ```
@@ -286,5 +287,5 @@ Phenotype-dependent evidence refinement:
 
 - Richards S, Aziz N, Bale S, et al. Standards and guidelines for the interpretation of sequence variants. Genet Med. 2015;17(5):405-424. PMID: 25741868. DOI: 10.1038/gim.2015.30.
 - Strande NT, Riggs ER, Buchanan AH, et al. Evaluating the Clinical Validity of Gene-Disease Associations: An Evidence-Based Framework Developed by the Clinical Genome Resource. Am J Hum Genet. 2017;100(6):895-906. PMID: 28552198. PMCID: PMC5473734.
-- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use as practice guidance for phenotype-specific PP4 stratification and phenotype double-counting safeguards.
+- Ellard S, Baple EL, Berry I, et al. ACGS Best Practice Guidelines for Variant Classification 2024. Use only as `practice/local refinement` for phenotype-specific PP4 stratification and phenotype double-counting safeguards unless a VCEP adopts the rule.
 - Current ClinGen VCEP specifications for disease-specific PP4, PS4, segregation, de novo, and phenotype-match rules.

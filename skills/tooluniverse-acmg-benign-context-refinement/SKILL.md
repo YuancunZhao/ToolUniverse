@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-benign-context-refinement
-description: Refine ACMG/AMP benign-context evidence BA1, BS1, BS2, BP2, and BP5 using ACGS 2024 practice guidance, disease-specific frequency thresholds, BA1 exception-list routing, healthy-observation context, alternate molecular diagnosis, cis/trans context, penetrance, and phenotype requirements.
+description: Refine ACMG/AMP benign-context evidence BA1, BS1, BS2, BP2, and BP5 using ClinGen/SVI BA1 exception-list routing, ACMG/AMP baseline criteria, VCEP-specific thresholds, and explicitly labeled practice/local refinements for disease-specific frequency, healthy-observation, alternate-diagnosis, cis/trans, penetrance, and phenotype context.
 disable-model-invocation: true
 ---
 
@@ -17,6 +17,12 @@ This skill extends `tooluniverse-acmg-variant-classification` for benign evidenc
 This overlay does not change the PM2 overlay. Population rarity/absence still follows `tooluniverse-acmg-pm2-absence-rarity-refinement`. Before applying BA1 stand-alone benign evidence, use `tooluniverse-acmg-ba1-exception-list-refinement`.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions. In this overlay, BA1 exception-list review is a prerequisite for BA1 only; BS1/BS2/BP2/BP5 remain here.
+
+Guidance authority:
+
+- BA1 exception-list and generic stand-alone BA1 review follow Ghosh et al. 2018 as `ClinGen/SVI primary`.
+- BS1, BS2, BP2, and BP5 start from `ACMG/AMP baseline` unless a current VCEP supplies `VCEP-specific` thresholds or rules.
+- ACGS 2024 operational details for BS1/BS2/BP2/BP5 are `practice/local refinement`, not generic ClinGen/SVI primary guidance.
 
 ---
 
@@ -70,7 +76,7 @@ Do not apply BA1 when the variant is on the ClinGen BA1 exception list, when hig
 
 Apply BS1 when allele frequency is greater than expected for the disorder but does not meet BA1.
 
-ACGS 2024 practice points:
+ACGS 2024 `practice/local refinement` points:
 
 - For high-penetrance autosomal dominant disorders, `BS1_Strong` can be stand-alone evidence for likely benign when the disease-specific threshold is exceeded.
 - Use maximum ancestry AF, not global AF alone.
@@ -83,7 +89,7 @@ ACGS 2024 practice points:
 
 Apply BS2 only when healthy observations are incompatible with pathogenicity for the disease context.
 
-ACGS 2024 practice examples:
+ACGS 2024 `practice/local refinement` examples:
 
 - For a highly penetrant dominant disease, BS2 can be supported by at least two heterozygous healthy appropriately phenotyped individuals.
 - For severe pediatric-onset recessive disease, at least two healthy homozygotes or phenotype-incompatible homozygotes in population data may support BS2.
@@ -114,7 +120,7 @@ Do not apply BP2 when:
 
 Apply BP5 only when another molecular diagnosis explains the patient's disease.
 
-ACGS 2024 cautions:
+ACGS 2024 `practice/local refinement` cautions:
 
 - Do not apply BP5 if the alternate P/LP variant does not explain all or most clinical features.
 - Do not apply BP5 when a blended phenotype is plausible.
@@ -135,6 +141,7 @@ Benign-context refinement:
 - Phase/alternate diagnosis: [cis/trans, other P/LP variant, phenotype explanation]
 - Applied evidence: [BA1 / BS1 / BS1_Strong / BS2 / BP2 / BP5 / No benign-context evidence / none]
 - Status: [applied / no_evidence / not_assessed / not_applicable]
+- Guidance authority: [ClinGen/SVI primary / ACMG/AMP baseline / VCEP-specific / practice/local refinement / source lead only]
 - Consumed evidence: [population frequency / healthy observations / phase / alternate diagnosis / none]
 - Missing information: [fields needed]
 ```

@@ -1,6 +1,6 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 Baseline comparison:
 
@@ -33,14 +33,14 @@ These are additive overlays intended to refine ACMG/AMP evidence assignment with
 | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` | Refine PM1 for regional missense intolerance, hotspots, constrained subdomains, and low benign variation while avoiding PP3/PM1 double counting. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pm2-absence-rarity-refinement` | Apply SVI-style PM2 absence/rarity logic, coverage checks, BA1/BS1/BS2 precedence, and PM2 supporting-strength boundaries. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pm3-in-trans-refinement` | Score PM3 for recessive disorders using in-trans, phase-unknown, one-parent-supported, VUS-other-allele, and homozygous evidence while checking rarity and circularity. | `SKILL.md`, `QUICK_START.md` |
-| `tooluniverse-acmg-pm4-bp3-protein-length-refinement` | Refine PM4/BP3 for in-frame insertions/deletions, single amino-acid indels, repeat regions, stop-loss variants, and last-exon altered-product contexts using ACGS 2024 practice guidance. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_pm4_bp3_summary.md` |
+| `tooluniverse-acmg-pm4-bp3-protein-length-refinement` | Refine PM4/BP3 for in-frame insertions/deletions, single amino-acid indels, repeat regions, stop-loss variants, and last-exon altered-product contexts using ACMG/AMP baseline wording plus explicitly labeled ACGS practice/local refinement. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_pm4_bp3_summary.md` |
 | `tooluniverse-acmg-pp1-segregation-refinement` | Refine PP1/BS4 segregation evidence using ClinGen 2024 combined PP1/BS4/PP4 points, diagnostic-yield PP4 interaction, locus-evidence cap, allele/locus apportionment, informative meioses, LOD-like reasoning, phenocopy/reduced-penetrance checks, and qualified-variant boundaries. | `SKILL.md`, `QUICK_START.md`, `references/biesecker_2024_pp1_bs4_pp4_combined_guidance.md` |
 | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` | Replace uncalibrated predictor majority voting with calibrated missense prediction evidence strengths for PP3/BP4. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` | Refine PP5/BP6 reputable-source assertions using ClinGen SVI guidance recommending discontinuation of PP5/BP6; treats secondary classifications as leads to primary evidence rather than counted criteria. | `SKILL.md`, `QUICK_START.md`, `references/biesecker_2018_pp5_bp6_summary.md` |
 | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` | Refine protein-level PS1/PM5 for same amino-acid substitution, same-residue missense comparison variants, same-codon edge cases, mechanism matching, splicing confounding, and circularity. | `SKILL.md`, `QUICK_START.md`, `references/acmg_2015_ps1_pm5_summary.md` |
 | `tooluniverse-acmg-ps1-splicing-similarity-refinement` | Apply PS1 logic for same predicted RNA-splicing events relative to known P/LP comparison variants, with RNA-evidence precedence and duplicate-evidence guards. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` | Refine PS3/BS3 strength for functional assays using assay validity, disease-mechanism fit, controls, OddsPath/calibration, and duplicate-counting checks. | `SKILL.md`, `QUICK_START.md` |
-| `tooluniverse-acmg-ps4-case-enrichment-refinement` | Refine PS4 for case-control evidence, odds ratio/confidence interval, unrelated affected case counts, ancestry matching, gnomAD control caveats, and rare-disease ACGS-style case counting. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_ps4_summary.md` |
+| `tooluniverse-acmg-ps4-case-enrichment-refinement` | Refine PS4 for formal case-control/cohort evidence, odds ratio/confidence interval, unrelated affected case counts, ancestry matching, gnomAD control caveats, and rare-disease ACGS-style case counting labeled as practice/local refinement. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_ps4_summary.md` |
 | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` | Refine baseline PVS1 strength using Abou Tayoun et al. 2018 / ClinGen SVI PVS1 LoF decision tree, including LoF mechanism gate, NMD, start-loss, exon deletion/duplication, whole-gene deletion, rescue transcript, and in-frame branch handling. | `SKILL.md`, `QUICK_START.md`, `references/abou_tayoun_2018_pvs1_summary.md` |
 | `tooluniverse-acmg-pvs1-splicing-refinement` | Refine PVS1/BP7 for RNA-splicing evidence, aberrant transcripts, exon skipping, rescue transcripts, and Walker/ClinGen SVI splicing-style logic. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-benign-context-refinement` | Refine BA1/BS1/BS2/BP2/BP5 while keeping PM2 on the ClinGen SVI PM2 overlay; requests disease threshold, phenotype, unaffected-status, phase, and alternate-diagnosis context when missing. | `SKILL.md`, `QUICK_START.md`, `references/acgs_2024_benign_context_summary.md` |
@@ -318,12 +318,12 @@ M skills/tooluniverse-rare-disease-diagnosis/SKILL.md
 
 Behavior added:
 
-- Adds PS4 case-enrichment overlay for formal case-control evidence and ACGS-style rare-disease affected-case counting; recessive biallelic affected-proband evidence routes to PM3 instead of PS4.
+- Adds PS4 case-enrichment overlay for formal case-control evidence and ACGS-style rare-disease affected-case counting as practice/local refinement; recessive biallelic affected-proband evidence routes to PM3 instead of PS4.
 - Adds PM4/BP3 overlay for protein length changes, single amino-acid in-frame indels, repeat-region BP3, stop-loss, and last-exon altered-product contexts; PM4 is not co-used with PVS1 for the same length-changing effect.
 - Adds benign-context overlay for BA1/BS1/BS2/BP2/BP5, while keeping PM2 under the ClinGen SVI PM2 overlay.
-- Enhances phenotype-dependent PP4 with ACGS Appendix B-style specificity stratification and double-counting safeguards with PS2/PM6 and PS4.
-- Enhances PS1/PM5 with ACGS practice guidance for `PS1_Moderate`, `PM5_Supporting`, initiation codon and non-coding RNA caveats, predicted-impact comparison, in-frame indel overlap, and PM1/PM5 double-counting.
-- Enhances PM1/PP2/BP1 with ACGS regional resources such as DECIPHER regional constraint, CCR, MetaDome, paralogous residue evidence, critical-residue `PM1_Strong` examples, and BP1 conflict handling.
+- Enhances phenotype-dependent PP4 with ACGS Appendix B-style specificity stratification as practice/local refinement and double-counting safeguards with PS2/PM6 and PS4.
+- Enhances PS1/PM5 with ACGS practice/local refinement for `PS1_Moderate`, `PM5_Supporting`, initiation codon and non-coding RNA caveats, predicted-impact comparison, in-frame indel overlap, and PM1/PM5 double-counting.
+- Enhances PM1/PP2/BP1 with ACGS regional resources as practice/local refinement, including DECIPHER regional constraint, CCR, MetaDome, paralogous residue evidence, critical-residue `PM1_Strong` examples, and BP1 conflict handling.
 - Preserves locked priorities: PM2 remains ClinGen SVI `PM2_Supporting`, and PP3/BP4 remains Pejaver 2022 calibrated missense prediction evidence.
 
 ## ClinGen 2024 PP1/BS4/PP4 Combined Guidance Update: 2026-06-16
@@ -464,7 +464,7 @@ Behavior clarified:
 - Formal case-control, cohort, or meta-analysis PS4 can be assessed from literature or cohort data when the source defines cases, disease context, controls, ancestry handling, and enrichment statistics sufficiently.
 - Rare-disease affected-case counting still requires affected-case phenotype specificity, unrelatedness, duplicate-report checks, and population-control context from the paper, database, or user.
 - Updates phenotype-dependent routing so PS4 only enters patient-phenotype intake when disease/case ascertainment is missing or when rare-disease case-count evidence needs case-level context.
-- Does not change PS4 thresholds, ACGS rare-disease case-count handling, PM3 routing for recessive biallelic probands, or VCEP precedence.
+- Does not change PS4 thresholds, ACGS rare-disease case-count handling now labeled as practice/local refinement, PM3 routing for recessive biallelic probands, or VCEP precedence.
 
 ## Clinical Phenotype Dependency Audit: 2026-06-16
 
@@ -506,10 +506,42 @@ Behavior clarified:
 - Adds explicit external-agent compliance outcomes for each considered criterion: `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, and `overlay_deferred_to_vcep`.
 - Requires imported agents to record overlay routing before final classification rather than using the base ACMG workflow as a manual checklist.
 - Strengthens PS3/BS3 guardrails: segregation, case recurrence, de novo evidence, PM3-compatible biallelic evidence, HGMD/ClinVar labels, and another paper's ACMG code cannot be counted as PS3 unless the actual functional assay is retrieved and evaluated.
-- Strengthens PP3/BP4 guardrails against local predictor voting such as "CADD + SIFT + PolyPhen all agree"; counted evidence must come from Pejaver 2022 calibrated thresholds or a current VCEP rule.
+- Strengthens PP3/BP4 guardrails against local predictor-majority reasoning across CADD, SIFT, PolyPhen, or similar tools; counted evidence must come from Pejaver 2022 calibrated thresholds or a current VCEP rule.
 - Strengthens PP5/BP6 and PS1/PM5 guardrails so reputable-source labels are source leads only and cannot be directly promoted into PM5, PM1, PS3, PP3, or other counted evidence without primary evidence review.
 - Strengthens PM1 guardrails against broad domain membership or another source's PM1 label without reviewable hotspot, constrained-region, critical-residue, or low-benign-variation evidence.
 - Does not change any evidence threshold, strength mapping, locked PM2/PP3 rules, VCEP precedence, or final ACMG combining rule.
+
+## External-Agent Compliance and Literature-Provenance Guardrail Cleanup: 2026-06-16
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-literature-deep-research/SKILL.md
+M skills/tooluniverse-literature-deep-research/FULLTEXT_STRATEGY.md
+M skills/tooluniverse-literature-figure-evidence-extraction/SKILL.md
+M skills/tooluniverse-literature-figure-evidence-extraction/references/figure_evidence_schema.md
+M skills/tooluniverse-acmg-pp3-bp4-missense-prediction-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps3-bs3-functional-assay-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/SKILL.md
+M skills/tooluniverse-acmg-pp1-segregation-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/SKILL.md
+```
+
+Behavior clarified:
+
+- Adds final hard-stop audit language: every counted evidence item must have `overlay_applied` or `overlay_deferred_to_vcep`; otherwise the report remains `draft classification`.
+- Separates source assertions from current counted evidence so ClinVar/HGMD/VCEP/paper labels cannot drive the final ACMG tier by themselves.
+- Adds literature provenance fields and the required sequence for inaccessible papers: search full text and supplements first, ask the user for PDF/source material if needed, then list as `missing evidence` only if still unavailable.
+- Clarifies that abstract-only, unavailable full-text, unread supplement, and low-confidence figure/OCR evidence are leads only unless a current VCEP explicitly permits use.
+- Reinforces PP3/BP4 Pejaver 2022 handling: no fallback PP3 from developer-default CADD/SIFT/PolyPhen-style labels or predictor-majority reasoning when calibrated scores are missing.
+- Reinforces PS3/BS3 handling: do not upgrade by counting multiple historical functional publications; use the best validated assay unless VCEP, OddsPath, or a validated combination rule permits combining.
+- Adds PS4 caveats for founder haplotypes, shared ancestry, mutation-positive cohorts, gnomAD-as-control comparisons, and case-series recurrence.
+- Adds PP1 guardrails for proband counting, co-segregating individual versus informative meiosis units, Biesecker/fallback non-mixing, figure provenance, and PP1/PP4/PS4 double counting.
+- Adds PS1/PM5 comparison-variant provenance and PM1 broad-domain checks.
+- Does not change any evidence threshold, strength mapping, VCEP precedence, PM2 default `PM2_Supporting`, PP3/BP4 Pejaver 2022 rule, or final ACMG combining rule.
 
 ## ACMG Overlay Consistency and Compliance Cleanup: 2026-06-16
 
@@ -544,6 +576,45 @@ Behavior clarified:
 - Converts legacy source-review and PVS1 missing-input display labels to `applied_evidence: none` plus `status: not_assessed` in structured output guidance.
 - Tightens common examples so ClinVar/CIViC/HGMD-style assertions are source leads, PP3/BP4 is assigned by calibrated overlay/VCEP, PM1 requires overlay-confirmed eligible regional evidence, and PS3 requires actual functional assay evidence.
 - Does not change evidence thresholds, strength mappings, VCEP precedence, PM2 default `PM2_Supporting`, PP3/BP4 Pejaver 2022 handling, or the final ACMG combining rule.
+
+## ClinGen Guidance Authority Alignment Cleanup: 2026-06-17
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-ps4-case-enrichment-refinement/references/acgs_2024_ps4_summary.md
+M skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-pm4-bp3-protein-length-refinement/references/acgs_2024_pm4_bp3_summary.md
+M skills/tooluniverse-acmg-benign-context-refinement/SKILL.md
+M skills/tooluniverse-acmg-benign-context-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-benign-context-refinement/references/acgs_2024_benign_context_summary.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/SKILL.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/references/phenotype_dependent_criteria_summary.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/SKILL.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-pm1-regional-missense-constraint-refinement/references/pmid38645134_regional_missense_constraint_summary.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/SKILL.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/QUICK_START.md
+M skills/tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement/references/acmg_2015_ps1_pm5_summary.md
+```
+
+Behavior clarified:
+
+- Adds a required `guidance_authority` field for counted evidence, with controlled labels `ClinGen/SVI primary`, `ACMG/AMP baseline`, `VCEP-specific`, `practice/local refinement`, and `source lead only`.
+- Clarifies that formal ClinGen/SVI recommendations, ACMG/AMP 2015 baseline criteria, and VCEP-specific rules must be distinguished from ACGS 2024, non-ClinGen literature, and local operational guardrails.
+- Re-labels PS4 rare-disease affected-case counting from ACGS 2024 as `practice/local refinement`; formal case-control/cohort enrichment and VCEP rules remain the primary PS4 paths.
+- Re-labels PM4/BP3 single-amino-acid indel, stop-loss, and last-exon altered-product details from ACGS 2024 as `practice/local refinement`; ACMG/AMP 2015 remains the baseline authority.
+- Keeps BA1/Ghosh 2018 as `ClinGen/SVI primary` while labeling ACGS details for BS1/BS2/BP2/BP5 as `practice/local refinement` unless adopted by VCEP.
+- Clarifies that Biesecker et al. 2024 is `ClinGen/SVI primary` for combined PP1/BS4/PP4 guidance, while standalone ACGS-style PP4 stratification is `practice/local refinement`.
+- Clarifies that PMID:38645134 regional missense constraint is a non-ClinGen regional evidence refinement for PM1 unless a VCEP or local policy adopts the threshold.
+- Clarifies that protein-level PS1/PM5 is `ACMG/AMP baseline`, Walker 2023 is `ClinGen/SVI primary` only for splicing-specific PS1/PVS1 interactions, and ACGS PS1/PM5 downgrades or edge-case extensions are `practice/local refinement`.
+- Does not change any evidence threshold, strength mapping, VCEP precedence, PM2 default `PM2_Supporting`, PP3/BP4 Pejaver 2022 handling, or final ACMG combining rule.
 
 ## Update Procedure
 

@@ -89,6 +89,15 @@ get_webpage_text_from_url(url="https://doi.org/10.1016/...")
 - No snippet extraction (full HTML)
 - Quality varies by publisher
 
+## Tier 4: User-Supplied Source for ACMG Evidence
+
+Use when a paper, supplement, figure, or table is necessary for a counted ACMG criterion and Tiers 1-3 cannot retrieve it.
+
+1. Try all available full-text and supplement routes first: PMC/EuropePMC full text, publisher OA page, OpenAlex/Crossref metadata, CORE/DOAJ/Fatcat/Unpaywall-style OA links when available, and cited supplementary files.
+2. If the required source is still unavailable, ask the user for the PDF, supplement, figure, or table.
+3. If the user cannot provide it, record `source_unavailable` and list the item as `missing evidence`.
+4. Do not count evidence that requires inaccessible assay details, case tables, pedigrees, or supplement data. Keep the citation as a lead only.
+
 ---
 
 ## Decision Matrix
@@ -101,6 +110,7 @@ get_webpage_text_from_url(url="https://doi.org/10.1016/...")
 | High-value paper analysis | 2 (Manual S2) | Precise control |
 | Systematic review (50+ papers) | 1 + 2 | Auto for OA, manual for key papers |
 | Paywalled critical paper | 3 (Manual download) | Only option |
+| Paywalled paper required for ACMG counted evidence | 1-3, then 4 | Try full text/supplements, ask user for PDF, then missing evidence if still unavailable |
 
 ---
 
@@ -118,7 +128,7 @@ get_webpage_text_from_url(url="https://doi.org/10.1016/...")
    - Quick verification: 150-200 chars
    - Default: 220 chars
 
-4. **Handle failures gracefully**: fall back to abstract or skip.
+4. **Handle failures gracefully**: for general literature synthesis, fall back to abstract or skip. For ACMG counted evidence, abstract-only support remains a lead unless a VCEP explicitly allows it.
 
 5. **Document full-text sources in report**:
    ```markdown
@@ -129,4 +139,14 @@ get_webpage_text_from_url(url="https://doi.org/10.1016/...")
    - Study B: Value Y [arXiv:2301.12345, Experimental Design]
 
    *Full-text verification performed on 8/15 OA papers (53% coverage)*
+   ```
+
+6. **For ACMG reports, add provenance fields**:
+   ```markdown
+   Literature provenance:
+   - PMID: [id]
+   - Full text: [full_text_read / abstract_only / source_unavailable]
+   - Supplement: [supplement_read / unavailable / not needed]
+   - Figure/table: [figure_readable / not_interpretable / not needed]
+   - Counted evidence allowed: [yes/no, reason]
    ```
