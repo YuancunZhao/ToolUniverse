@@ -273,6 +273,41 @@ Hard-stop rule: if any evidence row in the final counted table lacks a valid rou
 
 ---
 
+## Phase 7: Bayesian Evidence Combination
+
+After the hard-stop audit passes, use `tooluniverse-acmg-bayesian-classification-framework` to convert the routed counted evidence table into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and a structured final report.
+
+This final combination layer is not an evidence-assignment overlay. It must not retrieve evidence, decide whether criteria are met, or change the strength assigned by evidence-specific overlays or VCEP rules.
+
+Use these boundaries:
+
+- If BA1 is valid, short-circuit before Bayesian calculation and report Benign by BA1 stand-alone.
+- If any counted evidence lacks route outcome `overlay_applied` or `overlay_deferred_to_vcep`, output `draft classification` and do not compute final posterior probability.
+- If a VCEP defines a disease-specific combining framework, follow the VCEP and report Tavtigian-style posterior only as optional context when appropriate.
+- Do not use Bayesian points to convert source assertions, unrouted candidate evidence, abstract-only evidence, unread supplements, or low-confidence figure extraction into counted criteria.
+
+The Bayesian framework reports both readable points and probability:
+
+| Evidence strength | Points |
+| --- | ---: |
+| Pathogenic VeryStrong | `+8` |
+| Pathogenic Strong | `+4` |
+| Pathogenic Moderate | `+2` |
+| Pathogenic Supporting | `+1` |
+| Benign Strong | `-4` |
+| Benign Supporting | `-1` |
+
+Default formula from Tavtigian et al. 2018 and Supplemental Table S1:
+
+```text
+OddsPath = 350^(total_points / 8)
+Post_P = OddsPath * 0.10 / ((OddsPath - 1) * 0.10 + 1)
+```
+
+Later benign strengths not present in Tavtigian et al. 2018, such as `BP4_Moderate`, `BP4_VeryStrong`, or `BS3_Moderate`, require explicit VCEP, ClinGen/SVI extension, or local-policy conversion before entering the Bayesian calculator.
+
+---
+
 ## Classification Algorithm
 
 Combine criteria at their applied strength (after upgrades/downgrades):
@@ -294,44 +329,57 @@ Combine criteria at their applied strength (after upgrades/downgrades):
 ```markdown
 # ACMG Variant Classification Report
 
-## Variant: [HGVS]
-- **Gene**: [symbol] | **Transcript**: [MANE Select] | **Protein**: [p.notation] | **Type**: [variant type]
+## Variant Normalization
+- Variant:
+- Gene:
+- Transcript:
+- Genome build:
+- Consequence:
 
-## Classification Status: [final classification / draft classification]
-## Classification: [PATHOGENIC / LIKELY PATHOGENIC / VUS / LIKELY BENIGN / BENIGN / not computed because route audit failed]
+## Disease / Mechanism Context
+- Disease context:
+- Inheritance:
+- Mechanism:
+- Multiple-disorder boundary:
 
-## Evidence Summary
-### Source Assertions / Leads
-| Source | Assertion | Review status | Routed primary evidence |
+## Evidence Retrieval
+- Population:
+- Computational:
+- Clinical databases and source assertions:
+- Literature and supplements:
+- Functional / segregation / case evidence:
 
-### Current Counted Evidence
-| Criterion | Strength | Evidence | Overlay route outcome | Source |
+## Overlay Route Audit
+| Criterion | Proposed evidence | Route outcome | Guidance authority | Overlay or VCEP source | Counted? | Reason |
+| --- | --- | --- | --- | --- | --- | --- |
 
-### Pathogenic Criteria Met
-| Criterion | Strength | Evidence | Source |
+## Current Counted Evidence
+| Criterion | Direction | Strength | Points | Evidence | Overlay route outcome | Source |
+| --- | --- | --- | ---: | --- | --- | --- |
 
-### Benign Criteria Met
-| Criterion | Strength | Evidence | Source |
+## Bayesian Calculation
+- Model: Tavtigian et al. 2018 Bayesian ACMG/AMP framework
+- Prior probability:
+- Very Strong OddsPath:
+- Exponential progression:
+- Total points:
+- OddsPath:
+- Posterior probability:
+- Formula source:
 
-### Criteria Not Met (key ones with reasoning)
-### Criteria With `status: not_assessed` (and why)
+## Final Classification
+- Classification status: [final classification / draft classification]
+- Classification: [PATHOGENIC / LIKELY PATHOGENIC / VUS / LIKELY BENIGN / BENIGN / not computed because route audit failed]
+- ACMG/AMP qualitative table comparison:
+- VCEP override, if any:
 
-### Overlay Route Audit
-| Criterion | Proposed evidence | Route outcome | Overlay or VCEP source | Counted? | Reason |
+## Source Assertions / Leads
+| Source | Assertion | Why not counted directly | Routed primary evidence |
+| --- | --- | --- | --- |
 
-## Detailed Evidence
-- Population: gnomAD AF, ancestry max, homozygotes, gene constraints
-- Computational: calibrated predictor context and PP3/BP4 overlay result
-- Clinical: ClinVar/CIViC/source assertions as leads, plus extracted primary evidence where available
-- Domain: InterPro domains, UniProt annotations
-- Splice: SpliceAI scores, canonical site status
-- Literature: key functional study findings
-
-## Classification Logic
-Applied rule: [e.g., "PVS1 + PM2_Supporting = Likely Pathogenic (LP rule 1)"]
-
-## Limitations
-- [Criteria not assessed and what data would be needed]
+## Missing Evidence / Not Assessed
+| Criterion | Missing field or unavailable source | Impact |
+| --- | --- | --- |
 ```
 
 ---

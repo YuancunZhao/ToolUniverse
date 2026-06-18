@@ -39,6 +39,8 @@ Final hard-stop audit: every counted evidence item in the final classification m
 
 Separate source assertions from counted evidence. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG labels belong in `source assertions` until their primary evidence is retrieved and routed. The final classification may be computed only from `current counted evidence`, not from source labels.
 
+After the hard-stop audit passes, route final evidence combination to `tooluniverse-acmg-bayesian-classification-framework` when posterior probability, Bayesian points, OddsPath, or standardized phase reporting is requested. The Bayesian framework is a final combination layer only. It must not assign evidence strengths, and it must not receive unrouted or source-only evidence.
+
 Treat these as routing failures unless corrected before final classification:
 
 - Applying `PS3` or `BS3` from literature reports, HGMD/ClinVar labels, segregation, de novo observations, case enrichment, or another author's ACMG classification without reviewing the actual functional assay.
@@ -80,6 +82,11 @@ Apply this order before assigning final evidence codes:
 6. **Evidence-specific overlay**
    - Apply the relevant ACMG overlay for the criterion being assessed.
    - VCEP or current disease-specific specifications override generic overlay guidance.
+
+7. **Final Bayesian combination**
+   - If all counted evidence has route outcome `overlay_applied` or `overlay_deferred_to_vcep`, use `tooluniverse-acmg-bayesian-classification-framework` to convert counted strengths to Tavtigian 2018 Bayesian points, OddsPath, and posterior probability.
+   - If BA1 applies, stop before Bayesian combination and report Benign by BA1 stand-alone.
+   - If a VCEP defines a different combining framework, follow the VCEP and report the generic Bayesian result only as optional context if appropriate.
 
 ---
 
@@ -160,6 +167,7 @@ Do not introduce underscore-separated variants of very-strong strength names. Fo
 - **Double counting**: if the same primary evidence supports multiple possible criteria, choose the criterion-specific path and record the other criteria as `not_used` or `no_evidence` with a reason.
 - **Literature provenance**: evidence from papers must state whether the relevant full text, supplement, and figure/table content were read. Abstract-only or inaccessible papers are source leads, not counted evidence, unless a VCEP explicitly allows abstract-level use.
 - **Figure confidence**: low-confidence or `not_interpretable` visual extraction cannot by itself upgrade evidence strength. Route it as a lead and request the source image/PDF or corroborating text.
+- **Bayesian combination**: Tavtigian-style points are assigned only after overlays have assigned evidence strengths. Do not use points to promote candidate evidence into counted evidence.
 
 ---
 
@@ -204,6 +212,7 @@ Use these safeguards whenever patient-level data, unpublished deliberations, dra
 | Baseline LoF PVS1 | PVS1 LoF decision-tree overlay. |
 | RNA/splicing PVS1 or BP7 | PVS1 splicing overlay after baseline context. |
 | Same predicted splicing event as known P/LP variant | PS1-splicing overlay, keeping evidence independent from direct RNA evidence. |
+| Final counted-evidence combination and posterior probability | Bayesian classification framework after the hard-stop audit passes. |
 
 ---
 
