@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tooluniverse.org/schemas/acmg-route-audit.schema.json",
+  "title": "ToolUniverse ACMG Route Audit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "classification_status", "items"],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "classification_status": {
+      "type": "string",
+      "enum": ["final classification", "draft classification"]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "criterion",
+          "proposed_evidence",
+          "route_outcome",
+          "guidance_authority",
+          "overlay_or_vcep_source",
+          "counted",
+          "reason"
+        ],
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "pattern": "^[A-Z0-9_/+-]+$"
+          },
+          "proposed_evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "route_outcome": {
+            "type": "string",
+            "enum": [
+              "overlay_applied",
+              "overlay_not_applicable",
+              "overlay_not_assessed",
+              "overlay_deferred_to_vcep"
+            ]
+          },
+          "trigger_policy": {
+            "type": "string",
+            "enum": [
+              "universal_baseline",
+              "variant_type_baseline",
+              "evidence_discovery"
+            ]
+          },
+          "applies_when": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "guidance_authority": {
+            "type": "string",
+            "enum": [
+              "ClinGen/SVI primary",
+              "ACMG/AMP baseline",
+              "VCEP-specific",
+              "practice/local refinement",
+              "source lead only"
+            ]
+          },
+          "overlay_or_vcep_source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "counted": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "consumed_evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

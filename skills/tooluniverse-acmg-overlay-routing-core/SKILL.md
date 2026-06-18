@@ -10,6 +10,27 @@ This skill is a lightweight coordination layer for ToolUniverse ACMG/AMP overlay
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
+For portable use by external agents, this skill also includes a lightweight compliance contract:
+
+- `overlay_registry.yaml`: machine-readable mapping from ACMG criterion groups to mandatory overlay skills, trigger policies, applies-when conditions, and baseline data-source categories.
+- `overlay_route_contract.md`: human- and agent-readable rules for baseline route planning, discovery route expansion, mandatory overlay routing, and counted-evidence audit.
+- `schemas/route_plan.schema.json`: JSON Schema for pre-assignment route plans.
+- `schemas/overlay_result.schema.json`: JSON Schema for overlay-like results.
+- `schemas/route_audit.schema.json`: JSON Schema for final counted-evidence audits.
+- `evals/evals.json`: regression cases for detecting direct evidence assignment that bypasses overlays.
+
+These files are a portable compliance layer, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. A future validator or harness may consume the same registry and schemas.
+
+Apply the compliance layer in two route-planning passes followed by audit:
+
+1. `baseline_route_plan`: before evidence assignment, add every applicable `universal_baseline` route and every `variant_type_baseline` route whose `applies_when` condition matches the variant or context.
+2. `discovery_route_expansion`: after source, database, literature, clinical, or user-provided evidence is reviewed, append `evidence_discovery` routes for newly found candidate signals.
+3. `counted_evidence_audit`: count only evidence with route outcome `overlay_applied` or `overlay_deferred_to_vcep`.
+
+Missing an applicable baseline route is a compliance failure and requires `draft classification`. Missing a discovery route is acceptable only when no triggering evidence was found and the report states the literature/source coverage.
+
+If a covered criterion is assigned strength without a valid overlay or VCEP trace, mark the report `draft classification` and move the item out of current counted evidence.
+
 Every counted evidence item should report its guidance authority. Use one of these authority labels:
 
 - `ClinGen/SVI primary`: a formal ClinGen SVI recommendation or ClinGen guidance document directly governs the evidence assignment.
@@ -35,7 +56,7 @@ For every ACMG criterion that could affect the final classification, the agent m
 
 Do not assign refined evidence strength directly in the base workflow for criteria covered by overlays, including PM2, PP3/BP4, PS1/PM5, PM1/PP2/BP1, PS3/BS3, PS4, PP1/BS4/PP4, PM3, PS2/PM6, PM4/BP3, PVS1, BA1/BS1/BS2/BP2/BP5, PP5/BP6, and dominant-negative mechanism-sensitive criteria.
 
-Final hard-stop audit: every counted evidence item in the final classification must have route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks one of those outcomes, the report must be labeled `draft classification` and the agent must not present a final ACMG classification until the missing route is corrected or the item is removed from counted evidence.
+Final hard-stop audit: every counted evidence item in the final classification must have route outcome `overlay_applied` or `overlay_deferred_to_vcep`, and every applicable baseline route must appear in the route plan. If a counted item lacks one of those outcomes, or if an applicable baseline route is missing, the report must be labeled `draft classification` and the agent must not present a final ACMG classification until the missing route is corrected or the item is removed from counted evidence.
 
 Separate source assertions from counted evidence. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG labels belong in `source assertions` until their primary evidence is retrieved and routed. The final classification may be computed only from `current counted evidence`, not from source labels.
 
@@ -61,29 +82,37 @@ Apply this order before assigning final evidence codes:
    - Normalize HGVS, transcript, consequence, genome build, and zygosity.
    - Use the base `tooluniverse-acmg-variant-classification` workflow and ToolUniverse variant annotation tools.
 
-2. **Disease-entity boundary**
+2. **Baseline route plan**
+   - Use `overlay_registry.yaml` to add `universal_baseline` routes for germline assessment, including population frequency gates, disease/mechanism boundary, PVS1 applicability, and source assertion review when source assertions are available.
+   - Add `variant_type_baseline` routes when `applies_when` matches the consequence. For missense variants, this normally includes PP3/BP4, PS1/PM5, PM1/PP2/BP1, and structured functional-discovery lookup such as MaveDB when available.
+   - Run the PVS1 applicability gate for germline assessment even when the expected result for a non-LoF missense variant is `not_applicable`.
+   - Do not wait for literature discovery before planning population, computational, comparison-variant, regional/mechanism, or PVS1 applicability routes.
+
+3. **Disease-entity boundary**
    - If the gene has multiple associated disorders, inheritance models, dosage states, phenotype spectra, or mechanisms, use `tooluniverse-acmg-multiple-disorder-context-refinement`.
    - This determines whether evidence can be aggregated or must be split by disease, inheritance, mechanism, or variant class.
 
-3. **Mechanism boundary**
+4. **Mechanism boundary**
    - If LoF/haploinsufficiency, gain-of-function, dominant-negative, antimorphic, recessive LoF, altered-product, or mixed mechanism could change evidence use, use `tooluniverse-acmg-dominant-negative-mechanism-refinement`.
    - This step routes mechanism-sensitive criteria such as PVS1, PS1/PM5, PS3/BS3, PM1/PP2/BP1/PP3, PM4/BP3, PS4, PP1/BS4, PM3, and PS2/PM6.
 
-4. **Clinical context intake**
+5. **Clinical context intake**
    - First classify the needed context as patient-level phenotype, family/proband clinical-genotype context, literature/cohort case definition, or disease-context-only information.
    - Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` only when a criterion truly needs supplied or extracted phenotype, affected/unaffected status, disease specificity, diagnostic yield, phase, family data, de novo data, alternate diagnosis, or healthy-carrier context.
    - Do not route criteria to phenotype intake merely because they need disease prevalence, inheritance, penetrance, mechanism, or a literature-defined disease entity.
    - Use criterion-specific overlays for scoring after the required clinical fields are collected.
 
-5. **Source and literature intake**
+6. **Source, database, and literature intake**
    - Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary assertion is being considered.
+   - For missense variants, check structured functional-discovery sources such as MaveDB when available. A hit routes to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; do not interpret the functional score directly as PS3/BS3.
    - Use `tooluniverse-literature-deep-research` and `tooluniverse-literature-figure-evidence-extraction` when primary evidence is embedded in papers, tables, supplements, pedigrees, traces, gels, blots, RT-PCR/minigene panels, or assay figures.
+   - Append discovery routes only after evidence appears. Examples include PP1/BS4/PP4 after pedigree or cascade-screening evidence, PS4 after cohort or enrichment evidence, PS2/PM6 after de novo/trio evidence, and PM3 after biallelic or in-trans evidence.
 
-6. **Evidence-specific overlay**
+7. **Evidence-specific overlay**
    - Apply the relevant ACMG overlay for the criterion being assessed.
    - VCEP or current disease-specific specifications override generic overlay guidance.
 
-7. **Final Bayesian combination**
+8. **Final Bayesian combination**
    - If all counted evidence has route outcome `overlay_applied` or `overlay_deferred_to_vcep`, use `tooluniverse-acmg-bayesian-classification-framework` to convert counted strengths to Tavtigian 2018 Bayesian points, OddsPath, and posterior probability.
    - If BA1 applies, stop before Bayesian combination and report Benign by BA1 stand-alone.
    - If a VCEP defines a different combining framework, follow the VCEP and report the generic Bayesian result only as optional context if appropriate.
