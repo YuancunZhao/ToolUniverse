@@ -14,20 +14,28 @@ For portable use by external agents, this skill also includes a lightweight comp
 
 - `overlay_registry.yaml`: machine-readable mapping from ACMG criterion groups to mandatory overlay skills, trigger policies, applies-when conditions, and baseline data-source categories.
 - `overlay_route_contract.md`: human- and agent-readable rules for baseline route planning, discovery route expansion, mandatory overlay routing, and counted-evidence audit.
+- `schemas/bundle_route_plan.schema.json`: JSON Schema for compact bundle-level execution planning before detailed route expansion.
 - `schemas/route_plan.schema.json`: JSON Schema for pre-assignment route plans.
 - `schemas/overlay_result.schema.json`: JSON Schema for overlay-like results.
 - `schemas/route_audit.schema.json`: JSON Schema for final counted-evidence audits.
+- `schemas/coverage_audit.schema.json`: JSON Schema for data-source coverage, query hits, and discovery routes not triggered because coverage found no signal.
+- `schemas/evidence_compatibility.schema.json`: JSON Schema for final-combine evidence compatibility resolution.
 - `evals/evals.json`: regression cases for detecting direct evidence assignment that bypasses overlays.
 
 These files are a portable compliance layer, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. A future validator or harness may consume the same registry and schemas.
 
-Apply the compliance layer in two route-planning passes followed by audit:
+Apply the compliance layer in two route-planning passes followed by coverage, audit, and compatibility resolution:
 
-1. `baseline_route_plan`: before evidence assignment, add every applicable `universal_baseline` route and every `variant_type_baseline` route whose `applies_when` condition matches the variant or context.
-2. `discovery_route_expansion`: after source, database, literature, clinical, or user-provided evidence is reviewed, append `evidence_discovery` routes for newly found candidate signals.
-3. `counted_evidence_audit`: count only evidence with route outcome `overlay_applied` or `overlay_deferred_to_vcep`.
+1. `bundle_route_plan`: optionally emit compact bundle rows with `schemas/bundle_route_plan.schema.json` to decide which route groups need expansion.
+2. `baseline_route_plan`: before evidence assignment, add every applicable `universal_baseline` route and every `variant_type_baseline` route whose `applies_when` condition matches the variant or context.
+3. `coverage_audit`: query or explicitly mark unavailable the required baseline/discovery data-source categories, and record hits, no-hits, triggered routes, and routes not triggered.
+4. `discovery_route_expansion`: after source, database, literature, clinical, or user-provided evidence is reviewed, append `evidence_discovery` routes for newly found candidate signals.
+5. `counted_evidence_audit`: count only evidence with route outcome `overlay_applied` or `overlay_deferred_to_vcep`.
+6. `evidence_compatibility_resolution`: before final ACMG qualitative or Bayesian combination, resolve incompatible, duplicated, capped, or context-split evidence.
 
-Missing an applicable baseline route is a compliance failure and requires `draft classification`. Missing a discovery route is acceptable only when no triggering evidence was found and the report states the literature/source coverage.
+Agents may plan these routes through the **Route Bundle Quick Planner** below. Bundle planning is an operational shortcut for efficiency and readability; it does not replace `overlay_registry.yaml`, route audit, coverage audit, evidence compatibility resolution, or evidence-specific overlay rules.
+
+Missing an applicable baseline route is a compliance failure and requires `draft classification`. Missing a discovery route is acceptable only when no triggering evidence was found and the report includes coverage audit rows supporting that absence.
 
 If a covered criterion is assigned strength without a valid overlay or VCEP trace, mark the report `draft classification` and move the item out of current counted evidence.
 
@@ -60,7 +68,11 @@ Final hard-stop audit: every counted evidence item in the final classification m
 
 Separate source assertions from counted evidence. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG labels belong in `source assertions` until their primary evidence is retrieved and routed. The final classification may be computed only from `current counted evidence`, not from source labels.
 
-After the hard-stop audit passes, route final evidence combination to `tooluniverse-acmg-bayesian-classification-framework` when posterior probability, Bayesian points, OddsPath, or standardized phase reporting is requested. The Bayesian framework is a final combination layer only. It must not assign evidence strengths, and it must not receive unrouted or source-only evidence.
+Source-label fan-out is controlled. A ClinVar, HGMD, LOVD, VCEP, laboratory, or paper classification label by itself routes to `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` only. Fan-out to PS3/BS3, PM1, PM2, PM5, PP3/BP4, PP1/BS4/PP4, PS4, PM3, or PS2/PM6 requires explicit ACMG criterion codes in the source, primary-evidence keywords, or retrievable primary evidence. Without those, keep the assertion as `source lead only`.
+
+After the hard-stop audit passes, run Evidence Compatibility Resolution before any final combination. The compatibility gate outputs `current_counted_evidence_resolved`, `not_used_due_to_overlap`, `caps_applied`, `context_splits`, and `unresolved_conflicts`. Only `current_counted_evidence_resolved` may enter ACMG/AMP qualitative combination or `tooluniverse-acmg-bayesian-classification-framework`. If `unresolved_conflicts` is not empty, the report remains `draft classification` and no final posterior probability should be reported.
+
+Route final evidence combination to `tooluniverse-acmg-bayesian-classification-framework` only after compatibility resolution passes. The Bayesian framework is a final combination layer only. It must not assign evidence strengths, and it must not receive unrouted, source-only, or unresolved-conflict evidence.
 
 Treat these as routing failures unless corrected before final classification:
 
@@ -86,7 +98,8 @@ Apply this order before assigning final evidence codes:
    - Use `overlay_registry.yaml` to add `universal_baseline` routes for germline assessment, including population frequency gates, disease/mechanism boundary, PVS1 applicability, and source assertion review when source assertions are available.
    - Add `variant_type_baseline` routes when `applies_when` matches the consequence. For missense variants, this normally includes PP3/BP4, PS1/PM5, PM1/PP2/BP1, and structured functional-discovery lookup such as MaveDB when available.
    - Run the PVS1 applicability gate for germline assessment even when the expected result for a non-LoF missense variant is `not_applicable`.
-   - Do not wait for literature discovery before planning population, computational, comparison-variant, regional/mechanism, or PVS1 applicability routes.
+   - Include `enforcement_level`, `route_kind`, and `expected_default_status` in route-plan rows when structured output is available.
+   - Do not wait for literature discovery before planning population, computational, comparison-variant, regional/mechanism, structured functional-discovery, or PVS1 applicability routes.
 
 3. **Disease-entity boundary**
    - If the gene has multiple associated disorders, inheritance models, dosage states, phenotype spectra, or mechanisms, use `tooluniverse-acmg-multiple-disorder-context-refinement`.
@@ -102,20 +115,58 @@ Apply this order before assigning final evidence codes:
    - Do not route criteria to phenotype intake merely because they need disease prevalence, inheritance, penetrance, mechanism, or a literature-defined disease entity.
    - Use criterion-specific overlays for scoring after the required clinical fields are collected.
 
-6. **Source, database, and literature intake**
+6. **Source, database, and literature coverage**
    - Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary assertion is being considered.
-   - For missense variants, check structured functional-discovery sources such as MaveDB when available. A hit routes to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; do not interpret the functional score directly as PS3/BS3.
+   - For missense variants, check structured functional-discovery sources such as MaveDB when available. A hit routes to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; no hit is recorded in coverage audit and should not force a PS3/BS3 overlay result. Do not interpret the functional score directly as PS3/BS3.
    - Use `tooluniverse-literature-deep-research` and `tooluniverse-literature-figure-evidence-extraction` when primary evidence is embedded in papers, tables, supplements, pedigrees, traces, gels, blots, RT-PCR/minigene panels, or assay figures.
    - Append discovery routes only after evidence appears. Examples include PP1/BS4/PP4 after pedigree or cascade-screening evidence, PS4 after cohort or enrichment evidence, PS2/PM6 after de novo/trio evidence, and PM3 after biallelic or in-trans evidence.
+   - Emit coverage audit rows compatible with `schemas/coverage_audit.schema.json` for population, computational, source assertion, literature, functional database, disease context, mechanism context, and clinical context coverage when those categories determine whether routes are mandatory.
 
 7. **Evidence-specific overlay**
    - Apply the relevant ACMG overlay for the criterion being assessed.
    - VCEP or current disease-specific specifications override generic overlay guidance.
 
-8. **Final Bayesian combination**
-   - If all counted evidence has route outcome `overlay_applied` or `overlay_deferred_to_vcep`, use `tooluniverse-acmg-bayesian-classification-framework` to convert counted strengths to Tavtigian 2018 Bayesian points, OddsPath, and posterior probability.
+8. **Evidence compatibility resolution**
+   - Use this routing core as the final-combine compatibility gate after the route audit passes.
+   - Resolve hard incompatibilities, same-primary-evidence conflicts, mechanism mismatches, context splits, and caps before final combination.
+   - Output `current_counted_evidence_resolved`, `not_used_due_to_overlap`, `caps_applied`, `context_splits`, and `unresolved_conflicts` using `schemas/evidence_compatibility.schema.json`.
+   - If unresolved conflicts remain, label the report `draft classification` and do not run final qualitative or Bayesian combination.
+
+9. **Final Bayesian combination**
+   - If all counted evidence has route outcome `overlay_applied` or `overlay_deferred_to_vcep`, and compatibility resolution has produced `current_counted_evidence_resolved` with no unresolved conflicts, use `tooluniverse-acmg-bayesian-classification-framework` to convert resolved counted strengths to Tavtigian 2018 Bayesian points, OddsPath, and posterior probability.
    - If BA1 applies, stop before Bayesian combination and report Benign by BA1 stand-alone.
    - If a VCEP defines a different combining framework, follow the VCEP and report the generic Bayesian result only as optional context if appropriate.
+
+---
+
+## Route Bundle Quick Planner
+
+Use route bundles to keep variant interpretation efficient. A bundle is a compact plan row that expands to the required overlays and coverage checks. It is acceptable to report bundle-level planning first, then expand only triggered bundles into detailed route-plan rows.
+
+| Bundle | Trigger | Required overlays / checks | Evidence consumed | Output artifact | Stop condition |
+| --- | --- | --- | --- | --- | --- |
+| `baseline_context_bundle` | Any germline ACMG assessment | `tooluniverse-acmg-multiple-disorder-context-refinement`; `tooluniverse-acmg-dominant-negative-mechanism-refinement` when mechanism-sensitive evidence is possible | Disease, inheritance, mechanism, transcript, gene-disease validity, dosage context | Disease/mechanism context and context splits | Target disease or mechanism cannot be resolved; report `not_assessed` for mechanism-sensitive criteria |
+| `population_frequency_bundle` | Any germline ACMG assessment | `tooluniverse-acmg-ba1-exception-list-refinement`; `tooluniverse-acmg-pm2-absence-rarity-refinement`; `tooluniverse-acmg-benign-context-refinement` when BA1/BS1/BS2/BP2/BP5 may apply | gnomAD/ClinVar frequency, ancestry, disease prevalence/penetrance, coverage adequacy | BA1/BS1/BS2/PM2/BP2/BP5 route outcomes | Valid BA1 short-circuits PM2/BS1 for the same context |
+| `consequence_lof_bundle` | Nonsense, frameshift, canonical splice, start-loss, exon-level CNV, whole-gene deletion, or other LoF-like consequence | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement`; route CNV/SV evidence through `tooluniverse-structural-variant-analysis` as intake only | Consequence, transcript structure, NMD branch, rescue transcript, LoF/HI mechanism | Baseline PVS1 applicability and strength outcome | LoF/HI mechanism unsupported, rescue transcript preserves relevant function, or consequence is not LoF-like |
+| `splice_bundle` | Canonical splice, near-splice, deep intronic splice prediction, RNA assay, published RNA/splicing evidence | `tooluniverse-acmg-pvs1-splicing-refinement` only for RNA assay or observed transcript consequence; `tooluniverse-acmg-ps1-splicing-similarity-refinement` for independent same-event comparison evidence | SpliceAI and similar predictions, RNA assay, transcript event, comparison variant | Splicing prediction context, PVS1/RNA or BP7/RNA result, PS1-splicing result | SpliceAI-only evidence does not enter RNA-assay PVS1; route prediction-only evidence separately |
+| `missense_bundle` | Missense or amino-acid substitution consequence | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`; `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement`; `tooluniverse-acmg-pm1-regional-missense-constraint-refinement`; structured functional discovery such as MaveDB | Calibrated predictor, same residue/amino acid comparison, regional constraint, hotspot/domain, structured functional hit | PP3/BP4, PS1/PM5, PM1/PP2/BP1, PS3/BS3 discovery routes | No calibrated predictor/VCEP threshold, source-only comparison, broad domain only, or no structured functional hit |
+| `protein_length_bundle` | In-frame insertion/deletion, stop-loss, altered product, repeat-region indel | `tooluniverse-acmg-pm4-bp3-protein-length-refinement`; mechanism overlay when altered-product or dominant-negative context matters | Protein length, repeat/low-complexity region, critical domain/residue, stop-loss/nonstop decay context | PM4/BP3 route outcome or PVS1/PM4 routing decision | Same consequence already consumed by PVS1, nonfunctional repeat supports BP3, or altered-product mechanism unsupported |
+| `clinical_observation_bundle` | De novo, segregation, affected/unaffected relatives, biallelic phase, healthy carriers, alternate diagnosis, phenotype specificity | `tooluniverse-acmg-de-novo-evidence-refinement`; `tooluniverse-acmg-pp1-segregation-refinement`; `tooluniverse-acmg-pm3-in-trans-refinement`; phenotype-dependent intake as needed | Trio/parentage, pedigree, probands, phase, affected status, phenotype, alternate diagnosis | PS2/PM6, PP1/BS4/PP4, PM3, BS2/BP2/BP5 route outcomes | Missing clinical fields; same individual would be reused across incompatible criteria |
+| `literature_functional_bundle` | Functional assay, case-control/cohort/meta-analysis, case series, figure/table/supplement evidence, paper ACMG labels | `tooluniverse-literature-deep-research`; `tooluniverse-literature-figure-evidence-extraction`; `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; `tooluniverse-acmg-ps4-case-enrichment-refinement`; `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` for source labels | Full text, supplements, figures, assay design, controls, cases/controls, OR/CI, source assertions | Literature provenance, PS3/BS3 or PS4 route outcomes, source leads | Full text/supplement unavailable after retrieval attempt, abstract-only details, low-confidence figure evidence, or source labels without primary evidence |
+| `cnv_sv_bundle` | Deletion, duplication, inversion, translocation, complex rearrangement, exon-level event, whole-gene CNV | `tooluniverse-structural-variant-analysis` for SV/CNV intake; final ACMG evidence through PVS1, PM4/BP3, PM2/BA1/BS1, PS2/PM6, PS4, PP1/BS4/PP4, and compatibility resolution as applicable | Coordinates, SV type, reciprocal overlap, gene content, dosage, breakpoint, inheritance, population SVs | SV evidence summary and ACMG route candidates | Do not produce standalone germline ACMG final classification from this bundle alone |
+| `final_combine_bundle` | After overlay route audit passes | Evidence Compatibility Resolution; `tooluniverse-acmg-bayesian-classification-framework` after resolved evidence set | Routed counted evidence and source leads | `current_counted_evidence_resolved`, qualitative ACMG result, Bayesian points/posterior | Missing route audit, missing compatibility artifact, unresolved conflicts, valid BA1 stand-alone gate |
+
+Minimum bundle-plan output:
+
+```markdown
+Bundle route plan:
+| Bundle | Trigger found? | Required overlays/checks | Coverage required | Status | Reason |
+| --- | --- | --- | --- | --- | --- |
+```
+
+Use detailed route-plan rows compatible with `schemas/route_plan.schema.json` for every bundle that is triggered, counted, or needed to justify `not_assessed` / `not_applicable`.
+
+Structured bundle-plan output should be compatible with `schemas/bundle_route_plan.schema.json`. Bundle rows may list non-ACMG intake steps in `required_checks`, such as `tooluniverse-structural-variant-analysis` for `cnv_sv_bundle`. Counted evidence must still come from expanded ACMG overlay route rows or VCEP-specific route outcomes, never from the bundle row itself.
 
 ---
 
@@ -164,6 +215,22 @@ ACMG route audit:
 
 Allowed route outcomes are `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, and `overlay_deferred_to_vcep`. Only `overlay_applied` and `overlay_deferred_to_vcep` may be counted.
 
+For final-combine compatibility, include this block before qualitative or Bayesian classification:
+
+```markdown
+Evidence compatibility resolution:
+- current_counted_evidence_resolved: [criteria retained for final combination]
+- not_used_due_to_overlap: [criteria removed because another criterion consumed the evidence]
+- caps_applied: [PM1+PP3, PP1+PP4, PM3 homozygous, PS2/PM6 heterogeneity, or VCEP caps]
+- context_splits: [disease / inheritance / mechanism / transcript splits]
+- unresolved_conflicts: [conflicts that block final classification]
+
+| Conflict group | Evidence items | Conflict type | Resolution | Kept evidence | Removed/capped evidence | Status | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+```
+
+Use `schemas/evidence_compatibility.schema.json` for machine-checkable output. If a conflict cannot be resolved, set `resolution: unresolved_draft_only`, leave the affected item out of `current_counted_evidence_resolved`, and keep `classification_status: draft classification`.
+
 ---
 
 ## Strength Labels
@@ -197,6 +264,22 @@ Do not introduce underscore-separated variants of very-strong strength names. Fo
 - **Literature provenance**: evidence from papers must state whether the relevant full text, supplement, and figure/table content were read. Abstract-only or inaccessible papers are source leads, not counted evidence, unless a VCEP explicitly allows abstract-level use.
 - **Figure confidence**: low-confidence or `not_interpretable` visual extraction cannot by itself upgrade evidence strength. Route it as a lead and request the source image/PDF or corroborating text.
 - **Bayesian combination**: Tavtigian-style points are assigned only after overlays have assigned evidence strengths. Do not use points to promote candidate evidence into counted evidence.
+
+### Final-Combine Compatibility Matrix
+
+Apply these generic choices unless a current VCEP explicitly permits a different handling:
+
+- **Frequency**: valid BA1 excludes PM2 and BS1 for the same disease context. BS1 or BS2 excludes PM2 for the same frequency or healthy-carrier rationale.
+- **Disease/mechanism context**: do not combine evidence across mutually exclusive disorders, inheritance models, mechanisms, or transcript contexts. Use `split_by_context` when multiple-disorder refinement requires separate classifications.
+- **PVS1 and splicing**: canonical splice PVS1 excludes same-mechanism PP3. `PVS1_Strength (RNA)` excludes PS3 and same-mechanism PP3/BP4. `BP7_Strong (RNA)` excludes BS3 and contradicted PS1-splicing. Direct RNA evidence supersedes predicted same-event PS1-splicing unless independent comparison evidence remains.
+- **PVS1, PM4, and CNV/SV**: PVS1 and PM4 cannot use the same protein-length or LoF consequence. Whole-gene deletion should not be counted both as PVS1 and separate CNV dosage evidence unless the downstream framework explicitly permits the split. PVS1 is not countable when only dominant-negative or gain-of-function mechanism is established.
+- **Functional and computational evidence**: PS3/BS3 excludes the same assay, DMS, or MAVE source as PP3/BP4. Multiple functional assays are not stacked unless VCEP, formal OddsPath, or a validated combination rule permits it. Comparable conflicting assays yield no PS3/BS3.
+- **Missense regional and prediction evidence**: PP2 and BP1 are mutually exclusive. PM1 versus PP2 follows the PM1 overlay priority. PM1 plus PP3 is capped at Strong contribution. PM1, PM5, and PM4 cannot reuse the same residue/domain rationale unless evidence sources are independent.
+- **Protein comparison**: PS1 and PM5 are mutually exclusive for the same comparison relationship. Protein-level PS1/PM5 cannot use comparison variants whose pathogenicity is actually splicing, DNA-level, RNA-level, or another non-amino-acid mechanism.
+- **Clinical observations**: the same proband or individual cannot support PS4 plus PM3, PS2/PM6, PP1, or PP4. Recessive biallelic probands route to PM3; de novo observations route to PS2/PM6; family segregation routes to PP1/BS4.
+- **Phenotype and segregation**: PP1/PP4 combined evidence is capped at +5.0. Do not combine Biesecker 2024 points with informative-meioses fallback for the same pedigree. Phenotype specificity consumed by PS2/PM6 or a VCEP PS4 rule cannot also become PP4 unless explicitly allowed.
+- **PM3 and de novo caps**: block PM3 circularity; de-duplicate repeated or related probands; apply the default PM3 homozygous cap of 1.0 unless VCEP says otherwise; apply the PS2/PM6 high-genetic-heterogeneity cap of 1 point.
+- **Source and provenance**: PP5/BP6 source labels are not counted when underlying primary evidence is counted. Abstract-only evidence, inaccessible full text, unread supplements, and low-confidence figure/OCR evidence cannot enter `current_counted_evidence_resolved`.
 
 ---
 
@@ -241,7 +324,8 @@ Use these safeguards whenever patient-level data, unpublished deliberations, dra
 | Baseline LoF PVS1 | PVS1 LoF decision-tree overlay. |
 | RNA/splicing PVS1 or BP7 | PVS1 splicing overlay after baseline context. |
 | Same predicted splicing event as known P/LP variant | PS1-splicing overlay, keeping evidence independent from direct RNA evidence. |
-| Final counted-evidence combination and posterior probability | Bayesian classification framework after the hard-stop audit passes. |
+| Final counted-evidence compatibility | Evidence compatibility resolution in this routing core after the route audit passes. |
+| Final counted-evidence combination and posterior probability | Bayesian classification framework after compatibility resolution passes. |
 
 ---
 

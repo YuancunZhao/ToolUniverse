@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tooluniverse.org/schemas/acmg-coverage-audit.schema.json",
+  "title": "ToolUniverse ACMG Coverage Audit",
+  "$comment": "This schema records which baseline and discovery data sources were queried, which hits triggered overlay routes, and which discovery routes were absent because no triggering evidence was found. It validates field shape only; hard-stop invariants are enforced by overlay_route_contract.md and evals/evals.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "coverage_audit"],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "coverage_audit": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_category",
+          "queried_sources",
+          "query_status",
+          "hits",
+          "triggered_routes",
+          "not_triggered_routes",
+          "reason"
+        ],
+        "properties": {
+          "source_category": {
+            "type": "string",
+            "enum": [
+              "population",
+              "computational",
+              "source_assertion",
+              "literature",
+              "functional_database",
+              "disease_context",
+              "mechanism_context",
+              "clinical_context",
+              "route_audit",
+              "compatibility"
+            ]
+          },
+          "queried_sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "query_status": {
+            "type": "string",
+            "enum": ["success", "no_hit", "unavailable", "failed", "not_applicable"]
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/hitItem"
+            }
+          },
+          "triggered_routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/routeReference"
+            }
+          },
+          "not_triggered_routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/routeReference"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hitItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "hit_type", "summary"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hit_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_level": {
+          "type": "string",
+          "enum": [
+            "title",
+            "abstract",
+            "full_text",
+            "supplement",
+            "figure",
+            "structured_database",
+            "user_input",
+            "not_applicable"
+          ]
+        },
+        "counting_allowed_without_overlay": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "routeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_group", "overlay_skill", "reason"],
+      "properties": {
+        "criterion_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "overlay_skill": {
+          "type": "string",
+          "pattern": "^tooluniverse-acmg-[a-z0-9-]+$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

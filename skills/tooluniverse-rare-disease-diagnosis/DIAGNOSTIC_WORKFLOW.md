@@ -431,13 +431,15 @@ def check_population_frequency(tu, variant_id):
 
 ### 4.3 Computational Pathogenicity Prediction
 
-Use multiple prediction tools for VUS interpretation:
+Use multiple prediction tools for VUS retrieval and orientation. Do not assign
+ACMG evidence strength in this diagnostic workflow; route prediction evidence to
+`tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or a current VCEP.
 
 ```python
 def comprehensive_vus_prediction(tu, variant_info):
     """
-    Combine multiple prediction tools for VUS classification.
-    Critical for rare disease variants not in ClinVar.
+    Retrieve multiple prediction tools for VUS orientation.
+    ACMG PP3/BP4 strength is assigned only by the PP3/BP4 overlay or VCEP.
     """
     predictions = {}
 
@@ -453,7 +455,8 @@ def comprehensive_vus_prediction(tu, variant_info):
         predictions['cadd'] = {
             'score': cadd['data'].get('phred_score'),
             'interpretation': cadd['data'].get('interpretation'),
-            'acmg': 'PP3' if cadd['data'].get('phred_score', 0) >= 20 else 'neutral'
+            'prediction_context': 'deleterious_orientation' if cadd['data'].get('phred_score', 0) >= 20 else 'neutral_orientation',
+            'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement'
         }
 
     # 2. AlphaMissense - DeepMind pathogenicity
@@ -467,9 +470,8 @@ def comprehensive_vus_prediction(tu, variant_info):
             predictions['alphamissense'] = {
                 'score': am['data'].get('pathogenicity_score'),
                 'classification': classification,
-                'acmg': 'PP3 (strong)' if classification == 'pathogenic' else (
-                    'BP4 (strong)' if classification == 'benign' else 'neutral'
-                )
+                'prediction_context': classification,
+                'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement'
             }
 
     # 2b. ESMC-6B SAE - Mechanism of effect
@@ -500,9 +502,8 @@ def comprehensive_vus_prediction(tu, variant_info):
                     'summary': mech['data']['mechanism_summary'],
                     'lost_categories': mech['data']['lost_feature_categories'],
                     'gained_categories': mech['data']['gained_feature_categories'],
-                    # Map to ACMG: catalytic / ligand-binding / ptm loss is
-                    # mechanistic evidence supporting PP3 (does not replace
-                    # functional study PS3).
+                    # Mechanistic orientation only. Route any proposed ACMG use
+                    # through PM1/PP3/BP4 overlays or a current VCEP.
                 }
 
     # 3. EVE - Evolutionary prediction
@@ -518,7 +519,8 @@ def comprehensive_vus_prediction(tu, variant_info):
             predictions['eve'] = {
                 'score': eve_scores[0].get('eve_score'),
                 'classification': eve_scores[0].get('classification'),
-                'acmg': 'PP3' if eve_scores[0].get('eve_score', 0) > 0.5 else 'BP4'
+                'prediction_context': 'deleterious_orientation' if eve_scores[0].get('eve_score', 0) > 0.5 else 'benign_orientation',
+                'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement'
             }
 
     # 4. SpliceAI - Splice variant prediction
@@ -532,50 +534,43 @@ def comprehensive_vus_prediction(tu, variant_info):
         interpretation = splice['data'].get('interpretation', '')
 
         if max_score >= 0.8:
-            splice_acmg = 'PP3 (strong) - high splice impact'
+            splice_context = 'high_splice_prediction'
         elif max_score >= 0.5:
-            splice_acmg = 'PP3 (moderate) - splice impact'
+            splice_context = 'moderate_splice_prediction'
         elif max_score >= 0.2:
-            splice_acmg = 'PP3 (supporting) - possible splice effect'
+            splice_context = 'low_splice_prediction'
         else:
-            splice_acmg = 'BP7 (if synonymous) - no splice impact'
+            splice_context = 'low_splice_prediction_context'
 
         predictions['spliceai'] = {
             'max_delta_score': max_score,
             'interpretation': interpretation,
             'scores': splice['data'].get('scores', []),
-            'acmg': splice_acmg
+            'prediction_context': splice_context,
+            'candidate_route': 'PP3/BP4 prediction pathway or PS1-splicing comparison pathway; do not route SpliceAI-only evidence to PVS1_RNA without RNA assay or observed transcript evidence'
         }
-
-    # Consensus for PP3/BP4
-    damaging = sum(1 for p in predictions.values() if 'PP3' in p.get('acmg', ''))
-    benign = sum(1 for p in predictions.values() if 'BP4' in p.get('acmg', ''))
 
     return {
         'predictions': predictions,
-        'consensus': {
-            'damaging_count': damaging,
-            'benign_count': benign,
-            'pp3_applicable': damaging >= 2 and benign == 0,
-            'bp4_applicable': benign >= 2 and damaging == 0
-        }
+        'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement',
+        'route_status': 'candidate_only_until_overlay_or_vcep'
     }
 ```
 
-### 4.4 ACMG Classification Criteria
+### 4.4 ACMG Overlay Routing
 
-| Evidence Type | Criteria | Weight |
+| Candidate evidence | Required route | Output here |
 |---------------|----------|--------|
-| **PVS1** | Null variant in gene where LOF is mechanism | Very Strong |
-| **PS1** | Same amino acid change as established pathogenic | Strong |
-| **PM2** | Absent from population databases | Moderate |
-| **PP3** | Computational evidence supports deleterious (AlphaMissense, CADD, EVE, SpliceAI) | Supporting |
-| **BA1** | Allele frequency >5% | Benign standalone |
+| Predicted LoF or canonical splice consequence | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` first; RNA refinement only with RNA assay or observed transcript evidence | Candidate route |
+| Same amino-acid or same-residue comparison | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` | Candidate route |
+| Absent or rare population frequency | `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting if applied | Candidate route |
+| Computational missense or splice prediction | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`, PS1-splicing comparison, or VCEP | Prediction context |
+| BA1/BS1/BS2/BP2/BP5 benign context | BA1 exception list and benign-context overlays | Candidate route |
 
-**Enhanced PP3 Evidence**:
-- **AlphaMissense pathogenic** (>0.564) = Strong PP3 support (~90% accuracy)
-- **CADD >=20** + **EVE >0.5** = Multiple concordant predictions
-- Agreement from 2+ predictors strengthens PP3 evidence
+Do not compute final ACMG classification in this diagnostic workflow. Send the
+candidate evidence table to `tooluniverse-acmg-variant-classification`, then use
+the routing core, evidence compatibility resolution, and Bayesian framework only
+after overlays have assigned valid counted evidence.
 
 ---
 

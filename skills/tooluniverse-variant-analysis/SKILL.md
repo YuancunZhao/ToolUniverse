@@ -311,7 +311,7 @@ Use python_implementation for standard stats (Ti/Tv, type distributions, per-sam
 
 **See references/annotation_guide.md for detailed examples**
 
-### Phase 7: Structural Variant & CNV Analysis
+### Phase 7: Structural Variant & CNV Intake
 
 **When VCF contains SV calls** (SVTYPE=DEL/DUP/INV/BND):
 
@@ -326,11 +326,11 @@ Use python_implementation for standard stats (Ti/Tv, type distributions, per-sam
    gnomad_sv = gnomad_get_sv_by_gene(gene_symbol="BRCA1")
    # Returns: SVs with AF, AC, AN
    ```
-4. **Classify pathogenicity**:
-   - Pathogenic: Deletion + HI score = 3, AF < 0.0001
-   - Likely Pathogenic: Deletion + HI score = 2, AF < 0.001
-   - VUS: HI/TS score = 0-1, AF 0.001-0.01
-   - Benign: AF > 0.01
+4. **Generate route candidates, not final ACMG calls**:
+   - Whole-gene/exon deletion or LoF-like breakpoint -> `consequence_lof_bundle` and PVS1 LoF decision-tree overlay
+   - In-frame or altered-product consequence -> `protein_length_bundle` and PM4/BP3 overlay
+   - Frequency context -> BA1/BS1/PM2/benign-context overlays
+   - De novo, segregation, case enrichment, functional assay, or source assertion -> corresponding ACMG overlay through `tooluniverse-acmg-overlay-routing-core`
 
 **ClinGen dosage score interpretation**:
 - **3**: Sufficient evidence for dosage pathogenicity (HIGH impact)
@@ -339,7 +339,9 @@ Use python_implementation for standard stats (Ti/Tv, type distributions, per-sam
 - **0**: No evidence (MINIMAL impact)
 - **40**: Dosage sensitivity unlikely
 
-**See references/sv_cnv_analysis.md for full SV workflow**
+This skill should not produce final germline ACMG classification for SVs. Use `tooluniverse-structural-variant-analysis` for SV/CNV evidence intake and `tooluniverse-acmg-variant-classification` for final routed classification.
+
+**See references/sv_cnv_analysis.md for full SV evidence-intake workflow**
 
 ---
 
@@ -496,4 +498,3 @@ Filter via `df[df['Sequence Ontology (Combined)'].isin(CODING)]`, NOT by excludi
 **Sanity**: synonymous variants are typically about half of coding variants in human exomes. If your "synonymous fraction" is much lower than ~0.4, your denominator likely still includes intronic/UTR — restrict to CODING and recompute.
 
 Bundled tool: `tu run coding_variant_fraction '{"file":"variants.xlsx","vaf_threshold":0.3,"annotation":"synonymous_variant","header_rows":2}'` — handles 2-row headers and the CODING allowlist automatically.
-

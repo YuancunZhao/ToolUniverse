@@ -226,7 +226,7 @@ If a primary tool fails, use these alternatives:
 
 **Truncating Variant**: Use `tooluniverse-acmg-overlay-routing-core` first when disease boundary or mechanism is unclear. Then route PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning strength. If RNA assay or Walker 2023 splicing-specific evidence is present, apply `tooluniverse-acmg-pvs1-splicing-refinement` after the baseline LoF branch is identified.
 
-**Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential, and route the result to the relevant splicing overlay. Prediction-only evidence remains separate from RNA assay evidence; use `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA/splicing evidence affects PVS1 or BP7, and use `tooluniverse-acmg-ps1-splicing-similarity-refinement` only for independent comparison-variant evidence.
+**Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential, and route the result to the relevant splicing overlay. Prediction-only evidence remains separate from RNA assay evidence. Use `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA/splicing evidence affects PVS1 or RNA no-impact evidence. Use `tooluniverse-acmg-ps1-splicing-similarity-refinement` only for independent comparison-variant evidence.
 
 ---
 

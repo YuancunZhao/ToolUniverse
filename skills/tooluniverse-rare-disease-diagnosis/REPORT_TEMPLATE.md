@@ -252,30 +252,34 @@ Templates and example outputs for each phase of the rare disease diagnosis workf
 | Gene | FBN1 | Marfan syndrome gene |
 | Consequence | Missense | Amino acid change |
 | ClinVar | VUS | Uncertain significance |
-| gnomAD AF | 0.000004 | Ultra-rare (PM2) |
+| gnomAD AF | 0.000004 | Ultra-rare; route to PM2 overlay |
 
 ### 4.2 Computational Predictions
 
-| Predictor | Score | Classification | ACMG Support |
+| Predictor | Score | Classification | ACMG route |
 |-----------|-------|----------------|--------------|
-| **AlphaMissense** | 0.78 | Pathogenic | PP3 (strong) |
-| **CADD PHRED** | 28.5 | Top 0.1% deleterious | PP3 |
-| **EVE** | 0.72 | Likely pathogenic | PP3 |
+| **AlphaMissense** | 0.78 | Pathogenic orientation | PP3/BP4 overlay or VCEP; not counted here |
+| **CADD PHRED** | 28.5 | Deleterious orientation | PP3/BP4 overlay or VCEP; not counted here |
+| **EVE** | 0.72 | Likely pathogenic orientation | PP3/BP4 overlay or VCEP; not counted here |
 
-**Consensus**: 3/3 predictors concordant damaging -> **Strong PP3 support**
+**Prediction summary**: concordant damaging orientation. PP3/BP4 strength is not
+assigned in this diagnostic template; route to
+`tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`.
 
 *Source: AlphaMissense, CADD API, EVE via Ensembl VEP*
 
-### 4.3 ACMG Evidence Summary
+### 4.3 ACMG Candidate Route Summary
 
-| Criterion | Evidence | Strength |
-|-----------|----------|----------|
-| PM2 | Absent from gnomAD (AF < 0.00001) | Moderate |
-| PP3 | AlphaMissense + CADD + EVE concordant | Supporting (strong) |
-| PP4 | Phenotype highly specific for Marfan | Supporting |
-| PS4 | Multiple affected family members | Strong |
+| Candidate | Evidence lead | Required overlay | Route status |
+|-----------|----------|----------|----------|
+| PM2 | Absent/rare in gnomAD | `tooluniverse-acmg-pm2-absence-rarity-refinement` | candidate_only |
+| PP3/BP4 | AlphaMissense, CADD, and EVE prediction context | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP | candidate_only |
+| PP4 | Phenotype appears specific for Marfan | `tooluniverse-acmg-phenotype-dependent-evidence-refinement` or PP1/BS4/PP4 combined overlay if family evidence is reused | candidate_only |
+| PS4/PP1 | Affected relatives or family reports | Route case enrichment to PS4 overlay and segregation to PP1 overlay; do not use the same individuals twice | candidate_only |
 
-**Preliminary Classification**: Likely Pathogenic (1 Strong + 1 Moderate + 2 Supporting)
+**ACMG classification status**: Not calculated in this template. Use
+`tooluniverse-acmg-variant-classification`, route audit, Evidence Compatibility
+Resolution, and then Bayesian/qualitative final combine if eligible.
 
 *Source: ClinVar, gnomAD, AlphaMissense, CADD, EVE*
 ```

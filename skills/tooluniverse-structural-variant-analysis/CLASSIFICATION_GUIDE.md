@@ -1,217 +1,62 @@
-# SV Classification Guide: ACMG-Adapted Criteria
+# SV/CNV Evidence Routing Guide
 
-Reference material for structural variant pathogenicity classification using ACMG-adapted criteria.
+This guide supports structural-variant evidence intake. It does not define a standalone germline ACMG classifier.
 
----
+Final germline pathogenicity assessment must be performed by `tooluniverse-acmg-variant-classification` after overlay route audit, Evidence Compatibility Resolution, and final combine.
 
 ## SV Types
 
-| Type | Abbreviation | Description | Molecular Effect |
-|------|--------------|-------------|------------------|
-| **Deletion** | DEL | Loss of genomic segment | Haploinsufficiency, gene disruption |
-| **Duplication** | DUP | Gain of genomic segment | Triplosensitivity, gene dosage imbalance |
-| **Inversion** | INV | Segment flipped in orientation | Gene disruption at breakpoints, position effects |
-| **Translocation** | TRA | Segment moved to different chromosome | Gene fusions, disruption, position effects |
-| **Complex** | CPX | Multiple rearrangement types | Variable effects |
+| Type | Abbreviation | Main evidence question |
+| --- | --- | --- |
+| Deletion | DEL | Does the event remove a LoF/HI-relevant gene, exon, transcript region, regulatory element, or critical domain? |
+| Duplication | DUP | Does the event increase dosage, disrupt a transcript, create altered product, or affect regulation? |
+| Inversion | INV | Does either breakpoint disrupt coding sequence, a known regulatory element, or a disease-relevant fusion context? |
+| Translocation / breakend | TRA / BND | Does the event disrupt a gene, create a fusion, or separate gene and regulatory element? |
+| Complex rearrangement | CPX | Which component event creates the disease-relevant consequence? |
 
----
+## Dosage Sensitivity Context
 
-## ClinGen Dosage Sensitivity Scores
+| ClinGen dosage score | Intake interpretation |
+| --- | --- |
+| HI/TS 3 | Strong dosage-context signal; route to mechanism/PVS1/CNV-relevant overlays as appropriate. |
+| HI/TS 2 | Emerging dosage-context signal; route for context review and possible VCEP/disease-specific handling. |
+| HI/TS 1 or 0 | Insufficient dosage sensitivity by itself; route cautiously and document missing or negative context. |
+| Dosage sensitivity unlikely | Benign-context or no-evidence route may be appropriate depending on population and clinical context. |
 
-| Score | Haploinsufficiency (HI) | Triplosensitivity (TS) | Interpretation |
-|-------|------------------------|------------------------|----------------|
-| **3** | Sufficient evidence | Sufficient evidence | Gene IS dosage-sensitive |
-| **2** | Emerging evidence | Emerging evidence | Likely dosage-sensitive |
-| **1** | Little evidence | Little evidence | Insufficient evidence |
-| **0** | No evidence | No evidence | No established dosage sensitivity |
+pLI/LOEUF and constraint metrics can support context but do not replace ClinGen dosage, gene-disease validity, transcript consequence, or VCEP rules.
 
-## pLI Score Interpretation (gnomAD)
+## Population and Overlap Intake
 
-| pLI Range | Interpretation | LoF Intolerance |
-|-----------|----------------|-----------------|
-| **>=0.9** | Extremely intolerant | High - likely haploinsufficient |
-| **0.5-0.9** | Moderately intolerant | Moderate |
-| **<0.5** | Tolerant | Low - likely NOT haploinsufficient |
+Use reciprocal overlap for population and source comparison. Record the reciprocal-overlap threshold, affected genes, breakpoint precision, genome build, and whether the matched SV is truly comparable.
 
----
+| Evidence pattern | Route candidate |
+| --- | --- |
+| High population SV frequency | BA1 exception-list review, BS1/benign-context review |
+| Rare or absent population SV | PM2 absence/rarity overlay; default strength remains controlled by ClinGen SVI PM2 guidance |
+| ClinVar/dbVar/DGVa source label | PP5/BP6 source-review overlay first; fan out only with primary evidence |
+| DECIPHER or case-database overlap | PS4, PP1, PS2/PM6, PM3, PP4, or source-lead route depending on extracted evidence type |
 
-## Population Frequency Interpretation
+## Candidate ACMG Routes
 
-| SV Frequency | ACMG Code | Interpretation |
-|--------------|-----------|----------------|
-| **>=1% in gnomAD SVs** | BA1 (Stand-alone Benign) | Too common for rare disease |
-| **0.1-1%** | BS1 (Strong Benign) | Likely benign common variant |
-| **<0.01%** | PM2 (Supporting Pathogenic) | Rare, supports pathogenicity |
-| **Absent** | PM2 (Supporting) | Very rare, supports pathogenicity |
+| SV/CNV evidence | Required route before counting |
+| --- | --- |
+| Whole-gene deletion or exon deletion in LoF/HI context | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` |
+| Exon-level or in-frame protein-length change | `tooluniverse-acmg-pm4-bp3-protein-length-refinement` |
+| High/too-high allele frequency | `tooluniverse-acmg-ba1-exception-list-refinement` and/or `tooluniverse-acmg-benign-context-refinement` |
+| Absence/rarity in population SV databases | `tooluniverse-acmg-pm2-absence-rarity-refinement` |
+| De novo SV | `tooluniverse-acmg-de-novo-evidence-refinement` |
+| Segregation / non-segregation | `tooluniverse-acmg-pp1-segregation-refinement` |
+| Case-control/cohort enrichment | `tooluniverse-acmg-ps4-case-enrichment-refinement` |
+| Biallelic recessive affected-proband evidence | `tooluniverse-acmg-pm3-in-trans-refinement` |
+| Functional dosage/breakpoint assay | `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
+| Source label or external classification | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` |
 
-### Reciprocal Overlap Calculation
+## Compatibility Notes
 
-For proper comparison, calculate reciprocal overlap between query SV and population SV:
+- A CNV/SV consequence cannot be counted twice as both PVS1 and PM4 for the same primary effect.
+- Whole-gene deletion dosage evidence should not be counted as separate PVS1 plus separate CNV dosage evidence unless a recognized framework explicitly allows the split.
+- The same proband or family member cannot simultaneously support PS4, PM3, PS2/PM6, PP1, and PP4.
+- Source labels are leads, not counted evidence.
+- Low-confidence figure or OCR extraction from pedigrees, traces, or CNV plots is a lead only.
 
-```
-Reciprocal Overlap = min(overlap_with_A, overlap_with_B)
-where:
-  overlap_with_A = (overlap length) / (SV_A length)
-  overlap_with_B = (overlap length) / (SV_B length)
-
-Threshold: >=70% reciprocal overlap = "same" SV
-```
-
----
-
-## Pathogenicity Scoring (0-10 Scale)
-
-### Scoring Components
-
-1. **Gene Content (40 points max / scaled to 4)**:
-   - 10 points per dosage-sensitive gene (HI/TS score 3)
-   - 5 points per likely dosage-sensitive gene (score 2)
-   - 2 points per gene with disease association
-   - Cap at 40 points
-
-2. **Dosage Sensitivity Evidence (30 points max / scaled to 3)**:
-   - 30 points: Multiple genes with definitive HI/TS (score 3)
-   - 20 points: One gene with definitive HI/TS
-   - 10 points: Genes with emerging evidence (score 2)
-   - 5 points: Predicted haploinsufficiency (pLI >0.9)
-
-3. **Population Frequency (20 points max / scaled to 2)**:
-   - 20 points: Absent from gnomAD, DGV
-   - 10 points: Rare (<0.01%)
-   - 0 points: Common (>0.1%)
-   - -20 points: Very common (>1%) - likely benign
-
-4. **Clinical Evidence (10 points max / scaled to 1)**:
-   - 10 points: Matching ClinVar pathogenic SV
-   - 8 points: DECIPHER cases with matching phenotype
-   - 5 points: Literature support for gene dosage effects
-   - 3 points: Phenotype consistent with genes
-
-### Score to Classification Mapping
-
-| Score | Classification | Confidence |
-|-------|----------------|------------|
-| **9-10** | Pathogenic | High |
-| **7-8** | Likely Pathogenic | Moderate-High |
-| **4-6** | VUS | Low |
-| **2-3** | Likely Benign | Moderate-High |
-| **0-1** | Benign | High |
-
----
-
-## ACMG Evidence Codes
-
-### Pathogenic Evidence
-
-| Code | Strength | Criteria | SV Application |
-|------|----------|----------|----------------|
-| **PVS1** | Very Strong | Null variant in HI gene | Complete deletion of HI gene |
-| **PS1** | Strong | Same SV as known pathogenic | >=70% reciprocal overlap with ClinVar pathogenic |
-| **PS2** | Strong | De novo (confirmed) | De novo SV with matching phenotype |
-| **PS3** | Strong | Functional studies | Gene dosage effects demonstrated |
-| **PS4** | Strong | Case-control enrichment | SV enriched in cases vs controls |
-| **PM1** | Moderate | Critical region | Deletion of exons in HI gene |
-| **PM2** | Moderate | Absent from controls | Not in gnomAD SVs, DGV |
-| **PM3** | Moderate | Recessive: homozygous/compound het | Both alleles affected |
-| **PM4** | Moderate | Protein length change | In-frame deletion/duplication |
-| **PM5** | Moderate | Similar SVs pathogenic | Nearby SVs in ClinVar pathogenic |
-| **PM6** | Moderate | De novo (no confirmation) | De novo SV, phenotype consistent |
-| **PP1** | Supporting | Segregation in family | SV segregates with phenotype |
-| **PP2** | Supporting | Gene/pathway relevant | Genes in SV match phenotype |
-| **PP3** | Supporting | Computational evidence | Multiple predictors support haploinsufficiency |
-| **PP4** | Supporting | Phenotype consistent | Patient phenotype matches gene-disease |
-
-### Benign Evidence
-
-| Code | Strength | Criteria | SV Application |
-|------|----------|----------|----------------|
-| **BA1** | Stand-Alone | MAF >5% | SV frequency >5% in gnomAD |
-| **BS1** | Strong | MAF too high for disease | SV frequency >1% |
-| **BS2** | Strong | Healthy adult with genotype | SV in healthy individual (watch for reduced penetrance) |
-| **BS3** | Strong | No functional effect | No dosage sensitivity demonstrated |
-| **BS4** | Strong | Non-segregation | SV doesn't segregate with phenotype |
-| **BP2** | Supporting | In trans with pathogenic | SV + pathogenic SNV compound het (patient unaffected) |
-| **BP4** | Supporting | Computational benign | Predictors suggest no haploinsufficiency |
-| **BP5** | Supporting | Alternative cause | Phenotype explained by different variant |
-
-### Classification Rules
-
-| Classification | Evidence Required |
-|----------------|-------------------|
-| **Pathogenic** | PVS1 + PS1; OR 2 Strong; OR 1 Strong + 3 Moderate |
-| **Likely Pathogenic** | 1 Very Strong + 1 Moderate; OR 1 Strong + 2 Moderate; OR 3 Moderate |
-| **VUS** | Criteria not met; OR conflicting evidence |
-| **Likely Benign** | 1 Strong + 1 Supporting; OR 2 Supporting |
-| **Benign** | BA1; OR BS1 + BS2; OR 2 Strong |
-
----
-
-## Evidence Grading System
-
-| Symbol | Confidence | Criteria |
-|--------|------------|----------|
-| High | High | ClinGen definitive, ClinVar expert reviewed, multiple independent studies |
-| Moderate | Moderate | ClinGen strong/moderate, single good study, DECIPHER cohort support |
-| Limited | Limited | Computational predictions only, case reports, emerging evidence |
-
----
-
-## Special Scenarios
-
-### Recurrent Microdeletion Syndrome
-- Check for recurrence mechanism (LCRs, NAHR)
-- Look for founder effects
-- Population-specific frequencies
-- Incomplete penetrance and variable expressivity
-- Examples: 22q11.2 deletion, 17q21.31 deletion (Koolen-De Vries)
-
-### Balanced Translocation (No Gene Disruption)
-- If no genes disrupted: Likely benign (in most cases)
-- Check for cryptic imbalances
-- Consider position effects (rare)
-- Reproductive risk (unbalanced offspring)
-- Classification: Usually VUS or Likely Benign unless offspring affected
-
-### Complex Rearrangement
-- Break down into component SVs
-- Assess each breakpoint independently
-- Look for chromothripsis pattern
-- Consider cumulative gene dosage effects
-- Check for DNA repair defects
-
-### Small In-Frame Deletion/Duplication
-- May not cause haploinsufficiency
-- Check if critical domain affected
-- Look for similar variants in ClinVar
-- Consider protein structural impact
-- May need functional studies
-
----
-
-## Clinical Recommendations Framework
-
-### For Pathogenic/Likely Pathogenic SVs
-
-| SV Type | Recommendations |
-|---------|-----------------|
-| **Deletion (HI gene)** | Genetic counseling, cascade testing, phenotype-specific surveillance |
-| **Duplication (TS gene)** | Same as deletion; check for dosage-specific syndrome |
-| **Translocation (disruption)** | Assess both breakpoints, consider reproductive counseling |
-| **Complex** | Multidisciplinary evaluation, research enrollment |
-
-### For VUS
-
-| Action | Details |
-|--------|---------|
-| Clinical management | Base on phenotype, not genotype |
-| Follow-up | Reinterpret in 1-2 years or when phenotype evolves |
-| Research | Functional studies if research-grade samples available |
-| Family studies | Segregation analysis can reclassify |
-
-### For Benign/Likely Benign
-
-| Action | Details |
-|--------|---------|
-| Clinical | Not expected to cause rare disease |
-| Family | No cascade testing needed (unless recurrent/reproductive risk) |
-| Reproductive | Balanced translocation carriers may have offspring risk |
+Use `tooluniverse-acmg-overlay-routing-core` Evidence Compatibility Resolution before any final qualitative or Bayesian combine.

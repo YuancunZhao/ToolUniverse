@@ -1,433 +1,675 @@
-# Machine-readable registry for the ACMG overlay routing compliance layer.
-# This is a routing contract, not an ACMG rule source. It does not change
-# criterion thresholds, evidence strengths, VCEP precedence, or final combining.
+---
+version: '2026-06-18'
+registry_name: tooluniverse-acmg-overlay-skill-gate
+description: 'Maps ACMG evidence routes to mandatory ToolUniverse overlay skills. Baseline routes are planned before evidence assignment; discovery routes are appended after literature, clinical, database, or user-supplied evidence creates a candidate signal. Candidate detection means "route for adjudication", not "evidence is met".
 
-version: "2026-06-18"
-registry_name: "tooluniverse-acmg-overlay-skill-gate"
-description: >
-  Maps ACMG evidence routes to mandatory ToolUniverse overlay skills. Baseline
-  routes are planned before evidence assignment; discovery routes are appended
-  after literature, clinical, database, or user-supplied evidence creates a
-  candidate signal. Candidate detection means "route for adjudication", not
-  "evidence is met".
-
+'
 controlled_values:
   trigger_policy_values:
-    - universal_baseline
-    - variant_type_baseline
-    - evidence_discovery
+  - universal_baseline
+  - variant_type_baseline
+  - evidence_discovery
   allowed_route_outcomes:
-    - overlay_applied
-    - overlay_not_applicable
-    - overlay_not_assessed
-    - overlay_deferred_to_vcep
+  - overlay_applied
+  - overlay_not_applicable
+  - overlay_not_assessed
+  - overlay_deferred_to_vcep
   countable_route_outcomes:
-    - overlay_applied
-    - overlay_deferred_to_vcep
+  - overlay_applied
+  - overlay_deferred_to_vcep
   status_values:
-    - applied
-    - no_evidence
-    - not_assessed
-    - not_applicable
-    - not_used
+  - applied
+  - no_evidence
+  - not_assessed
+  - not_applicable
+  - not_used
   guidance_authority_values:
-    - ClinGen/SVI primary
-    - ACMG/AMP baseline
-    - VCEP-specific
-    - practice/local refinement
-    - source lead only
-
+  - ClinGen/SVI primary
+  - ACMG/AMP baseline
+  - VCEP-specific
+  - practice/local refinement
+  - source lead only
+  enforcement_level_values:
+  - must_plan
+  - must_query
+  - must_route_if_hit
+  - must_audit_if_counted
+  route_kind_values:
+  - applicability_gate
+  - evidence_scoring
+  - source_review
+  - functional_discovery
+  - compatibility_gate
+  query_status_values:
+  - success
+  - no_hit
+  - unavailable
+  - failed
+  - not_applicable
+  source_category_values:
+  - population
+  - computational
+  - source_assertion
+  - literature
+  - functional_database
+  - disease_context
+  - mechanism_context
+  - clinical_context
+  - route_audit
+  - compatibility
 defaults:
   mandatory: true
   blocks_direct_assignment: true
   required_trace_fields:
-    - criterion
-    - overlay_skill
-    - route_outcome
-    - trigger_policy
-    - status
-    - guidance_authority
-    - reason
-    - consumed_evidence
-    - source_of_truth
+  - criterion
+  - overlay_skill
+  - route_outcome
+  - trigger_policy
+  - status
+  - guidance_authority
+  - reason
+  - consumed_evidence
+  - source_of_truth
+  - enforcement_level
+  - route_kind
   allowed_route_outcomes:
-    - overlay_applied
-    - overlay_not_applicable
-    - overlay_not_assessed
-    - overlay_deferred_to_vcep
+  - overlay_applied
+  - overlay_not_applicable
+  - overlay_not_assessed
+  - overlay_deferred_to_vcep
   countable_route_outcomes:
-    - overlay_applied
-    - overlay_deferred_to_vcep
-
+  - overlay_applied
+  - overlay_deferred_to_vcep
+  compatibility_resolution_values:
+  - keep_more_specific
+  - keep_primary_evidence
+  - keep_mechanism_appropriate
+  - drop_as_not_used
+  - cap_combined_strength
+  - split_by_context
+  - defer_to_vcep
+  - unresolved_draft_only
 overlays:
-  - criterion_group: ba1_exception_list
-    covered_criteria: [BA1]
-    overlay_skill: tooluniverse-acmg-ba1-exception-list-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - population_frequency_available
-      - high_frequency_or_ba1_candidate
-    baseline_data_sources:
-      - gnomAD
-      - Ensembl variation
-      - MyVariant
-      - ClinVar allele frequency
-      - TOPMed
-    candidate_triggers:
-      - allele frequency near or above BA1 stand-alone thresholds
-      - high-frequency population observation in gnomAD, ExAC, 1000 Genomes, or cohort data
-      - mention of BA1, stand-alone benign, or BA1 exception list
-      - founder or continental population frequency used as benign evidence
-
-  - criterion_group: benign_context
-    covered_criteria: [BA1, BS1, BS2, BP2, BP5]
-    overlay_skill: tooluniverse-acmg-benign-context-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - benign_frequency_or_context_gate
-      - patient_or_source_context_if_available
-    baseline_data_sources:
-      - gnomAD
-      - ClinGen disease context
-      - GenCC
-      - ClinVar
-      - user phenotype/context when supplied
-    candidate_triggers:
-      - population frequency proposed as benign evidence below or outside BA1
-      - healthy adult carriers or unaffected individuals
-      - cis/trans benign phase evidence
-      - alternate molecular diagnosis proposed to explain the phenotype
-      - BA1 blocked but frequency may still support BS1
-
-  - criterion_group: pm2_absence_rarity
-    covered_criteria: [PM2]
-    overlay_skill: tooluniverse-acmg-pm2-absence-rarity-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - population_frequency_available_or_queryable
-    baseline_data_sources:
-      - gnomAD
-      - Ensembl variation
-      - MyVariant
-      - ClinVar
-      - TOPMed
-    candidate_triggers:
-      - absence, rarity, or extremely low allele count in population databases
-      - PM2, PM2_Supporting, absent from gnomAD, or rare in controls
-      - population database coverage or ancestry adequacy affects pathogenic evidence
-      - BA1, BS1, or BS2 may override population-rarity evidence
-
-  - criterion_group: pp3_bp4_missense_prediction
-    covered_criteria: [PP3, BP4]
-    overlay_skill: tooluniverse-acmg-pp3-bp4-missense-prediction-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - missense_variant
-      - protein_altering_variant_with_calibrated_predictor_available
-      - vcep_prediction_rule_available
-    baseline_data_sources:
-      - VEP
-      - MyVariant/dbNSFP
-      - REVEL
-      - AlphaMissense
-      - CADD
-      - SIFT
-      - PolyPhen
-    candidate_triggers:
-      - missense computational pathogenicity or benign prediction evidence
-      - REVEL, BayesDel, AlphaMissense, CADD, SIFT, PolyPhen, VEST, MetaSVM, or similar scores
-      - predictor concordance, predictor majority, deleterious prediction, or tolerated prediction
-      - VCEP or calibrated prediction threshold may apply
-
-  - criterion_group: ps1_pm5_amino_acid_equivalence
-    covered_criteria: [PS1, PM5]
-    overlay_skill: tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - missense_variant
-      - protein_substitution
-      - comparison_variant_queryable
-    baseline_data_sources:
-      - ClinVar
-      - MyVariant
-      - HGMD/LOVD if available
-      - VEP colocated variants
-    candidate_triggers:
-      - same amino acid substitution as known pathogenic or likely pathogenic variant
-      - different missense change at same residue or codon
-      - ClinVar, HGMD, LOVD, VCEP, or paper comparison variant label proposed for PS1 or PM5
-      - same-residue, same-codon, or amino-acid-mediated comparison evidence
-
-  - criterion_group: ps1_splicing_similarity
-    covered_criteria: [PS1]
-    overlay_skill: tooluniverse-acmg-ps1-splicing-similarity-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - splice_region_variant
-      - predicted_splicing_variant
-      - same_event_comparison_queryable
-    baseline_data_sources:
-      - VEP
-      - splice prediction
-      - ClinVar comparison variants
-      - RNA evidence if available
-    candidate_triggers:
-      - same predicted RNA splicing event as a known pathogenic or likely pathogenic variant
-      - donor or acceptor motif comparison variant evidence
-      - splice prediction used to compare two variants for PS1
-      - Walker-style same-event splicing evidence
-
-  - criterion_group: pm1_regional_missense_constraint
-    covered_criteria: [PM1, PP2, BP1]
-    overlay_skill: tooluniverse-acmg-pm1-regional-missense-constraint-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - missense_variant
-      - protein_region_queryable
-      - domain_or_constraint_context_available
-    baseline_data_sources:
-      - UniProt
-      - InterPro
-      - AlphaFold
-      - gnomAD constraints
-      - regional constraint literature
-    candidate_triggers:
-      - hotspot, critical residue, constrained subdomain, or functional domain evidence
-      - regional missense depletion or regional constraint proposed as PM1
-      - broad domain membership proposed as pathogenic evidence
-      - missense mechanism evidence for PP2 or BP1
-
-  - criterion_group: pvs1_lof_decision_tree
-    covered_criteria: [PVS1]
-    overlay_skill: tooluniverse-acmg-pvs1-lof-decision-tree-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - pvs1_applicability_gate
-      - lof_candidate_variant_if_present
-    baseline_data_sources:
-      - VEP
-      - VariantValidator
-      - ClinGen dosage
-      - ClinGen gene validity
-      - transcript structure
-    candidate_triggers:
-      - nonsense, frameshift, canonical splice, start-loss, exon deletion, exon duplication, or whole-gene deletion
-      - predicted loss of function, haploinsufficiency, NMD, truncated protein, or LoFTEE evidence
-      - PVS1, PVS1_Strong, PVS1_Moderate, PVS1_Supporting, or PVS1_N/A proposed
-      - transcript structure or LoF mechanism determines evidence strength
-
-  - criterion_group: pvs1_splicing
-    covered_criteria: [PVS1, BP7]
-    overlay_skill: tooluniverse-acmg-pvs1-splicing-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - splice_region_variant
-      - canonical_splice_variant
-      - rna_splicing_evidence_available
-      - splicing_prediction_available
-    baseline_data_sources:
-      - VEP
-      - splice prediction
-      - RNA assays/literature when discovered
-    candidate_triggers:
-      - RNA assay, RT-PCR, minigene, exon skipping, aberrant transcript, or rescue transcript evidence
-      - splicing evidence affects PVS1 or BP7 strength
-      - Walker-style RNA/splicing refinement needed after baseline PVS1 branch
-      - direct RNA evidence may supersede splice prediction evidence
-
-  - criterion_group: ps3_bs3_functional_assay
-    covered_criteria: [PS3, BS3]
-    overlay_skill: tooluniverse-acmg-ps3-bs3-functional-assay-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - missense_variant
-      - structured_functional_database_available
-      - functional_literature_signal_present
-    baseline_data_sources:
-      - MaveDB
-      - ProtVar
-      - literature functional assay
-      - ClinVar/HGMD source lead
-    candidate_triggers:
-      - functional assay, enzyme activity, cellular assay, rescue assay, minigene functional readout, or calibrated OddsPath
-      - literature, ClinVar, HGMD, or author ACMG label refers to PS3 or BS3
-      - experimental evidence proposed as functional support
-      - assay controls, validation, disease-mechanism fit, or statistical calibration determine evidence strength
-      - structured functional database hit such as MaveDB for a missense variant
-    notes:
-      - For missense variants, structured functional database lookup is a variant_type_baseline functional-discovery source.
-      - Literature functional assays remain evidence_discovery signals; once found, they must be routed to the same overlay before counting.
-
-  - criterion_group: ps4_case_enrichment
-    covered_criteria: [PS4]
-    overlay_skill: tooluniverse-acmg-ps4-case-enrichment-refinement
-    trigger_policy: evidence_discovery
-    applies_when:
-      - case_control_or_cohort_evidence_found
-      - case_series_or_recurrence_evidence_found
-      - literature_signal_present
-    baseline_data_sources:
-      - literature search
-      - ClinVar submissions as leads
-      - cohort studies
-    candidate_triggers:
-      - case-control, cohort, meta-analysis, odds ratio, confidence interval, or case enrichment evidence
-      - unrelated affected case series proposed as PS4 or rare-disease recurrence evidence
-      - gnomAD or population controls used for enrichment comparison
-      - disease case definition, ancestry matching, duplicate reports, or founder haplotypes affect scoring
-
-  - criterion_group: pp1_bs4_pp4_segregation
-    covered_criteria: [PP1, BS4, PP4]
-    overlay_skill: tooluniverse-acmg-pp1-segregation-refinement
-    trigger_policy: evidence_discovery
-    applies_when:
-      - pedigree_or_family_data_found
-      - segregation_or_cascade_screening_found
-      - user_family_data_supplied
-    baseline_data_sources:
-      - literature search
-      - full text
-      - figure/table extraction
-      - user pedigree
-    candidate_triggers:
-      - family, pedigree, co-segregation, segregation, non-segregation, meioses, affected relatives, or informative relatives
-      - literature family series or figures with genotype-phenotype relationships
-      - PP1, BS4, or PP4 locus evidence proposed from family data
-      - diagnostic-yield PP4 and segregation evidence may share the same locus, family, or individuals
-
-  - criterion_group: pm3_in_trans
-    covered_criteria: [PM3]
-    overlay_skill: tooluniverse-acmg-pm3-in-trans-refinement
-    trigger_policy: evidence_discovery
-    applies_when:
-      - biallelic_or_in_trans_evidence_found
-      - phase_data_available
-      - recessive_context
-    baseline_data_sources:
-      - ClinVar
-      - literature
-      - patient genotype/phase
-    candidate_triggers:
-      - recessive disease with biallelic observations
-      - in trans, phase unknown, one-parent-supported, homozygous, or compound heterozygous evidence
-      - VUS on the other allele or PM3 point scoring
-      - proband phase, genotype, or circularity affects recessive evidence
-
-  - criterion_group: de_novo_ps2_pm6
-    covered_criteria: [PS2, PM6]
-    overlay_skill: tooluniverse-acmg-de-novo-evidence-refinement
-    trigger_policy: evidence_discovery
-    applies_when:
-      - de_novo_or_trio_evidence_found
-      - parental_testing_available
-    baseline_data_sources:
-      - literature
-      - ClinVar submissions
-      - user trio data
-    candidate_triggers:
-      - de novo, presumed de novo, maternity or paternity confirmation, or parental testing evidence
-      - PS2, PM6, recurrent de novo, phenotype specificity, or SVI de novo point scoring
-      - trio data, family data, or literature case data propose de novo evidence
-      - inheritance model or phenotype specificity affects de novo strength
-
-  - criterion_group: pm4_bp3_protein_length
-    covered_criteria: [PM4, BP3]
-    overlay_skill: tooluniverse-acmg-pm4-bp3-protein-length-refinement
-    trigger_policy: variant_type_baseline
-    applies_when:
-      - inframe_indel
-      - stop_loss
-      - protein_length_change
-      - repeat_or_low_complexity_region
-    baseline_data_sources:
-      - VEP
-      - UniProt
-      - InterPro
-      - protein sequence/context
-    candidate_triggers:
-      - in-frame deletion, in-frame insertion, single amino-acid indel, repeat region, low-complexity region, stop-loss, or altered-product context
-      - protein length change proposed as PM4 or BP3
-      - PVS1 versus PM4 boundary needs resolution
-      - repeat-region benign evidence or last-exon altered-product evidence
-
-  - criterion_group: dominant_negative_mechanism
-    covered_criteria: [PVS1, PS1, PM5, PS3, BS3, PM1, PP2, BP1, PP3, PM4, PS4, PP1, BS4, PM3, PS2, PM6]
-    overlay_skill: tooluniverse-acmg-dominant-negative-mechanism-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - mechanism_sensitive_criteria_possible
-      - gene_mechanism_queryable
-    baseline_data_sources:
-      - ClinGen dosage
-      - ClinGen gene validity
-      - GenCC
-      - GeneReviews/MedGen
-      - literature mechanism
-    candidate_triggers:
-      - LoF, haploinsufficiency, dominant-negative, gain-of-function, antimorphic, recessive LoF, altered-product, or mixed mechanism may change evidence use
-      - autosomal dominant missense or in-frame disease mechanism is uncertain
-      - evidence may be transferred across different disease mechanisms
-      - mechanism-sensitive criterion is proposed without mechanism resolution
-
-  - criterion_group: multiple_disorder_context
-    covered_criteria: [PVS1, PS1, PM5, PS3, BS3, PS4, PP1, BS4, PP4, PM3, BA1, BS1, PM2, PS2, PM6]
-    overlay_skill: tooluniverse-acmg-multiple-disorder-context-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - germline_assessment
-      - gene_disease_context_needed
-      - multiple_disorders_possible
-    baseline_data_sources:
-      - ClinGen gene validity
-      - GenCC
-      - MedGen/MONDO/OMIM
-      - GeneReviews
-    candidate_triggers:
-      - one gene has multiple disorders, inheritance models, mechanisms, dosage states, or phenotype spectra
-      - target disease or inheritance model is missing or ambiguous
-      - evidence may be transferred across disease entities
-      - gene-disease validity, dosage sensitivity, or disease boundary affects ACMG routing
-
-  - criterion_group: phenotype_dependent_intake
-    covered_criteria: [PP4, PS4, PP1, BS4, PM3, BP5, BS2, PS2, PM6]
-    overlay_skill: tooluniverse-acmg-phenotype-dependent-evidence-refinement
-    trigger_policy: evidence_discovery
-    applies_when:
-      - patient_phenotype_required
-      - literature_case_context_required
-      - phenotype_specificity_or_diagnostic_yield_needed
-    baseline_data_sources:
-      - user phenotype
-      - literature full text
-      - case tables
-      - MedGen/GeneReviews
-    candidate_triggers:
-      - patient phenotype, family phenotype, affected status, unaffected status, age of onset, alternate diagnosis, phase, or de novo context is needed
-      - literature case phenotype or disease ascertainment must be extracted before criterion scoring
-      - PP4, BP5, BS2, PM3, PS2, PM6, PP1, BS4, or rare-disease PS4 lacks required clinical context
-      - phenotype specificity or diagnostic yield affects evidence routing
-
-  - criterion_group: reputable_source_review
-    covered_criteria: [PP5, BP6]
-    overlay_skill: tooluniverse-acmg-pp5-bp6-reputable-source-refinement
-    trigger_policy: universal_baseline
-    applies_when:
-      - source_assertion_present
-      - clinvar_or_lovd_or_hgmd_or_vcep_or_paper_label_available
-    baseline_data_sources:
-      - ClinVar
-      - LOVD
-      - HGMD if available
-      - VCEP
-      - paper ACMG labels
-      - lab reports
-    candidate_triggers:
-      - ClinVar, HGMD, LOVD, CIViC, VCEP, laboratory report, expert panel, or paper classification label is proposed as evidence
-      - source assertion is considered for PP5, BP6, PM5, PS1, PM1, PS3, PP3, or another counted criterion
-      - primary evidence behind a source label is missing or needs retrieval
-      - conflicting source classifications require primary-evidence review
+- criterion_group: ba1_exception_list
+  covered_criteria:
+  - BA1
+  overlay_skill: tooluniverse-acmg-ba1-exception-list-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - population_frequency_available
+  - high_frequency_or_ba1_candidate
+  baseline_data_sources:
+  - gnomAD
+  - Ensembl variation
+  - MyVariant
+  - ClinVar allele frequency
+  - TOPMed
+  candidate_triggers:
+  - allele frequency near or above BA1 stand-alone thresholds
+  - high-frequency population observation in gnomAD, ExAC, 1000 Genomes, or cohort data
+  - mention of BA1, stand-alone benign, or BA1 exception list
+  - founder or continental population frequency used as benign evidence
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: benign_context
+  covered_criteria:
+  - BA1
+  - BS1
+  - BS2
+  - BP2
+  - BP5
+  overlay_skill: tooluniverse-acmg-benign-context-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - benign_frequency_or_context_gate
+  - patient_or_source_context_if_available
+  baseline_data_sources:
+  - gnomAD
+  - ClinGen disease context
+  - GenCC
+  - ClinVar
+  - user phenotype/context when supplied
+  candidate_triggers:
+  - population frequency proposed as benign evidence below or outside BA1
+  - healthy adult carriers or unaffected individuals
+  - cis/trans benign phase evidence
+  - alternate molecular diagnosis proposed to explain the phenotype
+  - BA1 blocked but frequency may still support BS1
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: pm2_absence_rarity
+  covered_criteria:
+  - PM2
+  overlay_skill: tooluniverse-acmg-pm2-absence-rarity-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - population_frequency_available_or_queryable
+  baseline_data_sources:
+  - gnomAD
+  - Ensembl variation
+  - MyVariant
+  - ClinVar
+  - TOPMed
+  candidate_triggers:
+  - absence, rarity, or extremely low allele count in population databases
+  - PM2, PM2_Supporting, absent from gnomAD, or rare in controls
+  - population database coverage or ancestry adequacy affects pathogenic evidence
+  - BA1, BS1, or BS2 may override population-rarity evidence
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: pp3_bp4_missense_prediction
+  covered_criteria:
+  - PP3
+  - BP4
+  overlay_skill: tooluniverse-acmg-pp3-bp4-missense-prediction-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - missense_variant
+  - protein_altering_variant_with_calibrated_predictor_available
+  - vcep_prediction_rule_available
+  baseline_data_sources:
+  - VEP
+  - MyVariant/dbNSFP
+  - REVEL
+  - AlphaMissense
+  - CADD
+  - SIFT
+  - PolyPhen
+  candidate_triggers:
+  - missense computational pathogenicity or benign prediction evidence
+  - REVEL, BayesDel, AlphaMissense, CADD, SIFT, PolyPhen, VEST, MetaSVM, or similar scores
+  - predictor concordance, predictor majority, deleterious prediction, or tolerated prediction
+  - VCEP or calibrated prediction threshold may apply
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: ps1_pm5_amino_acid_equivalence
+  covered_criteria:
+  - PS1
+  - PM5
+  overlay_skill: tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - missense_variant
+  - protein_substitution
+  - comparison_variant_queryable
+  baseline_data_sources:
+  - ClinVar
+  - MyVariant
+  - HGMD/LOVD if available
+  - VEP colocated variants
+  candidate_triggers:
+  - same amino acid substitution as known pathogenic or likely pathogenic variant
+  - different missense change at same residue or codon
+  - ClinVar, HGMD, LOVD, VCEP, or paper comparison variant label proposed for PS1 or PM5
+  - same-residue, same-codon, or amino-acid-mediated comparison evidence
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: ps1_splicing_similarity
+  covered_criteria:
+  - PS1
+  overlay_skill: tooluniverse-acmg-ps1-splicing-similarity-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - splice_region_variant
+  - predicted_splicing_variant
+  - same_event_comparison_queryable
+  baseline_data_sources:
+  - VEP
+  - splice prediction
+  - ClinVar comparison variants
+  - RNA evidence if available
+  candidate_triggers:
+  - same predicted RNA splicing event as a known pathogenic or likely pathogenic variant
+  - donor or acceptor motif comparison variant evidence
+  - splice prediction used to compare two variants for PS1
+  - Walker-style same-event splicing evidence
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - same predicted splicing event
+  - splice comparison variant
+  - VCEP splicing comparison rule
+- criterion_group: pm1_regional_missense_constraint
+  covered_criteria:
+  - PM1
+  - PP2
+  - BP1
+  overlay_skill: tooluniverse-acmg-pm1-regional-missense-constraint-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - missense_variant
+  - protein_region_queryable
+  - domain_or_constraint_context_available
+  baseline_data_sources:
+  - UniProt
+  - InterPro
+  - AlphaFold
+  - gnomAD constraints
+  - regional constraint literature
+  candidate_triggers:
+  - hotspot, critical residue, constrained subdomain, or functional domain evidence
+  - regional missense depletion or regional constraint proposed as PM1
+  - broad domain membership proposed as pathogenic evidence
+  - missense mechanism evidence for PP2 or BP1
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: pvs1_lof_decision_tree
+  covered_criteria:
+  - PVS1
+  overlay_skill: tooluniverse-acmg-pvs1-lof-decision-tree-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - pvs1_applicability_gate
+  - lof_candidate_variant_if_present
+  baseline_data_sources:
+  - VEP
+  - VariantValidator
+  - ClinGen dosage
+  - ClinGen gene validity
+  - transcript structure
+  candidate_triggers:
+  - nonsense, frameshift, canonical splice, start-loss, exon deletion, exon duplication, or whole-gene deletion
+  - predicted loss of function, haploinsufficiency, NMD, truncated protein, or LoFTEE evidence
+  - PVS1, PVS1_Strong, PVS1_Moderate, PVS1_Supporting, or PVS1_N/A proposed
+  - transcript structure or LoF mechanism determines evidence strength
+  enforcement_level: must_plan
+  route_kind: applicability_gate
+  expected_default_status: not_applicable
+- criterion_group: pvs1_splicing
+  covered_criteria:
+  - PVS1
+  - BP7
+  overlay_skill: tooluniverse-acmg-pvs1-splicing-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - splice_region_variant
+  - canonical_splice_variant
+  - rna_splicing_evidence_available
+  - observed_transcript_consequence_available
+  baseline_data_sources:
+  - VEP
+  - splice prediction
+  - RNA assays/literature when discovered
+  candidate_triggers:
+  - RNA assay, RT-PCR, minigene, exon skipping, aberrant transcript, or rescue transcript evidence
+  - splicing evidence affects PVS1 or BP7 strength
+  - Walker-style RNA/splicing refinement needed after baseline PVS1 branch
+  - direct RNA evidence may supersede splice prediction evidence
+  - published RNA-splicing evidence or observed transcript consequence is available
+  notes:
+  - SpliceAI-only or other prediction-only evidence is prediction/comparison context, not RNA assay evidence.
+  - Route prediction-only splicing evidence to PP3/BP4 prediction guidance, PS1-splicing comparison guidance, or VCEP; do not trigger PVS1_RNA without RNA assay, published RNA evidence, or observed transcript consequence.
+  enforcement_level: must_route_if_hit
+  route_kind: applicability_gate
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - RNA assay
+  - published RNA evidence
+  - observed transcript consequence
+- criterion_group: ps3_bs3_functional_assay
+  covered_criteria:
+  - PS3
+  - BS3
+  overlay_skill: tooluniverse-acmg-ps3-bs3-functional-assay-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - missense_variant
+  - structured_functional_database_available
+  - functional_literature_signal_present
+  baseline_data_sources:
+  - MaveDB
+  - ProtVar
+  - literature functional assay
+  - ClinVar/HGMD source lead
+  candidate_triggers:
+  - functional assay, enzyme activity, cellular assay, rescue assay, minigene functional readout, or calibrated OddsPath
+  - literature, ClinVar, HGMD, or author ACMG label refers to PS3 or BS3
+  - experimental evidence proposed as functional support
+  - assay controls, validation, disease-mechanism fit, or statistical calibration determine evidence strength
+  - structured functional database hit such as MaveDB for a missense variant
+  notes:
+  - For missense variants, structured functional database lookup is a variant_type_baseline functional-discovery source.
+  - Literature functional assays remain evidence_discovery signals; once found, they must be routed to the same overlay before counting.
+  enforcement_level: must_query
+  route_kind: functional_discovery
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - MaveDB hit
+  - structured functional database hit
+  - functional assay in literature
+  - author PS3/BS3 code with assay details
+- criterion_group: ps4_case_enrichment
+  covered_criteria:
+  - PS4
+  overlay_skill: tooluniverse-acmg-ps4-case-enrichment-refinement
+  trigger_policy: evidence_discovery
+  applies_when:
+  - case_control_or_cohort_evidence_found
+  - case_series_or_recurrence_evidence_found
+  - literature_signal_present
+  baseline_data_sources:
+  - literature search
+  - ClinVar submissions as leads
+  - cohort studies
+  candidate_triggers:
+  - case-control, cohort, meta-analysis, odds ratio, confidence interval, or case enrichment evidence
+  - unrelated affected case series proposed as PS4 or rare-disease recurrence evidence
+  - gnomAD or population controls used for enrichment comparison
+  - disease case definition, ancestry matching, duplicate reports, or founder haplotypes affect scoring
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - case-control evidence
+  - cohort evidence
+  - meta-analysis
+  - odds ratio/confidence interval
+  - unrelated case series
+  - recurrence evidence
+- criterion_group: pp1_bs4_pp4_segregation
+  covered_criteria:
+  - PP1
+  - BS4
+  - PP4
+  overlay_skill: tooluniverse-acmg-pp1-segregation-refinement
+  trigger_policy: evidence_discovery
+  applies_when:
+  - pedigree_or_family_data_found
+  - segregation_or_cascade_screening_found
+  - user_family_data_supplied
+  baseline_data_sources:
+  - literature search
+  - full text
+  - figure/table extraction
+  - user pedigree
+  candidate_triggers:
+  - family, pedigree, co-segregation, segregation, non-segregation, meioses, affected relatives, or informative relatives
+  - literature family series or figures with genotype-phenotype relationships
+  - PP1, BS4, or PP4 locus evidence proposed from family data
+  - diagnostic-yield PP4 and segregation evidence may share the same locus, family, or individuals
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - pedigree
+  - segregation
+  - non-segregation
+  - cascade screening
+  - affected relatives
+  - informative meioses
+  - user family data
+- criterion_group: pm3_in_trans
+  covered_criteria:
+  - PM3
+  overlay_skill: tooluniverse-acmg-pm3-in-trans-refinement
+  trigger_policy: evidence_discovery
+  applies_when:
+  - biallelic_or_in_trans_evidence_found
+  - phase_data_available
+  - recessive_context
+  baseline_data_sources:
+  - ClinVar
+  - literature
+  - patient genotype/phase
+  candidate_triggers:
+  - recessive disease with biallelic observations
+  - in trans, phase unknown, one-parent-supported, homozygous, or compound heterozygous evidence
+  - VUS on the other allele or PM3 point scoring
+  - proband phase, genotype, or circularity affects recessive evidence
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - biallelic observation
+  - in-trans evidence
+  - phase data
+  - compound heterozygous evidence
+  - homozygous recessive observation
+- criterion_group: de_novo_ps2_pm6
+  covered_criteria:
+  - PS2
+  - PM6
+  overlay_skill: tooluniverse-acmg-de-novo-evidence-refinement
+  trigger_policy: evidence_discovery
+  applies_when:
+  - de_novo_or_trio_evidence_found
+  - parental_testing_available
+  baseline_data_sources:
+  - literature
+  - ClinVar submissions
+  - user trio data
+  candidate_triggers:
+  - de novo, presumed de novo, maternity or paternity confirmation, or parental testing evidence
+  - PS2, PM6, recurrent de novo, phenotype specificity, or SVI de novo point scoring
+  - trio data, family data, or literature case data propose de novo evidence
+  - inheritance model or phenotype specificity affects de novo strength
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - de novo evidence
+  - trio evidence
+  - parental testing
+  - parentage confirmation
+- criterion_group: pm4_bp3_protein_length
+  covered_criteria:
+  - PM4
+  - BP3
+  overlay_skill: tooluniverse-acmg-pm4-bp3-protein-length-refinement
+  trigger_policy: variant_type_baseline
+  applies_when:
+  - inframe_indel
+  - stop_loss
+  - protein_length_change
+  - repeat_or_low_complexity_region
+  baseline_data_sources:
+  - VEP
+  - UniProt
+  - InterPro
+  - protein sequence/context
+  candidate_triggers:
+  - in-frame deletion, in-frame insertion, single amino-acid indel, repeat region, low-complexity region, stop-loss, or altered-product context
+  - protein length change proposed as PM4 or BP3
+  - PVS1 versus PM4 boundary needs resolution
+  - repeat-region benign evidence or last-exon altered-product evidence
+  enforcement_level: must_query
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+- criterion_group: dominant_negative_mechanism
+  covered_criteria:
+  - PVS1
+  - PS1
+  - PM5
+  - PS3
+  - BS3
+  - PM1
+  - PP2
+  - BP1
+  - PP3
+  - PM4
+  - PS4
+  - PP1
+  - BS4
+  - PM3
+  - PS2
+  - PM6
+  overlay_skill: tooluniverse-acmg-dominant-negative-mechanism-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - mechanism_sensitive_criteria_possible
+  - gene_mechanism_queryable
+  baseline_data_sources:
+  - ClinGen dosage
+  - ClinGen gene validity
+  - GenCC
+  - GeneReviews/MedGen
+  - literature mechanism
+  candidate_triggers:
+  - LoF, haploinsufficiency, dominant-negative, gain-of-function, antimorphic, recessive LoF, altered-product, or mixed mechanism may change evidence use
+  - autosomal dominant missense or in-frame disease mechanism is uncertain
+  - evidence may be transferred across different disease mechanisms
+  - mechanism-sensitive criterion is proposed without mechanism resolution
+  enforcement_level: must_plan
+  route_kind: applicability_gate
+  expected_default_status: not_assessed
+- criterion_group: multiple_disorder_context
+  covered_criteria:
+  - PVS1
+  - PS1
+  - PM5
+  - PS3
+  - BS3
+  - PS4
+  - PP1
+  - BS4
+  - PP4
+  - PM3
+  - BA1
+  - BS1
+  - PM2
+  - PS2
+  - PM6
+  overlay_skill: tooluniverse-acmg-multiple-disorder-context-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - germline_assessment
+  - gene_disease_context_needed
+  - multiple_disorders_possible
+  baseline_data_sources:
+  - ClinGen gene validity
+  - GenCC
+  - MedGen/MONDO/OMIM
+  - GeneReviews
+  candidate_triggers:
+  - one gene has multiple disorders, inheritance models, mechanisms, dosage states, or phenotype spectra
+  - target disease or inheritance model is missing or ambiguous
+  - evidence may be transferred across disease entities
+  - gene-disease validity, dosage sensitivity, or disease boundary affects ACMG routing
+  enforcement_level: must_plan
+  route_kind: applicability_gate
+  expected_default_status: not_assessed
+- criterion_group: phenotype_dependent_intake
+  covered_criteria:
+  - PP4
+  - PS4
+  - PP1
+  - BS4
+  - PM3
+  - BP5
+  - BS2
+  - PS2
+  - PM6
+  overlay_skill: tooluniverse-acmg-phenotype-dependent-evidence-refinement
+  trigger_policy: evidence_discovery
+  applies_when:
+  - patient_phenotype_required
+  - literature_case_context_required
+  - phenotype_specificity_or_diagnostic_yield_needed
+  baseline_data_sources:
+  - user phenotype
+  - literature full text
+  - case tables
+  - MedGen/GeneReviews
+  candidate_triggers:
+  - patient phenotype, family phenotype, affected status, unaffected status, age of onset, alternate diagnosis, phase, or de novo context is needed
+  - literature case phenotype or disease ascertainment must be extracted before criterion scoring
+  - PP4, BP5, BS2, PM3, PS2, PM6, PP1, BS4, or rare-disease PS4 lacks required clinical context
+  - phenotype specificity or diagnostic yield affects evidence routing
+  enforcement_level: must_route_if_hit
+  route_kind: evidence_scoring
+  expected_default_status: not_assessed
+  hit_trigger_evidence_types:
+  - patient phenotype needed
+  - family phenotype needed
+  - affected status
+  - alternate diagnosis
+  - phase context
+  - phenotype specificity needed
+- criterion_group: reputable_source_review
+  covered_criteria:
+  - PP5
+  - BP6
+  overlay_skill: tooluniverse-acmg-pp5-bp6-reputable-source-refinement
+  trigger_policy: universal_baseline
+  applies_when:
+  - source_assertion_present
+  - clinvar_or_lovd_or_hgmd_or_vcep_or_paper_label_available
+  baseline_data_sources:
+  - ClinVar
+  - LOVD
+  - HGMD if available
+  - VCEP
+  - paper ACMG labels
+  - lab reports
+  candidate_triggers:
+  - ClinVar, HGMD, LOVD, CIViC, VCEP, laboratory report, expert panel, or paper classification label is proposed as evidence
+  - source assertion is considered for PP5, BP6, PM5, PS1, PM1, PS3, PP3, or another counted criterion
+  - primary evidence behind a source label is missing or needs retrieval
+  - conflicting source classifications require primary-evidence review
+  enforcement_level: must_query
+  route_kind: source_review
+  expected_default_status: not_used
+- criterion_group: evidence_compatibility_resolution
+  covered_criteria:
+  - BA1
+  - BS1
+  - BS2
+  - BP1
+  - BP3
+  - BP4
+  - BP5
+  - BP7
+  - BS3
+  - BS4
+  - PM1
+  - PM2
+  - PM3
+  - PM4
+  - PM5
+  - PM6
+  - PP1
+  - PP2
+  - PP3
+  - PP4
+  - PP5
+  - PS1
+  - PS2
+  - PS3
+  - PS4
+  - PVS1
+  overlay_skill: tooluniverse-acmg-overlay-routing-core
+  trigger_policy: universal_baseline
+  applies_when:
+  - final_counted_evidence_before_combination
+  - route_audit_complete
+  - current_counted_evidence_present
+  baseline_data_sources:
+  - route audit
+  - overlay results
+  - consumed evidence records
+  - source assertions/leads
+  - disease/mechanism context
+  candidate_triggers:
+  - final counted evidence is ready for ACMG qualitative combination
+  - final counted evidence is ready for Tavtigian Bayesian combination
+  - two or more counted items consume the same primary evidence, proband, assay, source label, disease context, mechanism, transcript consequence, or regional feature
+  - counted items require mutually exclusive criterion selection, context split, cap, or VCEP-specific compatibility handling
+  notes:
+  - This is a final-combine compatibility gate, not a new ACMG evidence criterion.
+  - It keeps, drops, caps, splits, or blocks already-routed evidence.
+  - Only current_counted_evidence_resolved may enter qualitative ACMG combine or Bayesian combine.
+  enforcement_level: must_audit_if_counted
+  route_kind: compatibility_gate
+  expected_default_status: not_assessed

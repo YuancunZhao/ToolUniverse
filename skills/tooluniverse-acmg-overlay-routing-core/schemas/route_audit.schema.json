@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tooluniverse.org/schemas/acmg-route-audit.schema.json",
   "title": "ToolUniverse ACMG Route Audit",
+  "$comment": "This schema validates field shape only. Hard-stop invariants, such as counted evidence requiring overlay_applied or overlay_deferred_to_vcep before final classification, are enforced by overlay_route_contract.md and evals/evals.json.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "classification_status", "items"],

@@ -116,10 +116,10 @@ This patient presents with a classic phenotype highly suggestive of **Marfan syn
 1. **Immediate**: FBN1 sequencing + deletion/duplication analysis
    - Highest pre-test probability
    - Expected turnaround: 2-4 weeks
-   
+
 2. **If FBN1 negative**: Aortopathy gene panel
    - TGFBR1, TGFBR2, SMAD3, COL3A1, ACTA2, MYH11
-   
+
 3. **If panel negative**: Consider WES with phenotype-guided analysis
 
 *Source: ClinGen gene-disease validity, GTEx expression*
@@ -262,21 +262,22 @@ This patient's phenotype and VUS in GFAP are highly consistent with **Alexander 
 | Gene | GFAP | Alexander disease gene |
 | Consequence | Missense | Amino acid change |
 | ClinVar | VUS | 1 submission |
-| gnomAD AF | 0.0000032 | Absent (PM2) |
+| gnomAD AF | 0.0000032 | Absent/rare; route to PM2 overlay |
 | CADD | 29.2 | Deleterious |
 | REVEL | 0.89 | Likely damaging |
 
-### ACMG Evidence
+### ACMG Candidate Routes
 
-| Criterion | Evidence | Strength |
-|-----------|----------|----------|
-| PM2 | Absent from gnomAD | Moderate |
-| PP3 | CADD=29.2, REVEL=0.89 | Supporting |
-| PP4 | Phenotype specific for Alexander | Supporting |
-| PM1 | Located in rod domain (critical) | Moderate |
+| Candidate | Evidence lead | Required overlay | Route status |
+|-----------|----------|----------|----------|
+| PM2 | Absent/rare in gnomAD | `tooluniverse-acmg-pm2-absence-rarity-refinement` | candidate_only |
+| PP3/BP4 | CADD=29.2, REVEL=0.89 | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP | candidate_only |
+| PP4 | Phenotype appears specific for Alexander disease | `tooluniverse-acmg-phenotype-dependent-evidence-refinement` | candidate_only |
+| PM1 | Located in rod domain | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` | candidate_only |
 
-**Current Classification**: VUS (2 Moderate + 2 Supporting)
-**With segregation (PS2) or functional data**: Would become Likely Pathogenic
+**Current ACMG status**: Not finalized in this rare-disease example. Send the
+candidate routes to `tooluniverse-acmg-variant-classification`; final
+classification requires route audit and Evidence Compatibility Resolution.
 
 ---
 
@@ -320,12 +321,12 @@ This patient's phenotype and VUS in GFAP are highly consistent with **Alexander 
 
 ### Immediate Actions
 1. **Clinical genetics consultation** - Discuss VUS implications
-2. **Parental testing** - De novo status would upgrade variant (PS2)
+2. **Parental testing** - If a de novo observation is found, route it to `tooluniverse-acmg-de-novo-evidence-refinement`
 3. **Neurology follow-up** - Seizure management, prognosis discussion
 
 ### Supporting Studies
 - Obtain parental samples for GFAP c.1186C>T
-- If not in parents → add PS2 (strong evidence) → Likely Pathogenic
+- If absent from parents, document parental testing, parentage confirmation, phenotype specificity, and mosaicism context; do not assign PS2/PM6 until the de novo overlay evaluates the observation
 ```
 
 ---

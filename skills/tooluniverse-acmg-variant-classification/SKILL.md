@@ -82,17 +82,24 @@ Accepted inputs: HGVS coding (NM_000059.4:c.5946delT), HGVS protein (BRCA2 p.Val
 
 ## Phase 0a: Overlay Routing Core
 
-Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays when disease context, mechanism, phenotype, family data, source assertions, literature extraction, or double-counting could affect evidence assignment.
+Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays. This base skill should act as a dispatcher: normalize the variant, establish disease/mechanism context, select route bundles, expand triggered bundles into overlay route rows, run overlays, resolve compatibility, and only then combine evidence.
 
-The shared routing order is:
+Start with a compact `Bundle Route Plan`:
 
-1. `tooluniverse-acmg-multiple-disorder-context-refinement` when one gene has multiple disorders, inheritance models, dosage states, phenotype spectra, or mechanisms.
-2. `tooluniverse-acmg-dominant-negative-mechanism-refinement` when LoF, HI, GoF, dominant-negative, antimorphic, recessive LoF, altered-product, or mixed mechanism affects evidence use.
-3. `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when patient phenotype, affected/unaffected status, disease specificity, diagnostic yield, phase, family data, de novo data, healthy-carrier context, or alternate diagnosis is required. Do not use phenotype intake merely for disease-context-only inputs such as prevalence, penetrance, inheritance, mechanism, transcript, or population thresholds.
-4. `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`, `tooluniverse-literature-deep-research`, and `tooluniverse-literature-figure-evidence-extraction` when source assertions or literature-derived primary evidence need extraction before scoring.
-5. The evidence-specific overlay for the criterion being assessed.
+1. `baseline_context_bundle` for disease entity, inheritance, transcript, mechanism, multiple-disorder boundary, and dominant-negative/LoF/GoF sensitivity.
+2. `population_frequency_bundle` for BA1/BS1/BS2/PM2/BP2/BP5 frequency and benign-context gates.
+3. `consequence_lof_bundle` only for LoF-like consequences such as nonsense, frameshift, canonical splice, start-loss, exon-level CNV, or whole-gene deletion.
+4. `splice_bundle` for splice prediction, PS1-splicing comparison, or RNA assay evidence; SpliceAI-only evidence is prediction context and does not trigger RNA-assay PVS1.
+5. `missense_bundle` only for missense/amino-acid substitution consequences, covering PP3/BP4, PS1/PM5, PM1/PP2/BP1, and structured functional-discovery lookup.
+6. `protein_length_bundle` for in-frame indels, stop-loss, altered-product, and repeat-region effects.
+7. `clinical_observation_bundle` only after de novo, segregation, biallelic phase, affected/unaffected, healthy-carrier, alternate-diagnosis, or phenotype-specific evidence is present or requested.
+8. `literature_functional_bundle` only after source/literature coverage finds functional assay, case-control/cohort, case series, figure/table/supplement, or paper-label triggers.
+9. `cnv_sv_bundle` for structural-variant/CNV evidence intake; final ACMG evidence must still route through the appropriate ACMG overlays and compatibility resolution.
+10. `final_combine_bundle` after overlay audit passes.
 
-External-agent compliance check: before final classification, list each evidence code considered and the overlay route used. If a code is assigned without the responsible overlay or VCEP rule, revise the evidence table before combining criteria.
+Then expand each triggered bundle using the routing core registry. A bundle row is not counted evidence; counted criteria still require overlay result, route audit outcome `overlay_applied` or `overlay_deferred_to_vcep`, and compatibility resolution.
+
+External-agent compliance check: before final classification, list each evidence code considered, the route bundle, and the overlay route used. If a code is assigned without the responsible overlay or VCEP rule, revise the evidence table before combining criteria.
 
 Final hard-stop audit: the report may present a final classification only when every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks that route outcome, label the result `draft classification`, move that item to `Criteria With status: not_assessed` or `Source Assertions / Leads`, and do not compute the final ACMG tier from it.
 
@@ -269,13 +276,45 @@ Before combining evidence, run an overlay compliance audit:
 | Same codon/residue comparison variant | PS1/PM5 overlay; verify independent P/LP status and amino-acid-mediated mechanism. |
 | Protein domain, hotspot, regional constraint, broad domain membership | PM1 overlay; broad domain membership alone is not enough. |
 
-Hard-stop rule: if any evidence row in the final counted table lacks a valid route outcome, stop and label the report `draft classification`. The classification algorithm below is applied only after the audit table contains no un-routed counted criteria.
+Hard-stop rule: if any evidence row in the final counted table lacks a valid route outcome, stop and label the report `draft classification`. The classification algorithm below is applied only after the audit table contains no un-routed counted criteria and evidence compatibility resolution has produced `current_counted_evidence_resolved` with no unresolved conflicts.
 
 ---
 
-## Phase 7: Bayesian Evidence Combination
+## Phase 7: Evidence Compatibility Resolution
 
-After the hard-stop audit passes, use `tooluniverse-acmg-bayesian-classification-framework` to convert the routed counted evidence table into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and a structured final report.
+After the hard-stop audit passes, run Evidence Compatibility Resolution through `tooluniverse-acmg-overlay-routing-core` before any final combination.
+
+This gate does not assign evidence strength. It resolves already-routed evidence before combine by keeping, dropping, capping, splitting, deferring to VCEP, or blocking incompatible evidence.
+
+Required outputs:
+
+- `current_counted_evidence_resolved`: only these evidence items may enter final combine.
+- `not_used_due_to_overlap`: evidence removed because the same primary evidence, proband, assay, source, mechanism, or region was consumed elsewhere.
+- `caps_applied`: PM1+PP3, PP1+PP4, PM3 homozygous, PS2/PM6 high-heterogeneity, or VCEP caps.
+- `context_splits`: separate disease, inheritance, mechanism, or transcript contexts that require separate classifications.
+- `unresolved_conflicts`: unresolved conflicts that block final classification.
+
+Use these compatibility rules unless a current VCEP explicitly supersedes them:
+
+- BA1 valid excludes PM2/BS1; BS1/BS2 exclude PM2 for the same frequency or healthy-carrier rationale.
+- Do not combine evidence across mutually exclusive diseases, inheritance models, mechanisms, or transcript contexts; split classifications when needed.
+- PVS1 canonical splice excludes same-mechanism PP3; `PVS1_Strength (RNA)` excludes PS3 and same-mechanism PP3/BP4; `BP7_Strong (RNA)` excludes BS3 and contradicted PS1-splicing.
+- PVS1 and PM4 cannot consume the same protein-length or LoF consequence; PM4 and BP3 are mutually exclusive; whole-gene deletion should not be double-counted as both PVS1 and separate CNV dosage evidence unless allowed.
+- PS3/BS3 excludes the same assay, DMS, or MAVE source as PP3/BP4; multiple assays are not stacked unless VCEP, OddsPath, or a validated combination rule permits it.
+- PP2 and BP1 are mutually exclusive; PM1/PP2/PP3 follows the PM1 overlay priority and PM1+PP3 cap; PM1/PM5/PM4 cannot reuse the same residue/domain rationale unless independent.
+- PS1 and PM5 cannot both use the same comparison relationship; protein-level PS1/PM5 cannot use comparison variants whose pathogenicity is splicing/DNA/RNA-mediated.
+- The same proband or individual cannot support PS4 plus PM3, PS2/PM6, PP1, or PP4.
+- PP1/PP4 combined evidence is capped at +5.0 and cannot mix Biesecker points with informative-meioses fallback for the same pedigree.
+- PM3 circularity, duplicate probands, homozygous cap, and PS2/PM6 high-genetic-heterogeneity cap must be resolved before final combine.
+- PP5/BP6 source labels, abstract-only evidence, inaccessible full text, unread supplements, and low-confidence figure/OCR evidence cannot enter `current_counted_evidence_resolved`.
+
+If `unresolved_conflicts` is not empty, report `draft classification` and do not run ACMG qualitative or Bayesian final combine.
+
+---
+
+## Phase 8: Bayesian Evidence Combination
+
+After compatibility resolution passes, use `tooluniverse-acmg-bayesian-classification-framework` to convert `current_counted_evidence_resolved` into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and a structured final report.
 
 This final combination layer is not an evidence-assignment overlay. It must not retrieve evidence, decide whether criteria are met, or change the strength assigned by evidence-specific overlays or VCEP rules.
 
@@ -283,6 +322,8 @@ Use these boundaries:
 
 - If BA1 is valid, short-circuit before Bayesian calculation and report Benign by BA1 stand-alone.
 - If any counted evidence lacks route outcome `overlay_applied` or `overlay_deferred_to_vcep`, output `draft classification` and do not compute final posterior probability.
+- If evidence compatibility resolution has not produced `current_counted_evidence_resolved`, output `draft classification` and do not compute final posterior probability.
+- If evidence compatibility resolution contains unresolved conflicts, output `draft classification` and do not compute final posterior probability.
 - If a VCEP defines a disease-specific combining framework, follow the VCEP and report Tavtigian-style posterior only as optional context when appropriate.
 - Do not use Bayesian points to convert source assertions, unrouted candidate evidence, abstract-only evidence, unread supplements, or low-confidence figure extraction into counted criteria.
 
@@ -310,7 +351,7 @@ Later benign strengths not present in Tavtigian et al. 2018, such as `BP4_Modera
 
 ## Classification Algorithm
 
-Combine criteria at their applied strength (after upgrades/downgrades):
+Combine criteria at their resolved applied strength after overlay route audit and evidence compatibility resolution:
 
 **Pathogenic**: (1) PVS1 + ≥1 Strong; (2) PVS1 + ≥2 Moderate; (3) PVS1 + 1 Moderate + 1 Supporting; (4) PVS1 + ≥2 Supporting; (5) ≥2 Strong; (6) 1 Strong + ≥3 Moderate; (7) 1 Strong + 2 Moderate + ≥2 Supporting; (8) 1 Strong + 1 Moderate + ≥4 Supporting
 
@@ -349,13 +390,27 @@ Combine criteria at their applied strength (after upgrades/downgrades):
 - Literature and supplements:
 - Functional / segregation / case evidence:
 
+## Bundle Route Plan
+| Bundle | Trigger found? | Required overlays/checks | Coverage required | Status | Reason |
+| --- | --- | --- | --- | --- | --- |
+
 ## Overlay Route Audit
-| Criterion | Proposed evidence | Route outcome | Guidance authority | Overlay or VCEP source | Counted? | Reason |
-| --- | --- | --- | --- | --- | --- | --- |
+| Criterion | Route bundle | Proposed evidence | Route outcome | Guidance authority | Overlay or VCEP source | Counted? | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Current Counted Evidence
 | Criterion | Direction | Strength | Points | Evidence | Overlay route outcome | Source |
 | --- | --- | --- | ---: | --- | --- | --- |
+
+## Evidence Compatibility Resolution
+- current_counted_evidence_resolved:
+- not_used_due_to_overlap:
+- caps_applied:
+- context_splits:
+- unresolved_conflicts:
+
+| Conflict group | Evidence items | Conflict type | Resolution | Kept evidence | Removed/capped evidence | Status | Reason |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 
 ## Bayesian Calculation
 - Model: Tavtigian et al. 2018 Bayesian ACMG/AMP framework

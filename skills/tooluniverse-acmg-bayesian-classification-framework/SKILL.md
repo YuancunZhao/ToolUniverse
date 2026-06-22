@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 This skill is the final evidence-combination layer for ToolUniverse ACMG/AMP variant classification. It follows Tavtigian et al. 2018, "Modeling the ACMG/AMP Variant Classification Guidelines as a Bayesian Classification Framework", PMID: 29300386, PMCID: PMC6336098, DOI: 10.1038/gim.2017.210.
 
-Use this skill only after the base ACMG workflow, `tooluniverse-acmg-overlay-routing-core`, evidence-specific overlays, and any applicable VCEP specification have completed evidence assignment. This skill does not retrieve primary evidence, does not decide whether a criterion is met, and does not change any evidence-specific threshold.
+Use this skill only after the base ACMG workflow, `tooluniverse-acmg-overlay-routing-core`, evidence-specific overlays, evidence compatibility resolution, and any applicable VCEP specification have completed evidence assignment. This skill does not retrieve primary evidence, does not decide whether a criterion is met, and does not change any evidence-specific threshold.
 
 ---
 
@@ -18,6 +18,8 @@ Use this skill when:
 
 - The report has a completed overlay route audit.
 - Every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`.
+- Evidence compatibility resolution has produced `current_counted_evidence_resolved`.
+- `unresolved_conflicts` is empty.
 - The user needs a posterior probability, Bayesian points, or a more readable final combination summary.
 - Pathogenic and benign evidence conflict and the qualitative ACMG/AMP 2015 table would otherwise leave the result as VUS without showing the quantitative balance.
 - A final report should use the standardized phase structure defined below.
@@ -26,6 +28,8 @@ Do not use this skill when:
 
 - BA1 is valid as stand-alone benign evidence. BA1 is a pre-Bayesian gate and should short-circuit to Benign.
 - Any counted evidence item lacks an overlay or VCEP route outcome.
+- Evidence compatibility resolution has not been run.
+- Evidence compatibility resolution reports unresolved conflicts.
 - A VCEP or disease-specific specification provides a required alternate combining framework.
 - The evidence table contains only source assertions, abstract-only evidence, inaccessible full text, unread supplements, or low-confidence visual extraction without primary-evidence routing.
 
@@ -33,7 +37,7 @@ Do not use this skill when:
 
 ## Evidence Inputs
 
-Input must be a counted evidence table after overlay review. Each row should include:
+Input must be `current_counted_evidence_resolved` after overlay review and evidence compatibility resolution. Each row should include:
 
 - `criterion`: ACMG code, such as `PVS1`, `PM2`, `PP3`, `BS1`, or `BP4`.
 - `strength`: `VeryStrong`, `Strong`, `Moderate`, or `Supporting`.
@@ -43,6 +47,8 @@ Input must be a counted evidence table after overlay review. Each row should inc
 - `source`: primary source or VCEP specification supporting the routed evidence.
 
 If a row is a source assertion only, a lead, an unreviewed literature claim, or an unrouted candidate criterion, put it in `Source Assertions / Leads` or `Missing Evidence / Not Assessed`; do not include it in Bayesian points.
+
+If compatibility resolution identifies evidence in `not_used_due_to_overlap`, `caps_applied`, `context_splits`, or `unresolved_conflicts`, report that block before Bayesian calculation. Use only the retained, resolved evidence. If `unresolved_conflicts` is not empty, do not compute final posterior probability.
 
 ---
 
@@ -182,6 +188,13 @@ Use this structure for final ACMG reports when this skill is active:
 | Criterion | Direction | Strength | Points | Source | Consumed evidence |
 | --- | --- | --- | ---: | --- | --- |
 
+## Evidence Compatibility Resolution
+- current_counted_evidence_resolved:
+- not_used_due_to_overlap:
+- caps_applied:
+- context_splits:
+- unresolved_conflicts:
+
 ## Bayesian Calculation
 - Model: Tavtigian et al. 2018 Bayesian ACMG/AMP framework
 - Prior probability: 0.10
@@ -215,6 +228,8 @@ Use this structure for final ACMG reports when this skill is active:
 - Do not count abstract-only or inaccessible literature as points when the criterion depends on full-text details.
 - Do not count unread supplements or low-confidence figure extraction as points.
 - Do not count the same primary evidence twice.
+- Do not accept unresolved conflicts from evidence compatibility resolution.
+- Do not compute posterior probability from evidence outside `current_counted_evidence_resolved`.
 - Do not use Bayesian points to justify assigning a criterion that an evidence-specific overlay did not support.
 - Do not use this skill to override current VCEP specifications.
 

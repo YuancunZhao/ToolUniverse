@@ -1,22 +1,34 @@
 # Quick Start: ACMG Bayesian Classification Framework
 
-Use this skill after ACMG evidence-specific overlays have assigned counted evidence. It converts the final evidence table into Tavtigian 2018 Bayesian points, OddsPath, posterior probability, and a structured report.
+Use this skill after ACMG evidence-specific overlays have assigned counted evidence,
+the route audit has passed, and Evidence Compatibility Resolution has produced
+`current_counted_evidence_resolved` with empty `unresolved_conflicts`. It converts
+the resolved final evidence table into Tavtigian 2018 Bayesian points, OddsPath,
+posterior probability, and a structured report.
 
 ## Minimum Inputs
 
 ```markdown
-Current Counted Evidence:
+Evidence Compatibility Resolution:
+- current_counted_evidence_resolved:
 | Criterion | Direction | Strength | Route outcome | Guidance authority | Source |
 | --- | --- | --- | --- | --- | --- |
 | PVS1 | pathogenic | VeryStrong | overlay_applied | ClinGen/SVI primary | PVS1 LoF decision-tree overlay |
 | PM2 | pathogenic | Supporting | overlay_applied | ClinGen/SVI primary | PM2 absence/rarity overlay |
+- unresolved_conflicts: []
 ```
 
-If any counted row is missing `overlay_applied` or `overlay_deferred_to_vcep`, stop and label the result `draft classification`.
+If compatibility resolution has not been run, if `unresolved_conflicts` is not
+empty, or if any resolved row is missing `overlay_applied` or
+`overlay_deferred_to_vcep`, stop and label the result `draft classification`.
+Do not compute OddsPath or posterior probability from raw counted evidence.
+
+All examples below assume the listed evidence rows are already in
+`current_counted_evidence_resolved`.
 
 ## Example 1: PVS1 Alone
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -36,7 +48,7 @@ Expected Bayesian calculation:
 
 ## Example 2: PVS1 Plus One Moderate
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -57,7 +69,7 @@ Expected Bayesian calculation:
 
 ## Example 3: PVS1 Plus One Strong
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -77,7 +89,7 @@ Expected Bayesian calculation:
 
 ## Example 4: Two Strong Pathogenic Criteria
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -98,7 +110,7 @@ Expected Bayesian calculation:
 
 ## Example 5: Two Strong Plus One Benign Supporting
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -119,7 +131,7 @@ Expected Bayesian calculation:
 
 ## Example 6: Two Strong Plus Two Benign Supporting
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -141,7 +153,7 @@ Expected Bayesian calculation:
 
 ## Example 7: Two Strong Plus One Benign Strong
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -162,7 +174,7 @@ Expected Bayesian calculation:
 
 ## Example 8: Two Benign Supporting Criteria
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -182,7 +194,7 @@ Expected Bayesian calculation:
 
 ## Example 9: Two Benign Strong Criteria
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Points |
@@ -202,7 +214,7 @@ Expected Bayesian calculation:
 
 ## Example 10: BA1 Stand-Alone
 
-Evidence:
+Resolved evidence:
 
 ```markdown
 | Criterion | Direction | Strength | Route outcome |
@@ -235,7 +247,10 @@ Expected behavior:
 
 ## Checklist Before Final Classification
 
-- Every counted criterion has `overlay_applied` or `overlay_deferred_to_vcep`.
+- Evidence Compatibility Resolution is present.
+- `unresolved_conflicts` is empty.
+- Bayesian input is `current_counted_evidence_resolved`, not raw counted evidence.
+- Every resolved counted criterion has `overlay_applied` or `overlay_deferred_to_vcep`.
 - Source assertions are separated from counted evidence.
 - BA1 has been handled before Bayesian calculation.
 - VCEP-specific combining rules have been checked.

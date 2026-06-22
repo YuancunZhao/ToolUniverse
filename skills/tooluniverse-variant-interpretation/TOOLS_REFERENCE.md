@@ -388,15 +388,16 @@ result = tu.tools.EVE_get_variant_score(
 
 ### Integrating Prediction Tools
 
-**Best Practice for VUS Classification**:
+**Best Practice for VUS Prediction Retrieval**:
 
 ```python
 def get_multi_predictor_evidence(tu, variant_info):
     """
-    Combine multiple predictors for robust PP3/BP4 assignment.
+    Retrieve multiple predictors for orientation.
+    Do not assign PP3/BP4 here; route to the calibrated overlay or VCEP.
     """
     evidence = []
-    
+
     # 1. CADD (all variants)
     cadd = tu.tools.CADD_get_variant_score(
         chrom=variant_info['chrom'],
@@ -411,7 +412,7 @@ def get_multi_predictor_evidence(tu, variant_info):
             'score': score,
             'damaging': score >= 20
         })
-    
+
     # 2. AlphaMissense (missense only)
     if variant_info.get('uniprot_id') and variant_info.get('aa_change'):
         am = tu.tools.AlphaMissense_get_variant_score(
@@ -425,7 +426,7 @@ def get_multi_predictor_evidence(tu, variant_info):
                 'classification': am['data'].get('classification'),
                 'damaging': am['data'].get('classification') == 'pathogenic'
             })
-    
+
     # 3. EVE (via VEP)
     eve = tu.tools.EVE_get_variant_score(
         chrom=variant_info['chrom'],
@@ -441,17 +442,17 @@ def get_multi_predictor_evidence(tu, variant_info):
                 'score': eve_scores[0].get('eve_score'),
                 'damaging': eve_scores[0].get('eve_score', 0) > 0.5
             })
-    
+
     # Consensus
     damaging = sum(1 for e in evidence if e.get('damaging'))
     benign = sum(1 for e in evidence if not e.get('damaging'))
-    
+
     return {
-        'predictions': evidence,
+        'prediction_context': evidence,
         'damaging_count': damaging,
         'benign_count': benign,
-        'acmg_pp3': damaging >= 2 and benign == 0,
-        'acmg_bp4': benign >= 2 and damaging == 0
+        'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement',
+        'route_status': 'candidate_only_until_overlay_or_vcep'
     }
 ```
 
@@ -866,28 +867,28 @@ result = tu.tools.PubMed_search_articles(
 ```python
 def annotate_variant(tu, variant_hgvs, gene):
     """Complete variant annotation workflow."""
-    
+
     # Phase 1: Get aggregated annotations
     annotations = tu.tools.MyVariant_query_variants(
         variant_id=variant_hgvs,
         fields="clinvar,gnomad,cadd,dbnsfp"
     )
-    
+
     # Phase 2: ClinVar detail
     clinvar = tu.tools.ClinVar_search_variants(variant=variant_hgvs)
-    
+
     # Phase 3: Population frequency
     gnomad = tu.tools.gnomad_search_variants(variant=variant_hgvs)
-    
+
     # Phase 4: Gene context
     omim = tu.tools.OMIM_search(query=gene)
-    
+
     # Phase 5: Literature
     literature = tu.tools.PubMed_search_articles(
         query=f"{gene} AND {variant_hgvs}",
         max_results=20
     )
-    
+
     return {
         'annotations': annotations,
         'clinvar': clinvar,
@@ -902,10 +903,10 @@ def annotate_variant(tu, variant_hgvs, gene):
 ```python
 def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
     """Structural analysis for VUS missense variants."""
-    
+
     # Try PDB first
     pdb_structures = tu.tools.PDBe_get_uniprot_mappings(uniprot_id=uniprot_id)
-    
+
     if pdb_structures:
         # Use best resolution experimental structure
         best_pdb = sorted(pdb_structures, key=lambda x: x.get('resolution', 10))[0]
@@ -915,13 +916,13 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
         # Fallback to AlphaFold
         structure = tu.tools.alphafold_get_prediction(accession=uniprot_id)
         structure_source = "AlphaFold DB"
-    
+
     # Get domain information
     domains = tu.tools.InterPro_get_protein_domains(accession=uniprot_id)
-    
+
     # Get functional sites
     functions = tu.tools.UniProt_get_function_by_accession(accession=uniprot_id)
-    
+
     # Analyze residue context
     analysis = {
         'structure_source': structure_source,
@@ -929,7 +930,7 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
         'functional_sites': find_nearby_sites(functions, residue_position),
         'pm1_applicable': assess_pm1(domains, functions, residue_position)
     }
-    
+
     return analysis
 ```
 
@@ -974,45 +975,37 @@ Do not use a local helper function to calculate final ACMG classification from e
 
 ---
 
-## ACMG Code Quick Reference
+## ACMG Route Quick Reference
 
-### Pathogenic Codes
-| Code | Strength | Trigger |
+This is a route index, not an evidence-strength table. Use
+`tooluniverse-acmg-variant-classification` and
+`tooluniverse-acmg-overlay-routing-core` for final evidence assignment, route
+audit, Evidence Compatibility Resolution, and final combine.
+
+### Pathogenic/Context Candidate Routes
+| Candidate | Trigger | Required route |
 |------|----------|---------|
-| PVS1 | Variable | Predicted LoF in an established LoF disease gene; assign strength through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` |
-| PS1 | Strong | Same AA as pathogenic |
-| PS2 | Strong | De novo (confirmed) |
-| PS3 | Overlay-assigned | Functional assay evidence routes to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
-| PS4 | Strong | Prevalence in affected |
-| PM1 | Moderate | Functional domain |
-| PM2 | Supporting | Absent/rare from controls after ClinGen SVI PM2 overlay checks |
-| PM3 | Moderate | Trans with pathogenic |
-| PM4 | Moderate | Protein length change |
-| PM5 | Moderate | Novel at known position |
-| PM6 | Moderate | De novo (unconfirmed) |
-| PP1 | Supporting | Segregation; strength and PP4 interaction require combined PP1/BS4/PP4 overlay |
-| PP2 | Supporting | Low missense rate gene |
-| PP3 | Overlay-assigned | Computational prediction evidence routes to PP3/BP4 overlay or VCEP |
-| PP4 | Supporting | Phenotype specific; do not double count with PP1/BS4 or PS4 |
-| PP5 | Not counted by default | Reputable-source assertion; retrieve primary evidence |
+| PVS1 | Predicted LoF, canonical splice, start-loss, exon deletion/duplication, or whole-gene deletion | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement`; RNA refinement only with RNA assay or observed transcript evidence |
+| PS1/PM5 | Same amino acid or same residue comparison variant | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement`; source labels are leads only |
+| PS1-splicing | Same predicted splice event as an independent P/LP comparison variant | `tooluniverse-acmg-ps1-splicing-similarity-refinement` |
+| PS2/PM6 | De novo or trio evidence | `tooluniverse-acmg-de-novo-evidence-refinement` |
+| PS3/BS3 | Functional assay or structured functional database hit | `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
+| PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment evidence | `tooluniverse-acmg-ps4-case-enrichment-refinement` |
+| PM1/PP2/BP1 | Hotspot, functional region, regional missense constraint, or missense mechanism context | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
+| PM2 | Absent or rare population frequency | `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting if applied |
+| PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous evidence | `tooluniverse-acmg-pm3-in-trans-refinement` |
+| PM4/BP3 | In-frame indel, stop-loss, altered product, repeat/low-complexity region | `tooluniverse-acmg-pm4-bp3-protein-length-refinement` |
+| PP1/BS4/PP4 | Segregation, non-segregation, family, pedigree, phenotype-locus evidence | `tooluniverse-acmg-pp1-segregation-refinement` and phenotype-dependent intake when needed |
+| PP3/BP4 | Computational prediction evidence | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP; no local predictor voting |
+| PP5/BP6 | Reputable-source assertion | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`; not counted by default |
 
-Use `tooluniverse-acmg-variant-classification` and its overlays for final evidence strength. In particular, BA1 uses the Ghosh 2018 BA1 exception-list overlay before stand-alone benign classification, PM2 defaults to `PM2_Supporting`, PP3/BP4 uses the Pejaver 2022 calibrated missense-prediction overlay, PS4 uses the case-enrichment overlay, PM4/BP3 uses the protein-length overlay, and PP5/BP6 uses the reputable-source overlay, which does not count PP5/BP6 by default.
-
-### Benign Codes
-| Code | Strength | Trigger |
+### Benign/Frequency Candidate Routes
+| Candidate | Trigger | Required route |
 |------|----------|---------|
-| BA1 | Stand-alone | AF >0.05 after Ghosh 2018 exception-list and dataset-adequacy review |
-| BS1 | Strong | High frequency |
-| BS2 | Strong | Homozygotes healthy |
-| BS3 | Strong | No functional effect |
-| BS4 | Strong | No segregation; apply only after penetrance, phenocopy, phase, and inheritance review |
-| BP1 | Supporting | Missense in LOF gene |
-| BP2 | Supporting | Observed trans |
-| BP3 | Supporting | In-frame, no function |
-| BP4 | Overlay-assigned | Benign prediction evidence routes to PP3/BP4 overlay or VCEP |
-| BP5 | Supporting | Alternate explanation |
-| BP6 | Not counted by default | Reputable-source assertion; retrieve primary evidence |
-| BP7 | Supporting | Synonymous |
+| BA1 | AF >0.05 candidate or stand-alone benign frequency claim | `tooluniverse-acmg-ba1-exception-list-refinement` before benign classification |
+| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, cis/trans context, or alternate diagnosis | `tooluniverse-acmg-benign-context-refinement` |
+| RNA no-splicing-impact evidence | Synonymous/intronic variant with direct RNA or appropriate splicing no-impact evidence | `tooluniverse-acmg-pvs1-splicing-refinement`; prediction-only low splice scores remain prediction context |
+| Final compatibility | Any final counted evidence set | Evidence Compatibility Resolution in `tooluniverse-acmg-overlay-routing-core`; only `current_counted_evidence_resolved` may enter final combine |
 
 ---
 

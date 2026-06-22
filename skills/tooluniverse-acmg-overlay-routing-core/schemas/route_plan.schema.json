@@ -19,6 +19,8 @@
           "candidate_criteria",
           "required_overlays",
           "trigger_policy",
+          "enforcement_level",
+          "route_kind",
           "applies_when",
           "baseline_data_sources",
           "reason_for_routing",
@@ -36,6 +38,21 @@
           "criterion_group": {
             "type": "string"
           },
+          "route_bundle": {
+            "type": "string",
+            "enum": [
+              "baseline_context_bundle",
+              "population_frequency_bundle",
+              "consequence_lof_bundle",
+              "splice_bundle",
+              "missense_bundle",
+              "protein_length_bundle",
+              "clinical_observation_bundle",
+              "literature_functional_bundle",
+              "cnv_sv_bundle",
+              "final_combine_bundle"
+            ]
+          },
           "required_overlays": {
             "type": "array",
             "minItems": 1,
@@ -50,6 +67,35 @@
               "universal_baseline",
               "variant_type_baseline",
               "evidence_discovery"
+            ]
+          },
+          "enforcement_level": {
+            "type": "string",
+            "enum": [
+              "must_plan",
+              "must_query",
+              "must_route_if_hit",
+              "must_audit_if_counted"
+            ]
+          },
+          "route_kind": {
+            "type": "string",
+            "enum": [
+              "applicability_gate",
+              "evidence_scoring",
+              "source_review",
+              "functional_discovery",
+              "compatibility_gate"
+            ]
+          },
+          "expected_default_status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "no_evidence",
+              "not_assessed",
+              "not_applicable",
+              "not_used"
             ]
           },
           "applies_when": {

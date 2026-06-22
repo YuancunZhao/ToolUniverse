@@ -13,8 +13,8 @@ Summary:
 - Added skills: 22
 - Modified upstream skills: 4
 - Deleted upstream skills: 0
-- Changed files under `skills/`: 75
-- Net intended overlay diff: approximately 10400 insertions, 190 deletions
+- Changed files under `skills/`: 76
+- Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
 ## Added Skills
 
@@ -25,7 +25,7 @@ These are additive overlays intended to refine ACMG/AMP evidence assignment with
 | Skill | Purpose | Files |
 | --- | --- | --- |
 | `tooluniverse-acmg-ba1-exception-list-refinement` | Refine BA1 stand-alone benign evidence using Ghosh et al. 2018 ClinGen SVI BA1 definition, 2,000 observed-allele requirement, general continental population dataset checks, founder-population caveats, gene/variant-specific BA1 modifications, and the BA1 exception list. | `SKILL.md`, `QUICK_START.md`, `references/ghosh_2018_ba1_exception_guidance.md` |
-| `tooluniverse-acmg-bayesian-classification-framework` | Convert already-routed ACMG/AMP evidence strengths into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and standardized phase output after the final overlay route audit. | `SKILL.md`, `QUICK_START.md`, `references/tavtigian_2018_bayesian_framework.md` |
+| `tooluniverse-acmg-bayesian-classification-framework` | Convert already-routed and compatibility-resolved ACMG/AMP evidence strengths into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and standardized phase output after the final overlay route audit and evidence compatibility gate. | `SKILL.md`, `QUICK_START.md`, `references/tavtigian_2018_bayesian_framework.md` |
 | `tooluniverse-acmg-dominant-negative-mechanism-refinement` | Resolve whether a gene-disease context supports LoF/haploinsufficiency, dominant-negative, antimorphic, gain-of-function, recessive LoF, or mixed mechanism before applying mechanism-sensitive ACMG criteria. | `SKILL.md`, `QUICK_START.md` |
 | `tooluniverse-acmg-de-novo-evidence-refinement` | Refine PS2/PM6 de novo evidence using ClinGen SVI De Novo Criteria v1.1 point scoring, parental relationship confirmation, phenotype specificity, recurrent observations, inheritance adjustments, literature extraction, and missing-information prompts. | `SKILL.md`, `QUICK_START.md`, `references/de_novo_ps2_pm6_summary.md` |
 | `tooluniverse-acmg-multiple-disorder-context-refinement` | Refine disease-entity selection and evidence aggregation when one gene has multiple associated disorders, inheritance models, dosage states, phenotype spectra, or mechanisms, using ClinGen multiple-disorder guidance and gene-disease validity/dosage context. | `SKILL.md`, `QUICK_START.md`, `references/clingen_multiple_disorder_guidance.md` |
@@ -57,6 +57,7 @@ M skills/tooluniverse-acmg-overlay-routing-core/overlay_registry.yaml
 M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
 M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_plan.schema.json
 M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_audit.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
 M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
 ```
 
@@ -70,6 +71,69 @@ Behavior clarified:
 - Clarifies that missing an applicable baseline route forces `draft classification`; missing a discovery route is acceptable only when no triggering evidence was found and source/literature coverage is stated.
 - Adds LDLR-like missense, literature cascade-screening, MaveDB functional-score, and missing-baseline-route regression evals.
 - This is a routing compliance contract update only. It does not change ACMG evidence thresholds, strength mappings, VCEP precedence, PM2/PP3 locked rules, or final classification combining.
+
+## ACMG Overlay Query-Aware Enforcement Contract: 2026-06-22
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_registry.yaml
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_plan.schema.json
+A skills/tooluniverse-acmg-overlay-routing-core/schemas/coverage_audit.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+```
+
+Behavior clarified:
+
+- Adds registry-level `enforcement_level` values: `must_plan`, `must_query`, `must_route_if_hit`, and `must_audit_if_counted`.
+- Adds registry-level `route_kind` values: `applicability_gate`, `evidence_scoring`, `source_review`, `functional_discovery`, and `compatibility_gate`.
+- Adds `expected_default_status` so applicability gates such as missense PVS1 can be planned with an expected `not_applicable` result.
+- Adds `schemas/coverage_audit.schema.json` for queried sources, query status, hits, triggered routes, not-triggered routes, and rationale.
+- Clarifies that MaveDB or equivalent structured functional databases are `must_query` for missense functional discovery; a hit triggers PS3/BS3 routing, while no hit is a coverage audit result rather than a forced overlay.
+- Clarifies source-label fan-out: ClinVar, HGMD, LOVD, VCEP, lab, or paper labels route to PP5/BP6 source review by default; evidence-specific fan-out requires explicit criterion codes, primary-evidence keywords, or retrievable primary evidence.
+- Adds regression evals for LDLR p.His583Tyr coverage audit, MaveDB hit/no-hit behavior, ClinVar label-only fan-out blocking, paper criterion-code fan-out, PP1 absence after literature no-hit, and abstract-only family evidence.
+- This remains a portable compliance contract. It does not add a CLI, MCP tool, runtime database query layer, ACMG threshold change, VCEP precedence change, or final combiner change.
+
+## Variant Pathogenicity Route-Bundle Optimization and SV Bypass Cleanup: 2026-06-22
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
+A skills/tooluniverse-acmg-overlay-routing-core/schemas/bundle_route_plan.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_plan.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-structural-variant-analysis/SKILL.md
+M skills/tooluniverse-structural-variant-analysis/CLASSIFICATION_GUIDE.md
+M skills/tooluniverse-structural-variant-analysis/ANALYSIS_PROCEDURES.md
+M skills/tooluniverse-structural-variant-analysis/REPORT_TEMPLATE.md
+M skills/tooluniverse-structural-variant-analysis/EXAMPLES.md
+M skills/tooluniverse-variant-analysis/SKILL.md
+M skills/tooluniverse-variant-analysis/references/sv_cnv_analysis.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+M skills/tooluniverse-variant-interpretation/EXAMPLES.md
+M skills/tooluniverse-rare-disease-diagnosis/EXAMPLES.md
+```
+
+Behavior clarified:
+
+- Adds a `Route Bundle Quick Planner` to the routing core so external agents can plan compact bundles before expanding triggered bundles into registry-backed overlay routes.
+- Adds `schemas/bundle_route_plan.schema.json` as the first-class compact bundle planning artifact, allowing non-ACMG intake steps in `required_checks` while keeping counted evidence tied to expanded ACMG overlay route rows.
+- Adds optional `route_bundle` to `schemas/route_plan.schema.json` and regression evals for route-bundle planning, SV/CNV standalone-classification blocking, Bayesian refusal without compatibility artifacts, and bundle-row-not-counted safeguards.
+- Simplifies the main ACMG workflow into a dispatcher: normalize variant, establish context, emit bundle route plan, run triggered overlays, resolve compatibility, then combine.
+- Converts `tooluniverse-structural-variant-analysis` into SV/CNV evidence intake. It now outputs evidence summaries and route candidates rather than standalone final germline ACMG classification, 0-10 pathogenicity score, or directly counted ACMG criteria.
+- Updates `tooluniverse-variant-analysis` SV/CNV reference to route structural variant evidence through SV intake and ACMG overlays.
+- Replaces direct final-classification examples in `tooluniverse-variant-interpretation` with retrieval and route-planning examples.
+- Removes residual de novo shortcut language from a rare-disease example; de novo observations now route to the PS2/PM6 overlay.
+- This is a workflow efficiency and bypass-prevention cleanup only. It does not change evidence-specific thresholds, ClinGen/VCEP authority, PM2 default strength, PP3/BP4 Pejaver handling, evidence compatibility rules, or Bayesian formulas.
 
 ### Literature Evidence Overlay
 
@@ -92,7 +156,7 @@ Main behavior changes:
 - Adds explicit gates for PVS1 when LoF/haploinsufficiency is uncertain or disease mechanism may be dominant-negative, antimorphic, gain-of-function, or mixed.
 - Routes PM2, BA1, PP3/BP4, PP5/BP6, protein-level PS1/PM5, PS1-splicing, PM1, baseline PVS1 LoF decision-tree, PVS1-splicing, PS3/BS3, PP1/BS4 with PP4 combined guidance, PM3, phenotype-dependent criteria, PS2/PM6 de novo evidence, PM4/BP3, and visual-literature evidence to the overlay skills through the shared routing core.
 - Routes PS4 case enrichment, PM4/BP3 protein-length evidence, BA1 exception-list evidence, and BA1/BS1/BS2/BP2/BP5 benign-context evidence to dedicated overlays.
-- Adds a final Tavtigian 2018 Bayesian evidence-combination phase after the overlay hard-stop audit, reporting points, OddsPath, posterior probability, and a standardized phase report without changing evidence-specific overlay thresholds.
+- Adds a final compatibility-resolution gate after the overlay hard-stop audit, then a Tavtigian 2018 Bayesian evidence-combination phase that consumes only `current_counted_evidence_resolved`, reporting points, OddsPath, posterior probability, and a standardized phase report without changing evidence-specific overlay thresholds.
 - Specifies that PS2/PM6 uses ClinGen SVI De Novo Criteria v1.1 point scoring and routes literature-derived de novo evidence through literature deep research and figure evidence extraction before scoring.
 - Adds explicit behavior for missing phenotype or de novo information: use routing-core status `not_assessed` and ask the user for targeted missing fields.
 - Adds explicit behavior for missing target disease/phenotype in multi-disorder genes: mark disease-context routing as not assessed and ask before transferring disease-specific evidence.
@@ -174,6 +238,7 @@ A skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/route_plan.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/overlay_result.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/route_audit.schema.json
+A skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
 A skills/tooluniverse-acmg-overlay-routing-core/references/routing_core_conventions.md
 A skills/tooluniverse-acmg-phenotype-dependent-evidence-refinement/QUICK_START.md
@@ -664,6 +729,7 @@ A skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/route_plan.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/overlay_result.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/schemas/route_audit.schema.json
+A skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
 A skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
 ```
 
@@ -676,6 +742,62 @@ Behavior clarified:
 - Adds regression eval cases for common overlay-bypass failures: direct PP1 strength assignment from family evidence, PS3 from source labels, PS4 from case recurrence without study fields, PP3 from predictor-majority reasoning, PP5/BP6 from source assertions, PVS1 from consequence alone, PM2_Moderate from absence alone, broad-domain PM1, source-label PM5, and missing final route audits.
 - Keeps the first version as a GitHub-shareable compliance contract rather than a full enforcement runtime or MCP tool.
 - Does not change any evidence threshold, strength mapping, VCEP precedence, PM2 default `PM2_Supporting`, PP3/BP4 Pejaver 2022 handling, or final ACMG combining rule.
+
+## Final Combine Evidence Compatibility Resolution: 2026-06-18
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_registry.yaml
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
+A skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-acmg-bayesian-classification-framework/SKILL.md
+```
+
+Behavior added:
+
+- Adds a universal final-combine `Evidence Compatibility Resolution` gate after route audit and before qualitative ACMG or Tavtigian Bayesian combine.
+- Adds required compatibility artifacts: `current_counted_evidence_resolved`, `not_used_due_to_overlap`, `caps_applied`, `context_splits`, and `unresolved_conflicts`.
+- Adds `schemas/evidence_compatibility.schema.json` with controlled resolution values: `keep_more_specific`, `keep_primary_evidence`, `keep_mechanism_appropriate`, `drop_as_not_used`, `cap_combined_strength`, `split_by_context`, `defer_to_vcep`, and `unresolved_draft_only`.
+- Extends `overlay_registry.yaml` with `criterion_group: evidence_compatibility_resolution`, `trigger_policy: universal_baseline`, and `applies_when: final_counted_evidence_before_combination`.
+- Updates `tooluniverse-acmg-variant-classification` so Phase 7 resolves compatibility and Phase 8 Bayesian calculation consumes only `current_counted_evidence_resolved`.
+- Updates `tooluniverse-acmg-bayesian-classification-framework` so unresolved conflicts block final OddsPath/posterior calculation and return `draft classification`.
+- Documents v1 incompatibility/cap/split rules for frequency evidence, disease/mechanism context, PVS1/RNA/splicing, PVS1/PM4/CNV, functional/computational reuse, PM1/PP2/PP3, PS1/PM5, clinical-observation reuse, PP1/PP4 caps, PM3/de novo caps, and source/provenance leads.
+- Adds regression evals for BA1/PM2/BS1, PP2/BP1, PVS1/PP3, PVS1_RNA/PS3/PP3, BP7_RNA/BS3/PS1-splicing, PM4/PVS1/BP3, whole-gene deletion dosage reuse, multiple/conflicting assays, DMS reuse, PM1/PP2/PP3 cap, PS1/PM5, PM5/PM1/PM4 overlap, same-proband clinical evidence reuse, PP1/PP4 cap, PS2/PM6 phenotype double counting, PM3 circularity/duplicates/homozygous cap, multiple-disorder context split, missing compatibility artifact, and unresolved Bayesian hard stop.
+- Does not assign new evidence, alter evidence-specific thresholds, change strength mappings, change VCEP precedence, or modify locked PM2 and PP3/BP4 rules.
+
+## Shared-Agent Bypass Cleanup and Final-Combine Consistency Pass: 2026-06-18
+
+Changed files:
+
+```text
+M skills/tooluniverse-rare-disease-diagnosis/DIAGNOSTIC_WORKFLOW.md
+M skills/tooluniverse-rare-disease-diagnosis/REPORT_TEMPLATE.md
+M skills/tooluniverse-rare-disease-diagnosis/EXAMPLES.md
+M skills/tooluniverse-rare-disease-diagnosis/TOOLS_REFERENCE.md
+M skills/tooluniverse-variant-interpretation/ACMG_CLASSIFICATION.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+M skills/tooluniverse-acmg-bayesian-classification-framework/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_registry.yaml
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_audit.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+```
+
+Behavior clarified:
+
+- Removes residual direct ACMG strength shortcuts from rare-disease diagnosis templates and examples, including PM2 Moderate from absence, PP3 from predictor consensus, SpliceAI-only PP3/BP7, and affected-family-member PS4 shortcuts.
+- Converts rare-disease Phase 4 variant output into candidate route, prediction context, required overlay, route status, and missing-input reporting.
+- Converts variant-interpretation quick references and predictor helper output into route-index and prediction-context language rather than local evidence-strength assignment.
+- Aligns Bayesian Quick Start with the final-combine compatibility gate by requiring `current_counted_evidence_resolved` and empty `unresolved_conflicts` before OddsPath or posterior calculation.
+- Clarifies in the routing registry that SpliceAI-only evidence is prediction/comparison context and does not trigger PVS1_RNA without RNA assay, published RNA evidence, or observed transcript consequence.
+- Adds schema comments that JSON Schema validates field shape only; hard-stop invariants are enforced by the routing contract and evals.
+- Adds regression evals for rare-disease template bypass, variant-interpretation predictor voting, raw-counted-evidence Bayesian use, and SpliceAI-only PVS1_RNA misrouting.
+- Does not add evidence criteria, change overlay thresholds, change VCEP precedence, or modify locked PM2 and PP3/BP4 rules.
 
 ## Update Procedure
 

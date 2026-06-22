@@ -2,31 +2,35 @@
 
 This file is a quick index for retrieval and reporting. It is not a standalone ACMG classifier. Use `tooluniverse-acmg-variant-classification` for final evidence-code assignment and classification, with `tooluniverse-acmg-overlay-routing-core` coordinating disease context, mechanism, phenotype/source/literature intake, and evidence-specific overlays.
 
-## Evidence Codes
+## Evidence Route Index
 
-### Pathogenic Evidence
+Do not assign ACMG evidence strength from this quick index. Use
+`tooluniverse-acmg-variant-classification` with the routing core, evidence
+specific overlays, route audit, and Evidence Compatibility Resolution.
 
-| Code | Strength | Description |
+### Pathogenic/Context Candidate Routes
+
+| Candidate | Evidence lead | Required route |
 |------|----------|-------------|
-| PVS1 | Very Strong | Null variant in gene where LOF is mechanism |
-| PS1 | Strong | Same amino acid change as known pathogenic |
-| PS3 | Overlay-assigned | Functional assay evidence routed to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
-| PM1 | Moderate | Mutational hot spot / functional domain |
-| PM2 | Supporting | Absent/rare from controls after coverage and population checks |
-| PM5 | Moderate | Different missense at same residue as pathogenic |
-| PP3 | Variable | Calibrated computational prediction evidence |
-| PP5 | Not counted by default | Reputable-source assertion; retrieve primary evidence with `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` |
+| PVS1 | Null, canonical splice, start-loss, exon deletion/duplication, whole-gene deletion | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement`; RNA refinement only with RNA assay or observed transcript evidence |
+| PS1/PM5 | Same amino-acid or same-residue comparison variant | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement`; comparison source labels are leads only |
+| PS3/BS3 | Functional assay evidence | `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
+| PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment | `tooluniverse-acmg-ps4-case-enrichment-refinement` |
+| PM1/PP2/BP1 | Hotspot, functional domain, regional missense constraint, or missense mechanism context | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
+| PM2 | Absent/rare from controls after coverage and population checks | `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting if applied |
+| PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous observations | `tooluniverse-acmg-pm3-in-trans-refinement` |
+| PM4/BP3 | Protein length change, in-frame indel, stop-loss, repeat/low-complexity region | `tooluniverse-acmg-pm4-bp3-protein-length-refinement` |
+| PP1/BS4/PP4 | Segregation, non-segregation, phenotype-locus evidence | `tooluniverse-acmg-pp1-segregation-refinement` and phenotype-dependent intake when needed |
+| PP3/BP4 | Calibrated computational prediction evidence | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP; no local predictor voting |
+| PP5/BP6 | Reputable-source assertion | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`; not counted by default |
 
-### Benign Evidence
+### Benign/Frequency Candidate Routes
 
-| Code | Strength | Description |
+| Candidate | Evidence lead | Required route |
 |------|----------|-------------|
-| BA1 | Stand-alone | AF >0.05 only after Ghosh 2018 BA1 exception-list and dataset-adequacy review |
-| BS1 | Strong | MAF greater than expected |
-| BS3 | Strong | Functional studies show no effect |
-| BP4 | Supporting | Multiple computational predictions benign |
-| BP6 | Not counted by default | Reputable-source assertion; retrieve primary evidence with `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` |
-| BP7 | Supporting | Synonymous with no splice impact |
+| BA1 | AF >0.05 candidate | `tooluniverse-acmg-ba1-exception-list-refinement` before stand-alone benign classification |
+| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, phase context, alternate diagnosis | `tooluniverse-acmg-benign-context-refinement` |
+| RNA no-splicing-impact candidate | Synonymous/intronic no-splicing-impact evidence | `tooluniverse-acmg-pvs1-splicing-refinement`; prediction-only low splice scores remain prediction context |
 
 ## Classification Algorithm
 
@@ -100,9 +104,9 @@ Gene-disease validity and disease association scores do not substitute for patie
 
 | Impact Level | Description | ACMG use |
 |--------------|-------------|--------------|
-| **Critical** | Active site, catalytic residue | PM1 (strong) |
-| **High** | Buried residue, disulfide, structural core | PM1 (moderate) |
-| **Moderate** | Domain interface, binding site | PM1 (supporting) |
+| **Critical** | Active site, catalytic residue | PM1 candidate route |
+| **High** | Buried residue, disulfide, structural core | PM1/structural context lead |
+| **Moderate** | Domain interface, binding site | PM1/structural context lead |
 | **Low** | Surface, flexible region | No support |
 
 Use `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` before assigning PM1 from regional missense constraint, DECIPHER/CCR/MetaDome/paralog evidence, hotspots, domains, or critical residues. Use `tooluniverse-acmg-pm4-bp3-protein-length-refinement` for in-frame insertions/deletions, repeat-region indels, stop-loss variants, and last-exon altered-product contexts.
@@ -142,7 +146,7 @@ Use `tooluniverse-acmg-phenotype-dependent-evidence-refinement` when PP4, PS4, P
 
 ## SpliceAI Prediction Context
 
-Use SpliceAI scores as prediction context, not direct evidence strength. Route prediction-only splice evidence through the relevant PP3/BP4 or splicing-prediction pathway, apply `tooluniverse-acmg-ps1-splicing-similarity-refinement` only for independent same-event comparison-variant evidence, and apply `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA assay or detailed RNA/splicing evidence affects PVS1 or BP7.
+Use SpliceAI scores as prediction context, not direct evidence strength. Route prediction-only splice evidence through the relevant PP3/BP4 or splicing-prediction pathway, apply `tooluniverse-acmg-ps1-splicing-similarity-refinement` only for independent same-event comparison-variant evidence, and apply `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA assay or detailed RNA/splicing evidence affects PVS1 or RNA no-impact evidence.
 
 ## Literature Evidence Weights
 
