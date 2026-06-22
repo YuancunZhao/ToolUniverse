@@ -162,6 +162,80 @@ default_tool_files = {
     "clinical_calculators": os.path.join(
         current_dir, "data", "clinical_calculators_tools.json"
     ),
+    # Canonical VCF/BCF variant statistics (bcftools-backed, local compute)
+    "vcf_stats": os.path.join(current_dir, "data", "vcf_stats_tools.json"),
+    # ROC / AUC diagnostic-accuracy analysis (numpy, local compute)
+    "roc_analysis": os.path.join(current_dir, "data", "roc_analysis_tools.json"),
+    # Network proximity between node sets (networkx, local compute)
+    "network_proximity": os.path.join(
+        current_dir, "data", "network_proximity_tools.json"
+    ),
+    # dN/dS (Ka/Ks) selection analysis between coding sequences (pure Python)
+    "dn_ds": os.path.join(current_dir, "data", "dn_ds_tools.json"),
+    # edgeR / limma-voom differential expression (Rscript, local compute)
+    "edger_limma": os.path.join(current_dir, "data", "edger_limma_tools.json"),
+    # gnomAD gene constraint (pLI / LOEUF / mis_z) via GraphQL
+    "gnomad_constraint": os.path.join(
+        current_dir, "data", "gnomad_constraint_tools.json"
+    ),
+    # HuggingFace Inference API (hosted ML models: classify / embed / fill-mask)
+    "huggingface_inference": os.path.join(
+        current_dir, "data", "huggingface_inference_tools.json"
+    ),
+    # Keyless ESM-2 masked-marginal missense variant scoring (via hf-inference)
+    "esm2_variant_effect": os.path.join(
+        current_dir, "data", "esm2_variant_effect_tools.json"
+    ),
+    # IUPred3 protein disorder prediction (sequence ML)
+    "iupred3": os.path.join(current_dir, "data", "iupred3_tools.json"),
+    # Ensembl VEP missense pathogenicity (AlphaMissense + SIFT + PolyPhen)
+    "vep_pathogenicity": os.path.join(
+        current_dir, "data", "vep_pathogenicity_tools.json"
+    ),
+    # Therapeutics Data Commons ML oracles (QED/SA/LogP/bioactivity; PyTDC)
+    "tdc_oracle": os.path.join(current_dir, "data", "tdc_oracle_tools.json"),
+    # IBM RXN for Chemistry — reaction/retrosynthesis prediction (API key)
+    "rxn_chemistry": os.path.join(current_dir, "data", "rxn_chemistry_tools.json"),
+    # Replicate — hosted ML model inference gateway (API token)
+    "replicate": os.path.join(current_dir, "data", "replicate_tools.json"),
+    # DTU protein predictors (DeepTMHMM / SignalP via biolib)
+    "dtu_protein": os.path.join(current_dir, "data", "dtu_protein_tools.json"),
+    # Cellpose deep-learning cell/nucleus segmentation (local, cellpose pkg)
+    "cellpose": os.path.join(current_dir, "data", "cellpose_tools.json"),
+    # Therapeutics Data Commons benchmark dataset retrieval (PyTDC)
+    "tdc_dataset": os.path.join(current_dir, "data", "tdc_dataset_tools.json"),
+    # ENCODE SCREEN cCRE registry (candidate cis-regulatory elements, GraphQL)
+    "screen_ccre": os.path.join(current_dir, "data", "screen_ccre_tools.json"),
+    # RNAcentral ncRNA genome locations / sequence
+    "rnacentral_genome": os.path.join(
+        current_dir, "data", "rnacentral_genome_tools.json"
+    ),
+    # LIPID MAPS Proteome Database (lipid-metabolism gene/protein lookup)
+    "lipidmaps_gene": os.path.join(current_dir, "data", "lipidmaps_gene_tools.json"),
+    # InterPro member-database signatures (Pfam/SMART/PANTHER/... + PDB structures)
+    "interpro_member_db": os.path.join(
+        current_dir, "data", "interpro_member_db_tools.json"
+    ),
+    # Rhea biochemical-reaction detail (equation, ChEBI participants, EC, xrefs)
+    "rhea_reaction": os.path.join(current_dir, "data", "rhea_reaction_tools.json"),
+    # PanglaoDB single-cell marker genes per cell type
+    "panglaodb": os.path.join(current_dir, "data", "panglaodb_tools.json"),
+    # IDR (Image Data Resource) cross-study metadata search engine
+    "idr_searchengine": os.path.join(
+        current_dir, "data", "idr_searchengine_tools.json"
+    ),
+    # GBIF backbone-taxonomy tree navigation + name parsing
+    "gbif_taxonomy": os.path.join(current_dir, "data", "gbif_taxonomy_tools.json"),
+    # UniBind direct TF-DNA binding sites (curated ChIP-seq)
+    "unibind": os.path.join(current_dir, "data", "unibind_tools.json"),
+    # ZOOMA free-text -> ontology annotation (EBI)
+    "zooma": os.path.join(current_dir, "data", "zooma_tools.json"),
+    # RGD rat disease-model strain catalog + annotations
+    "rgd_strain": os.path.join(current_dir, "data", "rgd_strain_tools.json"),
+    # SGD yeast protein domains / PTM sites / literature
+    "sgd_protein": os.path.join(current_dir, "data", "sgd_protein_tools.json"),
+    # HuBMAP biospecimen layer (samples w/ CCF spatial registration + donors)
+    "hubmap_sample": os.path.join(current_dir, "data", "hubmap_sample_tools.json"),
     "intact": os.path.join(current_dir, "data", "intact_tools.json"),
     "intogen": os.path.join(current_dir, "data", "intogen_tools.json"),
     "metabolights": os.path.join(current_dir, "data", "metabolights_tools.json"),
