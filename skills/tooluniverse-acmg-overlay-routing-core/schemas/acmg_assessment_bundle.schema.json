@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tooluniverse.local/schemas/acmg_assessment_bundle.schema.json",
+  "title": "ToolUniverse ACMG Overlay Assessment Bundle",
+  "description": "Minimal anti-bypass bundle required before presenting a final ACMG classification. This schema describes trace shape only; it does not score ACMG evidence.",
+  "type": "object",
+  "required": [
+    "classification_status",
+    "route_plan",
+    "coverage_audit",
+    "overlay_results",
+    "route_audit",
+    "compatibility_resolution"
+  ],
+  "properties": {
+    "variant": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "gene": { "type": "string" },
+        "hgvs_c": { "type": "string" },
+        "hgvs_p": { "type": "string" },
+        "zygosity": { "type": "string" },
+        "consequence": { "type": "string" },
+        "variant_type": { "type": "string" },
+        "assessment_context": { "type": "string" }
+      }
+    },
+    "classification_status": {
+      "type": "string",
+      "enum": ["final classification", "draft classification"]
+    },
+    "classification": {
+      "type": "string",
+      "description": "Optional ACMG five-tier label. Must be interpreted only when classification_status is final classification and the validator returns PASS."
+    },
+    "route_plan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["criterion_group", "overlay_skill", "trigger_policy", "enforcement_level", "route_kind", "status"],
+        "properties": {
+          "criterion_group": { "type": "string" },
+          "covered_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "overlay_skill": { "type": "string" },
+          "trigger_policy": {
+            "type": "string",
+            "enum": ["universal_baseline", "variant_type_baseline", "evidence_discovery"]
+          },
+          "enforcement_level": {
+            "type": "string",
+            "enum": ["must_plan", "must_query", "must_route_if_hit", "must_audit_if_counted"]
+          },
+          "route_kind": {
+            "type": "string",
+            "enum": ["applicability_gate", "evidence_scoring", "source_review", "functional_discovery", "compatibility_gate"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["planned", "queried", "triggered", "not_triggered", "not_applicable", "not_assessed", "deferred_to_vcep"]
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "coverage_audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["source_category", "queried_sources", "query_status", "reason"],
+        "properties": {
+          "source_category": { "type": "string" },
+          "queried_sources": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "query_status": {
+            "type": "string",
+            "enum": ["success", "no_hit", "unavailable", "failed", "not_applicable"]
+          },
+          "hits": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": true }
+          },
+          "triggered_routes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "not_triggered_routes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "overlay_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["overlay_skill", "criterion", "status", "guidance_authority", "reason", "consumed_evidence"],
+        "properties": {
+          "overlay_skill": { "type": "string" },
+          "criterion": { "type": "string" },
+          "applied_evidence": { "type": ["string", "null"] },
+          "status": {
+            "type": "string",
+            "enum": ["applied", "no_evidence", "not_assessed", "not_applicable", "not_used"]
+          },
+          "guidance_authority": {
+            "type": "string",
+            "enum": ["ClinGen/SVI primary", "ACMG/AMP baseline", "VCEP-specific", "practice/local refinement", "source lead only"]
+          },
+          "reason": { "type": "string" },
+          "consumed_evidence": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "routed_to": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "route_audit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["criterion", "proposed_evidence", "route_outcome", "overlay_or_vcep_source", "counted", "reason"],
+        "properties": {
+          "criterion": { "type": "string" },
+          "proposed_evidence": { "type": "string" },
+          "route_outcome": {
+            "type": "string",
+            "enum": ["overlay_applied", "overlay_not_applicable", "overlay_not_assessed", "overlay_deferred_to_vcep"]
+          },
+          "guidance_authority": {
+            "type": "string",
+            "enum": ["ClinGen/SVI primary", "ACMG/AMP baseline", "VCEP-specific", "practice/local refinement", "source lead only"]
+          },
+          "overlay_or_vcep_source": { "type": "string" },
+          "counted": { "type": "boolean" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "compatibility_resolution": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["current_counted_evidence_resolved", "unresolved_conflicts"],
+      "properties": {
+        "current_counted_evidence_resolved": {
+          "type": "array",
+          "items": { "type": ["string", "object"] }
+        },
+        "not_used_due_to_overlap": {
+          "type": "array",
+          "items": { "type": ["string", "object"] }
+        },
+        "caps_applied": {
+          "type": "array",
+          "items": { "type": ["string", "object"] }
+        },
+        "context_splits": {
+          "type": "array",
+          "items": { "type": ["string", "object"] }
+        },
+        "unresolved_conflicts": {
+          "type": "array",
+          "items": { "type": ["string", "object"] }
+        }
+      }
+    },
+    "source_assertions_or_leads": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,20 @@
+{
+  "expected_validator_status": "FAIL",
+  "classification_status": "final classification",
+  "classification": "Pathogenic",
+  "variant": {
+    "gene": "DHX30",
+    "hgvs_c": "NM_138615.3:c.2354G>A",
+    "hgvs_p": "p.Arg785His",
+    "consequence": "missense_variant"
+  },
+  "counted_evidence": [
+    "PS1_Strong",
+    "PS3_Strong",
+    "PS4_Moderate",
+    "PM2_Moderate",
+    "PM5_Moderate",
+    "PP3_Supporting"
+  ],
+  "reason": "Direct ACMG final classification without route plan, overlay results, route audit, or compatibility resolution."
+}

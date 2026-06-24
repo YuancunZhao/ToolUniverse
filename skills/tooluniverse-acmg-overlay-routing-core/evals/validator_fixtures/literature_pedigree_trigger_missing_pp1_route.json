@@ -1,0 +1,33 @@
+{
+  "expected_validator_status": "DRAFT_ONLY",
+  "acmg_assessment_bundle": {
+    "variant": {
+      "gene": "GENE",
+      "hgvs_c": "NM_000000.0:c.1A>G",
+      "consequence": "synonymous_variant"
+    },
+    "classification_status": "final classification",
+    "classification": "Likely Pathogenic",
+    "route_plan": [
+      {"criterion_group": "ba1_exception_list", "overlay_skill": "tooluniverse-acmg-ba1-exception-list-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},
+      {"criterion_group": "benign_context", "overlay_skill": "tooluniverse-acmg-benign-context-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},
+      {"criterion_group": "pm2_absence_rarity", "overlay_skill": "tooluniverse-acmg-pm2-absence-rarity-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},
+      {"criterion_group": "pvs1_lof_decision_tree", "overlay_skill": "tooluniverse-acmg-pvs1-lof-decision-tree-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_plan", "route_kind": "applicability_gate", "status": "not_applicable"},
+      {"criterion_group": "dominant_negative_mechanism", "overlay_skill": "tooluniverse-acmg-dominant-negative-mechanism-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_plan", "route_kind": "applicability_gate", "status": "planned"},
+      {"criterion_group": "multiple_disorder_context", "overlay_skill": "tooluniverse-acmg-multiple-disorder-context-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_plan", "route_kind": "applicability_gate", "status": "planned"}
+    ],
+    "coverage_audit": [
+      {"source_category": "literature", "queried_sources": ["PubMed"], "query_status": "success", "hits": [{"summary": "A published pedigree shows segregation in affected relatives."}], "triggered_routes": [], "not_triggered_routes": ["ps4_case_enrichment", "de_novo_ps2_pm6", "pm3_in_trans", "ps3_bs3_functional_assay"], "reason": "Pedigree trigger found but PP1 route is missing."}
+    ],
+    "overlay_results": [
+      {"overlay_skill": "tooluniverse-acmg-pm2-absence-rarity-refinement", "criterion": "PM2", "applied_evidence": "PM2_Supporting", "status": "applied", "guidance_authority": "ClinGen/SVI primary", "reason": "PM2 routed.", "consumed_evidence": ["gnomAD"], "routed_to": null}
+    ],
+    "route_audit": [
+      {"criterion": "PM2", "proposed_evidence": "PM2_Supporting", "route_outcome": "overlay_applied", "guidance_authority": "ClinGen/SVI primary", "overlay_or_vcep_source": "tooluniverse-acmg-pm2-absence-rarity-refinement", "counted": true, "reason": "PM2 routed."}
+    ],
+    "compatibility_resolution": {
+      "current_counted_evidence_resolved": ["PM2_Supporting"],
+      "unresolved_conflicts": []
+    }
+  }
+}

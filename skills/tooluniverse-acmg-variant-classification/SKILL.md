@@ -84,6 +84,8 @@ Accepted inputs: HGVS coding (NM_000059.4:c.5946delT), HGVS protein (BRCA2 p.Val
 
 Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays. This base skill should act as a dispatcher: normalize the variant, establish disease/mechanism context, select route bundles, expand triggered bundles into overlay route rows, run overlays, resolve compatibility, and only then combine evidence.
 
+Hard gate for external agents: before presenting any final ACMG classification, emit an `acmg_assessment_bundle` compatible with `tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json` and validate it with `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py`. If the validator returns `DRAFT_ONLY` or `FAIL`, keep `classification_status: draft classification`; do not compute or present the final ACMG tier from unrouted evidence.
+
 Start with a compact `Bundle Route Plan`:
 
 1. `baseline_context_bundle` for disease entity, inheritance, transcript, mechanism, multiple-disorder boundary, and dominant-negative/LoF/GoF sensitivity.
@@ -101,7 +103,7 @@ Then expand each triggered bundle using the routing core registry. A bundle row 
 
 External-agent compliance check: before final classification, list each evidence code considered, the route bundle, and the overlay route used. If a code is assigned without the responsible overlay or VCEP rule, revise the evidence table before combining criteria.
 
-Final hard-stop audit: the report may present a final classification only when every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks that route outcome, label the result `draft classification`, move that item to `Criteria With status: not_assessed` or `Source Assertions / Leads`, and do not compute the final ACMG tier from it.
+Final hard-stop audit: the report may present a final classification only when the ACMG assessment bundle validates and every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks that route outcome, or if the bundle is absent or invalid, label the result `draft classification`, move that item to `Criteria With status: not_assessed` or `Source Assertions / Leads`, and do not compute the final ACMG tier from it.
 
 Keep `Source Assertions / Leads` separate from `Current Counted Evidence`. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG classification may guide retrieval, but the final ACMG tier is based only on evidence that was independently routed through an overlay or current VCEP rule.
 

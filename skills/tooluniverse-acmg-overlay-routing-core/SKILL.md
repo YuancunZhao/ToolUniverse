@@ -10,19 +10,21 @@ This skill is a lightweight coordination layer for ToolUniverse ACMG/AMP overlay
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
-For portable use by external agents, this skill also includes a lightweight compliance contract:
+For portable use by external agents, this skill exposes three primary gate artifacts:
 
-- `overlay_registry.yaml`: machine-readable mapping from ACMG criterion groups to mandatory overlay skills, trigger policies, applies-when conditions, and baseline data-source categories.
-- `overlay_route_contract.md`: human- and agent-readable rules for baseline route planning, discovery route expansion, mandatory overlay routing, and counted-evidence audit.
-- `schemas/bundle_route_plan.schema.json`: JSON Schema for compact bundle-level execution planning before detailed route expansion.
-- `schemas/route_plan.schema.json`: JSON Schema for pre-assignment route plans.
-- `schemas/overlay_result.schema.json`: JSON Schema for overlay-like results.
-- `schemas/route_audit.schema.json`: JSON Schema for final counted-evidence audits.
-- `schemas/coverage_audit.schema.json`: JSON Schema for data-source coverage, query hits, and discovery routes not triggered because coverage found no signal.
-- `schemas/evidence_compatibility.schema.json`: JSON Schema for final-combine evidence compatibility resolution.
-- `evals/evals.json`: regression cases for detecting direct evidence assignment that bypasses overlays.
+- `overlay_registry.yaml`: the single rule index for covered criteria, mandatory overlay skills, trigger policies, enforcement levels, countable route outcomes, and baseline data-source categories.
+- `schemas/acmg_assessment_bundle.schema.json`: the minimal final-report bundle schema. A final ACMG classification requires this bundle to contain route planning, coverage audit, overlay results, route audit, compatibility resolution, and classification status.
+- `scripts/validate_acmg_overlay_bundle.py`: dependency-free validator for the assessment bundle. It returns `PASS`, `DRAFT_ONLY`, or `FAIL` and checks anti-bypass rules only.
 
-These files are a portable compliance layer, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. A future validator or harness may consume the same registry and schemas.
+Supporting reference artifacts are available for implementers, but external agents do not need to treat them as separate public interfaces:
+
+- `overlay_route_contract.md`: explanatory routing contract.
+- `schemas/bundle_route_plan.schema.json`, `schemas/route_plan.schema.json`, `schemas/overlay_result.schema.json`, `schemas/route_audit.schema.json`, `schemas/coverage_audit.schema.json`, and `schemas/evidence_compatibility.schema.json`: internal/reference schemas used to explain bundle sections.
+- `evals/evals.json` and `evals/validator_fixtures/`: regression cases for detecting direct evidence assignment that bypasses overlays.
+
+These files are a portable compliance gate, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. The validator only checks whether an external agent produced enough trace to present a final classification.
+
+**Hard gate:** without a validator-passing ACMG assessment bundle, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, and not-assessed criteria.
 
 Apply the compliance layer in two route-planning passes followed by coverage, audit, and compatibility resolution:
 

@@ -1,9 +1,12 @@
 # ACMG Overlay Route Contract
 
-This contract turns the ACMG overlay routing guidance into a portable compliance
-layer for ToolUniverse agents. It is intentionally lightweight: it defines the
-route plan, overlay result, and final route audit that an agent should produce,
-but it does not execute ToolUniverse skills or change any ACMG rule.
+This contract explains the ACMG overlay routing guidance behind the portable
+compliance gate for ToolUniverse agents. The operational interface is deliberately
+small: `overlay_registry.yaml` is the rule index, `schemas/acmg_assessment_bundle.schema.json`
+is the required final-report bundle shape, and
+`scripts/validate_acmg_overlay_bundle.py` is the minimal anti-bypass validator.
+The contract remains explanatory; it does not execute ToolUniverse skills or
+change any ACMG rule.
 
 ## Scope
 
@@ -17,6 +20,14 @@ This contract is not:
 - a replacement for VCEP specifications;
 - a runtime that guarantees tool invocation;
 - a source of criterion-specific thresholds.
+
+No final ACMG classification should be presented unless the output contains a
+validator-passing ACMG assessment bundle. Outputs without a valid bundle must
+stay `draft classification`.
+
+A validator-passing final bundle must tie the final classification to non-empty
+compatibility-resolved counted evidence and must document literature/discovery
+coverage, even when no discovery trigger was found.
 
 ## Trigger Policy Model
 

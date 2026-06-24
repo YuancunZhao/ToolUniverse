@@ -1,6 +1,6 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-18
+Last updated: 2026-06-24
 
 Baseline comparison:
 
@@ -15,6 +15,31 @@ Summary:
 - Deleted upstream skills: 0
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
+
+## ACMG Overlay Gate Convergence: 2026-06-24
+
+This change converges the overlay compliance layer around `registry + assessment bundle + validator`.
+
+- Added `tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json` as the required final-report bundle shape.
+- Added `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py`, a dependency-free validator returning `PASS`, `DRAFT_ONLY`, or `FAIL`.
+- Added `tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/` regression fixtures for DHX30-like direct bypass, source-label counting, missing missense baseline routes, PP1 no-hit coverage, MaveDB no-hit, MaveDB raw-score counting, and missing compatibility resolution.
+- Updated `tooluniverse-acmg-overlay-routing-core/SKILL.md`, `QUICK_START.md`, and `overlay_route_contract.md` to state the hard gate: no validator-passing ACMG assessment bundle, no final ACMG classification.
+- Updated `tooluniverse-acmg-variant-classification/SKILL.md` to make the assessment bundle and validator the final-classification gate for external agents.
+
+This is a routing-compliance enforcement change only. It does not change ACMG evidence thresholds, strength mapping, VCEP precedence, final combiner behavior, database query logic, or ToolUniverse MCP tools.
+
+## ACMG Overlay Gate Hardening: 2026-06-24
+
+This change closes validator gaps found during review.
+
+- Requires final classifications to have non-empty `current_counted_evidence_resolved` and at least one matching counted route-audit row with `overlay_applied` or `overlay_deferred_to_vcep`.
+- Requires final classifications to include literature/discovery coverage, or an explicit literature `unavailable` / `not_applicable` row.
+- Requires literature trigger hits such as pedigree, functional assay, cohort, de novo, or in-trans evidence to route to the corresponding discovery overlay.
+- Aligns validator structural checks with the assessment-bundle schema for key controlled values and requires `route_audit.counted` to be boolean.
+- Adds validator fixtures for empty final evidence, route-audit/resolved-evidence mismatch, missing literature coverage, literature pedigree trigger without PP1 route, and invalid string `counted` values.
+- Demotes old section schemas to internal/reference artifacts in the routing-core skill entrypoint; external agents should use `overlay_registry.yaml`, `acmg_assessment_bundle.schema.json`, and `validate_acmg_overlay_bundle.py`.
+
+This remains a lightweight compliance validator. It does not query databases, execute overlays, assign evidence strength, or change the final ACMG combiner.
 
 ## Added Skills
 
