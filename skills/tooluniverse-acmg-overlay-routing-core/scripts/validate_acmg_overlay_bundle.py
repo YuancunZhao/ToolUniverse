@@ -50,6 +50,12 @@ SOURCE_LABEL_RE = re.compile(
 )
 PRIMARY_EVIDENCE_RE = re.compile(r"\b(primary|assay|pedigree|segregation|trio|de novo|case-control|cohort|functional)\b", re.IGNORECASE)
 STANDALONE_BENIGN_RE = re.compile(r"\bBA1\b", re.IGNORECASE)
+LITERATURE_EVIDENCE_RE = re.compile(
+    r"\b(PMID|PMCID|DOI|PubMed|EuropePMC|PMC|paper|article|publication|"
+    r"literature|abstract|supplement|figure|table|case report|case series|"
+    r"functional assay|pedigree|segregation|case-control|cohort|meta-analysis)\b",
+    re.IGNORECASE,
+)
 DISCOVERY_TRIGGER_PATTERNS = {
     "pp1_bs4_pp4_segregation": re.compile(r"\b(family|pedigree|segregation|cascade|affected relative|meios(?:is|es))\b", re.IGNORECASE),
     "ps4_case_enrichment": re.compile(r"\b(case-control|cohort|meta-analysis|recurrence|odds ratio|OR\b|confidence interval|unrelated case|case series)\b", re.IGNORECASE),
@@ -58,6 +64,7 @@ DISCOVERY_TRIGGER_PATTERNS = {
     "ps3_bs3_functional_assay": re.compile(r"\b(functional assay|in vitro|enzyme activity|minigene|luciferase|western blot|flow cytometry|uptake assay|MaveDB|MAVE|DMS)\b", re.IGNORECASE),
 }
 DISCOVERY_COVERAGE_ROUTES = set(DISCOVERY_TRIGGER_PATTERNS)
+PENETRANCE_SENSITIVE_CRITERIA = {"BS1", "BS2", "BS4", "PP1", "PP4", "PM2", "PS4"}
 
 
 def severity_rank(status: str) -> int:
@@ -228,6 +235,70 @@ def row_counted(row: Any) -> bool:
     return False
 
 
+def is_literature_backed_row(row: dict[str, Any]) -> bool:
+    if "literature_provenance" in row:
+        return True
+    fields = [
+        row.get("proposed_evidence"),
+        row.get("overlay_or_vcep_source"),
+        row.get("reason"),
+        row.get("consumed_evidence"),
+    ]
+    return LITERATURE_EVIDENCE_RE.search(" ".join(text_of(field) for field in fields)) is not None
+
+
+def invalid_literature_provenance_reason(row: dict[str, Any]) -> str | None:
+    provenance = row.get("literature_provenance")
+    if not is_literature_backed_row(row):
+        return None
+    if not isinstance(provenance, dict):
+        return "Counted literature-backed evidence lacks structured literature_provenance."
+
+    full_text = provenance.get("full_text_status")
+    supplement = provenance.get("supplement_status")
+    figure = provenance.get("figure_status")
+    allowed = provenance.get("counted_evidence_allowed")
+    vcep_allows_abstract = provenance.get("vcep_allows_abstract_level_use") is True
+    authority = row.get("guidance_authority")
+
+    if allowed is not True:
+        return "Literature provenance marks counted_evidence_allowed as false or missing."
+    if full_text in {"abstract_only", "source_unavailable"}:
+        if not (vcep_allows_abstract and authority == "VCEP-specific"):
+            return f"Full-text status `{full_text}` cannot support counted evidence unless a VCEP explicitly allows abstract-level use."
+    if supplement == "unavailable":
+        return "Required supplement is unavailable; keep the source as a lead or mark the criterion not_assessed."
+    if figure == "not_interpretable":
+        return "Required figure/table evidence is not interpretable; keep the source as a lead or mark the criterion not_assessed."
+    return None
+
+
+def invalid_context_artifact_reason(name: str, value: Any) -> str | None:
+    if value is None:
+        return f"`{name}` is missing."
+    if not isinstance(value, dict):
+        return f"`{name}` must be an object."
+    status = value.get("status")
+    if name in {"disease_context", "penetrance_context"} and status not in {None, "resolved", "partial", "unknown"}:
+        return f"`{name}.status` has invalid value `{status}`."
+    if name == "penetrance_context":
+        penetrance_type = value.get("penetrance_type")
+        if penetrance_type not in {"full", "reduced", "age_dependent", "sex_limited", "variable", "unknown"}:
+            return f"`penetrance_context.penetrance_type` has invalid value `{penetrance_type}`."
+        interpretability = value.get("unaffected_carrier_interpretability")
+        if interpretability not in {"informative", "not_informative", "context_dependent", "unknown"}:
+            return f"`penetrance_context.unaffected_carrier_interpretability` has invalid value `{interpretability}`."
+    if name == "vcep_context":
+        scope = value.get("scope_match")
+        if scope not in {"exact", "partial", "mismatch", "none", "unknown"}:
+            return f"`vcep_context.scope_match` has invalid value `{scope}`."
+        if not isinstance(value.get("criteria_overridden"), list):
+            return "`vcep_context.criteria_overridden` must be an array."
+        if not isinstance(value.get("generic_overlay_responsibilities"), list):
+            return "`vcep_context.generic_overlay_responsibilities` must be an array."
+    return None
+
+
 def covered_criteria(registry: list[dict[str, Any]]) -> set[str]:
     criteria = set()
     for row in registry:
@@ -350,6 +421,13 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
         if query_status not in QUERY_STATUS_VALUES:
             add(DRAFT_ONLY, "invalid_query_status", f"coverage_audit.query_status `{query_status}` is not a controlled value.")
 
+    for artifact_name in ("disease_context", "vcep_context"):
+        reason = invalid_context_artifact_reason(artifact_name, bundle.get(artifact_name))
+        if reason and final_requested:
+            add(DRAFT_ONLY, f"missing_or_invalid_{artifact_name}", f"Final classification requires {artifact_name}: {reason}")
+
+    penetrance_context_required = False
+
     for row in route_audit:
         if not row_counted(row):
             continue
@@ -367,6 +445,22 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
             add(FAIL, "source_label_counted", f"Counted evidence `{criterion}` appears to rely directly on a source label.")
         if criterion in covered and not source:
             add(FAIL, "covered_criterion_missing_overlay_source", f"Covered criterion `{criterion}` is counted without overlay or VCEP source.")
+        if outcome == "overlay_applied" and source and not source.startswith("tooluniverse-acmg-"):
+            add(FAIL, "covered_criterion_non_acmg_overlay_source", f"Counted evidence `{criterion}` uses non-ACMG source `{source}` as an overlay result.")
+        provenance_reason = invalid_literature_provenance_reason(row)
+        if provenance_reason:
+            add(DRAFT_ONLY, "counted_literature_provenance_block", f"Counted evidence `{criterion}` cannot enter final classification: {provenance_reason}")
+        if criterion in PENETRANCE_SENSITIVE_CRITERIA:
+            penetrance_context_required = True
+        if outcome == "overlay_deferred_to_vcep":
+            vcep_context = bundle.get("vcep_context")
+            if not isinstance(vcep_context, dict) or vcep_context.get("scope_match") not in {"exact", "partial"}:
+                add(DRAFT_ONLY, "vcep_scope_not_supported", f"Counted VCEP-deferred evidence `{criterion}` requires vcep_context with exact or partial scope match.")
+
+    if final_requested and penetrance_context_required:
+        reason = invalid_context_artifact_reason("penetrance_context", bundle.get("penetrance_context"))
+        if reason:
+            add(DRAFT_ONLY, "missing_or_invalid_penetrance_context", f"Final classification with penetrance-sensitive evidence requires penetrance_context: {reason}")
 
     for group in required_baseline_groups(registry, bundle):
         if not has_route_for(route_plan, group):

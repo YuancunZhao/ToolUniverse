@@ -86,7 +86,66 @@
             "items": {
               "type": "string"
             }
+          },
+          "literature_provenance": {
+            "$ref": "#/$defs/literatureProvenance"
           }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "literatureProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_text_status",
+        "supplement_status",
+        "figure_status",
+        "counted_evidence_allowed",
+        "reason"
+      ],
+      "properties": {
+        "pmid": {
+          "type": "string"
+        },
+        "doi": {
+          "type": "string"
+        },
+        "full_text_status": {
+          "type": "string",
+          "enum": [
+            "full_text_read",
+            "abstract_only",
+            "source_unavailable",
+            "not_needed"
+          ]
+        },
+        "supplement_status": {
+          "type": "string",
+          "enum": [
+            "supplement_read",
+            "unavailable",
+            "not_needed"
+          ]
+        },
+        "figure_status": {
+          "type": "string",
+          "enum": [
+            "figure_readable",
+            "not_interpretable",
+            "not_needed"
+          ]
+        },
+        "counted_evidence_allowed": {
+          "type": "boolean"
+        },
+        "vcep_allows_abstract_level_use": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
         }
       }
     }

@@ -100,7 +100,7 @@ Tools: `ChIPAtlas_enrichment_analysis`, `ChIPAtlas_get_peak_data`, `ENCODE_searc
 
 ## Phase 2.9: Short-Circuit Check
 
-Before full ACMG classification, check if the variant already has an expert panel classification in ClinVar. Use `MyVariant_query_variants` with the rsID or HGVS notation — the `clinvar` field in the response includes clinical significance, review status, and RCV records. If an expert panel has already classified the variant as Pathogenic or Benign, note this prominently and focus on confirming/contextualizing rather than de novo classification.
+Before full ACMG classification, check if the variant already has an expert panel classification in ClinVar. Use `MyVariant_query_variants` with the rsID or HGVS notation — the `clinvar` field in the response includes clinical significance, review status, and RCV records. Treat expert-panel and practice-guideline entries as source assertions and high-value leads; retrieve primary evidence and route final evidence assignment through the ACMG overlays or a current VCEP rule.
 
 ## Phase 3: Computational Predictions
 
@@ -145,7 +145,7 @@ mech = tu.tools.ESM_explain_variant_mechanism(
 ```
 
 Returns `mechanism_summary`, per-feature lost/gained tables, and category aggregates. Use the category aggregate to support or qualify the pathogenicity verdict in the report:
-- `catalytic` / `ligand-binding` / `ptm` lost → mechanistic support for PP3
+- `catalytic` / `ligand-binding` / `ptm` lost → mechanism context for ACMG overlays; route prediction evidence to PP3/BP4 overlay and do not count PP3 locally
 - `secondary-structure` / `structural-stability` gained on a stable WT region → mechanistic basis for "destabilizing" claim
 - No interpretable change at top-K → does not weaken AlphaMissense alone, but flag for caution
 
@@ -185,7 +185,7 @@ BA1 stand-alone benign evidence requires Ghosh 2018 exception-list review before
 This is one of the most challenging scenarios in variant interpretation. When a biochemical assay shows damage but population/epidemiological data shows no disease association:
 
 1. **Epidemiological data generally trumps in-vitro assays** for clinical classification. A variant found at ~0.1% frequency with no disease association in 40K+ cases is unlikely to be clinically significant, even if it reduces protein function in a tube.
-2. **Apply PS3/BS3 carefully**: ClinGen's SVI recommends that PS3 (functional evidence for pathogenicity) requires the assay to be validated against known pathogenic AND known benign controls. A single biochemical study without such validation is PS3_Supporting at best.
+2. **Route PS3/BS3 carefully**: ClinGen's SVI functional-assay guidance requires assay validity, controls, replicates, calibration, and variant-specific results. Do not assign PS3/BS3 inside this variant-interpretation skill; route assay evidence to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`.
 3. **Hypomorphic variants**: Some variants genuinely reduce protein function (detectable in sensitive assays) but not enough to cause disease. This is biologically real and does not make them pathogenic.
 4. **Document the conflict explicitly** in the report. State: "Biochemical assay X shows [result], but case-control study Y with N cases found no significant disease association. Per ACMG guidelines, the epidemiological evidence is weighted more heavily for clinical classification."
 
@@ -222,7 +222,7 @@ If a primary tool fails, use these alternatives:
 
 ## Special Scenarios
 
-**Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
+**Novel Missense VUS**: Check comparison variants, protein-region context, and calibrated predictors, then route PS1/PM5, PM1/PP2/BP1, and PP3/BP4 decisions to their ACMG overlays.
 
 **Truncating Variant**: Use `tooluniverse-acmg-overlay-routing-core` first when disease boundary or mechanism is unclear. Then route PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning strength. If RNA assay or Walker 2023 splicing-specific evidence is present, apply `tooluniverse-acmg-pvs1-splicing-refinement` after the baseline LoF branch is identified.
 

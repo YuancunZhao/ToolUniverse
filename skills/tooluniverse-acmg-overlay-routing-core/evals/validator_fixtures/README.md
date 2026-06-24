@@ -34,9 +34,13 @@ Expected coverage:
 - `resolved_without_matching_counted_audit.json`: resolved evidence without a matching counted audit row is `DRAFT_ONLY`.
 - `final_missing_literature_coverage.json`: final classification without literature discovery coverage is `DRAFT_ONLY`.
 - `literature_pedigree_trigger_missing_pp1_route.json`: literature pedigree trigger without PP1 route is `DRAFT_ONLY`.
+- `abstract_only_literature_counted.json`: abstract-only literature kept as a lead but blocked from counted evidence is `DRAFT_ONLY`.
 - `string_counted_value_invalid.json`: string `counted` values are structurally invalid and produce `DRAFT_ONLY`.
 - `missense_missing_baseline_routes.json`: missing applicable missense baseline routes is `DRAFT_ONLY`.
 - `no_pp1_literature_no_hit_pass.json`: missing PP1 is acceptable when literature coverage documents no trigger hit.
 - `mavedb_no_hit_pass.json`: MaveDB no-hit is coverage, not forced PS3/BS3.
 - `mavedb_raw_score_counted.json`: raw functional score counted without overlay is `FAIL`.
+- `outer_skill_cadd_pp3_counted.json`: a non-ACMG annotation skill counted as PP3 overlay source is `FAIL`.
+- `reduced_penetrance_bs2_missing_context.json`: BS2 counted without penetrance context is `DRAFT_ONLY`.
+- `vcep_scope_mismatch_counted.json`: VCEP-deferred counted evidence with scope mismatch is `DRAFT_ONLY`.
 - `missing_compatibility_resolution.json`: routed evidence without compatibility resolution is `DRAFT_ONLY`.

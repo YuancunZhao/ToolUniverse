@@ -9,6 +9,28 @@
     },
     "classification_status": "final classification",
     "classification": "VUS",
+    "disease_context": {
+      "disease_entity": "familial hypercholesterolemia",
+      "inheritance": "autosomal dominant",
+      "mechanism": "LDLR receptor dysfunction",
+      "source": "fixture disease context",
+      "status": "resolved"
+    },
+    "penetrance_context": {
+      "penetrance_type": "variable",
+      "age_of_onset": "childhood to adulthood",
+      "unaffected_carrier_interpretability": "context_dependent",
+      "source": "fixture penetrance context",
+      "criteria_affected": ["PM2"],
+      "status": "resolved"
+    },
+    "vcep_context": {
+      "vcep_available": false,
+      "scope_match": "none",
+      "source": "fixture VCEP search",
+      "criteria_overridden": [],
+      "generic_overlay_responsibilities": ["PM2", "PP3/BP4", "PS1/PM5", "PM1/PP2/BP1"]
+    },
     "route_plan": [
       {"criterion_group": "ba1_exception_list", "overlay_skill": "tooluniverse-acmg-ba1-exception-list-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},
       {"criterion_group": "benign_context", "overlay_skill": "tooluniverse-acmg-benign-context-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},

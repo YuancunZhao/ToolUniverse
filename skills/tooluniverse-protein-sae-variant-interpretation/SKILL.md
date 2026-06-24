@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-protein-sae-variant-interpretation
-description: "Interpret a missense variant via ESMC-6B Sparse Autoencoder (SAE) feature activations. For a given protein + variant, computes which interpretable SAE features (catalytic, ligand-binding, PTM, structural motif, domain, etc.) are lost or gained at the mutation site. Use when standard pathogenicity scores (AlphaMissense, ClinVar) say a variant is damaging but you need a MECHANISTIC explanation — e.g. 'why is this variant LoF?' Complements (does not replace) variant-interpretation and variant-to-mechanism skills, which focus on ACMG classification or regulatory mechanism."
+description: "Interpret a missense variant via ESMC-6B Sparse Autoencoder (SAE) feature activations. For a given protein + variant, computes which interpretable SAE features (catalytic, ligand-binding, PTM, structural motif, domain, etc.) are lost or gained at the mutation site. Use when prediction or source context suggests a variant may affect function and you need a mechanistic explanation. Complements, but does not replace, ACMG variant classification."
 disable-model-invocation: true
 ---
 
@@ -8,13 +8,15 @@ disable-model-invocation: true
 
 Interpret a single missense variant by comparing reference vs mutant Sparse Autoencoder (SAE) feature activations from the ESMC-6B protein language model. SAE features are interpretable latent dimensions of the model's hidden state — many activate on biologically meaningful patterns (active sites, ligand-binding pockets, PTM sequons, structural motifs).
 
+**ACMG boundary**: SAE feature changes are mechanism context only. Do not assign PVS1, PS3, PP3, PM1, or final ACMG classification from this skill. Route prediction evidence through `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`; route experimental functional assay evidence through `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; route final classification through `tooluniverse-acmg-variant-classification`.
+
 ---
 
 ## When to use this skill
 
 Apply when users:
-- Ask "why is variant X (a missense) loss-of-function?" and need a mechanistic answer beyond a pathogenicity score
-- Have an AlphaMissense / ClinVar "damaging" variant and want to know **which functional feature breaks** (catalytic? binding? PTM site? structural?)
+- Ask which molecular feature a missense variant may affect
+- Have prediction or source-assertion context and want to know **which functional feature may be affected** (catalytic? binding? PTM site? structural?)
 - Want to compare ref vs mutant protein representation at a specific residue
 - Are interpreting why a structurally subtle change (single AA) has a big functional impact
 
@@ -242,4 +244,3 @@ Confidence: {high|medium|low}, based on:
   - Cross-validation: {how many layers agree?}
   - Limitations encountered: {any of the 6 caveats above that apply}
 ```
-

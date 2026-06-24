@@ -1,0 +1,46 @@
+{
+  "expected_validator_status": "DRAFT_ONLY",
+  "acmg_assessment_bundle": {
+    "variant": {
+      "gene": "GENE",
+      "hgvs_c": "NM_000000.0:c.2A>G",
+      "consequence": "missense_variant"
+    },
+    "classification_status": "final classification",
+    "classification": "Likely Benign",
+    "disease_context": {
+      "disease_entity": "reduced penetrance disorder",
+      "inheritance": "autosomal dominant",
+      "mechanism": "unknown",
+      "source": "fixture",
+      "status": "resolved"
+    },
+    "vcep_context": {
+      "vcep_available": false,
+      "scope_match": "none",
+      "source": "fixture VCEP search",
+      "criteria_overridden": [],
+      "generic_overlay_responsibilities": ["BS2"]
+    },
+    "route_plan": [
+      {"criterion_group": "benign_context", "overlay_skill": "tooluniverse-acmg-benign-context-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"}
+    ],
+    "coverage_audit": [
+      {"source_category": "clinical_context", "queried_sources": ["user"], "query_status": "success", "hits": [{"healthy_carrier": true}], "triggered_routes": ["benign_context"], "not_triggered_routes": [], "reason": "Healthy carrier reported."},
+      {"source_category": "literature", "queried_sources": ["PubMed"], "query_status": "not_applicable", "hits": [], "triggered_routes": [], "not_triggered_routes": ["pp1_bs4_pp4_segregation", "ps4_case_enrichment", "de_novo_ps2_pm6", "pm3_in_trans", "ps3_bs3_functional_assay"], "reason": "No literature evidence used."}
+    ],
+    "overlay_results": [
+      {"overlay_skill": "tooluniverse-acmg-benign-context-refinement", "criterion": "BS2", "applied_evidence": "BS2", "status": "applied", "guidance_authority": "ACMG/AMP baseline", "reason": "Incorrectly counted without penetrance context.", "consumed_evidence": ["healthy carrier"], "routed_to": null}
+    ],
+    "route_audit": [
+      {"criterion": "BS2", "proposed_evidence": "BS2", "route_outcome": "overlay_applied", "guidance_authority": "ACMG/AMP baseline", "overlay_or_vcep_source": "tooluniverse-acmg-benign-context-refinement", "counted": true, "reason": "Healthy carrier counted without penetrance artifact."}
+    ],
+    "compatibility_resolution": {
+      "current_counted_evidence_resolved": ["BS2"],
+      "not_used_due_to_overlap": [],
+      "caps_applied": [],
+      "context_splits": [],
+      "unresolved_conflicts": []
+    }
+  }
+}

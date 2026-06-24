@@ -22,6 +22,28 @@ Before final classification, emit one `acmg_assessment_bundle` compatible with `
       "consequence": "missense_variant"
     },
     "classification_status": "draft classification",
+    "disease_context": {
+      "disease_entity": "familial hypercholesterolemia",
+      "inheritance": "autosomal dominant",
+      "mechanism": "LDLR loss of function / receptor dysfunction",
+      "source": "ClinGen/GeneReviews/literature",
+      "status": "resolved"
+    },
+    "penetrance_context": {
+      "penetrance_type": "variable",
+      "age_of_onset": "childhood to adulthood",
+      "unaffected_carrier_interpretability": "context_dependent",
+      "source": "GeneReviews/literature",
+      "criteria_affected": ["BS1", "BS2", "BS4", "PP1", "PP4", "PM2", "PS4"],
+      "status": "resolved"
+    },
+    "vcep_context": {
+      "vcep_available": false,
+      "scope_match": "none",
+      "source": "VCEP search",
+      "criteria_overridden": [],
+      "generic_overlay_responsibilities": ["all triggered generic overlays"]
+    },
     "route_plan": [],
     "coverage_audit": [],
     "overlay_results": [],
@@ -37,6 +59,7 @@ Before final classification, emit one `acmg_assessment_bundle` compatible with `
 The bundle may be compact, but it must include:
 
 - `route_plan`: baseline and triggered discovery routes from `overlay_registry.yaml`.
+- `disease_context`, `penetrance_context`, and `vcep_context`: shared context for inheritance, mechanism, penetrance-sensitive evidence, and VCEP precedence.
 - `coverage_audit`: data sources checked, no-hits, unavailable sources, and triggered routes.
 - `overlay_results`: overlay or VCEP trace for assessed criteria.
 - `route_audit`: every potentially counted item and whether it was counted.
@@ -70,6 +93,7 @@ The validator checks trace compliance only. It does not query databases, run Too
 - Missing discovery routes are acceptable only when `coverage_audit` documents no trigger hit or source unavailability.
 - Final classification requires literature/discovery coverage, or an explicit `unavailable` / `not_applicable` literature row.
 - Missing compatibility resolution, or unresolved compatibility conflicts, force `draft classification`.
+- Counted literature-backed evidence must include `literature_provenance`. Abstract-only or source-unavailable papers remain literature leads and may trigger PDF/supplement requests, but they cannot support final counted evidence unless a current VCEP explicitly allows abstract-level use.
 
 ## Missense Baseline
 

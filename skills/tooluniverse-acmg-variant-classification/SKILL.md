@@ -262,6 +262,14 @@ PubMed_search_articles(query="BRCA2 c.5946delT segregation family", limit=5)
 
 Criteria requiring user-supplied patient or family clinical data (PS2, PM3, PM6, BS4, BP2, BP5, BS2, PP4, and some VCEP-specific rules) cannot be assessed automatically. Use routing-core status `not_assessed` and request targeted missing fields rather than inferring clinical data from variant annotation. PS4 is mixed: formal case-control, cohort, or meta-analysis evidence can be assessed from literature or cohort data when the publication defines cases, disease context, controls, ancestry handling, and statistics sufficiently; rare-disease affected-case counting still requires affected-case phenotype, unrelatedness, duplicate-report, and control context from the paper, database, or user. Use `tooluniverse-acmg-de-novo-evidence-refinement` for PS2/PM6 whenever de novo status, parental testing, parentage confirmation, parental mosaicism, or phenotype consistency is relevant.
 
+Use standard user-input request blocks when fields are missing:
+
+- `clinical_phenotype_needed`: HPO terms, clinical diagnosis, age, sex when relevant, age of onset, severity, tested/excluded diagnoses, and phenotype specificity.
+- `pedigree_or_phase_needed`: affected/unaffected relatives, genotype status, relationship, age at evaluation, phenotype details, phasing method, and whether phenocopy or reduced penetrance is plausible.
+- `de_novo_needed`: proband genotype, mother/father genotypes, biological relationship confirmation, parental mosaicism assessment, and phenotype consistency.
+- `literature_source_needed`: PMID/DOI/source name, requested PDF/supplement/figure/table, why abstract-only evidence is insufficient, and affected criteria.
+- `disease_context_needed`: disease entity, inheritance, mechanism, penetrance, prevalence, age of onset, and VCEP/gene-specific rule scope.
+
 When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points while checking PM2-level rarity, phase, other-allele classification, and circularity. Recessive biallelic probands with genotype/phase evidence should route to PM3 rather than PS4 unless a VCEP specifies otherwise.
 
 PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) are routed through `tooluniverse-acmg-pm4-bp3-protein-length-refinement` in Phase 4. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 (synonymous, no splice impact) is assessable via SpliceAI < 0.1 and RNA-specific BP7 through the PVS1/RNA splicing overlay when direct RNA evidence exists.
@@ -309,6 +317,7 @@ Use these compatibility rules unless a current VCEP explicitly supersedes them:
 - PP1/PP4 combined evidence is capped at +5.0 and cannot mix Biesecker points with informative-meioses fallback for the same pedigree.
 - PM3 circularity, duplicate probands, homozygous cap, and PS2/PM6 high-genetic-heterogeneity cap must be resolved before final combine.
 - PP5/BP6 source labels, abstract-only evidence, inaccessible full text, unread supplements, and low-confidence figure/OCR evidence cannot enter `current_counted_evidence_resolved`.
+- Literature-backed counted evidence must include `literature_provenance` with full-text, supplement, and figure/table status. Abstract-only sources are retained as leads and should trigger full-text/supplement retrieval or a user PDF request; they are not counted unless a current VCEP explicitly allows abstract-level use and the exception is recorded in route audit.
 
 If `unresolved_conflicts` is not empty, report `draft classification` and do not run ACMG qualitative or Bayesian final combine.
 
@@ -384,8 +393,10 @@ Combine criteria at their resolved applied strength after overlay route audit an
 - Inheritance:
 - Mechanism:
 - Multiple-disorder boundary:
+- Penetrance context:
+- VCEP context:
 
-## Evidence Retrieval
+## Evidence Retrieval Coverage
 - Population:
 - Computational:
 - Clinical databases and source assertions:
@@ -396,13 +407,13 @@ Combine criteria at their resolved applied strength after overlay route audit an
 | Bundle | Trigger found? | Required overlays/checks | Coverage required | Status | Reason |
 | --- | --- | --- | --- | --- | --- |
 
+## Overlay Results
+| Overlay / VCEP | Criterion | Status | Applied evidence | Guidance authority | Consumed evidence | Reason |
+| --- | --- | --- | --- | --- | --- | --- |
+
 ## Overlay Route Audit
 | Criterion | Route bundle | Proposed evidence | Route outcome | Guidance authority | Overlay or VCEP source | Counted? | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-
-## Current Counted Evidence
-| Criterion | Direction | Strength | Points | Evidence | Overlay route outcome | Source |
-| --- | --- | --- | ---: | --- | --- | --- |
 
 ## Evidence Compatibility Resolution
 - current_counted_evidence_resolved:
@@ -413,6 +424,10 @@ Combine criteria at their resolved applied strength after overlay route audit an
 
 | Conflict group | Evidence items | Conflict type | Resolution | Kept evidence | Removed/capped evidence | Status | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+
+## Current Counted Evidence Resolved
+| Criterion | Direction | Strength | Points | Evidence | Overlay route outcome | Source |
+| --- | --- | --- | ---: | --- | --- | --- |
 
 ## Bayesian Calculation
 - Model: Tavtigian et al. 2018 Bayesian ACMG/AMP framework
@@ -431,12 +446,22 @@ Combine criteria at their resolved applied strength after overlay route audit an
 - VCEP override, if any:
 
 ## Source Assertions / Leads
+machine key: `source_assertions_or_leads`
+
 | Source | Assertion | Why not counted directly | Routed primary evidence |
 | --- | --- | --- | --- |
 
 ## Missing Evidence / Not Assessed
+machine key: `missing_not_assessed`
+
 | Criterion | Missing field or unavailable source | Impact |
 | --- | --- | --- |
+
+## User-Needed Inputs
+machine key: `user_needed_inputs`
+
+| Missing input type | Requested details | Why needed | Affected criteria |
+| --- | --- | --- | --- |
 ```
 
 ---

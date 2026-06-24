@@ -842,6 +842,82 @@
         "Requires overlay_applied or overlay_deferred_to_vcep for PM2 and PP3",
         "Keeps classification draft until route audit and compatibility resolution pass"
       ]
+    },
+    {
+      "id": 55,
+      "prompt": "A PubMed abstract reports a functional assay result and the agent counts PS3, but the full text, supplement, and figure/table details have not been read.",
+      "expected_output": "The abstract should be preserved as a literature lead and should trigger full-text/supplement retrieval or a user PDF request. PS3 cannot enter current_counted_evidence_resolved from abstract-only support; the report must remain draft or mark PS3 not_assessed until provenance is sufficient.",
+      "files": [
+        "schemas/route_audit.schema.json",
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py"
+      ],
+      "assertions": [
+        "Requires literature_provenance for counted literature-backed evidence",
+        "Blocks abstract_only literature from counted PS3 by default",
+        "Keeps the citation as source lead rather than deleting it",
+        "Requests full text, supplement, figure, or table before final counting"
+      ]
+    },
+    {
+      "id": 56,
+      "prompt": "A current disease-specific VCEP explicitly permits an abstract-level case-count rule for a criterion, and the route audit records VCEP-specific authority and literature_provenance with vcep_allows_abstract_level_use true.",
+      "expected_output": "The route may proceed only as a VCEP-specific exception with the provenance exception recorded. Generic ACMG overlays must not treat this as permission to count abstract-only evidence for other criteria.",
+      "files": [
+        "schemas/route_audit.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Allows abstract-level use only when guidance_authority is VCEP-specific",
+        "Requires vcep_allows_abstract_level_use true",
+        "Does not generalize the exception to ClinGen/SVI primary or practice/local refinement rows",
+        "Still requires compatibility resolution before final combine"
+      ]
+    },
+    {
+      "id": 57,
+      "prompt": "A functional annotation skill reports CADD 28 and the agent counts PP3 directly from that annotation output.",
+      "expected_output": "The report should fail or remain draft-only because non-ACMG annotation skills cannot be used as overlay_applied sources for counted ACMG evidence. Prediction context must route to the calibrated PP3/BP4 overlay or an in-scope VCEP.",
+      "files": [
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/outer_skill_cadd_pp3_counted.json"
+      ],
+      "assertions": [
+        "Rejects non-ACMG skill as overlay_applied counted source",
+        "Routes CADD/AlphaMissense/REVEL context to PP3/BP4 overlay",
+        "Does not count local CADD thresholds"
+      ]
+    },
+    {
+      "id": 58,
+      "prompt": "A healthy carrier is used for BS2 in an adult-onset or reduced-penetrance disease, but no penetrance_context is reported.",
+      "expected_output": "The final classification should be draft-only until penetrance type, age of onset, unaffected-carrier interpretability, and source are recorded. Reduced penetrance can make the healthy-carrier observation non-informative.",
+      "files": [
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/reduced_penetrance_bs2_missing_context.json"
+      ],
+      "assertions": [
+        "Requires penetrance_context for BS2/BS4/PP1/PP4/PM2/PS4/BS1 use",
+        "Blocks naive BS2 from healthy carrier without penetrance context",
+        "Keeps the observation as clinical context when not countable"
+      ]
+    },
+    {
+      "id": 59,
+      "prompt": "A VCEP rule is cited for PP3, but the VCEP disease or variant-type scope does not match the current interpretation context.",
+      "expected_output": "The VCEP label should be retained as a source lead or context note, but counted evidence must fall back to the generic overlay unless vcep_context.scope_match is exact or partial for the relevant criterion.",
+      "files": [
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/vcep_scope_mismatch_counted.json"
+      ],
+      "assertions": [
+        "Requires vcep_context for VCEP-deferred counted evidence",
+        "Blocks VCEP-deferred counted evidence when scope_match is mismatch",
+        "Falls back to generic overlay responsibility"
+      ]
     }
   ]
 }

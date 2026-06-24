@@ -34,6 +34,15 @@
       "type": "string",
       "description": "Optional ACMG five-tier label. Must be interpreted only when classification_status is final classification and the validator returns PASS."
     },
+    "disease_context": {
+      "$ref": "#/$defs/diseaseContext"
+    },
+    "penetrance_context": {
+      "$ref": "#/$defs/penetranceContext"
+    },
+    "vcep_context": {
+      "$ref": "#/$defs/vcepContext"
+    },
     "route_plan": {
       "type": "array",
       "items": {
@@ -145,7 +154,10 @@
           },
           "overlay_or_vcep_source": { "type": "string" },
           "counted": { "type": "boolean" },
-          "reason": { "type": "string" }
+          "reason": { "type": "string" },
+          "literature_provenance": {
+            "$ref": "#/$defs/literatureProvenance"
+          }
         }
       }
     },
@@ -179,6 +191,102 @@
     "source_assertions_or_leads": {
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "$defs": {
+    "diseaseContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["disease_entity", "inheritance", "mechanism", "source", "status"],
+      "properties": {
+        "disease_entity": { "type": "string" },
+        "inheritance": { "type": "string" },
+        "mechanism": { "type": "string" },
+        "prevalence": { "type": ["string", "number", "null"] },
+        "age_of_onset": { "type": ["string", "null"] },
+        "source": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["resolved", "partial", "unknown"]
+        }
+      }
+    },
+    "penetranceContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["penetrance_type", "source", "unaffected_carrier_interpretability", "status"],
+      "properties": {
+        "penetrance_type": {
+          "type": "string",
+          "enum": ["full", "reduced", "age_dependent", "sex_limited", "variable", "unknown"]
+        },
+        "age_of_onset": { "type": ["string", "null"] },
+        "unaffected_carrier_interpretability": {
+          "type": "string",
+          "enum": ["informative", "not_informative", "context_dependent", "unknown"]
+        },
+        "source": { "type": "string" },
+        "criteria_affected": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["resolved", "partial", "unknown"]
+        }
+      }
+    },
+    "vcepContext": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["vcep_available", "scope_match", "source", "criteria_overridden", "generic_overlay_responsibilities"],
+      "properties": {
+        "vcep_available": { "type": "boolean" },
+        "scope_match": {
+          "type": "string",
+          "enum": ["exact", "partial", "mismatch", "none", "unknown"]
+        },
+        "source": { "type": "string" },
+        "criteria_overridden": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "generic_overlay_responsibilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "reason": { "type": "string" }
+      }
+    },
+    "literatureProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_text_status",
+        "supplement_status",
+        "figure_status",
+        "counted_evidence_allowed",
+        "reason"
+      ],
+      "properties": {
+        "pmid": { "type": "string" },
+        "doi": { "type": "string" },
+        "full_text_status": {
+          "type": "string",
+          "enum": ["full_text_read", "abstract_only", "source_unavailable", "not_needed"]
+        },
+        "supplement_status": {
+          "type": "string",
+          "enum": ["supplement_read", "unavailable", "not_needed"]
+        },
+        "figure_status": {
+          "type": "string",
+          "enum": ["figure_readable", "not_interpretable", "not_needed"]
+        },
+        "counted_evidence_allowed": { "type": "boolean" },
+        "vcep_allows_abstract_level_use": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
     }
   },
   "additionalProperties": true

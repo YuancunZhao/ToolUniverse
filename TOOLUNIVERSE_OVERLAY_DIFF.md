@@ -824,6 +824,68 @@ Behavior clarified:
 - Adds regression evals for rare-disease template bypass, variant-interpretation predictor voting, raw-counted-evidence Bayesian use, and SpliceAI-only PVS1_RNA misrouting.
 - Does not add evidence criteria, change overlay thresholds, change VCEP precedence, or modify locked PM2 and PP3/BP4 rules.
 
+## Literature Provenance Hard-Stop Upgrade: 2026-06-24
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/route_audit.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/overlay_result.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/evidence_compatibility.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+A skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/abstract_only_literature_counted.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/README.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+```
+
+Behavior clarified:
+
+- Adds structured `literature_provenance` fields for literature-backed evidence: `full_text_status`, `supplement_status`, `figure_status`, `counted_evidence_allowed`, and `reason`.
+- Extends the validator so counted literature-backed evidence with `abstract_only`, `source_unavailable`, unavailable required supplements, or uninterpretable required figures blocks final classification unless a current VCEP explicitly allows abstract-level use.
+- Keeps abstract-only literature as a source lead rather than discarding it. The lead should trigger full-text/supplement retrieval or a user PDF/source request, and only unresolved counted use is blocked.
+- Adds regression coverage for abstract-only literature incorrectly counted as PS3.
+- Does not change any evidence threshold, strength mapping, VCEP precedence, or final-combine rule.
+
+## Peripheral Bypass Cleanup and Context Artifact Hardening: 2026-06-24
+
+Changed files:
+
+```text
+M skills/tooluniverse-variant-functional-annotation/SKILL.md
+M skills/tooluniverse-rare-disease-genomics/SKILL.md
+M skills/tooluniverse-protein-lof-mechanism/SKILL.md
+M skills/tooluniverse-protein-sae-variant-interpretation/SKILL.md
+M skills/tooluniverse-variant-interpretation/SKILL.md
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/QUICK_START.md
+M skills/tooluniverse-acmg-overlay-routing-core/overlay_route_contract.md
+M skills/tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json
+M skills/tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py
+M skills/tooluniverse-acmg-overlay-routing-core/evals/evals.json
+A skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/outer_skill_cadd_pp3_counted.json
+A skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/reduced_penetrance_bs2_missing_context.json
+A skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/vcep_scope_mismatch_counted.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/no_pp1_literature_no_hit_pass.json
+M skills/tooluniverse-acmg-overlay-routing-core/evals/validator_fixtures/README.md
+```
+
+Behavior clarified:
+
+- Converts `tooluniverse-variant-functional-annotation` into retrieval/orientation output only, removing CADD-to-PP3/BP4 shortcuts, ClinVar-label override language, and variant-level evidence grading.
+- Marks rare-disease genomics tiers as gene-disease prioritization only; ClinVar/HGMD/LOVD/lab/paper labels remain source leads until primary evidence is routed.
+- Limits protein SAE/LoF mechanism outputs to mechanism or prediction context; they cannot directly assign PVS1, PS3, PP3, PM1, or final ACMG classification.
+- Adds shared `disease_context`, `penetrance_context`, and `vcep_context` artifacts to the final ACMG assessment bundle and validator.
+- Requires penetrance context before final classification when penetrance-sensitive evidence such as BS1, BS2, BS4, PP1, PP4, PM2, or PS4 is counted.
+- Requires VCEP-deferred counted evidence to have exact or partial VCEP scope match; out-of-scope VCEP labels fall back to generic overlays.
+- Rejects non-ACMG outer skills as `overlay_applied` counted evidence sources.
+- Keeps SNV/small-indel overlay thresholds unchanged and leaves SV/CNV as intake/routing only.
+
 ## Update Procedure
 
 Whenever `.agents/skills` changes in RulesEnhancement:

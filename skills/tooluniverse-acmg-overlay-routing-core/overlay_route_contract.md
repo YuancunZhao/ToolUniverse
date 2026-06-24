@@ -47,6 +47,12 @@ non-ACMG intake or retrieval steps. For example, `cnv_sv_bundle` may list
 counted evidence still requires expanded ACMG overlay route rows or VCEP route
 outcomes.
 
+The final assessment bundle also carries shared context artifacts:
+
+- `disease_context`: disease entity, inheritance, mechanism, source, and status.
+- `penetrance_context`: penetrance type, age-of-onset, unaffected-carrier interpretability, source, affected criteria, and status. This artifact is required before final classification when penetrance-sensitive evidence such as BS1, BS2, BS4, PP1, PP4, PM2, or PS4 is counted.
+- `vcep_context`: VCEP availability, scope match, source, criteria overridden by VCEP, and generic-overlay responsibilities. VCEP-deferred counted evidence requires `scope_match` of `exact` or `partial`; `mismatch`, `none`, or `unknown` must fall back to generic overlays and keep VCEP labels as leads.
+
 The registry also uses an enforcement model:
 
 - `must_plan`: the route must appear in the route plan when the assessment is
@@ -372,8 +378,16 @@ Common compatibility rules:
 - PM3 circularity, duplicate probands, homozygous cap, and PS2/PM6 high
   heterogeneity cap must be checked before final combine.
 - Multiple-disorder or mechanism conflicts require `split_by_context`.
-- Source assertions, inaccessible evidence, unread supplements, and
-  low-confidence figure/OCR evidence cannot enter resolved counted evidence.
+- Source assertions, abstract-only evidence, inaccessible evidence, unread
+  supplements, and low-confidence figure/OCR evidence cannot enter resolved
+  counted evidence. Literature-backed counted rows must carry
+  `literature_provenance` with `full_text_status`, `supplement_status`,
+  `figure_status`, `counted_evidence_allowed`, and `reason`.
+- Abstract-only literature is not discarded. It remains a source lead and may
+  trigger further full-text/supplement retrieval or a user request for the PDF.
+  It blocks final counted evidence only when an agent tries to count the paper
+  before the missing details are verified, unless a current VCEP explicitly
+  allows abstract-level use.
 
 ## PP1 Example
 

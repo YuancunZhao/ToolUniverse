@@ -41,6 +41,14 @@ Missing an applicable baseline route is a compliance failure and requires `draft
 
 If a covered criterion is assigned strength without a valid overlay or VCEP trace, mark the report `draft classification` and move the item out of current counted evidence.
 
+Final classifications must also include shared context artifacts in the ACMG assessment bundle:
+
+- `disease_context`: disease entity, inheritance, disease mechanism, source, and resolution status.
+- `penetrance_context`: penetrance type, age-of-onset context, unaffected-carrier interpretability, source, affected criteria, and status. Required whenever BS1, BS2, BS4, PP1, PP4, PM2, or PS4 is counted.
+- `vcep_context`: whether a VCEP or disease-specific specification exists, whether its scope matches the disease/variant type, which criteria it overrides, and which generic overlays remain responsible.
+
+Do not use VCEP-specific evidence when `vcep_context.scope_match` is `mismatch`, `none`, or `unknown`; fall back to generic overlays with the mismatch documented.
+
 Every counted evidence item should report its guidance authority. Use one of these authority labels:
 
 - `ClinGen/SVI primary`: a formal ClinGen SVI recommendation or ClinGen guidance document directly governs the evidence assignment.
@@ -264,6 +272,7 @@ Do not introduce underscore-separated variants of very-strong strength names. Fo
 - **PP5/BP6**: reputable-source assertions are source leads by default. Do not count PP5/BP6 unless a current VCEP or explicitly approved local legacy policy requires it.
 - **Double counting**: if the same primary evidence supports multiple possible criteria, choose the criterion-specific path and record the other criteria as `not_used` or `no_evidence` with a reason.
 - **Literature provenance**: evidence from papers must state whether the relevant full text, supplement, and figure/table content were read. Abstract-only or inaccessible papers are source leads, not counted evidence, unless a VCEP explicitly allows abstract-level use.
+- **Literature provenance hard-stop**: counted literature-backed evidence must include `literature_provenance` with `full_text_status`, `supplement_status`, `figure_status`, `counted_evidence_allowed`, and `reason`. Abstract-only papers are not ignored; they remain literature leads and should trigger full-text/supplement retrieval or a user request for the source. They cannot enter `current_counted_evidence_resolved` unless a current VCEP explicitly allows abstract-level use and the route audit records that exception.
 - **Figure confidence**: low-confidence or `not_interpretable` visual extraction cannot by itself upgrade evidence strength. Route it as a lead and request the source image/PDF or corroborating text.
 - **Bayesian combination**: Tavtigian-style points are assigned only after overlays have assigned evidence strengths. Do not use points to promote candidate evidence into counted evidence.
 
@@ -282,6 +291,7 @@ Apply these generic choices unless a current VCEP explicitly permits a different
 - **Phenotype and segregation**: PP1/PP4 combined evidence is capped at +5.0. Do not combine Biesecker 2024 points with informative-meioses fallback for the same pedigree. Phenotype specificity consumed by PS2/PM6 or a VCEP PS4 rule cannot also become PP4 unless explicitly allowed.
 - **PM3 and de novo caps**: block PM3 circularity; de-duplicate repeated or related probands; apply the default PM3 homozygous cap of 1.0 unless VCEP says otherwise; apply the PS2/PM6 high-genetic-heterogeneity cap of 1 point.
 - **Source and provenance**: PP5/BP6 source labels are not counted when underlying primary evidence is counted. Abstract-only evidence, inaccessible full text, unread supplements, and low-confidence figure/OCR evidence cannot enter `current_counted_evidence_resolved`.
+- **Abstract-only handling**: do not discard abstract-only literature. Put it in `source_assertions_or_leads` or `coverage_audit.hits`, record `full_text_status: abstract_only`, and request the PDF/supplement when the missing details are needed. The final classification stays `draft classification` only if the agent tries to count that source before provenance is sufficient.
 
 ---
 
