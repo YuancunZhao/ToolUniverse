@@ -377,6 +377,9 @@ default_tool_files = {
         current_dir, "data", "clinvar_submitted_tools.json"
     ),
     "intervar": os.path.join(current_dir, "data", "intervar_tools.json"),
+    "acmg_overlay_gate": os.path.join(
+        current_dir, "data", "acmg_overlay_gate_tools.json"
+    ),
     # GeneBe - independent ACMG/AMP auto-classifier (+ AlphaMissense, gnomAD)
     "genebe": os.path.join(current_dir, "data", "genebe_tools.json"),
     "cancervar": os.path.join(current_dir, "data", "cancervar_tools.json"),

@@ -1,7 +1,8 @@
 [
   {
     "name": "InterVar_classify_variant",
-    "description": "Classify a germline variant using ACMG/AMP 2015 standards (InterVar). Returns the clinical significance category — Pathogenic, Likely Pathogenic, Uncertain Significance, Likely Benign, or Benign — plus the activation status of all 28 evidence criteria (PVS1, PS1-PS4, PM1-PM6, PP1-PP5, BA1, BP1-BP7, BS1-BS4). Input requires genomic coordinates in hg19 or hg38. No API key needed. Example: BRCA1 c.5266dupC (chr17:41245466 G>A in hg19) is Likely Pathogenic with PM2+PP3+PP5.",
+    "description": "Retrieve InterVar automated ACMG/AMP 2015 germline variant classification output as a source lead and comparator for overlay-gated review. Returns InterVar clinical significance category and activation status of evidence criteria, but these automated criteria are not ACMG counted evidence and are not final ToolUniverse ACMG classification. For germline ACMG/pathogenicity final classification, route primary evidence through ACMG_overlay_gate_assess_variant, emit an acmg_assessment_bundle, and require validator_status: PASS.",
+    "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
     "type": "InterVarTool",
     "parameter": {
       "type": "object",

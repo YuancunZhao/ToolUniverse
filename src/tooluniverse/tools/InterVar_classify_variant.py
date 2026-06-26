@@ -1,7 +1,8 @@
 """
 InterVar_classify_variant
 
-Classify a germline variant using ACMG/AMP 2015 standards (InterVar). Returns the clinical signif...
+Retrieve InterVar automated ACMG/AMP output as a source lead/comparator, not
+ToolUniverse final ACMG counted evidence.
 """
 
 from typing import Any, Optional, Callable
@@ -20,7 +21,9 @@ def InterVar_classify_variant(
     validate: bool = True,
 ) -> dict[str, Any]:
     """
-    Classify a germline variant using ACMG/AMP 2015 standards (InterVar). Returns the clinical signif...
+    Retrieve InterVar automated ACMG/AMP output as a source lead/comparator.
+    Do not use this wrapper result as ToolUniverse final ACMG counted evidence
+    without an overlay-gated bundle and validator_status: PASS.
 
     Parameters
     ----------

@@ -10,6 +10,10 @@ An agent may summarize evidence without the bundle, but the output must stay `dr
 
 This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP. Those outputs are source leads, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
 
+For MCP workflows, start with `ACMG_overlay_gate_assess_variant`. It is the front-door gate for germline ACMG/pathogenicity tasks: it plans baseline/discovery routes, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, creates a bundle skeleton, and validates a supplied `acmg_assessment_bundle`.
+
+This applies to English and Chinese variant-classification queries. For example, `根据ACMG规则评估 ... 杂合变异致病性` and direct `Tool_Finder_Keyword` searches should surface `ACMG_overlay_gate_assess_variant` before direct tools such as GeneBe, InterVar, SpliceAI, MyVariant, ClinVar, or VEP.
+
 ## Required Bundle
 
 Before final classification, emit one `acmg_assessment_bundle` compatible with `schemas/acmg_assessment_bundle.schema.json`:

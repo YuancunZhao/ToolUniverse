@@ -165,7 +165,13 @@ tooluniverse-doctor = "tooluniverse.doctor:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-tooluniverse = ["data/*", "data/packages/*"]
+tooluniverse = [
+    "data/*",
+    "data/packages/*",
+    "data/acmg_overlay_gate/*",
+    "data/acmg_overlay_gate/schemas/*",
+    "data/acmg_overlay_gate/scripts/*",
+]
 
 [dependency-groups]
 dev = [

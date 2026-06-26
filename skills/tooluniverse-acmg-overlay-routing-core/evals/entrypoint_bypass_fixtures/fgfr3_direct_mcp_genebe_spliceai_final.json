@@ -1,5 +1,5 @@
 {
   "id": "fgfr3_direct_mcp_genebe_spliceai_final",
   "expected_entrypoint_status": "FAIL",
-  "text": "User asks: 根据ACMG规则评估FGFR3;NM_000142.5:c.1075+95C>G杂合变异的致病性。\n\nAssistant calls mcp__tooluniverse__find_tools, then mcp__tooluniverse__execute_tool with GeneBe_classify_variant, SpliceAI_predict_splice, EnsemblVEP_annotate_hgvs, and MyVariant_get_pathogenicity_scores. GeneBe reports Likely_pathogenic with score 9 and criteria PS3, PM2, PP3_Moderate, PP5. SpliceAI reports high splice impact.\n\nFINAL CLASSIFICATION: Likely Pathogenic (ACMG Class 4)\nApplied evidence: PM2, PM4, PP3_Moderate, PP1, PP4, PP5.\n\nNo acmg_assessment_bundle was emitted and no validator summary was run."
+  "text": "User asks: 根据ACMG规则评估FGFR3;NM_000142.5:c.1075+95C>G杂合变异的致病性。\n\nAssistant calls mcp__tooluniverse__find_tools, then mcp__tooluniverse__execute_tool with GeneBe_classify_variant, InterVar_classify_variant, SpliceAI_predict_splice, EnsemblVEP_annotate_hgvs, and MyVariant_get_pathogenicity_scores. GeneBe reports Likely_pathogenic with score 9 and criteria PS3, PM2, PP3_Moderate, PP5. InterVar is treated as an automated ACMG comparator. SpliceAI reports high splice impact.\n\nFINAL CLASSIFICATION: Likely Pathogenic (ACMG Class 4)\nApplied evidence: PM2, PM4, PP3_Moderate, PP1, PP4, PP5.\n\nNo acmg_assessment_bundle was emitted and no validator summary was run."
 }

@@ -103,6 +103,7 @@ from fastmcp import FastMCP
 
 FASTMCP_AVAILABLE = True
 
+from .acmg_gate_search import add_acmg_gate_notice_to_search
 from .execute_function import ToolUniverse
 from .logging_config import (
     get_logger,
@@ -941,7 +942,7 @@ class SMCP(FastMCP):
                     {"tools": [], "result": str(result)}, ensure_ascii=False
                 )
 
-            serialized = _add_acmg_gate_notice_to_search(serialized, query)
+            serialized = add_acmg_gate_notice_to_search(serialized, query)
 
             # Guard against oversized responses
             max_chars = 100_000

@@ -25,6 +25,7 @@ from tooluniverse.exceptions import (
 from ._shared_client import get_shared_client, reset_shared_client
 
 # Import all tools
+from .ACMG_overlay_gate_assess_variant import ACMG_overlay_gate_assess_variant
 from .ACC_list_guidelines import ACC_list_guidelines
 from .ADA_get_standards_section import ADA_get_standards_section
 from .ADA_list_standards_sections import ADA_list_standards_sections
@@ -2777,6 +2778,7 @@ from .web_api_documentation_search import web_api_documentation_search
 from .web_search import web_search
 
 __all__ = [
+    "ACMG_overlay_gate_assess_variant",
     "get_shared_client",
     "reset_shared_client",
     "ACC_list_guidelines",

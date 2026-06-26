@@ -10,6 +10,7 @@ that points final ACMG/pathogenicity work at non-gate entrypoints.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
@@ -28,7 +29,8 @@ FINAL_LABEL_RE = re.compile(
 FINAL_CONTEXT_RE = re.compile(
     r"\b(final\s+classification|ACMG\s+classification|overall\s+classification|"
     r"classification_status\s*[:=]\s*['\"]?final\s+classification|"
-    r"final\s+ACMG|five-tier|5-tier)\b",
+    r"final\s+ACMG|five-tier|5-tier)\b|"
+    r"最终\s*ACMG\s*分类|最终分类|ACMG\s*分类|致病性评级",
     re.IGNORECASE,
 )
 VALIDATOR_PASS_RE = re.compile(r'"validator_status"\s*:\s*"PASS"', re.IGNORECASE)
@@ -42,6 +44,7 @@ COUNTED_SOURCE_RE = re.compile(
 DIRECT_MCP_TOOL_RE = re.compile(
     r"\b(mcp__tooluniverse__(?:find_tools|execute_tool)|"
     r"GeneBe_classify_variant|GeneBe_classify_variants_batch|"
+    r"InterVar_classify_variant|"
     r"SpliceAI_predict_splice|SpliceAI_get_max_delta|"
     r"MyVariant_get_pathogenicity_scores|EnsemblVEP_annotate_hgvs|"
     r"ClinVar_get_clinical_significance)\b",
@@ -66,6 +69,7 @@ HIGH_RISK_TOOL_NOTICE_PATTERNS = (
 )
 HIGH_RISK_TOOL_DEFINITION_FILES = (
     "genebe_tools.json",
+    "intervar_tools.json",
     "clinvar_tools.json",
     "spliceai_tools.json",
     "biothings_tools.json",
@@ -74,12 +78,17 @@ HIGH_RISK_TOOL_DEFINITION_FILES = (
 HIGH_RISK_TOOL_NAMES = (
     "GeneBe_classify_variant",
     "GeneBe_classify_variants_batch",
+    "InterVar_classify_variant",
     "ClinVar_get_clinical_significance",
     "SpliceAI_predict_splice",
     "SpliceAI_get_max_delta",
     "MyVariant_get_pathogenicity_scores",
     "EnsemblVEP_annotate_hgvs",
 )
+FRONT_DOOR_TOOL_NAME = "ACMG_overlay_gate_assess_variant"
+CHINESE_GATE_QUERY = "根据ACMG规则评估 FGFR3;NM_000142.5:c.1075+95C>G 杂合变异致病性"
+ENGLISH_GATE_QUERY = "ACMG pathogenicity classification FGFR3 variant"
+NON_ACMG_QUERY = "protein structure prediction for kinase domain"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -140,6 +149,37 @@ def scan_high_risk_tool_definitions(root: Path) -> list[dict[str, Any]]:
     if not data_root.exists():
         return violations
 
+    gate_path = data_root / "acmg_overlay_gate_tools.json"
+    if not gate_path.exists():
+        violations.append(
+            {
+                "file": str(gate_path),
+                "tool": FRONT_DOOR_TOOL_NAME,
+                "violation": "acmg_front_door_gate_tool_definition_not_found",
+            }
+        )
+    else:
+        gate_payload = json.loads(gate_path.read_text(encoding="utf-8"))
+        gate_tools = [tool for tool in _iter_json_tool_objects(gate_payload) if tool.get("name") == FRONT_DOOR_TOOL_NAME]
+        if not gate_tools:
+            violations.append(
+                {
+                    "file": str(gate_path),
+                    "tool": FRONT_DOOR_TOOL_NAME,
+                    "violation": "acmg_front_door_gate_tool_definition_not_found",
+                }
+            )
+        else:
+            gate_text = json.dumps(gate_tools[0], ensure_ascii=False)
+            if "not an ACMG classifier" not in gate_text or "validator_status: PASS" not in gate_text:
+                violations.append(
+                    {
+                        "file": str(gate_path),
+                        "tool": FRONT_DOOR_TOOL_NAME,
+                        "violation": "acmg_front_door_gate_tool_missing_role_or_validator_wording",
+                    }
+                )
+
     found: set[str] = set()
     for filename in HIGH_RISK_TOOL_DEFINITION_FILES:
         path = data_root / filename
@@ -166,6 +206,81 @@ def scan_high_risk_tool_definitions(root: Path) -> list[dict[str, Any]]:
                 "file": str(data_root),
                 "tool": name,
                 "violation": "high_risk_variant_tool_definition_not_found",
+            }
+        )
+
+    return violations
+
+
+def scan_gate_priority_implementation(root: Path) -> list[dict[str, Any]]:
+    violations: list[dict[str, Any]] = []
+    src_root = root / "src" / "tooluniverse"
+    helper = src_root / "acmg_gate_search.py"
+    keyword = src_root / "tool_finder_keyword.py"
+    smcp = src_root / "smcp.py"
+
+    if not helper.exists():
+        return [
+            {
+                "file": str(helper),
+                "violation": "acmg_gate_search_helper_not_found",
+            }
+        ]
+
+    spec = importlib.util.spec_from_file_location("acmg_gate_search_check", helper)
+    module = importlib.util.module_from_spec(spec) if spec and spec.loader else None
+    if module is None or spec is None or spec.loader is None:
+        violations.append(
+            {
+                "file": str(helper),
+                "violation": "acmg_gate_search_helper_not_importable",
+            }
+        )
+    else:
+        spec.loader.exec_module(module)
+        detector = getattr(module, "looks_like_acmg_gate_query", None)
+        if not callable(detector):
+            violations.append(
+                {
+                    "file": str(helper),
+                    "violation": "acmg_gate_query_detector_not_found",
+                }
+            )
+        else:
+            if not detector(CHINESE_GATE_QUERY):
+                violations.append(
+                    {
+                        "file": str(helper),
+                        "violation": "chinese_hgvs_acmg_query_not_detected",
+                    }
+                )
+            if not detector(ENGLISH_GATE_QUERY):
+                violations.append(
+                    {
+                        "file": str(helper),
+                        "violation": "english_acmg_query_not_detected",
+                    }
+                )
+            if detector(NON_ACMG_QUERY):
+                violations.append(
+                    {
+                        "file": str(helper),
+                        "violation": "non_acmg_query_detected_as_gate_query",
+                    }
+                )
+
+    if not keyword.exists() or "add_acmg_gate_to_search_payload" not in keyword.read_text(encoding="utf-8"):
+        violations.append(
+            {
+                "file": str(keyword),
+                "violation": "tool_finder_keyword_missing_acmg_gate_prepend",
+            }
+        )
+    if not smcp.exists() or "add_acmg_gate_notice_to_search" not in smcp.read_text(encoding="utf-8"):
+        violations.append(
+            {
+                "file": str(smcp),
+                "violation": "smcp_find_tools_missing_acmg_gate_notice",
             }
         )
 
@@ -264,11 +379,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.tooluniverse_root
         else []
     )
+    gate_priority_violations = (
+        scan_gate_priority_implementation(Path(args.tooluniverse_root))
+        if args.tooluniverse_root
+        else []
+    )
     summary = {
         "status": PASS
         if all(row["ok"] for row in results)
         and not static_violations
         and not tool_definition_violations
+        and not gate_priority_violations
         else FAIL,
         "fixture_count": len(results),
         "results": results,
@@ -276,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
         "static_violations": static_violations,
         "tool_definition_violation_count": len(tool_definition_violations),
         "tool_definition_violations": tool_definition_violations,
+        "gate_priority_violation_count": len(gate_priority_violations),
+        "gate_priority_violations": gate_priority_violations,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2 if args.pretty else None, sort_keys=True))
     return 0 if summary["status"] == PASS else 1

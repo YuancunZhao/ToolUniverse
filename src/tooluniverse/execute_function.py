@@ -88,6 +88,7 @@ ACMG_GATE_NOTICE = (
 HIGH_RISK_ACMG_GATE_TOOLS = {
     "GeneBe_classify_variant",
     "GeneBe_classify_variants_batch",
+    "InterVar_classify_variant",
     "ClinVar_get_clinical_significance",
     "SpliceAI_predict_splice",
     "SpliceAI_get_max_delta",

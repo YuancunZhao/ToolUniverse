@@ -12,6 +12,7 @@ import re
 import math
 from collections import Counter, defaultdict
 from typing import Dict, List
+from .acmg_gate_search import add_acmg_gate_to_search_payload, looks_like_acmg_gate_query
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -712,33 +713,34 @@ class ToolFinderKeyword(BaseTool):
             if not query_tokens and not query_phrases:
                 # Feature-R13B-01: return standard schema so programmatic consumers
                 # can always read total_matches without branching on "error" key.
-                return json.dumps(
-                    {
-                        "query": query,
-                        "search_method": "Advanced keyword matching (TF-IDF + NLP)",
-                        "total_matches": 0,
-                        "limit": limit,
-                        "offset": offset,
-                        "has_more": False,
-                        "categories_filtered": categories,
-                        "processing_info": {
-                            "query_tokens": 0,
-                            "query_phrases": 0,
-                            "indexed_tools": getattr(self, "_total_documents", 0),
-                            "warning": "No meaningful search terms found in query",
-                            **(
-                                {
-                                    "query_submitted": query_submitted,
-                                    "query_normalized": query,
-                                }
-                                if query_submitted != query
-                                else {}
-                            ),
-                        },
-                        "tools": [],
+                payload = {
+                    "query": query,
+                    "search_method": "Advanced keyword matching (TF-IDF + NLP)",
+                    "total_matches": 0,
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": False,
+                    "categories_filtered": categories,
+                    "processing_info": {
+                        "query_tokens": 0,
+                        "query_phrases": 0,
+                        "indexed_tools": getattr(self, "_total_documents", 0),
+                        "warning": "No meaningful search terms found in query",
+                        **(
+                            {
+                                "query_submitted": query_submitted,
+                                "query_normalized": query,
+                            }
+                            if query_submitted != query
+                            else {}
+                        ),
                     },
-                    indent=2,
-                )
+                    "tools": [],
+                }
+                if looks_like_acmg_gate_query(query_submitted):
+                    payload = add_acmg_gate_to_search_payload(payload)
+                    payload["total_matches"] = len(payload.get("tools", []))
+                return json.dumps(payload, indent=2, ensure_ascii=False)
 
             # Calculate relevance scores for all tools
             tool_scores = []
@@ -803,40 +805,42 @@ class ToolFinderKeyword(BaseTool):
                     limit is not None and (offset + len(matching_tools)) < total_scored
                 )
             )
-            return json.dumps(
-                {
-                    "query": query,
-                    "search_method": "Advanced keyword matching (TF-IDF + NLP)",
-                    "total_matches": total_scored,
-                    "limit": limit,
-                    "offset": offset,
-                    "has_more": has_more,
-                    # Feature-R19A-02: include next_offset so pipelines don't recompute
-                    # offset + len(tools). Feature-23A-02: when limit=0 and has_more=True,
-                    # set next_offset=0 so callers can pass it directly as --offset.
-                    "next_offset": (offset + len(matching_tools))
-                    if (has_more and limit != 0)
-                    else (0 if has_more else None),
-                    "categories_filtered": categories,
-                    "processing_info": {
-                        "query_tokens": len(query_tokens),
-                        "query_phrases": len(query_phrases),
-                        "indexed_tools": self._total_documents,
-                        # Feature-R15B-02: expose original vs normalized query when underscore
-                        # normalization was applied, so callers can detect the transformation.
-                        **(
-                            {
-                                "query_submitted": query_submitted,
-                                "query_normalized": query,
-                            }
-                            if query_submitted != query
-                            else {}
-                        ),
-                    },
-                    "tools": matching_tools,
+            payload = {
+                "query": query,
+                "search_method": "Advanced keyword matching (TF-IDF + NLP)",
+                "total_matches": total_scored,
+                "limit": limit,
+                "offset": offset,
+                "has_more": has_more,
+                # Feature-R19A-02: include next_offset so pipelines don't recompute
+                # offset + len(tools). Feature-23A-02: when limit=0 and has_more=True,
+                # set next_offset=0 so callers can pass it directly as --offset.
+                "next_offset": (offset + len(matching_tools))
+                if (has_more and limit != 0)
+                else (0 if has_more else None),
+                "categories_filtered": categories,
+                "processing_info": {
+                    "query_tokens": len(query_tokens),
+                    "query_phrases": len(query_phrases),
+                    "indexed_tools": self._total_documents,
+                    # Feature-R15B-02: expose original vs normalized query when underscore
+                    # normalization was applied, so callers can detect the transformation.
+                    **(
+                        {
+                            "query_submitted": query_submitted,
+                            "query_normalized": query,
+                        }
+                        if query_submitted != query
+                        else {}
+                    ),
                 },
-                indent=2,
-            )
+                "tools": matching_tools,
+            }
+            if looks_like_acmg_gate_query(query_submitted):
+                before_len = len(payload.get("tools", []))
+                payload = add_acmg_gate_to_search_payload(payload)
+                payload["total_matches"] = total_scored + len(payload.get("tools", [])) - before_len
+            return json.dumps(payload, indent=2, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps(

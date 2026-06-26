@@ -6,6 +6,7 @@ This file allows lazy loading to work in frozen environments where source files 
 
 # Map of tool_name -> module_name
 STATIC_LAZY_REGISTRY = {
+    "ACMGOverlayGateTool": "acmg_overlay_gate_tool",
     "ADAStandardsTool": "clinical_society_tools",
     "ADMETAITool": "admetai_tool",
     "AHAACCGuidelineTool": "clinical_society_tools",

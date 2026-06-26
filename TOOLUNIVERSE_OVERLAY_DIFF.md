@@ -20,11 +20,17 @@ Summary:
 
 This change closes a remaining bypass path where an agent can skip ACMG skills and call ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP directly, then turn those outputs into final ACMG evidence.
 
+- Adds `ACMG_overlay_gate_assess_variant` as a lightweight ToolUniverse MCP front-door gate for germline ACMG/pathogenicity tasks. The tool creates route-plan and bundle skeletons, normalizes automated classifiers as source leads, and validates supplied `acmg_assessment_bundle` payloads; it is not a new ACMG classifier.
+- Updates ToolUniverse MCP search handling so ACMG/pathogenicity/five-tier variant-classification queries surface `ACMG_overlay_gate_assess_variant` as the recommended front-door tool before direct tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, or VEP.
 - Adds direct-MCP regression coverage for an FGFR3-like transcript where GeneBe, SpliceAI, VEP, and MyVariant outputs are manually combined into a final `Likely Pathogenic` call without an `acmg_assessment_bundle` or validator `PASS`.
 - Extends the entrypoint bypass checker to flag direct ToolUniverse MCP variant-tool usage plus final ACMG wording when validator `PASS` is absent.
-- Adds optional static checks for high-risk ToolUniverse tool definitions so GeneBe, ClinVar clinical significance, SpliceAI, MyVariant pathogenicity scores, and Ensembl VEP definitions must carry source-lead / not-counted-evidence / validator-PASS gate wording.
+- Adds optional static checks for high-risk ToolUniverse tool definitions so GeneBe, InterVar, ClinVar clinical significance, SpliceAI, MyVariant pathogenicity scores, and Ensembl VEP definitions must carry source-lead / not-counted-evidence / validator-PASS gate wording.
 - Updates `tooluniverse-acmg-overlay-routing-core/QUICK_START.md` to state that direct ToolUniverse MCP outputs remain source leads or route triggers until routed through the bundle and validator.
 - Updates ToolUniverse runtime metadata in the fork so high-risk direct MCP tool results and ACMG/pathogenicity tool-search responses carry an `acmg_gate_notice`.
+- Hardens gate priority for Chinese and real-HGVS queries such as `根据ACMG规则评估 ... 杂合变异致病性`, so `ACMG_overlay_gate_assess_variant` is surfaced before direct evidence tools.
+- Reuses the same front-door gate search helper from both the MCP `find_tools` wrapper and direct `Tool_Finder_Keyword` execution, closing a bypass where agents could call the tool finder through `execute_tool`.
+- Packages a runtime fallback copy of the overlay registry, assessment-bundle schema, and validator under `tooluniverse.data` so installed ToolUniverse builds can run the gate tool even when repository-level `skills/` files are not present.
+- Adds Chinese direct-MCP regression coverage and gate-priority implementation checks to the entrypoint bypass checker.
 
 This is direct-MCP/tool-output gate hardening only. It does not add a full harness, query databases in the validator, assign evidence strength, change VCEP precedence, change ACMG thresholds, or modify the final combiner.
 
