@@ -941,6 +941,8 @@ class SMCP(FastMCP):
                     {"tools": [], "result": str(result)}, ensure_ascii=False
                 )
 
+            serialized = _add_acmg_gate_notice_to_search(serialized, query)
+
             # Guard against oversized responses
             max_chars = 100_000
             if len(serialized) > max_chars:

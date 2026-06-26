@@ -8,6 +8,8 @@ No valid ACMG assessment bundle, no final ACMG classification.
 
 An agent may summarize evidence without the bundle, but the output must stay `draft classification` until the bundle validates.
 
+This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP. Those outputs are source leads, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
+
 ## Required Bundle
 
 Before final classification, emit one `acmg_assessment_bundle` compatible with `schemas/acmg_assessment_bundle.schema.json`:

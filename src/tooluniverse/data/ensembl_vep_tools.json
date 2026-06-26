@@ -1,7 +1,8 @@
 [
   {
     "name": "EnsemblVEP_annotate_hgvs",
-    "description": "Predict functional consequences of a genetic variant using HGVS notation via the Ensembl Variant Effect Predictor (VEP). Returns impact on genes, transcripts, and proteins including SIFT/PolyPhen pathogenicity scores, consequence types, amino acid changes, and colocated known variants. HGVS notation examples: 'BRAF:p.Val600Glu' (protein), 'ENST00000366667:c.803C>T' (coding DNA). This complements the existing region-based VEP tool by accepting standard clinical variant nomenclature.",
+    "description": "Annotate functional consequences of a genetic variant using HGVS notation via Ensembl VEP. Returns consequence, transcript/protein impact, SIFT/PolyPhen annotations, amino acid changes, and colocated variants as source leads and route triggers. VEP consequences or predictor fields are not ACMG counted evidence by themselves. For germline ACMG/pathogenicity final classification, route primary evidence through the ACMG overlay gate with an acmg_assessment_bundle and validator_status: PASS.",
+    "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
     "parameter": {
       "type": "object",
       "properties": {

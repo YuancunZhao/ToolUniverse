@@ -16,6 +16,18 @@ Summary:
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
+## ACMG Gate Direct-MCP Hardening: 2026-06-26
+
+This change closes a remaining bypass path where an agent can skip ACMG skills and call ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP directly, then turn those outputs into final ACMG evidence.
+
+- Adds direct-MCP regression coverage for an FGFR3-like transcript where GeneBe, SpliceAI, VEP, and MyVariant outputs are manually combined into a final `Likely Pathogenic` call without an `acmg_assessment_bundle` or validator `PASS`.
+- Extends the entrypoint bypass checker to flag direct ToolUniverse MCP variant-tool usage plus final ACMG wording when validator `PASS` is absent.
+- Adds optional static checks for high-risk ToolUniverse tool definitions so GeneBe, ClinVar clinical significance, SpliceAI, MyVariant pathogenicity scores, and Ensembl VEP definitions must carry source-lead / not-counted-evidence / validator-PASS gate wording.
+- Updates `tooluniverse-acmg-overlay-routing-core/QUICK_START.md` to state that direct ToolUniverse MCP outputs remain source leads or route triggers until routed through the bundle and validator.
+- Updates ToolUniverse runtime metadata in the fork so high-risk direct MCP tool results and ACMG/pathogenicity tool-search responses carry an `acmg_gate_notice`.
+
+This is direct-MCP/tool-output gate hardening only. It does not add a full harness, query databases in the validator, assign evidence strength, change VCEP precedence, change ACMG thresholds, or modify the final combiner.
+
 ## ACMG Overlay Gate Convergence: 2026-06-24
 
 This change converges the overlay compliance layer around `registry + assessment bundle + validator`.

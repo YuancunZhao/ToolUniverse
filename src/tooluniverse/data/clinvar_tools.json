@@ -217,7 +217,8 @@
     {
         "type": "ClinVarGetClinicalSignificance",
         "name": "ClinVar_get_clinical_significance",
-        "description": "Get clinical significance information for a variant from ClinVar. Returns pathogenicity classification and clinical interpretations.",
+        "description": "Get ClinVar clinical significance information for a variant as source assertion context. Returns ClinVar aggregate significance and interpretation fields that may guide evidence retrieval or PP5/BP6 source-review routing. ClinVar labels are source leads only, not ACMG counted evidence. For germline ACMG/pathogenicity final classification, primary evidence must be routed through the ACMG overlay gate with an acmg_assessment_bundle and validator_status: PASS.",
+        "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
         "parameter": {
             "type": "object",
             "properties": {

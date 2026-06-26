@@ -76,6 +76,39 @@ LAZY_LOADING_ENABLED = (
     os.getenv("TOOLUNIVERSE_LAZY_LOADING", "true").lower() in _TRUTHY_VALUES
 )
 
+ACMG_GATE_NOTICE = (
+    "ACMG gate: this direct ToolUniverse tool output is a source lead, "
+    "route trigger, or annotation input only; it is not ACMG counted evidence. "
+    "For germline ACMG/pathogenicity final classification, include an "
+    "acmg_assessment_bundle and validator_status: PASS from "
+    "tooluniverse-acmg-overlay-routing-core before presenting final "
+    "Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign."
+)
+
+HIGH_RISK_ACMG_GATE_TOOLS = {
+    "GeneBe_classify_variant",
+    "GeneBe_classify_variants_batch",
+    "ClinVar_get_clinical_significance",
+    "SpliceAI_predict_splice",
+    "SpliceAI_get_max_delta",
+    "MyVariant_get_pathogenicity_scores",
+    "EnsemblVEP_annotate_hgvs",
+}
+
+
+def _attach_acmg_gate_notice(function_name: str, result: Any) -> Any:
+    if function_name not in HIGH_RISK_ACMG_GATE_TOOLS or not isinstance(result, dict):
+        return result
+    metadata = result.setdefault("metadata", {})
+    if isinstance(metadata, dict):
+        metadata.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
+    else:
+        result["metadata"] = {
+            "original_metadata": metadata,
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+    return result
+
 if LAZY_LOADING_ENABLED:
     # Use lazy auto-discovery by default (much faster)
     debug("Starting lazy tool auto-discovery...")
@@ -3178,6 +3211,8 @@ class ToolUniverse:
                 # Classify and return structured error
                 classified_error = self._classify_exception(e, function_name, arguments)
                 return self._create_dual_format_error(classified_error)
+
+            result = _attach_acmg_gate_notice(function_name, result)
 
             # Apply output hooks if enabled
             if self.hook_manager:

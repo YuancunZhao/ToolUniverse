@@ -1,16 +1,13 @@
 """
-GeneBe variant ACMG-classification tool for ToolUniverse.
+GeneBe variant source-lead tool for ToolUniverse.
 
-GeneBe (genebe.net) automatically classifies a germline variant under the
-ACMG/AMP guidelines and returns the verdict, the numeric score, and the exact
-triggered criteria (e.g. ``PS3,PM1,PM2,PM5,PP2,PP3_Moderate,PP5``), alongside
-gene/transcript context, dbSNP id, gnomAD allele frequency, ClinVar
-classification, and an AlphaMissense score.
-
-It is complementary to ``InterVar_classify_variant`` (a different group's
-implementation of ACMG/AMP): GeneBe is independently maintained and layers in
-AlphaMissense / APOGEE2 and gene-specific ACMG, so cross-checking the two
-sources is useful when a classification is borderline.
+GeneBe (genebe.net) returns an automated germline ACMG-style classification,
+score, criteria string, gene/transcript context, dbSNP id, gnomAD allele
+frequency, ClinVar classification, and AlphaMissense score. In ToolUniverse ACMG
+workflows these fields are source leads and route triggers only. They are not
+ACMG counted evidence and must not be used as a final germline pathogenicity
+classification without an acmg_assessment_bundle and validator_status: PASS from
+tooluniverse-acmg-overlay-routing-core.
 
 API: https://api.genebe.net/cloud/api-public/v1/variant (public, no key; a
 free account raises the anonymous rate limit). Input is chromosome / position
@@ -26,6 +23,14 @@ from .tool_registry import register_tool
 
 GENEBE_API = "https://api.genebe.net/cloud/api-public/v1/variant"
 GENEBE_BATCH_API = "https://api.genebe.net/cloud/api-public/v1/variants"
+GENEBE_ACMG_GATE_NOTICE = (
+    "ACMG gate: this direct ToolUniverse tool output is a source lead, "
+    "route trigger, or annotation input only; it is not ACMG counted evidence. "
+    "For germline ACMG/pathogenicity final classification, include an "
+    "acmg_assessment_bundle and validator_status: PASS from "
+    "tooluniverse-acmg-overlay-routing-core before presenting final "
+    "Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign."
+)
 
 # Max variants per batch request accepted by the public GeneBe endpoint.
 GENEBE_BATCH_MAX = 1000
@@ -61,7 +66,7 @@ _USEFUL_FIELDS = (
 
 @register_tool("GeneBeTool")
 class GeneBeTool(BaseTool):
-    """Classify a germline variant with GeneBe's ACMG/AMP auto-classifier."""
+    """Retrieve GeneBe automated labels as source leads for gated ACMG review."""
 
     def __init__(self, tool_config: Dict[str, Any]):
         super().__init__(tool_config)
@@ -146,15 +151,19 @@ class GeneBeTool(BaseTool):
         return {
             "status": "success",
             "data": data,
-            "metadata": {"source": "GeneBe (genebe.net)", "genome": genome},
+            "metadata": {
+                "source": "GeneBe (genebe.net)",
+                "genome": genome,
+                "acmg_gate_notice": GENEBE_ACMG_GATE_NOTICE,
+            },
         }
 
     def _run_batch(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Classify up to 1000 variants in a single POST to GeneBe.
+        """Retrieve up to 1000 GeneBe source-lead records in one request.
 
-        Expects ``variants``: a list of objects each with chr/pos/ref/alt. Returns
-        the full per-variant ACMG output (verdict, score, criteria, per-gene HGVS,
-        AlphaMissense, gnomAD AF, ClinVar) for every variant.
+        GeneBe verdicts, scores, and criteria strings are not ACMG counted
+        evidence. Route primary evidence through the ACMG overlay gate before
+        final classification.
         """
         raw = arguments.get("variants")
         if not isinstance(raw, list) or not raw:
@@ -263,5 +272,6 @@ class GeneBeTool(BaseTool):
                 "genome": genome,
                 "submitted_count": len(body),
                 "result_count": len(variants),
+                "acmg_gate_notice": GENEBE_ACMG_GATE_NOTICE,
             },
         }
