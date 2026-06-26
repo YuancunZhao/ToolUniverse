@@ -31,7 +31,7 @@ Apply when users:
 - Ask "what is the functional impact of this intronic SNP?"
 
 **NOT for** (use other skills instead):
-- Coding variant pathogenicity / ACMG classification -> Use `tooluniverse-variant-interpretation`
+- Coding variant pathogenicity / ACMG classification -> Use `tooluniverse-acmg-variant-classification`
 - Pure regulatory element annotation without mechanism -> Use `tooluniverse-regulatory-genomics`
 - Pure GWAS hit listing without mechanism -> Use `tooluniverse-gwas-snp-interpretation`
 - Pharmacogenomic variant annotation -> Use `tooluniverse-pharmacogenomics`
@@ -87,12 +87,6 @@ myvar = tu.tools.MyVariant_query_variants(
 # Step 3: Confirm gene context
 gwas_snp = tu.tools.gwas_search_snps(rs_id="rs7903146")
 # Returns: SNP location, mapped genes, functional class
-
-# Optional one-call shortcut (when a GRCh38 coordinate is available):
-favor = tu.tools.FAVOR_annotate_variant(variant="19-44908822-C-T")
-# Returns freq (BRAVO/gnomAD-by-ancestry/1000G) + CADD/SIFT/PolyPhen/AlphaMissense
-# + conservation + ClinVar + regulatory annotation in a single call — a fast way to
-# populate most of Phase 1 (and the regulatory block of Phase 2) before drilling in.
 ```
 
 ---

@@ -61,7 +61,7 @@ Phase 2: Disease Matching → Orphanet_search_diseases, OMIM_search, DisGeNET_se
 Phase 3: Gene Panel → ClinGen validation, GTEx expression, prioritization scoring
 Phase 3.5: Expression Context → CELLxGENE, ChIPAtlas for tissue/cell-type confirmation
 Phase 3.6: Pathway Analysis → KEGG, IntAct for convergent pathways
-Phase 4: Variant Interpretation → ClinVar, gnomAD frequency, CADD/AlphaMissense/EVE/SpliceAI, ACMG criteria
+Phase 4: Variant Evidence Intake → ClinVar source assertions, gnomAD frequency, CADD/AlphaMissense/EVE/SpliceAI, and candidate ACMG routes; final pathogenicity requires `tooluniverse-acmg-variant-classification`
 Phase 5: Structure Analysis → AlphaFold2, InterPro domains (for VUS)
 Phase 6: Literature → PubMed, BioRxiv/MedRxiv, OpenAlex
 Phase 7: Report Synthesis → Prioritized differential with next steps
@@ -73,7 +73,7 @@ Phase 7: Report Synthesis → Prioritized differential with next steps
 
 **Phase 3 - Gene Panel**: ClinGen classification drives inclusion (Definitive/Strong/Moderate = include; Limited = flag; Disputed/Refuted = exclude). Scoring: Tier 1 (top disease gene +5), Tier 2 (multi-disease +3), Tier 3 (ClinGen Definitive +3), Tier 4 (tissue expression +2), Tier 5 (pLI >0.9 +1).
 
-**Phase 4 - Variants**: gnomAD frequency classes: ultra-rare <0.00001, rare <0.0001, low-freq <0.01. For ACMG classification, route to `tooluniverse-acmg-variant-classification` and its overlays. PM2 defaults to `PM2_Supporting` under the ClinGen SVI PM2 overlay; missense PP3/BP4 must use `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` rather than uncalibrated predictor voting.
+**Phase 4 - Variants**: gnomAD frequency classes: ultra-rare <0.00001, rare <0.0001, low-freq <0.01. Treat ClinVar, OMIM, predictor, and paper labels as source leads or candidate route context inside this diagnostic skill. For final variant pathogenicity or ACMG classification, route to `tooluniverse-acmg-variant-classification` and its overlays. PM2 defaults to `PM2_Supporting` under the ClinGen SVI PM2 overlay; missense PP3/BP4 must use `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` rather than uncalibrated predictor voting.
 
 ---
 
@@ -82,7 +82,7 @@ Phase 7: Report Synthesis → Prioritized differential with next steps
 | Tier | Criteria |
 |------|----------|
 | **T1** (High) | Phenotype match >80% + gene match |
-| **T2** (Medium-High) | Phenotype match 60-80% OR likely pathogenic variant |
+| **T2** (Medium-High) | Phenotype match 60-80% OR externally reported / ACMG-gated P/LP variant |
 | **T3** (Medium) | Phenotype match 40-60% OR VUS in candidate gene |
 | **T4** (Low) | Phenotype <40% OR uncertain gene |
 

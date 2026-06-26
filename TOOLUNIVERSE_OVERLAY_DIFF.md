@@ -1,6 +1,6 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-24
+Last updated: 2026-06-25
 
 Baseline comparison:
 
@@ -40,6 +40,29 @@ This change closes validator gaps found during review.
 - Demotes old section schemas to internal/reference artifacts in the routing-core skill entrypoint; external agents should use `overlay_registry.yaml`, `acmg_assessment_bundle.schema.json`, and `validate_acmg_overlay_bundle.py`.
 
 This remains a lightweight compliance validator. It does not query databases, execute overlays, assign evidence strength, or change the final ACMG combiner.
+
+## ACMG Gate Entrypoint Hardening: 2026-06-25
+
+This change moves the validator gate to the main variant pathogenicity entrypoints so external agents cannot bypass the bundle by staying in a general router or evidence-intake skill.
+
+- Updates `tooluniverse/SKILL.md` so ACMG classification, pathogenicity, variant clinical significance, VUS, and "is this variant pathogenic" requests route to `tooluniverse-acmg-variant-classification` for final classification rather than stopping at `tooluniverse-variant-interpretation`.
+- Updates `tooluniverse-variant-interpretation/SKILL.md` to define Phase 6 as intake-only and require handoff to `tooluniverse-acmg-variant-classification` for final ACMG answers.
+- Updates `tooluniverse-acmg-variant-classification/SKILL.md` so final five-tier output requires a validator summary block with `validator_status: PASS`; otherwise the classification status remains draft-only.
+- Adds entrypoint bypass fixtures and a lightweight text checker for VWF-like GeneBe direct classification, natural-language route-table substitution, variant-interpretation direct final answers, and the accepted validator-PASS pattern.
+
+This is an entrypoint compliance change only. It does not add a ToolUniverse MCP tool, query databases, assign evidence strength, change VCEP precedence, or modify the final ACMG combiner.
+
+## ACMG Gate Full Entrypoint Closure: 2026-06-25
+
+This change closes remaining entrypoint and final-output bypass paths found after the first entrypoint hardening pass.
+
+- Reframes `tooluniverse-variant-interpretation` as evidence intake and draft reporting only; its frontmatter no longer advertises final ACMG/pathogenicity classification.
+- Repoints final ACMG/pathogenicity cross-skill references from `tooluniverse-variant-interpretation` to `tooluniverse-acmg-variant-classification`.
+- Adds the same `acmg_assessment_bundle` and `validator_status: PASS` requirement to the Bayesian final-combination skill before any final five-tier tier is presented.
+- Rewords rare-disease diagnosis variant sections so ClinVar/predictor/structure signals remain diagnosis context or ACMG route leads unless the ACMG gate validates.
+- Extends entrypoint bypass regression checks to scan static skill text and adds fixtures for Bayesian final output without validator PASS, rare-disease VUS promotion, and cross-skill final-routing bypass.
+
+This is still a skill-routing and output-gate change only. It does not change ACMG thresholds, evidence strength mapping, VCEP precedence, database query logic, or Tavtigian/Bayesian formulas.
 
 ## Added Skills
 

@@ -212,5 +212,5 @@ Compile all results into a single table per gene-disease pair:
 
 For comprehensive disease reports: [tooluniverse-disease-research](../tooluniverse-disease-research/SKILL.md)
 For rare disease diagnosis: [tooluniverse-rare-disease-diagnosis](../tooluniverse-rare-disease-diagnosis/SKILL.md)
-For variant interpretation: [tooluniverse-variant-interpretation](../tooluniverse-variant-interpretation/SKILL.md)
+For final germline variant pathogenicity or ACMG classification: [tooluniverse-acmg-variant-classification](../tooluniverse-acmg-variant-classification/SKILL.md)
 For drug-target validation: [tooluniverse-drug-target-validation](../tooluniverse-drug-target-validation/SKILL.md)

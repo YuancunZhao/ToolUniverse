@@ -240,10 +240,10 @@ Templates and example outputs for each phase of the rare disease diagnosis workf
 *Source: KEGG, IntAct, Reactome*
 ```
 
-### Phase 4: Variant Interpretation Output
+### Phase 4: Variant Evidence Intake Output
 
 ```markdown
-## 4. Variant Interpretation
+## 4. Variant Evidence Intake
 
 ### 4.1 Variant: FBN1 c.4621G>A (p.Glu1541Lys)
 
@@ -260,7 +260,7 @@ Templates and example outputs for each phase of the rare disease diagnosis workf
 |-----------|-------|----------------|--------------|
 | **AlphaMissense** | 0.78 | Pathogenic orientation | PP3/BP4 overlay or VCEP; not counted here |
 | **CADD PHRED** | 28.5 | Deleterious orientation | PP3/BP4 overlay or VCEP; not counted here |
-| **EVE** | 0.72 | Likely pathogenic orientation | PP3/BP4 overlay or VCEP; not counted here |
+| **EVE** | 0.72 | Damaging orientation | PP3/BP4 overlay or VCEP; not counted here |
 
 **Prediction summary**: concordant damaging orientation. PP3/BP4 strength is not
 assigned in this diagnostic template; route to
@@ -320,7 +320,7 @@ The variant p.Glu1541Lys:
 3. **Calcium binding** - Glutamate at this position coordinates Ca2+
 4. **Adjacent pathogenic variant** - p.Glu1540Lys is classified Pathogenic
 
-**Structural Evidence**: Strong support for pathogenicity (PM1 - critical domain)
+**Structural route lead**: Possible PM1/domain context. Do not count PM1 or upgrade pathogenicity in this diagnostic template; route through the ACMG overlay workflow.
 
 *Source: NVIDIA NIM via `NvidiaNIM_alphafold2`, InterPro*
 ```
@@ -381,6 +381,6 @@ priority,gene,diseases,evidence_level,pLI,expression,clingen_classification,acti
 **File**: `[PATIENT_ID]_variant_interpretation.csv`
 
 ```csv
-gene,variant,consequence,clinvar,gnomad_af,cadd,alphamissense,eve,acmg_class
-FBN1,c.4621G>A,Missense,VUS,0.000004,28.5,0.78,0.72,Likely Pathogenic
+gene,variant,consequence,clinvar,gnomad_af,cadd,alphamissense,eve,acmg_gate_status
+FBN1,c.4621G>A,Missense,VUS,0.000004,28.5,0.78,0.72,draft_only_route_to_acmg_gate
 ```

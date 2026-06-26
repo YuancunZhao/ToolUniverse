@@ -27,7 +27,7 @@ Apply for **missense (coding) variants** where:
 
 **Not for** (use other skills instead):
 - Non-coding / regulatory variants → `tooluniverse-variant-to-mechanism`
-- ACMG pathogenicity classification → `tooluniverse-variant-interpretation`
+- ACMG pathogenicity classification → `tooluniverse-acmg-variant-classification`
 - Just the SAE feature disruption (without full synthesis) → `tooluniverse-protein-sae-variant-interpretation`
 - Cancer-specific drivers → `tooluniverse-cancer-variant-interpretation`
 

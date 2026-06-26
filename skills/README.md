@@ -78,7 +78,7 @@ npx skills add mims-harvard/ToolUniverse
 | `tooluniverse-systems-biology` | Pathway analysis (Reactome, KEGG, WikiPathways) |
 | `tooluniverse-target-research` | Comprehensive drug target profiling (9 research paths) |
 | `tooluniverse-variant-analysis` | VCF processing, variant annotation, and SV/CNV interpretation |
-| `tooluniverse-variant-interpretation` | Clinical variant interpretation with ACMG classification |
+| `tooluniverse-variant-interpretation` | Variant evidence intake and draft interpretation; final ACMG classification uses `tooluniverse-acmg-variant-classification` |
 
 ### Developer Skills
 

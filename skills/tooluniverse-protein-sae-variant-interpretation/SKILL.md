@@ -21,7 +21,7 @@ Apply when users:
 - Are interpreting why a structurally subtle change (single AA) has a big functional impact
 
 **Not for** (use other skills instead):
-- ACMG pathogenicity classification → `tooluniverse-variant-interpretation`
+- ACMG pathogenicity classification → `tooluniverse-acmg-variant-classification`
 - Regulatory / non-coding variants → `tooluniverse-variant-to-mechanism`
 - Variant-to-disease association without mechanism → `tooluniverse-gene-disease-association`
 - Cancer-specific variant interpretation → `tooluniverse-cancer-variant-interpretation`

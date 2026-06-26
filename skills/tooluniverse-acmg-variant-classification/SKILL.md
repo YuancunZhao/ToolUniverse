@@ -86,6 +86,14 @@ Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays. 
 
 Hard gate for external agents: before presenting any final ACMG classification, emit an `acmg_assessment_bundle` compatible with `tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json` and validate it with `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py`. If the validator returns `DRAFT_ONLY` or `FAIL`, keep `classification_status: draft classification`; do not compute or present the final ACMG tier from unrouted evidence.
 
+Final answer output requirement: any final five-tier ACMG answer must include a validator summary block exactly equivalent to:
+
+```json
+{"validator_status":"PASS","violations":[]}
+```
+
+If the validator summary is absent, malformed, or not `PASS`, use `classification_status: draft classification` and do not present `Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign` as a final classification. Automated classifier outputs such as GeneBe, ClinVar-derived summaries, commercial/lab labels, or paper ACMG labels are `source_assertions_or_leads`; they are not overlay results and must not be inserted into counted evidence without the responsible overlay or VCEP route.
+
 Start with a compact `Bundle Route Plan`:
 
 1. `baseline_context_bundle` for disease entity, inheritance, transcript, mechanism, multiple-disorder boundary, and dominant-negative/LoF/GoF sensitivity.

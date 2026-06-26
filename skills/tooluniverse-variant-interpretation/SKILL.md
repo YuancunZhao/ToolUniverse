@@ -1,27 +1,29 @@
 ---
 name: tooluniverse-variant-interpretation
-description: Clinical variant interpretation from raw variant calls to ACMG-classified recommendations with structural impact analysis. Use for VUS classification, pathogenicity assessment with cited criteria, structure-based variant impact (AlphaFold/PDB), and producing clinical-grade variant reports for return of results or molecular tumor boards.
+description: Variant evidence intake and draft interpretation support from raw variant calls, with structural, population, clinical-database, computational, and literature annotation. Use for gathering source evidence, candidate ACMG routes, and draft reports before final germline ACMG classification. Final ACMG/pathogenicity answers must use tooluniverse-acmg-variant-classification.
 disable-model-invocation: true
 ---
 
 # Clinical Variant Interpreter
 
-Systematic variant interpretation using ToolUniverse - from raw variant calls to ACMG-classified clinical recommendations with structural impact analysis.
+Systematic variant evidence intake using ToolUniverse - from raw variant calls to source, population, computational, structural, and literature context for downstream ACMG-gated classification.
 
 ## Triggers
 
 Use this skill when users:
-- Ask about variant interpretation, classification, or pathogenicity
+- Ask about variant interpretation or evidence intake before classification
 - Have VCF data needing clinical annotation
-- Need ACMG classification for variants
+- Need source, population, computational, structural, or literature evidence gathered for variants
 - Want structural impact analysis for missense variants
+
+If the user asks whether a germline variant is pathogenic, asks for ACMG classification, clinical significance, or any final five-tier verdict, hand off to `tooluniverse-acmg-variant-classification`. This skill may collect and summarize evidence, but it must not be the endpoint for final ACMG classification.
 
 ## Key Principles
 
-1. **ACMG-Guided** - Follow ACMG/AMP 2015 guidelines with explicit evidence codes
+1. **ACMG-Guided Intake** - Gather evidence and candidate routes for ACMG/AMP 2015 criteria without final local scoring
 2. **Structural Evidence** - Use AlphaFold2 for novel structural impact analysis
 3. **Population Context** - gnomAD frequencies with ancestry-specific data
-4. **Actionable Output** - Clear recommendations, not just classifications
+4. **Draft Output** - Clear evidence gaps and route candidates, not final clinical classification
 5. **English-first queries** - Always use English terms in tool calls; respond in user's language
 6. **Confidentiality and Human Review** - De-identify patient-level inputs, separate public from restricted evidence, disclose AI-assisted drafting when used for notes or curation drafts, and require qualified human review before clinical or ClinGen/VCEP use
 
@@ -29,7 +31,7 @@ Use this skill when users:
 
 ## LOOK UP, DON'T GUESS
 
-When asked about a variant's significance, query ClinVar/gnomAD/CIViC FIRST. Never classify a variant without checking databases. When you're not sure about a fact, your first instinct should be to SEARCH for it using tools, not to reason harder from memory.
+When asked about a variant's significance, query ClinVar/gnomAD/CIViC FIRST as evidence intake. Never present a final germline ACMG classification from this skill; hand off to `tooluniverse-acmg-variant-classification` for the bundle, overlay audit, and validator gate. When you're not sure about a fact, your first instinct should be to SEARCH for it using tools, not to reason harder from memory.
 
 ---
 
@@ -56,7 +58,7 @@ Phase 3: COMPUTATIONAL PREDICTIONS → CADD, AlphaMissense, EVE, SIFT/PolyPhen
 Phase 4: STRUCTURAL ANALYSIS      → PDB/AlphaFold2, domains, functional sites (VUS/novel)
 Phase 4.5: EXPRESSION CONTEXT     → CELLxGENE, GTEx tissue expression
 Phase 5: LITERATURE EVIDENCE      → PubMed, EuropePMC, BioRxiv, MedRxiv
-Phase 6: ACMG CLASSIFICATION      → Evidence codes, classification, recommendations
+Phase 6: ACMG INTAKE ONLY         → Route to ACMG classification gate; no final verdict here
 ```
 
 ---
@@ -144,7 +146,7 @@ mech = tu.tools.ESM_explain_variant_mechanism(
 #    Induced feature categories (gained): structural-stability=1"
 ```
 
-Returns `mechanism_summary`, per-feature lost/gained tables, and category aggregates. Use the category aggregate to support or qualify the pathogenicity verdict in the report:
+Returns `mechanism_summary`, per-feature lost/gained tables, and category aggregates. Use the category aggregate as mechanism context for downstream overlays:
 - `catalytic` / `ligand-binding` / `ptm` lost → mechanism context for ACMG overlays; route prediction evidence to PP3/BP4 overlay and do not count PP3 locally
 - `secondary-structure` / `structural-stability` gained on a stable WT region → mechanistic basis for "destabilizing" claim
 - No interpretable change at top-K → does not weaken AlphaMissense alone, but flag for caution
@@ -167,9 +169,13 @@ Tools: `PubMed_search_articles`, `EuropePMC_search_articles`, `BioRxiv_list_rece
 
 Always flag preprints as NOT peer-reviewed.
 
-## Phase 6: ACMG Classification
+## Phase 6: ACMG Intake Only
 
-Apply all relevant evidence codes (PVS1, PS1, PS3, PS4, PM1, PM2, PM4, PM5, PP3 for pathogenic; BA1, BS1, BS2, BS3, BP2, BP3, BP4, BP5, BP7 for benign). Use `tooluniverse-acmg-variant-classification` as the primary ACMG workflow and `tooluniverse-acmg-overlay-routing-core` to coordinate context overlays before evidence-specific overlays. The routing core standardizes the order: multiple-disorder context, mechanism context, clinical-context intake, source/literature intake, then criterion-specific scoring. Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary source assertion is encountered; PP5/BP6 are not counted by default. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+This phase is intake and handoff only. Do not apply final ACMG evidence codes or emit a final five-tier classification from this skill. Use `tooluniverse-acmg-variant-classification` as the primary ACMG workflow and `tooluniverse-acmg-overlay-routing-core` to coordinate context overlays before evidence-specific overlays. The routing core standardizes the order: multiple-disorder context, mechanism context, clinical-context intake, source/literature intake, then criterion-specific scoring. Use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` when a secondary source assertion is encountered; PP5/BP6 are not counted by default. See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+
+If this skill still produces an interpretation report, set `classification_status: draft classification` unless the report includes a machine-checkable `acmg_assessment_bundle` and validator summary with `validator_status: PASS`.
+
+A natural-language `Bundle Route Plan`, markdown table, or text block containing words such as `overlay_applied` is not a substitute for a machine-checkable `acmg_assessment_bundle`. Without the JSON bundle and validator result, the report remains draft-only.
 
 ### Gene-Specific Population Frequency Thresholds
 
@@ -241,7 +247,7 @@ If a primary tool fails, use these alternatives:
 ## 4. Computational Predictions
 ## 5. Structural Analysis
 ## 6. Literature Evidence
-## 7. ACMG Classification
+## 7. ACMG Intake / Draft Classification Status
 ## 8. Clinical Recommendations
 ## 9. Limitations & Uncertainties
 ## Data Sources
@@ -253,11 +259,13 @@ File naming: `{GENE}_{VARIANT}_interpretation_report.md`
 
 ## Clinical Recommendations
 
-**Pathogenic/Likely Pathogenic**: Enhanced screening, risk-reducing options, drug dosing adjustment, reproductive counseling, family cascade screening.
+These recommendations are draft-only and must not be tied to a final five-tier ACMG label unless a machine-checkable `acmg_assessment_bundle` validates with `validator_status: PASS`.
 
-**VUS**: Do not use for medical decisions. Reinterpret in 1-2 years. Pursue functional studies and segregation data.
+- If source assertions or routed overlays suggest a pathogenic direction, state the needed ACMG gate, human review, and source gaps rather than final clinical action.
 
-**Benign/Likely Benign**: Not expected to cause disease. No cascade testing needed.
+- If evidence remains uncertain, state that the variant evidence is draft-only and should not guide medical decisions without qualified review.
+
+- If benign-oriented evidence appears, keep it as route context until the ACMG gate validates; do not recommend cascade-testing decisions from this skill alone.
 
 ---
 

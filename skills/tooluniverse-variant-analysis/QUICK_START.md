@@ -337,7 +337,7 @@ print(important[['chrom', 'pos', 'gene', 'mutation_type', 'vaf']])
 ## Next Steps
 
 After running this skill:
-1. **Deep annotation**: Use `tooluniverse-variant-interpretation` for ACMG classification of specific variants
+1. **ACMG classification**: Use `tooluniverse-acmg-variant-classification` for final pathogenicity classification of specific germline variants
 2. **Cancer context**: Use `tooluniverse-cancer-variant-interpretation` for somatic mutation clinical interpretation
 3. **Population analysis**: Use gnomAD/dbSNP tools for detailed population frequency analysis
 4. **Functional prediction**: Use CADD, AlphaMissense, EVE tools for pathogenicity scoring

@@ -392,7 +392,7 @@ def get_protein_interactions(tu, gene_symbol):
 
 ---
 
-## Phase 4: Variant Interpretation
+## Phase 4: Variant Evidence Intake
 
 ### 4.1 ClinVar Lookup
 

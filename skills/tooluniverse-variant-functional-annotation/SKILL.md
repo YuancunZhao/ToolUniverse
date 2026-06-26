@@ -10,10 +10,10 @@ Comprehensive functional annotation of protein variants by combining ProtVar str
 context, ClinVar clinical classifications, gnomAD population frequencies, CADD deleteriousness
 scoring, and ClinGen gene-disease validity.
 
-**Differentiation from tooluniverse-variant-interpretation**: This skill focuses specifically on
+**Differentiation from ACMG classification**: This skill focuses specifically on
 **protein-level functional evidence** — structural mapping, residue context, protein domain impact,
 and population allele frequencies. It does NOT produce full ACMG classifications or treatment
-recommendations. Use `tooluniverse-variant-interpretation` for complete ACMG clinical classification.
+recommendations. Use `tooluniverse-acmg-variant-classification` for final germline ACMG/pathogenicity classification.
 
 ## LOOK UP, DON'T GUESS
 When uncertain about any scientific fact, SEARCH databases first (PubMed, UniProt, ChEMBL, ClinVar, etc.) rather than reasoning from memory. A database-verified answer is always more reliable than a guess.

@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-acmg-bayesian-classification-framework
-description: Convert already-routed ACMG/AMP evidence strengths into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and a structured final classification report. Use only after evidence-specific overlays or VCEP rules have assigned counted evidence.
+description: Convert already-routed and validator-passing ACMG/AMP evidence strengths into Tavtigian et al. 2018 Bayesian points, OddsPath, posterior probability, and a structured final classification report. Use only after evidence-specific overlays or VCEP rules have assigned counted evidence, compatibility resolution has completed, and the ACMG assessment bundle validator returns PASS.
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,15 @@ disable-model-invocation: true
 
 This skill is the final evidence-combination layer for ToolUniverse ACMG/AMP variant classification. It follows Tavtigian et al. 2018, "Modeling the ACMG/AMP Variant Classification Guidelines as a Bayesian Classification Framework", PMID: 29300386, PMCID: PMC6336098, DOI: 10.1038/gim.2017.210.
 
-Use this skill only after the base ACMG workflow, `tooluniverse-acmg-overlay-routing-core`, evidence-specific overlays, evidence compatibility resolution, and any applicable VCEP specification have completed evidence assignment. This skill does not retrieve primary evidence, does not decide whether a criterion is met, and does not change any evidence-specific threshold.
+Use this skill only after the base ACMG workflow, `tooluniverse-acmg-overlay-routing-core`, evidence-specific overlays, evidence compatibility resolution, any applicable VCEP specification, and `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py` have completed successfully. This skill does not retrieve primary evidence, does not decide whether a criterion is met, and does not change any evidence-specific threshold.
+
+Final-output hard gate: a final Bayesian tier requires a machine-checkable `acmg_assessment_bundle` and a validator summary block equivalent to:
+
+```json
+{"validator_status":"PASS","violations":[]}
+```
+
+Without validator `PASS`, this skill may show a Bayesian calculation draft for review, but the report must keep `classification_status: draft classification` and must not present `Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign` as final.
 
 ---
 
@@ -20,6 +28,7 @@ Use this skill when:
 - Every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`.
 - Evidence compatibility resolution has produced `current_counted_evidence_resolved`.
 - `unresolved_conflicts` is empty.
+- The `acmg_assessment_bundle` validates with `validator_status: PASS`.
 - The user needs a posterior probability, Bayesian points, or a more readable final combination summary.
 - Pathogenic and benign evidence conflict and the qualitative ACMG/AMP 2015 table would otherwise leave the result as VUS without showing the quantitative balance.
 - A final report should use the standardized phase structure defined below.
@@ -30,6 +39,7 @@ Do not use this skill when:
 - Any counted evidence item lacks an overlay or VCEP route outcome.
 - Evidence compatibility resolution has not been run.
 - Evidence compatibility resolution reports unresolved conflicts.
+- The `acmg_assessment_bundle` is absent, invalid, or has validator status `DRAFT_ONLY` or `FAIL`.
 - A VCEP or disease-specific specification provides a required alternate combining framework.
 - The evidence table contains only source assertions, abstract-only evidence, inaccessible full text, unread supplements, or low-confidence visual extraction without primary-evidence routing.
 
@@ -195,6 +205,11 @@ Use this structure for final ACMG reports when this skill is active:
 - context_splits:
 - unresolved_conflicts:
 
+## ACMG Assessment Bundle Validator
+```json
+{"validator_status":"PASS","violations":[]}
+```
+
 ## Bayesian Calculation
 - Model: Tavtigian et al. 2018 Bayesian ACMG/AMP framework
 - Prior probability: 0.10
@@ -229,6 +244,7 @@ Use this structure for final ACMG reports when this skill is active:
 - Do not count unread supplements or low-confidence figure extraction as points.
 - Do not count the same primary evidence twice.
 - Do not accept unresolved conflicts from evidence compatibility resolution.
+- Do not present a final Bayesian tier without a validator-passing `acmg_assessment_bundle`.
 - Do not compute posterior probability from evidence outside `current_counted_evidence_resolved`.
 - Do not use Bayesian points to justify assigning a criterion that an evidence-specific overlay did not support.
 - Do not use this skill to override current VCEP specifications.

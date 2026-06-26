@@ -217,7 +217,7 @@ Genetic testing recommended - see Section 3.
 
 ## Executive Summary
 
-This patient's phenotype and VUS in GFAP are highly consistent with **Alexander disease** (★★★). The combination of developmental delay, hypotonia, seizures, and frontal-predominant white matter changes in a young child matches infantile/juvenile Alexander disease. The GFAP p.Arg396Cys variant affects a highly conserved residue in the rod domain. **Structural analysis and segregation studies are recommended to support reclassification of this VUS to Likely Pathogenic.**
+This patient's phenotype and VUS in GFAP are highly consistent with **Alexander disease** (★★★). The combination of developmental delay, hypotonia, seizures, and frontal-predominant white matter changes in a young child matches infantile/juvenile Alexander disease. The GFAP p.Arg396Cys variant affects a highly conserved residue in the rod domain. **Structural analysis and segregation studies are recommended as evidence leads; any reclassification requires the ACMG gate and validator PASS.**
 
 ---
 

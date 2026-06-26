@@ -26,7 +26,7 @@ combine with GWAS tools for population-stratified analysis.
 ## NOT for (use other skills instead)
 
 - Allele frequencies from gnomAD -> Use `tooluniverse-population-genetics`
-- ClinVar / OMIM variant interpretation -> Use `tooluniverse-variant-interpretation`
+- ClinVar / OMIM variant pathogenicity or ACMG classification -> Use `tooluniverse-acmg-variant-classification`
 - GWAS fine-mapping -> Use `tooluniverse-gwas-finemapping`
 
 ---
