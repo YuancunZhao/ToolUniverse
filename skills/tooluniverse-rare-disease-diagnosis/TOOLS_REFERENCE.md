@@ -273,7 +273,7 @@ result = tu.tools.CADD_get_variant_score(
     version="GRCh38-v1.7"
 )
 # Returns: phred_score, raw_score, interpretation
-# PHRED ≥20 = top 1% deleterious (PP3 support)
+# PHRED >=20 is deleterious prediction context only; route PP3/BP4 to the calibrated overlay or VCEP.
 ```
 
 ### AlphaMissense (NEW)
@@ -311,14 +311,14 @@ result = tu.tools.ESM_explain_variant_mechanism(
 - `ESM_get_region_sae_features` — aggregate features over a residue range (e.g. characterize a domain or motif)
 - `ESM_describe_sae_feature` — biological category label for a feature_id (cached per id)
 
-**Mapping SAE categories → ACMG support**:
-| SAE category lost | Mechanistic claim | ACMG line |
+**Mapping SAE categories -> mechanism context**:
+| SAE category lost | Mechanistic claim | ACMG route note |
 |---|---|---|
-| `catalytic` | Active-site disruption | Mechanistic support for PP3 |
-| `ligand-binding` / `ptm` / `domain` | Functional site disruption | Supports PP3 |
-| `structural-stability` / `secondary-structure` | Fold-destabilizing | Supports PP3 |
-| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Supports PP3 |
-| (no interpretable change) | No mechanistic signal | Do not strengthen PP3 above the predictor score alone |
+| `catalytic` | Active-site disruption | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `ligand-binding` / `ptm` / `domain` | Functional site disruption | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `structural-stability` / `secondary-structure` | Fold-destabilizing | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| (no interpretable change) | No mechanistic signal | Do not strengthen PP3/BP4 from SAE output inside this skill |
 
 **Requires**: `ESM_API_KEY` env var (free non-commercial token at https://forge.evolutionaryscale.ai) and `pip install 'esm @ git+https://github.com/evolutionaryscale/esm@ee891c52'` (SAE support on unmerged feature branch; PyPI esm 3.2.x lacks SAEConfig). Outputs governed by EvolutionaryScale Cambrian Inference License — non-commercial use only.
 

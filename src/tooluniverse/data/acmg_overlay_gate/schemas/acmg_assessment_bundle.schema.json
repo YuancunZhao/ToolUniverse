@@ -88,6 +88,19 @@
             "type": "array",
             "items": { "type": "string" }
           },
+          "query_terms": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Terms used for an actual online/source query. Required by the validator for final literature coverage."
+          },
+          "query_tool": {
+            "type": "string",
+            "description": "Tool or service used for the query, such as PubMed, PMC, EuropePMC, or a ToolUniverse literature tool."
+          },
+          "query_time": {
+            "type": "string",
+            "description": "Timestamp, run identifier, or explicit fixture marker for the query."
+          },
           "query_status": {
             "type": "string",
             "enum": ["success", "no_hit", "unavailable", "failed", "not_applicable"]

@@ -1,7 +1,7 @@
 [
   {
     "name": "ACMG_overlay_gate_assess_variant",
-    "description": "Front-door ACMG overlay compliance gate for germline variant pathogenicity assessment. Use this before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it creates a route plan and assessment-bundle skeleton, normalizes automated classifier outputs as source leads, optionally validates a supplied acmg_assessment_bundle, and tells whether final classification is allowed. Final ACMG/pathogenicity wording requires validator_status: PASS.",
+    "description": "Front-door ACMG overlay compliance gate for germline variant pathogenicity assessment. Use this before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, MaveDB, ClinGen/G2P, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it creates a route plan and assessment-bundle skeleton, recommends required online literature coverage, normalizes direct tool outputs as source leads/coverage hits, optionally validates a supplied acmg_assessment_bundle, and tells whether final classification is allowed. Final ACMG/pathogenicity wording requires actual literature coverage and validator_status: PASS.",
     "type": "ACMGOverlayGateTool",
     "parameter": {
       "type": "object",
@@ -60,6 +60,8 @@
         "required_baseline_routes": {"type": "array"},
         "triggered_discovery_routes": {"type": "array"},
         "recommended_tool_calls": {"type": "array"},
+        "online_literature_query_templates": {"type": "array"},
+        "required_coverage_tasks": {"type": "array"},
         "source_assertions_or_leads": {"type": "array"},
         "acmg_assessment_bundle": {"type": "object"},
         "validator_result": {"type": ["object", "null"]},

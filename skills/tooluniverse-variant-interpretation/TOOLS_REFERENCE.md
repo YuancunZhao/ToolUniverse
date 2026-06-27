@@ -571,12 +571,12 @@ vda = tu.tools.DisGeNET_get_vda(
 )
 ```
 
-**DisGeNET Score for ACMG**:
-| Score | Strength | ACMG Code |
-|-------|----------|-----------|
-| >0.7 | Strong gene-disease | Background only; PP4 still requires supplied phenotype and, when applicable, combined PP1/BS4/PP4 review |
-| 0.4-0.7 | Moderate evidence | Supporting |
-| <0.4 | Weak/Literature only | Insufficient |
+**DisGeNET Score for Gene-Disease Background**:
+| Score | Background context | ACMG route note |
+|-------|--------------------|-----------------|
+| >0.7 | Strong gene-disease context | Background only; PP4 still requires supplied phenotype and, when applicable, combined PP1/BS4/PP4 review |
+| 0.4-0.7 | Moderate gene-disease context | Background only; do not count as ACMG evidence |
+| <0.4 | Weak or literature-only context | Insufficient for variant-level ACMG evidence |
 
 ---
 

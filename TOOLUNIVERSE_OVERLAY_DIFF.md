@@ -31,6 +31,9 @@ This change closes a remaining bypass path where an agent can skip ACMG skills a
 - Reuses the same front-door gate search helper from both the MCP `find_tools` wrapper and direct `Tool_Finder_Keyword` execution, closing a bypass where agents could call the tool finder through `execute_tool`.
 - Packages a runtime fallback copy of the overlay registry, assessment-bundle schema, and validator under `tooluniverse.data` so installed ToolUniverse builds can run the gate tool even when repository-level `skills/` files are not present.
 - Adds Chinese direct-MCP regression coverage and gate-priority implementation checks to the entrypoint bypass checker.
+- Requires actual online literature coverage before final ACMG/pathogenicity output. A no-hit PubMed/PMC/EuropePMC or ToolUniverse literature search is acceptable, but an empty placeholder or skipped search is not.
+- Extends the gate tool output with online literature query templates and required coverage tasks for literature, population, computational, source assertion, functional database, disease/mechanism, and clinical context sources.
+- Tightens validator/checker behavior so direct MCP outputs from GeneBe/InterVar, ClinVar, SpliceAI/VEP/MyVariant, gnomAD, MaveDB/DMS, ClinGen/G2P/GeneReviews, or user family/phenotype input cannot become counted ACMG evidence without coverage audit, overlay routing, and validator `PASS`.
 
 This is direct-MCP/tool-output gate hardening only. It does not add a full harness, query databases in the validator, assign evidence strength, change VCEP precedence, change ACMG thresholds, or modify the final combiner.
 
@@ -926,6 +929,24 @@ Behavior clarified:
 - Requires VCEP-deferred counted evidence to have exact or partial VCEP scope match; out-of-scope VCEP labels fall back to generic overlays.
 - Rejects non-ACMG outer skills as `overlay_applied` counted evidence sources.
 - Keeps SNV/small-indel overlay thresholds unchanged and leaves SV/CNV as intake/routing only.
+
+## Shortcut Cleanup and Documentation Deduplication: 2026-06-27
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-rare-disease-diagnosis/TOOLS_REFERENCE.md
+M skills/tooluniverse-variant-interpretation/TOOLS_REFERENCE.md
+```
+
+Behavior clarified:
+
+- Removes residual wording that could be read as assigning BP7 or a benign classification directly from a low SpliceAI score. SpliceAI-only low-score evidence is prediction context unless a VCEP, RNA no-impact evidence, or another routed benign criterion supports counting.
+- Converts ACMG common-pattern examples from direct final classifications into route-gated examples requiring route audit, Evidence Compatibility Resolution, and validator PASS before final output.
+- Downgrades CADD and SAE/ESM mechanism examples in rare-disease diagnosis to prediction/mechanism context only; PP3/BP4 must still route through the calibrated overlay or VCEP.
+- Rephrases the DisGeNET table in variant interpretation as gene-disease background and PP4 route context, not variant-level ACMG evidence.
+- Does not change any evidence threshold, strength mapping, VCEP precedence, or final-combine rule.
 
 ## Update Procedure
 

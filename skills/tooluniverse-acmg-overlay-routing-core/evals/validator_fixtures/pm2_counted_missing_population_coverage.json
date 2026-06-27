@@ -1,35 +1,33 @@
 {
-  "expected_validator_status": "PASS",
+  "expected_validator_status": "DRAFT_ONLY",
   "acmg_assessment_bundle": {
     "variant": {
-      "gene": "LDLR",
-      "hgvs_c": "NM_000527.5:c.1747C>T",
-      "hgvs_p": "p.His583Tyr",
+      "gene": "GENE",
+      "hgvs_c": "NM_000000.0:c.1A>G",
       "consequence": "missense_variant"
     },
     "classification_status": "final classification",
-    "classification": "VUS",
+    "classification": "Likely Pathogenic",
     "disease_context": {
-      "disease_entity": "familial hypercholesterolemia",
+      "disease_entity": "example disease",
       "inheritance": "autosomal dominant",
-      "mechanism": "LDLR receptor dysfunction",
-      "source": "fixture disease context",
+      "mechanism": "example mechanism",
+      "source": "fixture",
       "status": "resolved"
     },
     "penetrance_context": {
       "penetrance_type": "variable",
-      "age_of_onset": "childhood to adulthood",
-      "unaffected_carrier_interpretability": "context_dependent",
-      "source": "fixture penetrance context",
+      "source": "fixture",
+      "unaffected_carrier_interpretability": "unknown",
       "criteria_affected": ["PM2"],
       "status": "resolved"
     },
     "vcep_context": {
       "vcep_available": false,
       "scope_match": "none",
-      "source": "fixture VCEP search",
+      "source": "fixture",
       "criteria_overridden": [],
-      "generic_overlay_responsibilities": ["PM2", "PP3/BP4", "PS1/PM5", "PM1/PP2/BP1"]
+      "generic_overlay_responsibilities": ["PM2"]
     },
     "route_plan": [
       {"criterion_group": "ba1_exception_list", "overlay_skill": "tooluniverse-acmg-ba1-exception-list-refinement", "trigger_policy": "universal_baseline", "enforcement_level": "must_query", "route_kind": "evidence_scoring", "status": "queried"},
@@ -44,23 +42,18 @@
       {"criterion_group": "ps3_bs3_functional_assay", "overlay_skill": "tooluniverse-acmg-ps3-bs3-functional-assay-refinement", "trigger_policy": "variant_type_baseline", "enforcement_level": "must_query", "route_kind": "functional_discovery", "status": "queried"}
     ],
     "coverage_audit": [
-      {"source_category": "population", "queried_sources": ["gnomAD"], "query_status": "success", "hits": [{"af": 0.00003}], "triggered_routes": [], "not_triggered_routes": [], "reason": "Population frequency checked."},
-      {"source_category": "computational", "queried_sources": ["REVEL", "VEP"], "query_status": "success", "hits": [{"tool": "REVEL", "score": 0.7}], "triggered_routes": [], "not_triggered_routes": [], "reason": "Computational source checked."},
+      {"source_category": "computational", "queried_sources": ["VEP"], "query_status": "success", "hits": [], "triggered_routes": [], "not_triggered_routes": [], "reason": "Computational checked."},
       {"source_category": "functional_database", "queried_sources": ["MaveDB"], "query_status": "no_hit", "hits": [], "triggered_routes": [], "not_triggered_routes": ["ps3_bs3_functional_assay"], "reason": "No structured functional hit."},
-      {"source_category": "literature", "queried_sources": ["PubMed", "PMC"], "query_terms": ["LDLR NM_000527.5:c.1747C>T", "LDLR p.His583Tyr familial hypercholesterolemia segregation functional assay"], "query_tool": "online PubMed/PMC search", "query_time": "fixture", "query_status": "no_hit", "hits": [], "triggered_routes": [], "not_triggered_routes": ["pp1_bs4_pp4_segregation", "ps4_case_enrichment", "de_novo_ps2_pm6", "pm3_in_trans", "ps3_bs3_functional_assay"], "reason": "Online literature search completed with no pedigree, segregation, affected-relative, cohort, case-control, recurrence, de novo, trio, phase, biallelic, or functional-assay trigger found."}
+      {"source_category": "literature", "queried_sources": ["PubMed"], "query_terms": ["GENE NM_000000.0:c.1A>G"], "query_tool": "online PubMed search", "query_time": "fixture", "query_status": "no_hit", "hits": [], "triggered_routes": [], "not_triggered_routes": ["pp1_bs4_pp4_segregation", "ps4_case_enrichment", "de_novo_ps2_pm6", "pm3_in_trans", "ps3_bs3_functional_assay"], "reason": "Online literature search found no discovery triggers."}
     ],
     "overlay_results": [
-      {"overlay_skill": "tooluniverse-acmg-pm2-absence-rarity-refinement", "criterion": "PM2", "applied_evidence": "PM2_Supporting", "status": "applied", "guidance_authority": "ClinGen/SVI primary", "reason": "Rarity overlay applied.", "consumed_evidence": ["gnomAD"], "routed_to": null},
-      {"overlay_skill": "tooluniverse-acmg-pp3-bp4-missense-prediction-refinement", "criterion": "PP3/BP4", "applied_evidence": null, "status": "no_evidence", "guidance_authority": "ClinGen/SVI primary", "reason": "Calibrated predictor did not meet a counted threshold in this fixture.", "consumed_evidence": ["REVEL"], "routed_to": null}
+      {"overlay_skill": "tooluniverse-acmg-pm2-absence-rarity-refinement", "criterion": "PM2", "applied_evidence": "PM2_Supporting", "status": "applied", "guidance_authority": "ClinGen/SVI primary", "reason": "Incorrect fixture: PM2 was counted without population coverage.", "consumed_evidence": ["direct statement that variant is absent"], "routed_to": null}
     ],
     "route_audit": [
-      {"criterion": "PM2", "proposed_evidence": "PM2_Supporting", "route_outcome": "overlay_applied", "guidance_authority": "ClinGen/SVI primary", "overlay_or_vcep_source": "tooluniverse-acmg-pm2-absence-rarity-refinement", "counted": true, "reason": "PM2 routed."}
+      {"criterion": "PM2", "proposed_evidence": "PM2_Supporting", "route_outcome": "overlay_applied", "guidance_authority": "ClinGen/SVI primary", "overlay_or_vcep_source": "tooluniverse-acmg-pm2-absence-rarity-refinement", "counted": true, "reason": "PM2 counted without population coverage."}
     ],
     "compatibility_resolution": {
       "current_counted_evidence_resolved": ["PM2_Supporting"],
-      "not_used_due_to_overlap": [],
-      "caps_applied": [],
-      "context_splits": [],
       "unresolved_conflicts": []
     }
   }

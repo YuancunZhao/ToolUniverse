@@ -65,6 +65,21 @@ DISCOVERY_TRIGGER_PATTERNS = {
 }
 DISCOVERY_COVERAGE_ROUTES = set(DISCOVERY_TRIGGER_PATTERNS)
 PENETRANCE_SENSITIVE_CRITERIA = {"BS1", "BS2", "BS4", "PP1", "PP4", "PM2", "PS4"}
+COUNTED_EVIDENCE_COVERAGE_REQUIREMENTS = {
+    "PM2": {"population"},
+    "BA1": {"population"},
+    "BS1": {"population"},
+    "PP3": {"computational"},
+    "BP4": {"computational"},
+    "PVS1": {"computational"},
+    "PM4": {"computational"},
+    "PS3": {"functional_database", "literature"},
+    "BS3": {"functional_database", "literature"},
+    "PP1": {"clinical_context", "literature"},
+    "BS4": {"clinical_context", "literature"},
+    "PP4": {"clinical_context", "literature"},
+    "PS4": {"literature"},
+}
 
 
 def severity_rank(status: str) -> int:
@@ -353,12 +368,37 @@ def counted_row_matches_resolved(row: dict[str, Any], resolved: list[Any]) -> bo
     return False
 
 
+def criterion_code(value: str) -> str:
+    match = re.search(r"\b(BA1|BS1|BS3|BS4|BP4|PM2|PM4|PP1|PP3|PP4|PS3|PS4|PVS1)\b", value)
+    return match.group(1) if match else ""
+
+
 def literature_rows(coverage: list[Any]) -> list[dict[str, Any]]:
     return [
         row
         for row in coverage
         if isinstance(row, dict) and str(row.get("source_category", "")) == "literature"
     ]
+
+
+def invalid_literature_coverage_reason(row: dict[str, Any]) -> str | None:
+    status = str(row.get("query_status", ""))
+    if status not in {"success", "no_hit", "failed", "unavailable"}:
+        return "literature coverage must reflect an actual online query with status success, no_hit, failed, or unavailable"
+    if not as_list(row.get("queried_sources")):
+        return "literature coverage must list queried online sources"
+    query_terms = row.get("query_terms") or row.get("queries") or row.get("search_terms")
+    if not as_list(query_terms):
+        return "literature coverage must record the query terms used"
+    if not (row.get("query_tool") or row.get("query_time") or row.get("queried_at")):
+        return "literature coverage must record the query tool or query time"
+    if not str(row.get("reason", "")).strip():
+        return "literature coverage must include a reason"
+    if status == "no_hit":
+        missing = sorted(DISCOVERY_COVERAGE_ROUTES - set(str(v) for v in as_list(row.get("not_triggered_routes"))))
+        if missing:
+            return f"no-hit literature coverage must document not_triggered_routes for: {', '.join(missing)}"
+    return None
 
 
 def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
@@ -467,6 +507,18 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
             add(DRAFT_ONLY, "missing_applicable_baseline_route", f"Applicable baseline route `{group}` is missing from route_plan.")
 
     categories = coverage_categories(coverage)
+    if final_requested:
+        for row in route_audit:
+            if not isinstance(row, dict) or not row_counted(row):
+                continue
+            code = criterion_code(" ".join([str(row.get("criterion", "")), str(row.get("proposed_evidence", ""))]))
+            required_categories = COUNTED_EVIDENCE_COVERAGE_REQUIREMENTS.get(code, set())
+            if required_categories and not (required_categories & categories):
+                add(
+                    DRAFT_ONLY,
+                    "counted_evidence_missing_coverage_category",
+                    f"Counted evidence `{code}` requires one of these coverage categories before final classification: {', '.join(sorted(required_categories))}.",
+                )
     if "missense_variant" in consequence_tokens(bundle):
         for category in ("population", "computational", "functional_database"):
             if category not in categories:
@@ -491,6 +543,9 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
         else:
             not_triggered = set()
             for row in lit_rows:
+                invalid_lit_reason = invalid_literature_coverage_reason(row)
+                if invalid_lit_reason:
+                    add(DRAFT_ONLY, "invalid_online_literature_coverage", invalid_lit_reason)
                 not_triggered.update(str(v) for v in as_list(row.get("not_triggered_routes")))
                 hit_text = text_of(row.get("hits"))
                 for route, pattern in DISCOVERY_TRIGGER_PATTERNS.items():

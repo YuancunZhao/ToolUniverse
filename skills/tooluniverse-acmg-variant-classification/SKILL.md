@@ -280,7 +280,7 @@ Use standard user-input request blocks when fields are missing:
 
 When affected-proband biallelic evidence is available for a recessive disorder, use `tooluniverse-acmg-pm3-in-trans-refinement` to score PM3 using ClinGen SVI PM3 v1.0 points while checking PM2-level rarity, phase, other-allele classification, and circularity. Recessive biallelic probands with genotype/phase evidence should route to PM3 rather than PS4 unless a VCEP specifies otherwise.
 
-PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) are routed through `tooluniverse-acmg-pm4-bp3-protein-length-refinement` in Phase 4. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 (synonymous, no splice impact) is assessable via SpliceAI < 0.1 and RNA-specific BP7 through the PVS1/RNA splicing overlay when direct RNA evidence exists.
+PM4 (protein length change in non-repeat region) and BP3 (in-frame indel in repeat) are routed through `tooluniverse-acmg-pm4-bp3-protein-length-refinement` in Phase 4. If an in-frame protein length change may preserve an altered product in a dominant-negative or complex-mediated disease context, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM4 or BP3. BP7 for synonymous or intronic variants requires the appropriate no-splicing-impact context and route audit; SpliceAI low score alone is prediction context, not a direct BP7 assignment. RNA-specific BP7 is handled through the PVS1/RNA splicing overlay when direct RNA evidence exists.
 
 Before combining evidence, run an overlay compliance audit:
 
@@ -478,14 +478,14 @@ machine key: `user_needed_inputs`
 
 **Pattern 1: Known pathogenic frameshift** — "Classify BRCA2 c.5946delT"
 Phase 0 (validate) → Phase 1 (gnomAD absent, PM2_Supporting) → Phase 3 (ClinVar Pathogenic assertion used as lead only; no PP5) → Phase 4 (DNA repair domain, PM1 if overlay confirms an eligible critical region) → Phase 5 (frameshift + LOF gene, PVS1 decision-tree overlay) → Phase 6 (functional assay evidence routed to PS3/BS3 if present)
-Result: **Pathogenic** (PVS1 + PS3 + PM1 + PM2_Supporting; PP5 not counted)
+Final result can be reported only after route audit, Evidence Compatibility Resolution, and validator PASS; PP5 is not counted from the ClinVar source label.
 
 **Pattern 2: Missense VUS** — "Is BRCA1 p.Arg1699Gln pathogenic?"
 Phase 0 → Phase 1 (rare, PM2_Supporting) → Phase 2 (REVEL 0.82, PP3_Moderate by calibrated missense-prediction overlay) → Phase 3 (ClinVar VUS) → Phase 4 (BRCT domain, PM1; PM1+PP3 contribution capped at Strong) → Phase 6 (reduced activity, PS3_Moderate)
-Result: **Likely Pathogenic** (PS3_Moderate + PM1 + PM2_Supporting + PP3_Moderate, with PM1+PP3 cap applied)
+Final result can be reported only after route audit, Evidence Compatibility Resolution, validator PASS, and documentation of the PM1+PP3 cap.
 
 **Pattern 3: Common benign variant** — "ACMG for rs1800497"
-Phase 1 (gnomAD AF=0.21, BA1 exception-list overlay confirms no exception and adequate general population data) → short-circuit. Result: **Benign** (BA1 stand-alone)
+Phase 1 (gnomAD AF=0.21, BA1 exception-list overlay confirms no exception and adequate general population data) → BA1 stand-alone gate. Final Benign output still requires route audit and validator PASS documenting the BA1 route.
 
 **Pattern 4: Deep-intronic variant** — "Classify NM_000059.4:c.7977+100A>G"
-Phase 1 (check AF) → Phase 5 (SpliceAI < 0.1) → Result: **Likely Benign** or VUS depending on frequency
+Phase 1 (check AF) → splice prediction context such as a low SpliceAI score → route audit. Do not assign BP7 or Likely Benign from SpliceAI alone. If no calibrated benign frequency evidence, RNA no-impact evidence, VCEP rule, or other routed benign evidence is present, keep the result as VUS or `draft classification` depending on route completeness.

@@ -8,11 +8,13 @@ No valid ACMG assessment bundle, no final ACMG classification.
 
 An agent may summarize evidence without the bundle, but the output must stay `draft classification` until the bundle validates.
 
-This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP. Those outputs are source leads, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
+This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, or user-supplied family/phenotype context. Those outputs are source leads, coverage hits, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
 
 For MCP workflows, start with `ACMG_overlay_gate_assess_variant`. It is the front-door gate for germline ACMG/pathogenicity tasks: it plans baseline/discovery routes, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, creates a bundle skeleton, and validates a supplied `acmg_assessment_bundle`.
 
 This applies to English and Chinese variant-classification queries. For example, `根据ACMG规则评估 ... 杂合变异致病性` and direct `Tool_Finder_Keyword` searches should surface `ACMG_overlay_gate_assess_variant` before direct tools such as GeneBe, InterVar, SpliceAI, MyVariant, ClinVar, or VEP.
+
+Final classification requires actual online literature coverage. A PubMed/PMC/EuropePMC or ToolUniverse literature search that returns `no_hit` is acceptable when the bundle records queried sources, query terms, query tool or time, reason, and the discovery routes not triggered. A missing search, empty placeholder, or source-label-only lookup is not literature coverage.
 
 ## Required Bundle
 
@@ -66,7 +68,7 @@ The bundle may be compact, but it must include:
 
 - `route_plan`: baseline and triggered discovery routes from `overlay_registry.yaml`.
 - `disease_context`, `penetrance_context`, and `vcep_context`: shared context for inheritance, mechanism, penetrance-sensitive evidence, and VCEP precedence.
-- `coverage_audit`: data sources checked, no-hits, unavailable sources, and triggered routes.
+- `coverage_audit`: data sources checked, no-hits, unavailable sources, and triggered routes. Literature coverage must be based on an actual online search; no-hit is acceptable, no-search is not.
 - `overlay_results`: overlay or VCEP trace for assessed criteria.
 - `route_audit`: every potentially counted item and whether it was counted.
 - `compatibility_resolution`: resolved counted evidence and unresolved conflicts.
@@ -97,7 +99,7 @@ The validator checks trace compliance only. It does not query databases, run Too
 - ClinVar, HGMD, LOVD, VCEP, lab, or paper labels are source leads unless primary evidence is routed.
 - Applicable baseline routes missing from the route plan force `draft classification`.
 - Missing discovery routes are acceptable only when `coverage_audit` documents no trigger hit or source unavailability.
-- Final classification requires literature/discovery coverage, or an explicit `unavailable` / `not_applicable` literature row.
+- Final classification requires online literature/discovery coverage. A `no_hit` row is acceptable only when it records queried sources, query terms, query tool or time, reason, and not-triggered discovery families. `failed` or `unavailable` rows must describe the tool/network/source failure and cannot be used as a silent skip.
 - Missing compatibility resolution, or unresolved compatibility conflicts, force `draft classification`.
 - Counted literature-backed evidence must include `literature_provenance`. Abstract-only or source-unavailable papers remain literature leads and may trigger PDF/supplement requests, but they cannot support final counted evidence unless a current VCEP explicitly allows abstract-level use.
 

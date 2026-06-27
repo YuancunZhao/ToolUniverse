@@ -75,6 +75,41 @@ BASE_RECOMMENDED_TOOL_CALLS = [
     },
 ]
 
+ONLINE_LITERATURE_TOOL_CALLS = [
+    {
+        "tool_name": "tooluniverse-literature-deep-research",
+        "source_category": "literature",
+        "purpose": "Run online literature discovery before final ACMG classification; record no-hit results as coverage, not as evidence.",
+        "route_input_for": ["PP1/BS4/PP4", "PS4", "PS2/PM6", "PM3", "PS3/BS3"],
+    },
+    {
+        "tool_name": "NCBI/PubMed literature search",
+        "source_category": "literature",
+        "purpose": "Search PubMed for variant, rsID, gene-disease, family, cohort, and functional/RNA evidence.",
+        "route_input_for": ["literature coverage audit"],
+    },
+    {
+        "tool_name": "PMC/EuropePMC full-text search",
+        "source_category": "literature",
+        "purpose": "Search full text, tables, supplements, and figures when abstracts or source assertions mention primary evidence.",
+        "route_input_for": ["literature provenance", "full-text/supplement coverage"],
+    },
+    {
+        "tool_name": "tooluniverse-literature-figure-evidence-extraction",
+        "source_category": "literature",
+        "purpose": "Extract primary evidence from figures, pedigrees, RT-PCR/minigene panels, tables, or supplements when literature hits require it.",
+        "route_input_for": ["PS3/BS3", "PP1/BS4/PP4", "PS4"],
+    },
+]
+
+DISCOVERY_NO_HIT_ROUTES = [
+    "pp1_bs4_pp4_segregation",
+    "ps4_case_enrichment",
+    "de_novo_ps2_pm6",
+    "pm3_in_trans",
+    "ps3_bs3_functional_assay",
+]
+
 
 @register_tool("ACMGOverlayGateTool")
 class ACMGOverlayGateTool(BaseTool):
@@ -111,6 +146,8 @@ class ACMGOverlayGateTool(BaseTool):
             "required_baseline_routes": baseline_routes,
             "triggered_discovery_routes": discovery_routes,
             "recommended_tool_calls": self._recommended_tool_calls(arguments),
+            "online_literature_query_templates": self._literature_query_templates(arguments, source_leads),
+            "required_coverage_tasks": self._required_coverage_tasks(arguments, source_leads),
             "source_assertions_or_leads": source_leads,
             "acmg_assessment_bundle": bundle or self._bundle_skeleton(arguments, baseline_routes, discovery_routes, source_leads),
             "validator_result": validation.get("validator_result"),
@@ -207,11 +244,11 @@ class ACMGOverlayGateTool(BaseTool):
     def _select_discovery_routes(self, entries: List[Dict[str, Any]], arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
         haystack = json.dumps(arguments, ensure_ascii=False).lower()
         trigger_terms = {
-            "pp1": ("segregation", "family", "pedigree", "affected", "mother", "father", "grandmother", "cascade"),
-            "ps4": ("case-control", "cohort", "odds ratio", "recurrence", "case series"),
-            "ps3": ("functional", "assay", "rt-pcr", "rna", "minigene", "mavedb", "mave"),
-            "ps2": ("de novo", "trio", "parental"),
-            "pm3": ("in trans", "biallelic", "phase", "compound heterozyg"),
+            "pp1": ("segregation", "family", "pedigree", "affected", "mother", "father", "grandmother", "cascade", "家系", "共分离", "母亲", "父亲", "外婆", "外祖母", "患病亲属"),
+            "ps4": ("case-control", "cohort", "odds ratio", "recurrence", "case series", "病例对照", "队列", "复现", "病例系列"),
+            "ps3": ("functional", "assay", "rt-pcr", "rna", "minigene", "mavedb", "mave", "功能实验", "剪接实验", "转录", "迷你基因"),
+            "ps2": ("de novo", "trio", "parental", "新发", "三联体", "父母验证"),
+            "pm3": ("in trans", "biallelic", "phase", "compound heterozyg", "反式", "双等位", "相位", "复合杂合"),
         }
         selected: List[Dict[str, Any]] = []
         for entry in entries:
@@ -223,7 +260,7 @@ class ACMGOverlayGateTool(BaseTool):
         return selected
 
     def _recommended_tool_calls(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        calls = list(BASE_RECOMMENDED_TOOL_CALLS)
+        calls = list(ONLINE_LITERATURE_TOOL_CALLS) + list(BASE_RECOMMENDED_TOOL_CALLS)
         variant_text = str(arguments.get("variant", ""))
         if variant_text and ("+" in variant_text or "-" in variant_text or "splice" in variant_text.lower()):
             calls.insert(0, {
@@ -232,6 +269,97 @@ class ACMGOverlayGateTool(BaseTool):
                 "route_input_for": ["normalization", "splice bundle"],
             })
         return calls
+
+    def _literature_query_templates(self, arguments: Dict[str, Any], source_leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        gene = str(arguments.get("gene") or "").strip()
+        variant = str(arguments.get("variant") or "").strip()
+        transcript = str(arguments.get("transcript") or "").strip()
+        phenotype = str(arguments.get("phenotype_context") or arguments.get("disease_context") or "").strip()
+        family = str(arguments.get("family_context") or "").strip()
+        source_text = json.dumps([lead.get("raw_source") for lead in source_leads], ensure_ascii=False).lower()
+        rsids = sorted(set(token for token in source_text.replace(",", " ").split() if token.startswith("rs") and token[2:].isdigit()))
+
+        base_terms = [term for term in (gene, transcript, variant) if term]
+        queries: List[Dict[str, Any]] = []
+        if base_terms:
+            queries.append({
+                "purpose": "variant_specific_literature",
+                "query": " ".join(base_terms),
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+        for rsid in rsids:
+            queries.append({
+                "purpose": "rsid_literature",
+                "query": f"{gene} {rsid}".strip(),
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+        if gene and phenotype:
+            queries.append({
+                "purpose": "gene_phenotype_literature",
+                "query": f"{gene} {phenotype}",
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+        if gene and (family or phenotype):
+            queries.append({
+                "purpose": "segregation_family_literature",
+                "query": f"{gene} segregation family pedigree affected relatives",
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+        if gene:
+            queries.append({
+                "purpose": "functional_splicing_literature",
+                "query": f"{gene} {variant} RT-PCR RNA minigene cryptic splice intron retention".strip(),
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+            queries.append({
+                "purpose": "case_enrichment_literature",
+                "query": f"{gene} {variant} cohort case series recurrence".strip(),
+                "sources": ["PubMed", "PMC", "EuropePMC"],
+            })
+        return queries
+
+    def _required_coverage_tasks(self, arguments: Dict[str, Any], source_leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "source_category": "literature",
+                "required_before_final": True,
+                "must_be_online": True,
+                "acceptable_query_status": ["success", "no_hit", "failed", "unavailable"],
+                "required_fields": ["queried_sources", "query_terms", "query_tool_or_time", "query_status", "reason", "not_triggered_routes"],
+                "not_triggered_routes_if_no_hit": DISCOVERY_NO_HIT_ROUTES,
+                "reason": "Final classification requires actual online literature discovery; no-hit is acceptable, no-search is not.",
+            },
+            {
+                "source_category": "population",
+                "required_before_final": True,
+                "reason": "Population frequency outputs are coverage inputs; BA1/BS1/PM2 require overlay routing.",
+            },
+            {
+                "source_category": "computational",
+                "required_before_final": True,
+                "reason": "VEP/SpliceAI/MyVariant/CADD/SIFT/PolyPhen outputs are route inputs, not counted evidence.",
+            },
+            {
+                "source_category": "source_assertion",
+                "required_before_final": bool(source_leads),
+                "reason": "GeneBe/InterVar/ClinVar/lab/paper assertions are source leads and must not be counted directly.",
+            },
+            {
+                "source_category": "functional_database",
+                "required_before_final": True,
+                "reason": "MaveDB/DMS hits trigger PS3/BS3 overlay; no-hit is documented coverage.",
+            },
+            {
+                "source_category": "disease_context",
+                "required_before_final": True,
+                "reason": "ClinGen/G2P/GeneReviews resolve disease/mechanism context but do not count as ACMG evidence.",
+            },
+            {
+                "source_category": "clinical_context",
+                "required_before_final": bool(arguments.get("family_context") or arguments.get("phenotype_context")),
+                "reason": "User-supplied family/phenotype context triggers PP1/PP4 intake but does not assign strength directly.",
+            },
+        ]
 
     def _normalize_source_leads(self, value: Any) -> List[Dict[str, Any]]:
         if value in (None, ""):
@@ -314,6 +442,7 @@ class ACMGOverlayGateTool(BaseTool):
             "classification_status": CLASSIFICATION_DRAFT,
             "route_plan": baseline_routes + discovery_routes,
             "coverage_audit": [],
+            "coverage_audit_note": "Populate coverage_audit only after actual queries. Literature coverage must come from online PubMed/PMC/EuropePMC or ToolUniverse literature search; no-hit is acceptable, no-search is not.",
             "overlay_results": [],
             "route_audit": [],
             "compatibility_resolution": {"current_counted_evidence_resolved": [], "unresolved_conflicts": []},
@@ -335,9 +464,11 @@ class ACMGOverlayGateTool(BaseTool):
         if validation.get("validator_status") != "PASS":
             actions.append("Keep classification_status as draft classification until validator_status is PASS.")
             actions.append("Populate route_plan, coverage_audit, overlay_results, route_audit, and compatibility_resolution in acmg_assessment_bundle.")
+            actions.append("Run online literature discovery before final classification; record no-hit literature searches with queried sources, query terms, tool/time, reason, and not_triggered_routes.")
         if baseline_routes:
             actions.append("Run or document all applicable baseline routes before evidence assignment.")
         if discovery_routes:
             actions.append("Run triggered discovery overlays before counting family, functional, cohort, de novo, or phase evidence.")
+        actions.append("Treat SpliceAI/VEP/MyVariant/gnomAD/MaveDB/ClinGen/G2P and user family or phenotype input as coverage hits or route triggers until overlay audit passes.")
         actions.append("Keep GeneBe, InterVar, ClinVar, lab, and paper labels in source_assertions_or_leads unless primary evidence is routed.")
         return actions

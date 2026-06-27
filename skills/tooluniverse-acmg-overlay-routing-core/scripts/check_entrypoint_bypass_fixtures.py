@@ -47,7 +47,19 @@ DIRECT_MCP_TOOL_RE = re.compile(
     r"InterVar_classify_variant|"
     r"SpliceAI_predict_splice|SpliceAI_get_max_delta|"
     r"MyVariant_get_pathogenicity_scores|EnsemblVEP_annotate_hgvs|"
-    r"ClinVar_get_clinical_significance)\b",
+    r"ClinVar_get_clinical_significance|"
+    r"gnomAD|EnsemblVar_get_population_frequencies|MaveDB|DMS|"
+    r"ClinGen_search_gene_validity|G2P_search|GeneReviews)\b",
+    re.IGNORECASE,
+)
+ONLINE_LITERATURE_COVERAGE_RE = re.compile(
+    r"\b(tooluniverse-literature-deep-research|"
+    r"source_category\s*['\"]?\s*:\s*['\"]?literature|"
+    r"query_terms|queried_sources)\b",
+    re.IGNORECASE,
+)
+NO_ONLINE_LITERATURE_RE = re.compile(
+    r"\b(no|without|missing)\s+(?:online\s+)?(?:PubMed|PMC|EuropePMC|literature|literature\s+coverage)",
     re.IGNORECASE,
 )
 FORBIDDEN_VARIANT_INTERPRETATION_ROUTE_RE = re.compile(
@@ -103,6 +115,14 @@ def has_validator_pass(text: str) -> bool:
     return bool(VALIDATOR_PASS_RE.search(text) and EMPTY_VIOLATIONS_RE.search(text))
 
 
+def has_online_literature_coverage(text: str) -> bool:
+    if not ONLINE_LITERATURE_COVERAGE_RE.search(text):
+        return False
+    if NO_ONLINE_LITERATURE_RE.search(text) and "source_category" not in text and "query_terms" not in text:
+        return False
+    return True
+
+
 def check_text(text: str) -> list[str]:
     violations: list[str] = []
     has_bundle = "acmg_assessment_bundle" in text
@@ -115,6 +135,8 @@ def check_text(text: str) -> list[str]:
 
     if final_like and DIRECT_MCP_TOOL_RE.search(text) and not has_validator_pass(text):
         violations.append("direct_mcp_variant_tool_final_classification_without_validator_pass")
+        if not has_online_literature_coverage(text):
+            violations.append("direct_mcp_final_without_online_literature_coverage")
 
     source_assertion_lead = "source_assertions_or_leads" in text or "source assertions / leads" in text.lower()
     if SOURCE_LABEL_RE.search(text) and COUNTED_SOURCE_RE.search(text) and not source_assertion_lead:
