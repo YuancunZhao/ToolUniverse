@@ -97,6 +97,21 @@ HIGH_RISK_TOOL_NAMES = (
     "MyVariant_get_pathogenicity_scores",
     "EnsemblVEP_annotate_hgvs",
 )
+HIGH_RISK_EXECUTE_GUARD_TOOLS = (
+    *HIGH_RISK_TOOL_NAMES,
+    "EnsemblVEP_variant_recoder",
+    "gnomad_search_variants",
+    "gnomad_get_variant",
+    "gnomad_get_variant_populations",
+    "MaveDB_search_score_sets",
+    "MaveDB_get_variant_scores",
+    "MaveDB_get_effect_matrix",
+    "MaveDB_get_clinical_controls",
+    "ClinGen_search_gene_validity",
+    "G2P_search",
+    "G2P_get_record",
+    "G2P_get_gene",
+)
 FRONT_DOOR_TOOL_NAME = "ACMG_overlay_gate_assess_variant"
 CHINESE_GATE_QUERY = "根据ACMG规则评估 FGFR3;NM_000142.5:c.1075+95C>G 杂合变异致病性"
 ENGLISH_GATE_QUERY = "ACMG pathogenicity classification FGFR3 variant"
@@ -192,13 +207,27 @@ def scan_high_risk_tool_definitions(root: Path) -> list[dict[str, Any]]:
                 }
             )
         else:
-            gate_text = json.dumps(gate_tools[0], ensure_ascii=False)
+            gate_tool = gate_tools[0]
+            gate_text = json.dumps(gate_tool, ensure_ascii=False)
             if "not an ACMG classifier" not in gate_text or "validator_status: PASS" not in gate_text:
                 violations.append(
                     {
                         "file": str(gate_path),
                         "tool": FRONT_DOOR_TOOL_NAME,
                         "violation": "acmg_front_door_gate_tool_missing_role_or_validator_wording",
+                    }
+                )
+            output_mode = (
+                gate_tool.get("parameter", {})
+                .get("properties", {})
+                .get("output_mode", {})
+            )
+            if output_mode.get("default") != "compact" or set(output_mode.get("enum", [])) != {"compact", "full"}:
+                violations.append(
+                    {
+                        "file": str(gate_path),
+                        "tool": FRONT_DOOR_TOOL_NAME,
+                        "violation": "acmg_front_door_gate_tool_missing_compact_full_output_mode",
                     }
                 )
 
@@ -240,6 +269,8 @@ def scan_gate_priority_implementation(root: Path) -> list[dict[str, Any]]:
     helper = src_root / "acmg_gate_search.py"
     keyword = src_root / "tool_finder_keyword.py"
     smcp = src_root / "smcp.py"
+    execute_function = src_root / "execute_function.py"
+    tool_discovery = src_root / "tool_discovery_tools.py"
 
     if not helper.exists():
         return [
@@ -261,6 +292,8 @@ def scan_gate_priority_implementation(root: Path) -> list[dict[str, Any]]:
     else:
         spec.loader.exec_module(module)
         detector = getattr(module, "looks_like_acmg_gate_query", None)
+        result_guard = getattr(module, "attach_acmg_gate_notice", None)
+        high_risk_detector = getattr(module, "is_high_risk_acmg_tool", None)
         if not callable(detector):
             violations.append(
                 {
@@ -290,6 +323,31 @@ def scan_gate_priority_implementation(root: Path) -> list[dict[str, Any]]:
                         "violation": "non_acmg_query_detected_as_gate_query",
                     }
                 )
+        if not callable(result_guard) or not callable(high_risk_detector):
+            violations.append(
+                {
+                    "file": str(helper),
+                    "violation": "acmg_execute_result_guard_not_found",
+                }
+            )
+        else:
+            for tool_name in HIGH_RISK_EXECUTE_GUARD_TOOLS:
+                if not high_risk_detector(tool_name):
+                    violations.append(
+                        {
+                            "file": str(helper),
+                            "tool": tool_name,
+                            "violation": "high_risk_tool_missing_execute_guard",
+                        }
+                    )
+            guarded = result_guard("GeneBe_classify_variant", {"status": "success"})
+            if not isinstance(guarded, dict) or guarded.get("recommended_front_door_tool") != FRONT_DOOR_TOOL_NAME:
+                violations.append(
+                    {
+                        "file": str(helper),
+                        "violation": "acmg_execute_result_guard_missing_front_door_marker",
+                    }
+                )
 
     if not keyword.exists() or "add_acmg_gate_to_search_payload" not in keyword.read_text(encoding="utf-8"):
         violations.append(
@@ -303,6 +361,28 @@ def scan_gate_priority_implementation(root: Path) -> list[dict[str, Any]]:
             {
                 "file": str(smcp),
                 "violation": "smcp_find_tools_missing_acmg_gate_notice",
+            }
+        )
+    execute_text = execute_function.read_text(encoding="utf-8") if execute_function.exists() else ""
+    if "attach_acmg_gate_notice" not in execute_text:
+        violations.append(
+            {
+                "file": str(execute_function),
+                "violation": "execute_function_missing_acmg_result_guard",
+            }
+        )
+    if execute_text.count("attach_acmg_gate_notice(function_name") < 4:
+        violations.append(
+            {
+                "file": str(execute_function),
+                "violation": "execute_function_missing_sync_async_or_cache_acmg_guard",
+            }
+        )
+    if not tool_discovery.exists() or "attach_acmg_gate_notice(tool_name" not in tool_discovery.read_text(encoding="utf-8"):
+        violations.append(
+            {
+                "file": str(tool_discovery),
+                "violation": "execute_tool_wrapper_missing_acmg_result_guard",
             }
         )
 

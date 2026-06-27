@@ -66,6 +66,7 @@ from .logging_config import (
 from .cache.result_cache_manager import ResultCacheManager
 from .output_hook import HookManager
 from .default_config import default_tool_files, get_default_hook_config
+from .acmg_gate_search import attach_acmg_gate_notice
 
 # Determine the directory where the current file is located
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -75,40 +76,6 @@ _TRUTHY_VALUES = {"true", "1", "yes"}
 LAZY_LOADING_ENABLED = (
     os.getenv("TOOLUNIVERSE_LAZY_LOADING", "true").lower() in _TRUTHY_VALUES
 )
-
-ACMG_GATE_NOTICE = (
-    "ACMG gate: this direct ToolUniverse tool output is a source lead, "
-    "route trigger, or annotation input only; it is not ACMG counted evidence. "
-    "For germline ACMG/pathogenicity final classification, include an "
-    "acmg_assessment_bundle and validator_status: PASS from "
-    "tooluniverse-acmg-overlay-routing-core before presenting final "
-    "Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign."
-)
-
-HIGH_RISK_ACMG_GATE_TOOLS = {
-    "GeneBe_classify_variant",
-    "GeneBe_classify_variants_batch",
-    "InterVar_classify_variant",
-    "ClinVar_get_clinical_significance",
-    "SpliceAI_predict_splice",
-    "SpliceAI_get_max_delta",
-    "MyVariant_get_pathogenicity_scores",
-    "EnsemblVEP_annotate_hgvs",
-}
-
-
-def _attach_acmg_gate_notice(function_name: str, result: Any) -> Any:
-    if function_name not in HIGH_RISK_ACMG_GATE_TOOLS or not isinstance(result, dict):
-        return result
-    metadata = result.setdefault("metadata", {})
-    if isinstance(metadata, dict):
-        metadata.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
-    else:
-        result["metadata"] = {
-            "original_metadata": metadata,
-            "acmg_gate_notice": ACMG_GATE_NOTICE,
-        }
-    return result
 
 if LAZY_LOADING_ENABLED:
     # Use lazy auto-discovery by default (much faster)
@@ -3005,7 +2972,7 @@ class ToolUniverse:
                     result, function_name, arguments
                 )
                 processed_results.append(
-                    self._create_dual_format_error(classified_error)
+                    self._create_gate_aware_error(function_name, classified_error)
                 )
             else:
                 processed_results.append(result)
@@ -3107,7 +3074,7 @@ class ToolUniverse:
                 )
                 if cached_value is not None:
                     self.logger.debug(f"Cache hit for {function_name}")
-                    return cached_value
+                    return attach_acmg_gate_notice(function_name, cached_value)
                 cache_guard = self.cache_manager.singleflight_guard(composed_cache_key)
             else:
                 cache_enabled = False
@@ -3123,7 +3090,7 @@ class ToolUniverse:
                     self.logger.debug(
                         f"Cache hit for {function_name} (after singleflight wait)"
                     )
-                    return cached_value
+                    return attach_acmg_gate_notice(function_name, cached_value)
 
             # Coerce types if lenient coercion is enabled
             if self.lenient_type_coercion:
@@ -3141,17 +3108,18 @@ class ToolUniverse:
             if validate:
                 validation_error = self._validate_parameters(function_name, arguments)
                 if validation_error:
-                    return self._create_dual_format_error(validation_error)
+                    return self._create_gate_aware_error(function_name, validation_error)
             else:
                 # When validate=False, perform lightweight checks:
                 # 1. Verify tool exists in all_tool_dict
                 # 2. No parameter validation (for performance)
                 if function_name not in self.all_tool_dict:
-                    return self._create_dual_format_error(
+                    return self._create_gate_aware_error(
+                        function_name,
                         ToolValidationError(
                             f"Tool '{function_name}' not found",
                             details={"tool_name": function_name},
-                        )
+                        ),
                     )
 
             # Execute the tool
@@ -3211,9 +3179,9 @@ class ToolUniverse:
             except Exception as e:
                 # Classify and return structured error
                 classified_error = self._classify_exception(e, function_name, arguments)
-                return self._create_dual_format_error(classified_error)
+                return self._create_gate_aware_error(function_name, classified_error)
 
-            result = _attach_acmg_gate_notice(function_name, result)
+            result = attach_acmg_gate_notice(function_name, result)
 
             # Apply output hooks if enabled
             if self.hook_manager:
@@ -3311,7 +3279,7 @@ class ToolUniverse:
                 )
                 if cached_value is not None:
                     self.logger.debug(f"Cache hit for {function_name}")
-                    return cached_value
+                    return attach_acmg_gate_notice(function_name, cached_value)
             else:
                 cache_enabled = False
 
@@ -3327,14 +3295,15 @@ class ToolUniverse:
         if validate:
             validation_error = self._validate_parameters(function_name, arguments)
             if validation_error:
-                return self._create_dual_format_error(validation_error)
+                return self._create_gate_aware_error(function_name, validation_error)
         else:
             if function_name not in self.all_tool_dict:
-                return self._create_dual_format_error(
+                return self._create_gate_aware_error(
+                    function_name,
                     ToolValidationError(
                         f"Tool '{function_name}' not found",
                         details={"tool_name": function_name},
-                    )
+                    ),
                 )
 
         # Execute the tool
@@ -3351,7 +3320,8 @@ class ToolUniverse:
                 # Try to auto-load tools if dictionary is empty
                 if not self._auto_load_tools_if_empty(function_name):
                     error_msg = "Failed to auto-load tools"
-                    return self._create_dual_format_error(
+                    return self._create_gate_aware_error(
+                        function_name,
                         ToolUnavailableError(
                             error_msg,
                             retriable=False,
@@ -3359,7 +3329,7 @@ class ToolUniverse:
                                 "Manually run tu.load_tools()",
                                 "Check tool configuration",
                             ],
-                        )
+                        ),
                     )
 
                 # Try to get the tool instance again after loading
@@ -3384,7 +3354,8 @@ class ToolUniverse:
                         error_msg = (
                             f"Tool '{function_name}' not found even after loading tools"
                         )
-                    return self._create_dual_format_error(
+                    return self._create_gate_aware_error(
+                        function_name,
                         ToolUnavailableError(
                             error_msg,
                             retriable=False,
@@ -3392,12 +3363,14 @@ class ToolUniverse:
                                 "Check tool name spelling",
                                 "Verify tool is available in loaded categories",
                             ],
-                        )
+                        ),
                     )
         except Exception as e:
             # Classify and return structured error
             classified_error = self._classify_exception(e, function_name, arguments)
-            return self._create_dual_format_error(classified_error)
+            return self._create_gate_aware_error(function_name, classified_error)
+
+        result = attach_acmg_gate_notice(function_name, result)
 
         # Apply output hooks if enabled
         if self.hook_manager:
@@ -3966,6 +3939,10 @@ class ToolUniverse:
             "error": str(error),  # Backward compatible string
             "error_details": error.to_dict(),  # New structured format
         }
+
+    def _create_gate_aware_error(self, function_name: str, error: ToolError) -> dict:
+        """Create an error response and attach ACMG gate notice for high-risk tools."""
+        return attach_acmg_gate_notice(function_name, self._create_dual_format_error(error))
 
     def refresh_tools(self):
         """Re-scan workspace and reload all tool configurations.

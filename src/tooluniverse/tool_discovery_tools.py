@@ -33,6 +33,7 @@ Recommended Workflow:
 
 import json
 import re
+from .acmg_gate_search import attach_acmg_gate_notice
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -947,7 +948,9 @@ class ExecuteToolTool(BaseTool):
                 result = json.loads(result)
             except (json.JSONDecodeError, ValueError):
                 # If it's not valid JSON, return as string wrapped in dict
-                return {"result": result}
+                return attach_acmg_gate_notice(tool_name, {"result": result})
 
         # Return as dict (FastMCP will serialize if needed)
-        return result if isinstance(result, dict) else {"result": result}
+        if isinstance(result, dict):
+            return attach_acmg_gate_notice(tool_name, result)
+        return attach_acmg_gate_notice(tool_name, {"result": result})

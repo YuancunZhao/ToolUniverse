@@ -1,7 +1,7 @@
 [
   {
     "name": "ACMG_overlay_gate_assess_variant",
-    "description": "Front-door ACMG overlay compliance gate for germline variant pathogenicity assessment. Use this before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, MaveDB, ClinGen/G2P, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it creates a route plan and assessment-bundle skeleton, recommends required online literature coverage, normalizes direct tool outputs as source leads/coverage hits, optionally validates a supplied acmg_assessment_bundle, and tells whether final classification is allowed. Final ACMG/pathogenicity wording requires actual literature coverage and validator_status: PASS.",
+    "description": "Front-door ACMG overlay compliance gate for germline variant pathogenicity assessment. Use this before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, MaveDB, ClinGen/G2P, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it creates a concise route plan by default, recommends required online literature coverage, normalizes direct tool outputs as source leads/coverage hits, optionally validates a supplied acmg_assessment_bundle, and tells whether final classification is allowed. Use output_mode=full when a full assessment-bundle skeleton is needed. Final ACMG/pathogenicity wording requires actual literature coverage and validator_status: PASS.",
     "type": "ACMGOverlayGateTool",
     "parameter": {
       "type": "object",
@@ -43,9 +43,20 @@
         "acmg_assessment_bundle": {
           "type": "object",
           "description": "Optional machine-checkable assessment bundle to validate with the overlay gate validator."
+        },
+        "output_mode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "default": "compact",
+          "description": "Use compact for concise CLI/agent output. Use full to include the full acmg_assessment_bundle skeleton and full route rows."
         }
       },
-      "required": ["variant"]
+      "required": [
+        "variant"
+      ]
     },
     "fields": {
       "operation": "assess_variant"
@@ -53,21 +64,72 @@
     "return_schema": {
       "type": "object",
       "properties": {
-        "status": {"type": "string"},
-        "classification_status": {"type": "string"},
-        "validator_status": {"type": "string"},
-        "final_classification_allowed": {"type": "boolean"},
-        "required_baseline_routes": {"type": "array"},
-        "triggered_discovery_routes": {"type": "array"},
-        "recommended_tool_calls": {"type": "array"},
-        "online_literature_query_templates": {"type": "array"},
-        "required_coverage_tasks": {"type": "array"},
-        "source_assertions_or_leads": {"type": "array"},
-        "acmg_assessment_bundle": {"type": "object"},
-        "validator_result": {"type": ["object", "null"]},
-        "violations": {"type": "array"},
-        "next_actions": {"type": "array"},
-        "acmg_gate_notice": {"type": "string"}
+        "status": {
+          "type": "string"
+        },
+        "classification_status": {
+          "type": "string"
+        },
+        "validator_status": {
+          "type": "string"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "required_baseline_routes": {
+          "type": "array"
+        },
+        "triggered_discovery_routes": {
+          "type": "array"
+        },
+        "recommended_tool_calls": {
+          "type": "array"
+        },
+        "online_literature_query_templates": {
+          "type": "array"
+        },
+        "required_coverage_tasks": {
+          "type": "array"
+        },
+        "source_assertions_or_leads": {
+          "type": "array"
+        },
+        "acmg_assessment_bundle": {
+          "type": "object"
+        },
+        "validator_result": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "violations": {
+          "type": "array"
+        },
+        "next_actions": {
+          "type": "array"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        },
+        "output_mode": {
+          "type": "string"
+        },
+        "required_baseline_route_groups": {
+          "type": "array"
+        },
+        "triggered_discovery_route_groups": {
+          "type": "array"
+        },
+        "validated_bundle_present": {
+          "type": "boolean"
+        },
+        "acmg_assessment_bundle_status": {
+          "type": "string"
+        },
+        "bundle_required_fields": {
+          "type": "array"
+        }
       }
     },
     "test_examples": [
@@ -78,9 +140,22 @@
         "family_context": "mother and maternal grandmother have similar symptoms"
       }
     ],
-    "label": ["ACMG", "overlay", "gate", "variant", "pathogenicity", "germline"],
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
     "metadata": {
-      "tags": ["ACMG_gate", "variant_interpretation", "pathogenicity", "germline", "compliance"],
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
       "estimated_execution_time": "< 2 seconds without bundle; < 5 seconds with validator",
       "tool_role": "front-door compliance gate, not classifier"
     }

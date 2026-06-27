@@ -125,6 +125,10 @@ class ACMGOverlayGateTool(BaseTool):
         if not isinstance(arguments, dict):
             return {"status": "error", "error": "arguments must be an object"}
 
+        output_mode = str(arguments.get("output_mode") or "compact").lower()
+        if output_mode not in {"compact", "full"}:
+            return {"status": "error", "error": "output_mode must be 'compact' or 'full'"}
+
         registry_entries = self._load_registry_entries()
         baseline_routes = self._select_baseline_routes(registry_entries, arguments)
         discovery_routes = self._select_discovery_routes(registry_entries, arguments)
@@ -136,9 +140,10 @@ class ACMGOverlayGateTool(BaseTool):
         final_allowed = validator_status == "PASS"
         classification_status = CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT
 
-        return {
+        response = {
             "status": "success",
             "tool_role": "ACMG overlay compliance gate and preflight planner; not an ACMG classifier",
+            "output_mode": output_mode,
             "classification_status": classification_status,
             "validator_status": validator_status,
             "final_classification_allowed": final_allowed,
@@ -159,6 +164,9 @@ class ACMGOverlayGateTool(BaseTool):
                 "draft classification only."
             ),
         }
+        if output_mode == "full":
+            return response
+        return self._compact_response(response, bundle is not None)
 
     def _repo_root_candidates(self) -> Iterable[Path]:
         here = Path(__file__).resolve()
@@ -208,6 +216,54 @@ class ACMGOverlayGateTool(BaseTool):
             "route_kind": entry.get("route_kind"),
             "applies_when": entry.get("applies_when", []),
             "baseline_data_sources": entry.get("baseline_data_sources", []),
+        }
+
+    def _compact_route_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "criterion_group": row.get("criterion_group"),
+            "covered_criteria": row.get("covered_criteria", []),
+            "overlay_skill": row.get("overlay_skill"),
+            "trigger_policy": row.get("trigger_policy"),
+            "enforcement_level": row.get("enforcement_level"),
+            "route_kind": row.get("route_kind"),
+        }
+
+    def _compact_response(self, response: Dict[str, Any], bundle_present: bool) -> Dict[str, Any]:
+        return {
+            "status": response["status"],
+            "tool_role": response["tool_role"],
+            "output_mode": "compact",
+            "classification_status": response["classification_status"],
+            "validator_status": response["validator_status"],
+            "final_classification_allowed": response["final_classification_allowed"],
+            "variant": response["variant"],
+            "required_baseline_route_groups": [
+                self._compact_route_row(row) for row in response["required_baseline_routes"]
+            ],
+            "triggered_discovery_route_groups": [
+                self._compact_route_row(row) for row in response["triggered_discovery_routes"]
+            ],
+            "recommended_tool_calls": response["recommended_tool_calls"],
+            "online_literature_query_templates": response["online_literature_query_templates"],
+            "required_coverage_tasks": response["required_coverage_tasks"],
+            "source_assertions_or_leads": response["source_assertions_or_leads"],
+            "validated_bundle_present": bundle_present,
+            "acmg_assessment_bundle_status": (
+                "validated_input_bundle_not_echoed" if bundle_present else "skeleton_available_with_output_mode_full"
+            ),
+            "bundle_required_fields": [
+                "variant",
+                "classification_status",
+                "route_plan",
+                "coverage_audit",
+                "overlay_results",
+                "route_audit",
+                "compatibility_resolution",
+            ],
+            "validator_result": response["validator_result"],
+            "violations": response["violations"],
+            "next_actions": response["next_actions"],
+            "acmg_gate_notice": response["acmg_gate_notice"],
         }
 
     def _select_baseline_routes(self, entries: List[Dict[str, Any]], arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
