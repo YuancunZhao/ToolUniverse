@@ -6,74 +6,26 @@ import json
 import re
 from typing import Any, Dict, List
 
-ACMG_FRONT_DOOR_TOOL_NAME = "ACMG_overlay_gate_assess_variant"
-ACMG_GATE_NOTICE = (
-    "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, "
-    "SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, "
-    "GeneReviews, and related variant evidence tools provide source leads, "
-    "coverage hits, route triggers, or annotation inputs only; they are not "
-    "ACMG counted evidence. Final germline ACMG/pathogenicity output requires "
-    "ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, and "
-    "validator_status: PASS."
-)
+try:
+    from .acmg_gate_policy import (
+        ACMG_FRONT_DOOR_TOOL_NAME,
+        ACMG_GATE_NOTICE,
+        HIGH_RISK_ACMG_GATE_TOOLS,
+    )
+except ImportError:  # pragma: no cover - used by standalone regression checker imports.
+    import importlib.util
+    from pathlib import Path
 
-HIGH_RISK_ACMG_GATE_TOOLS = {
-    "GeneBe_classify_variant",
-    "GeneBe_classify_variants_batch",
-    "InterVar_classify_variant",
-    "ClinVar_get_clinical_significance",
-    "ClinVar_get_variant_details",
-    "ClinVar_search_variants",
-    "ClinVarSubmitted_get_assertions",
-    "SpliceAI_predict_splice",
-    "SpliceAI_get_max_delta",
-    "SpliceAI_predict_pangolin",
-    "MyVariant_get_pathogenicity_scores",
-    "MyVariant_get_variant",
-    "EnsemblVEP_annotate_hgvs",
-    "EnsemblVEP_variant_recoder",
-    "gnomad_search_variants",
-    "gnomad_get_variant",
-    "gnomad_get_variant_populations",
-    "MaveDB_search_score_sets",
-    "MaveDB_get_score_set",
-    "MaveDB_get_variant_scores",
-    "MaveDB_get_effect_matrix",
-    "MaveDB_get_mapped_variants",
-    "MaveDB_get_clinical_controls",
-    "MaveDB_get_gnomad_variants",
-    "ClinGen_search_gene_validity",
-    "G2P_search",
-    "G2P_get_record",
-    "G2P_get_gene",
-    "MedGen_search",
-}
+    _policy_path = Path(__file__).with_name("acmg_gate_policy.py")
+    _policy_spec = importlib.util.spec_from_file_location("acmg_gate_policy", _policy_path)
+    if _policy_spec is None or _policy_spec.loader is None:
+        raise
+    _policy_module = importlib.util.module_from_spec(_policy_spec)
+    _policy_spec.loader.exec_module(_policy_module)
+    ACMG_FRONT_DOOR_TOOL_NAME = _policy_module.ACMG_FRONT_DOOR_TOOL_NAME
+    ACMG_GATE_NOTICE = _policy_module.ACMG_GATE_NOTICE
+    HIGH_RISK_ACMG_GATE_TOOLS = _policy_module.HIGH_RISK_ACMG_GATE_TOOLS
 
-RECOMMENDED_ACMG_DIRECT_TOOLS = (
-    "EnsemblVEP_variant_recoder",
-    "EnsemblVEP_annotate_hgvs",
-    "ClinVar_get_clinical_significance",
-    "MyVariant_get_pathogenicity_scores",
-    "SpliceAI_predict_splice",
-    "GeneBe_classify_variant",
-    "InterVar_classify_variant",
-)
-
-
-def acmg_direct_tool_search_entry(tool_name: str) -> Dict[str, Any]:
-    return {
-        "name": tool_name,
-        "tool_name": tool_name,
-        "description": (
-            "Recommended direct ToolUniverse evidence-intake tool for ACMG workflows. "
-            "Use only after ACMG_overlay_gate_assess_variant; output is a source lead, "
-            "coverage hit, route trigger, or annotation input, not counted ACMG evidence."
-        ),
-        "category": "acmg_evidence_intake",
-        "acmg_gate_notice": ACMG_GATE_NOTICE,
-        "recommended_front_door_tool": ACMG_FRONT_DOOR_TOOL_NAME,
-        "priority": "direct_tool_after_acmg_front_door",
-    }
 
 _ACMG_INTENT_TERMS = (
     "acmg",
@@ -129,9 +81,9 @@ def acmg_gate_tool_search_entry() -> Dict[str, Any]:
         "description": (
             "Front-door ACMG overlay compliance gate. Use this before GeneBe, "
             "InterVar, ClinVar, SpliceAI, MyVariant, VEP, or other direct tools "
-            "for germline ACMG/pathogenicity final classification. It creates "
-            "route plans, normalizes source leads, validates acmg_assessment_bundle, "
-            "and reports whether final classification is allowed."
+            "for germline ACMG/pathogenicity final classification. It provides "
+            "preflight guidance, normalizes source leads, validates an "
+            "acmg_assessment_bundle, and reports whether final classification is allowed."
         ),
         "type": "ACMGOverlayGateTool",
         "category": "acmg_overlay_gate",
@@ -176,13 +128,7 @@ def prepend_acmg_gate_tool(tools: List[Any]) -> List[Any]:
         gate_entry = acmg_gate_tool_search_entry()
 
     high_risk, other = _split_high_risk_tools(remaining)
-    seen = {_search_item_name(item) for item in [gate_entry, *high_risk, *other]}
-    default_intake = [
-        acmg_direct_tool_search_entry(tool_name)
-        for tool_name in RECOMMENDED_ACMG_DIRECT_TOOLS
-        if tool_name not in seen
-    ]
-    return [gate_entry, *high_risk, *default_intake, *other]
+    return [gate_entry, *high_risk, *other]
 
 
 def add_acmg_gate_notice_to_search(serialized: str, query: str) -> str:

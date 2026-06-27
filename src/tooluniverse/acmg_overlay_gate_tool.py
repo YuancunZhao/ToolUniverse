@@ -17,6 +17,11 @@ from typing import Any, Dict, Iterable, List
 
 import yaml
 
+from .acmg_gate_policy import (
+    DISCOVERY_NO_HIT_ROUTES,
+    RECOMMENDED_ACMG_INTAKE_TOOLS,
+    REQUIRED_ACMG_COVERAGE_CATEGORIES,
+)
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -41,74 +46,6 @@ SOURCE_LEAD_KEYWORDS = (
     "lab assertion",
     "paper label",
 )
-
-BASE_RECOMMENDED_TOOL_CALLS = [
-    {
-        "tool_name": "EnsemblVEP_annotate_hgvs",
-        "purpose": "Normalize consequence, transcript, protein effect, and colocated variant context.",
-        "route_input_for": ["PVS1", "PM4/BP3", "PS1/PM5", "PP3/BP4"],
-    },
-    {
-        "tool_name": "ClinVar_get_clinical_significance",
-        "purpose": "Retrieve ClinVar assertion as source lead only; do not count the label directly.",
-        "route_input_for": ["PP5/BP6 source review", "source_assertions_or_leads"],
-    },
-    {
-        "tool_name": "MyVariant_get_pathogenicity_scores",
-        "purpose": "Retrieve predictor and dbNSFP context as PP3/BP4 route input only.",
-        "route_input_for": ["PP3/BP4"],
-    },
-    {
-        "tool_name": "SpliceAI_predict_splice",
-        "purpose": "Retrieve splice prediction as splicing/prediction route input only.",
-        "route_input_for": ["splice bundle", "PP3-style prediction", "PVS1-splicing boundary"],
-    },
-    {
-        "tool_name": "GeneBe_classify_variant",
-        "purpose": "Retrieve automated ACMG-style label as source lead only.",
-        "route_input_for": ["source_assertions_or_leads"],
-    },
-    {
-        "tool_name": "InterVar_classify_variant",
-        "purpose": "Retrieve automated ACMG-style label as source lead/comparator only.",
-        "route_input_for": ["source_assertions_or_leads"],
-    },
-]
-
-ONLINE_LITERATURE_TOOL_CALLS = [
-    {
-        "tool_name": "tooluniverse-literature-deep-research",
-        "source_category": "literature",
-        "purpose": "Run online literature discovery before final ACMG classification; record no-hit results as coverage, not as evidence.",
-        "route_input_for": ["PP1/BS4/PP4", "PS4", "PS2/PM6", "PM3", "PS3/BS3"],
-    },
-    {
-        "tool_name": "NCBI/PubMed literature search",
-        "source_category": "literature",
-        "purpose": "Search PubMed for variant, rsID, gene-disease, family, cohort, and functional/RNA evidence.",
-        "route_input_for": ["literature coverage audit"],
-    },
-    {
-        "tool_name": "PMC/EuropePMC full-text search",
-        "source_category": "literature",
-        "purpose": "Search full text, tables, supplements, and figures when abstracts or source assertions mention primary evidence.",
-        "route_input_for": ["literature provenance", "full-text/supplement coverage"],
-    },
-    {
-        "tool_name": "tooluniverse-literature-figure-evidence-extraction",
-        "source_category": "literature",
-        "purpose": "Extract primary evidence from figures, pedigrees, RT-PCR/minigene panels, tables, or supplements when literature hits require it.",
-        "route_input_for": ["PS3/BS3", "PP1/BS4/PP4", "PS4"],
-    },
-]
-
-DISCOVERY_NO_HIT_ROUTES = [
-    "pp1_bs4_pp4_segregation",
-    "ps4_case_enrichment",
-    "de_novo_ps2_pm6",
-    "pm3_in_trans",
-    "ps3_bs3_functional_assay",
-]
 
 
 @register_tool("ACMGOverlayGateTool")
@@ -152,6 +89,7 @@ class ACMGOverlayGateTool(BaseTool):
             "triggered_discovery_routes": discovery_routes,
             "recommended_tool_calls": self._recommended_tool_calls(arguments),
             "online_literature_query_templates": self._literature_query_templates(arguments, source_leads),
+            "required_coverage_categories": self._required_coverage_categories(arguments, source_leads),
             "required_coverage_tasks": self._required_coverage_tasks(arguments, source_leads),
             "source_assertions_or_leads": source_leads,
             "acmg_assessment_bundle": bundle or self._bundle_skeleton(arguments, baseline_routes, discovery_routes, source_leads),
@@ -218,16 +156,6 @@ class ACMGOverlayGateTool(BaseTool):
             "baseline_data_sources": entry.get("baseline_data_sources", []),
         }
 
-    def _compact_route_row(self, row: Dict[str, Any]) -> Dict[str, Any]:
-        return {
-            "criterion_group": row.get("criterion_group"),
-            "covered_criteria": row.get("covered_criteria", []),
-            "overlay_skill": row.get("overlay_skill"),
-            "trigger_policy": row.get("trigger_policy"),
-            "enforcement_level": row.get("enforcement_level"),
-            "route_kind": row.get("route_kind"),
-        }
-
     def _compact_response(self, response: Dict[str, Any], bundle_present: bool) -> Dict[str, Any]:
         return {
             "status": response["status"],
@@ -237,15 +165,8 @@ class ACMGOverlayGateTool(BaseTool):
             "validator_status": response["validator_status"],
             "final_classification_allowed": response["final_classification_allowed"],
             "variant": response["variant"],
-            "required_baseline_route_groups": [
-                self._compact_route_row(row) for row in response["required_baseline_routes"]
-            ],
-            "triggered_discovery_route_groups": [
-                self._compact_route_row(row) for row in response["triggered_discovery_routes"]
-            ],
             "recommended_tool_calls": response["recommended_tool_calls"],
-            "online_literature_query_templates": response["online_literature_query_templates"],
-            "required_coverage_tasks": response["required_coverage_tasks"],
+            "required_coverage_categories": response["required_coverage_categories"],
             "source_assertions_or_leads": response["source_assertions_or_leads"],
             "validated_bundle_present": bundle_present,
             "acmg_assessment_bundle_status": (
@@ -298,25 +219,10 @@ class ACMGOverlayGateTool(BaseTool):
         return False
 
     def _select_discovery_routes(self, entries: List[Dict[str, Any]], arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        haystack = json.dumps(arguments, ensure_ascii=False).lower()
-        trigger_terms = {
-            "pp1": ("segregation", "family", "pedigree", "affected", "mother", "father", "grandmother", "cascade", "家系", "共分离", "母亲", "父亲", "外婆", "外祖母", "患病亲属"),
-            "ps4": ("case-control", "cohort", "odds ratio", "recurrence", "case series", "病例对照", "队列", "复现", "病例系列"),
-            "ps3": ("functional", "assay", "rt-pcr", "rna", "minigene", "mavedb", "mave", "功能实验", "剪接实验", "转录", "迷你基因"),
-            "ps2": ("de novo", "trio", "parental", "新发", "三联体", "父母验证"),
-            "pm3": ("in trans", "biallelic", "phase", "compound heterozyg", "反式", "双等位", "相位", "复合杂合"),
-        }
-        selected: List[Dict[str, Any]] = []
-        for entry in entries:
-            if entry.get("trigger_policy") != "evidence_discovery":
-                continue
-            text = json.dumps(entry, ensure_ascii=False).lower()
-            if any(any(term in haystack for term in terms) and key in text for key, terms in trigger_terms.items()):
-                selected.append(self._route_row(entry))
-        return selected
+        return []
 
     def _recommended_tool_calls(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        calls = list(ONLINE_LITERATURE_TOOL_CALLS) + list(BASE_RECOMMENDED_TOOL_CALLS)
+        calls = [dict(row) for row in RECOMMENDED_ACMG_INTAKE_TOOLS]
         variant_text = str(arguments.get("variant", ""))
         if variant_text and ("+" in variant_text or "-" in variant_text or "splice" in variant_text.lower()):
             calls.insert(0, {
@@ -374,48 +280,27 @@ class ACMGOverlayGateTool(BaseTool):
             })
         return queries
 
+    def _required_coverage_categories(self, arguments: Dict[str, Any], source_leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        categories = [dict(row) for row in REQUIRED_ACMG_COVERAGE_CATEGORIES]
+        categories.append({
+            "source_category": "source_assertion",
+            "required_before_final": bool(source_leads),
+            "reason": "GeneBe/InterVar/ClinVar/lab/paper assertions are source leads and must not be counted directly.",
+        })
+        categories.append({
+            "source_category": "clinical_context",
+            "required_before_final": bool(arguments.get("family_context") or arguments.get("phenotype_context")),
+            "reason": "User-supplied family/phenotype context triggers intake but does not assign strength directly.",
+        })
+        return categories
+
     def _required_coverage_tasks(self, arguments: Dict[str, Any], source_leads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [
-            {
-                "source_category": "literature",
-                "required_before_final": True,
-                "must_be_online": True,
-                "acceptable_query_status": ["success", "no_hit", "failed", "unavailable"],
-                "required_fields": ["queried_sources", "query_terms", "query_tool_or_time", "query_status", "reason", "not_triggered_routes"],
-                "not_triggered_routes_if_no_hit": DISCOVERY_NO_HIT_ROUTES,
-                "reason": "Final classification requires actual online literature discovery; no-hit is acceptable, no-search is not.",
-            },
-            {
-                "source_category": "population",
-                "required_before_final": True,
-                "reason": "Population frequency outputs are coverage inputs; BA1/BS1/PM2 require overlay routing.",
-            },
-            {
-                "source_category": "computational",
-                "required_before_final": True,
-                "reason": "VEP/SpliceAI/MyVariant/CADD/SIFT/PolyPhen outputs are route inputs, not counted evidence.",
-            },
-            {
-                "source_category": "source_assertion",
-                "required_before_final": bool(source_leads),
-                "reason": "GeneBe/InterVar/ClinVar/lab/paper assertions are source leads and must not be counted directly.",
-            },
-            {
-                "source_category": "functional_database",
-                "required_before_final": True,
-                "reason": "MaveDB/DMS hits trigger PS3/BS3 overlay; no-hit is documented coverage.",
-            },
-            {
-                "source_category": "disease_context",
-                "required_before_final": True,
-                "reason": "ClinGen/G2P/GeneReviews resolve disease/mechanism context but do not count as ACMG evidence.",
-            },
-            {
-                "source_category": "clinical_context",
-                "required_before_final": bool(arguments.get("family_context") or arguments.get("phenotype_context")),
-                "reason": "User-supplied family/phenotype context triggers PP1/PP4 intake but does not assign strength directly.",
-            },
-        ]
+        tasks = self._required_coverage_categories(arguments, source_leads)
+        for row in tasks:
+            if row.get("source_category") == "literature":
+                row["required_fields"] = ["queried_sources", "query_terms", "query_tool_or_time", "query_status", "reason", "not_triggered_routes"]
+                row["not_triggered_routes_if_no_hit"] = DISCOVERY_NO_HIT_ROUTES
+        return tasks
 
     def _normalize_source_leads(self, value: Any) -> List[Dict[str, Any]]:
         if value in (None, ""):

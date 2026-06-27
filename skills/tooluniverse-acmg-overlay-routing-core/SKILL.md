@@ -10,11 +10,13 @@ This skill is a lightweight coordination layer for ToolUniverse ACMG/AMP overlay
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
+For ToolUniverse MCP workflows, call `ACMG_overlay_gate_assess_variant` first. It is the front-door preflight and validator wrapper for germline ACMG/pathogenicity tasks. It is not a classifier.
+
 For portable use by external agents, this skill exposes three primary gate artifacts:
 
 - `overlay_registry.yaml`: the single rule index for covered criteria, mandatory overlay skills, trigger policies, enforcement levels, countable route outcomes, and baseline data-source categories.
 - `schemas/acmg_assessment_bundle.schema.json`: the minimal final-report bundle schema. A final ACMG classification requires this bundle to contain route planning, coverage audit, overlay results, route audit, compatibility resolution, and classification status.
-- `scripts/validate_acmg_overlay_bundle.py`: dependency-free validator for the assessment bundle. It returns `PASS`, `DRAFT_ONLY`, or `FAIL` and checks anti-bypass rules only.
+- `scripts/validate_acmg_overlay_bundle.py`: dependency-free validator for the assessment bundle. It returns `PASS`, `DRAFT_ONLY`, or `FAIL`. The default mode is strict and keeps baseline, coverage, context, compatibility, and source-label bypass checks enabled; `--mode minimal` is only for lightweight integrations.
 
 Supporting reference artifacts are available for implementers, but external agents do not need to treat them as separate public interfaces:
 
@@ -25,6 +27,8 @@ Supporting reference artifacts are available for implementers, but external agen
 These files are a portable compliance gate, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. The validator only checks whether an external agent produced enough trace to present a final classification.
 
 **Hard gate:** without a validator-passing ACMG assessment bundle, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, and not-assessed criteria.
+
+The compact gate tool output intentionally does not include full route rows or an empty bundle skeleton. Use `output_mode=full` only when constructing fixtures or debugging bundle assembly.
 
 Apply the compliance layer in two route-planning passes followed by coverage, audit, and compatibility resolution:
 

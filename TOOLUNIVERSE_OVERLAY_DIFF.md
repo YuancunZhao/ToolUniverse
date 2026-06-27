@@ -16,6 +16,19 @@ Summary:
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
+## ACMG Gate Complexity Consolidation: 2026-06-27
+
+This change keeps the MCP front-door gate strict while reducing duplicate downstream planning surfaces.
+
+- Adds a shared ACMG gate policy module so high-risk tool lists, gate notices, recommended intake tools, coverage categories, and literature no-hit route families are maintained in one place.
+- Keeps `find_tools`, direct `Tool_Finder_Keyword`, and direct `execute_tool` gate behavior, but stops synthesizing extra direct-tool search entries when those tools were not returned by the normal search.
+- Narrows the default `ACMG_overlay_gate_assess_variant` compact output to preflight status, recommended intake calls, required coverage categories, source leads, validator result, violations, and next actions.
+- Leaves full route rows and empty bundle skeleton output available only through `output_mode: "full"` for debugging and fixture construction.
+- Adds `--mode minimal` to the validator for lightweight integrations while keeping strict validation as the default ToolUniverse ACMG gate behavior.
+- Updates routing-core documentation to describe a three-step MCP workflow: call the gate tool, run recommended evidence/literature intake, then validate the assessment bundle before any final classification.
+
+This is complexity consolidation only. It does not change ACMG evidence thresholds, strength mappings, VCEP precedence, database query logic, online literature requirements, or final combiner behavior.
+
 ## ACMG Gate Direct-MCP Hardening: 2026-06-26
 
 This change closes a remaining bypass path where an agent can skip ACMG skills and call ToolUniverse MCP tools such as GeneBe, ClinVar, SpliceAI, MyVariant, or Ensembl VEP directly, then turn those outputs into final ACMG evidence.

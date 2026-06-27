@@ -10,11 +10,17 @@ An agent may summarize evidence without the bundle, but the output must stay `dr
 
 This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, or user-supplied family/phenotype context. Those outputs are source leads, coverage hits, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
 
-For MCP workflows, start with `ACMG_overlay_gate_assess_variant`. It is the front-door gate for germline ACMG/pathogenicity tasks: it plans baseline/discovery routes, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, and validates a supplied `acmg_assessment_bundle`. The default `output_mode` is `compact`, so CLI and agent outputs do not echo a full empty bundle; use `output_mode: "full"` only when you need the full assessment-bundle skeleton and full route rows.
+For MCP workflows, start with `ACMG_overlay_gate_assess_variant`. It is the front-door gate for germline ACMG/pathogenicity tasks: it gives preflight guidance, recommends coverage and intake tool calls, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, and validates a supplied `acmg_assessment_bundle`. The default `output_mode` is `compact`, so CLI and agent outputs do not echo route skeletons or full empty bundles; use `output_mode: "full"` only when you need the full assessment-bundle skeleton and route rows for debugging or fixture construction.
 
 This applies to English and Chinese variant-classification queries. For example, `根据ACMG规则评估 ... 杂合变异致病性` and direct `Tool_Finder_Keyword` searches should surface `ACMG_overlay_gate_assess_variant` before direct tools such as GeneBe, InterVar, SpliceAI, MyVariant, ClinVar, or VEP. Direct `execute_tool` calls to high-risk variant evidence tools should return an `acmg_gate_notice` and `recommended_front_door_tool` so tool output remains a source lead or route input until validated.
 
 Final classification requires actual online literature coverage. A PubMed/PMC/EuropePMC or ToolUniverse literature search that returns `no_hit` is acceptable when the bundle records queried sources, query terms, query tool or time, reason, and the discovery routes not triggered. A missing search, empty placeholder, or source-label-only lookup is not literature coverage.
+
+## Three-Step Workflow
+
+1. Call `ACMG_overlay_gate_assess_variant` first and keep the output as `draft classification`.
+2. Run the recommended ToolUniverse intake calls, including online literature search, and record source leads, coverage hits, no-hits, and route triggers.
+3. Build an `acmg_assessment_bundle` and run `validate_acmg_overlay_bundle.py`; only `PASS` allows final ACMG/pathogenicity wording.
 
 ## Required Bundle
 
@@ -83,6 +89,8 @@ Run the dependency-free validator:
 ```bash
 python3 .agents/skills/tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py output.json --pretty
 ```
+
+The default validator mode is strict. A lightweight integration can run `--mode minimal`, but ToolUniverse ACMG final classification workflows should use the default strict mode.
 
 Validator outcomes:
 

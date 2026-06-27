@@ -603,6 +603,103 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
     return {"status": status, "violations": violations}
 
 
+def validate_minimal(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
+    """Run only the anti-bypass checks needed for lightweight integrations.
+
+    Strict mode remains the default. This mode intentionally omits baseline,
+    missense, penetrance, VCEP-scope, and detailed coverage completeness checks.
+    """
+
+    status = PASS
+    violations: list[dict[str, str]] = []
+    bundle, has_bundle = get_bundle(payload)
+    final_requested = is_final_classification(bundle, payload)
+
+    def add(new_status: str, code: str, message: str) -> None:
+        nonlocal status
+        status = max_status(status, new_status)
+        violations.append({"severity": new_status, "code": code, "message": message})
+
+    if not has_bundle or bundle is None:
+        if final_requested:
+            add(FAIL, "missing_assessment_bundle", "Final ACMG classification was presented without an ACMG overlay assessment bundle.")
+        else:
+            add(DRAFT_ONLY, "missing_assessment_bundle", "No ACMG overlay assessment bundle was found; only draft output is allowed.")
+        return {"status": status, "violations": violations}
+
+    route_audit = as_list(bundle.get("route_audit"))
+    coverage = as_list(bundle.get("coverage_audit"))
+    compatibility = bundle.get("compatibility_resolution")
+    covered = covered_criteria(registry)
+
+    classification_status = bundle.get("classification_status")
+    if classification_status not in CLASSIFICATION_STATUS_VALUES:
+        add(DRAFT_ONLY, "invalid_classification_status", "classification_status must be `final classification` or `draft classification`.")
+
+    for row in route_audit:
+        if not isinstance(row, dict):
+            add(DRAFT_ONLY, "invalid_route_audit_row", "Every route_audit row must be an object.")
+            continue
+        if "counted" not in row or not isinstance(row.get("counted"), bool):
+            add(DRAFT_ONLY, "invalid_counted_type", "route_audit.counted must be a boolean.")
+        outcome = row.get("route_outcome")
+        if outcome not in ROUTE_OUTCOME_VALUES:
+            add(DRAFT_ONLY, "invalid_route_outcome", f"route_audit.route_outcome `{outcome}` is not a controlled value.")
+
+    for row in route_audit:
+        if not isinstance(row, dict) or not row_counted(row):
+            continue
+        criterion = str(row.get("criterion", ""))
+        outcome = str(row.get("route_outcome", ""))
+        authority = str(row.get("guidance_authority", ""))
+        proposed = text_of(row.get("proposed_evidence"))
+        source = text_of(row.get("overlay_or_vcep_source"))
+        combined = " ".join([proposed, source, text_of(row.get("reason"))])
+        if outcome not in COUNTABLE_ROUTE_OUTCOMES:
+            add(FAIL, "counted_without_countable_route_outcome", f"Counted evidence `{criterion}` has route outcome `{outcome}`.")
+        if authority == "source lead only":
+            add(FAIL, "source_lead_counted", f"Counted evidence `{criterion}` is marked as source lead only.")
+        if SOURCE_LABEL_RE.search(combined) and not PRIMARY_EVIDENCE_RE.search(combined):
+            add(FAIL, "source_label_counted", f"Counted evidence `{criterion}` appears to rely directly on a source label.")
+        if criterion in covered and not source:
+            add(FAIL, "covered_criterion_missing_overlay_source", f"Covered criterion `{criterion}` is counted without overlay or VCEP source.")
+        if outcome == "overlay_applied" and source and not source.startswith("tooluniverse-acmg-"):
+            add(FAIL, "covered_criterion_non_acmg_overlay_source", f"Counted evidence `{criterion}` uses non-ACMG source `{source}` as an overlay result.")
+
+    if final_requested:
+        lit_rows = literature_rows(coverage)
+        if not lit_rows:
+            add(DRAFT_ONLY, "missing_literature_discovery_coverage", "Final classification requires literature discovery coverage, or an explicit unavailable/not_applicable literature row.")
+        else:
+            for row in lit_rows:
+                invalid_lit_reason = invalid_literature_coverage_reason(row)
+                if invalid_lit_reason:
+                    add(DRAFT_ONLY, "invalid_online_literature_coverage", invalid_lit_reason)
+
+    if not isinstance(compatibility, dict):
+        add(DRAFT_ONLY, "missing_compatibility_resolution", "Compatibility resolution is missing or not an object.")
+    else:
+        unresolved = as_list(compatibility.get("unresolved_conflicts"))
+        resolved = as_list(compatibility.get("current_counted_evidence_resolved"))
+        if unresolved and final_requested:
+            add(DRAFT_ONLY, "unresolved_compatibility_conflicts", "Unresolved compatibility conflicts block final classification.")
+        if final_requested and not resolved:
+            add(DRAFT_ONLY, "empty_resolved_counted_evidence", "Final classification requires non-empty current_counted_evidence_resolved.")
+        counted_rows = [row for row in route_audit if isinstance(row, dict) and row_counted(row)]
+        valid_counted_rows = [
+            row
+            for row in counted_rows
+            if row.get("route_outcome") in COUNTABLE_ROUTE_OUTCOMES
+        ]
+        if final_requested and not valid_counted_rows:
+            add(DRAFT_ONLY, "missing_counted_route_audit", "Final classification requires at least one counted route_audit row with a countable overlay/VCEP outcome.")
+        if final_requested and resolved and not any(STANDALONE_BENIGN_RE.search(resolved_item_text(item)) for item in resolved):
+            if not any(counted_row_matches_resolved(row, resolved) for row in valid_counted_rows):
+                add(DRAFT_ONLY, "resolved_evidence_without_counted_audit_match", "Resolved counted evidence must match at least one counted route_audit row.")
+
+    return {"status": status, "violations": violations}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate a ToolUniverse ACMG overlay assessment bundle.")
     parser.add_argument("output_json", type=Path, help="Agent output JSON or raw ACMG assessment bundle JSON.")
@@ -612,12 +709,18 @@ def main(argv: list[str] | None = None) -> int:
         default=Path(__file__).resolve().parents[1] / "overlay_registry.yaml",
         help="Path to overlay_registry.yaml.",
     )
+    parser.add_argument(
+        "--mode",
+        choices=("strict", "minimal"),
+        default="strict",
+        help="Validation profile. strict is the default gate; minimal only runs lightweight anti-bypass checks.",
+    )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print validation JSON.")
     args = parser.parse_args(argv)
 
     payload = load_json(args.output_json)
     registry = load_registry(args.registry)
-    result = validate(payload, registry)
+    result = validate_minimal(payload, registry) if args.mode == "minimal" else validate(payload, registry)
     json.dump(result, sys.stdout, ensure_ascii=False, indent=2 if args.pretty else None)
     sys.stdout.write("\n")
     return {PASS: 0, DRAFT_ONLY: 2, FAIL: 1}[result["status"]]

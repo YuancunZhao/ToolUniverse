@@ -19,6 +19,7 @@ def ACMG_overlay_gate_assess_variant(
     family_context: Optional[Any] = None,
     source_outputs_or_leads: Optional[list[Any]] = None,
     acmg_assessment_bundle: Optional[dict[str, Any]] = None,
+    output_mode: Optional[str] = None,
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
@@ -38,6 +39,7 @@ def ACMG_overlay_gate_assess_variant(
             "family_context": family_context,
             "source_outputs_or_leads": source_outputs_or_leads,
             "acmg_assessment_bundle": acmg_assessment_bundle,
+            "output_mode": output_mode,
         }.items()
         if v is not None
     }
