@@ -18,9 +18,11 @@ from typing import Any, Dict, Iterable, List
 import yaml
 
 from .acmg_gate_policy import (
+    ACMG_GATE_NOTICE,
     DISCOVERY_NO_HIT_ROUTES,
     RECOMMENDED_ACMG_INTAKE_TOOLS,
     REQUIRED_ACMG_COVERAGE_CATEGORIES,
+    SOURCE_LEAD_NOTICE,
 )
 from .base_tool import BaseTool
 from .tool_registry import register_tool
@@ -29,12 +31,6 @@ CLASSIFICATION_DRAFT = "draft classification"
 CLASSIFICATION_FINAL = "final classification"
 VALIDATOR_NOT_RUN = "NOT_RUN"
 VALIDATOR_DRAFT_ONLY = "DRAFT_ONLY"
-SOURCE_LEAD_NOTICE = (
-    "Automated classifier, database label, predictor score, or annotation output "
-    "is a source lead or route trigger only. It is not ACMG counted evidence "
-    "until routed through an overlay or in-scope VCEP and validated in an "
-    "acmg_assessment_bundle."
-)
 
 SOURCE_LEAD_KEYWORDS = (
     "genebe",
@@ -96,11 +92,7 @@ class ACMGOverlayGateTool(BaseTool):
             "validator_result": validation.get("validator_result"),
             "violations": validation.get("violations", []),
             "next_actions": self._next_actions(validation, baseline_routes, discovery_routes),
-            "acmg_gate_notice": (
-                "Final germline ACMG/pathogenicity wording requires a machine-checkable "
-                "acmg_assessment_bundle and validator_status: PASS. Without PASS, report "
-                "draft classification only."
-            ),
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
         if output_mode == "full":
             return response

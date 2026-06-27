@@ -30,6 +30,7 @@ import json
 import random
 import string
 import os
+import tempfile
 import time
 import hashlib
 import warnings
@@ -449,6 +450,11 @@ class ToolUniverse:
             if not base_dir:
                 base_dir = os.path.join(str(Path.home()), ".tooluniverse")
             os.makedirs(base_dir, exist_ok=True)
+            if not os.access(base_dir, os.W_OK) and not os.getenv(
+                "TOOLUNIVERSE_CACHE_DIR"
+            ):
+                base_dir = os.path.join(tempfile.gettempdir(), "tooluniverse")
+                os.makedirs(base_dir, exist_ok=True)
             cache_path = os.path.join(base_dir, "cache.sqlite")
 
         self.cache_manager = ResultCacheManager(

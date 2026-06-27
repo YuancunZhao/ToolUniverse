@@ -1,12 +1,12 @@
 ---
 name: tooluniverse-acmg-overlay-routing-core
-description: Shared routing and reporting core for ToolUniverse ACMG/AMP overlay skills. Use before evidence-specific overlays to standardize disease context, mechanism context, phenotype/source/literature intake, double-counting guards, output status values, and evidence-strength labels without changing criterion-specific rules.
+description: Portable routing and compliance contract for ToolUniverse ACMG/AMP overlay skills. Use before evidence-specific overlays to enforce route planning, coverage audit, source-lead handling, evidence compatibility resolution, validator checks, output status values, and evidence-strength labels without changing criterion-specific rules.
 disable-model-invocation: true
 ---
 
 # ACMG Overlay Routing Core
 
-This skill is a lightweight coordination layer for ToolUniverse ACMG/AMP overlay skills. It does not assign ACMG evidence by itself and does not change any criterion threshold, strength adjustment, or VCEP rule.
+This skill is the portable routing and compliance contract for ToolUniverse ACMG/AMP overlay skills. It does not assign ACMG evidence by itself and does not change any criterion threshold, strength adjustment, or VCEP rule.
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
@@ -62,6 +62,20 @@ Every counted evidence item should report its guidance authority. Use one of the
 - `source lead only`: a database, paper label, expert assertion, abstract-only source, or inaccessible source is used only to retrieve primary evidence and is not counted.
 
 Practice/local refinements must be explicitly labeled in the output and must not be described as ClinGen/SVI primary guidance. VCEP-specific rules supersede generic overlays and practice/local refinements.
+
+## Criterion Ownership Index
+
+Use this index when a criterion name could route to more than one overlay:
+
+| Criterion / evidence type | Owning route |
+| --- | --- |
+| Protein-level PS1 or PM5 from same amino acid, same codon, or same residue comparison | `ps1_pm5_amino_acid_equivalence` -> `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` |
+| PS1 from same predicted splicing event comparison | `ps1_splicing_similarity` -> `tooluniverse-acmg-ps1-splicing-similarity-refinement` |
+| BP1, PP2, and PM1 for missense mechanism or regional constraint | `pm1_regional_missense_constraint` -> `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
+| BP2 and BP5 with cis/trans, alternate diagnosis, or benign clinical context | `benign_context` -> `tooluniverse-acmg-benign-context-refinement` |
+| BP7 or RNA no-splicing-impact evidence | `pvs1_splicing_refinement` -> `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA/no-splicing-impact context supports it |
+
+BP1 stays with the missense mechanism/regional overlay because it depends on whether missense variation is disease-relevant for the same gene-disease context. Do not move BP1 into benign-context routing.
 
 ---
 

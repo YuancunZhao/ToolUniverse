@@ -981,6 +981,32 @@ Behavior clarified:
 - Keeps these tools available for evidence retrieval; their outputs remain source leads, coverage hits, route triggers, or annotation inputs until an ACMG assessment bundle validates with `PASS`.
 - Does not change any evidence threshold, strength mapping, VCEP precedence, database query logic, or final-combine rule.
 
+## Structural Deduplication and Gate Notice Consolidation: 2026-06-27
+
+Changed files:
+
+```text
+M skills/tooluniverse-acmg-variant-classification/SKILL.md
+M skills/tooluniverse-acmg-overlay-routing-core/SKILL.md
+M src/tooluniverse/acmg_gate_policy.py
+M src/tooluniverse/genebe_tool.py
+M src/tooluniverse/acmg_overlay_gate_tool.py
+M src/tooluniverse/execute_function.py
+M src/tooluniverse/tools/__init__.py
+M src/tooluniverse/data/*_tools.json files carrying acmg_gate_notice
+A tests/unit/test_acmg_gate_notice_and_wrappers.py
+```
+
+Behavior clarified:
+
+- Keeps `tooluniverse-acmg-overlay-routing-core` as the portable routing/compliance contract and reduces duplicated hard-gate and compatibility-matrix prose in the main ACMG classification skill.
+- Adds a Criterion Ownership Index for PS1 protein comparison, PS1 splicing comparison, BP1, BP2/BP5, and BP7/RNA no-impact routing.
+- Consolidates ACMG gate and source-lead notices in `acmg_gate_policy.py`; GeneBe, ACMG overlay gate, and tool JSON configs now use the same canonical gate notice semantics.
+- Fixes SDK typed-wrapper import drift for ClinVar/dbSNP generated modules and adds a regression import check for common variant wrappers.
+- Makes the default persistent cache path fall back to a writable temporary directory when the default home cache directory is not writable and no explicit cache path or cache directory was configured.
+- Adds focused unit tests for shared notices and wrapper argument forwarding for VariantValidator, CADD, SpliceAI, and common variant wrappers.
+- Does not change evidence thresholds, strength mapping, VCEP precedence, validator hard-stop semantics, or final-combine rules.
+
 ## Update Procedure
 
 Whenever `.agents/skills` changes in RulesEnhancement:

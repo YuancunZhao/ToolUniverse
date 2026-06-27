@@ -2,7 +2,7 @@
   {
     "name": "SpliceAI_predict_splice",
     "description": "Predict splice-altering effects using SpliceAI. Returns delta scores for acceptor/donor gain/loss as prediction and route-trigger context. SpliceAI scores are source leads or computational/splicing route triggers only, not ACMG counted evidence by themselves. For germline ACMG/pathogenicity final classification, route prediction or RNA evidence through the appropriate ACMG overlay, emit an acmg_assessment_bundle, and require validator_status: PASS.",
-    "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
+    "acmg_gate_notice": "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, and related variant evidence tools provide source leads, coverage hits, route triggers, or annotation inputs only; they are not ACMG counted evidence. Final germline ACMG/pathogenicity output requires ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, and validator_status: PASS.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",
@@ -57,7 +57,7 @@
   {
     "name": "SpliceAI_get_max_delta",
     "description": "Get a simplified maximum SpliceAI delta score and interpretation for variant triage. The score is a source lead or computational/splicing route trigger only, not ACMG counted evidence by itself. For germline ACMG/pathogenicity final classification, route prediction or RNA evidence through the appropriate ACMG overlay, emit an acmg_assessment_bundle, and require validator_status: PASS.",
-    "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
+    "acmg_gate_notice": "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, and related variant evidence tools provide source leads, coverage hits, route triggers, or annotation inputs only; they are not ACMG counted evidence. Final germline ACMG/pathogenicity output requires ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, and validator_status: PASS.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",

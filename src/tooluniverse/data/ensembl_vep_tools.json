@@ -2,7 +2,7 @@
   {
     "name": "EnsemblVEP_annotate_hgvs",
     "description": "Annotate functional consequences of a genetic variant using HGVS notation via Ensembl VEP. Returns consequence, transcript/protein impact, SIFT/PolyPhen annotations, amino acid changes, and colocated variants as source leads and route triggers. VEP consequences or predictor fields are not ACMG counted evidence by themselves. For germline ACMG/pathogenicity final classification, route primary evidence through the ACMG overlay gate with an acmg_assessment_bundle and validator_status: PASS.",
-    "acmg_gate_notice": "ACMG gate: this direct ToolUniverse tool output is a source lead, route trigger, or annotation input only; it is not ACMG counted evidence. For germline ACMG/pathogenicity final classification, include an acmg_assessment_bundle and validator_status: PASS from tooluniverse-acmg-overlay-routing-core before presenting final Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign.",
+    "acmg_gate_notice": "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, and related variant evidence tools provide source leads, coverage hits, route triggers, or annotation inputs only; they are not ACMG counted evidence. Final germline ACMG/pathogenicity output requires ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, and validator_status: PASS.",
     "parameter": {
       "type": "object",
       "properties": {

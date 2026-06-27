@@ -18,19 +18,12 @@ from typing import Any, Dict
 
 import requests
 
+from .acmg_gate_policy import ACMG_GATE_NOTICE
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
 GENEBE_API = "https://api.genebe.net/cloud/api-public/v1/variant"
 GENEBE_BATCH_API = "https://api.genebe.net/cloud/api-public/v1/variants"
-GENEBE_ACMG_GATE_NOTICE = (
-    "ACMG gate: this direct ToolUniverse tool output is a source lead, "
-    "route trigger, or annotation input only; it is not ACMG counted evidence. "
-    "For germline ACMG/pathogenicity final classification, include an "
-    "acmg_assessment_bundle and validator_status: PASS from "
-    "tooluniverse-acmg-overlay-routing-core before presenting final "
-    "Pathogenic/Likely Pathogenic/VUS/Likely Benign/Benign."
-)
 
 # Max variants per batch request accepted by the public GeneBe endpoint.
 GENEBE_BATCH_MAX = 1000
@@ -154,7 +147,7 @@ class GeneBeTool(BaseTool):
             "metadata": {
                 "source": "GeneBe (genebe.net)",
                 "genome": genome,
-                "acmg_gate_notice": GENEBE_ACMG_GATE_NOTICE,
+                "acmg_gate_notice": ACMG_GATE_NOTICE,
             },
         }
 
@@ -272,6 +265,6 @@ class GeneBeTool(BaseTool):
                 "genome": genome,
                 "submitted_count": len(body),
                 "result_count": len(variants),
-                "acmg_gate_notice": GENEBE_ACMG_GATE_NOTICE,
+                "acmg_gate_notice": ACMG_GATE_NOTICE,
             },
         }

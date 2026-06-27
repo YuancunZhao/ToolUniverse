@@ -82,11 +82,13 @@ Accepted inputs: HGVS coding (NM_000059.4:c.5946delT), HGVS protein (BRCA2 p.Val
 
 ## Phase 0a: Overlay Routing Core
 
-Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays. This base skill should act as a dispatcher: normalize the variant, establish disease/mechanism context, select route bundles, expand triggered bundles into overlay route rows, run overlays, resolve compatibility, and only then combine evidence.
+Use `tooluniverse-acmg-overlay-routing-core` before evidence-specific overlays. This skill is the dispatcher/reporting workflow: normalize the variant, establish disease/mechanism context, select route bundles, expand triggered bundles into overlay route rows, run overlays, resolve compatibility, and only then combine evidence.
+
+The routing core is the source of truth for anti-bypass rules, canonical status values, guidance-authority labels, bundle details, coverage audit, source-lead handling, and Evidence Compatibility Resolution. Do not duplicate or override those rules here.
 
 Hard gate for external agents: before presenting any final ACMG classification, emit an `acmg_assessment_bundle` compatible with `tooluniverse-acmg-overlay-routing-core/schemas/acmg_assessment_bundle.schema.json` and validate it with `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py`. If the validator returns `DRAFT_ONLY` or `FAIL`, keep `classification_status: draft classification`; do not compute or present the final ACMG tier from unrouted evidence.
 
-Final answer output requirement: any final five-tier ACMG answer must include a validator summary block exactly equivalent to:
+Any final five-tier ACMG answer must include a validator summary block equivalent to:
 
 ```json
 {"validator_status":"PASS","violations":[]}
@@ -94,7 +96,7 @@ Final answer output requirement: any final five-tier ACMG answer must include a 
 
 If the validator summary is absent, malformed, or not `PASS`, use `classification_status: draft classification` and do not present `Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign` as a final classification. Automated classifier outputs such as GeneBe, ClinVar-derived summaries, commercial/lab labels, or paper ACMG labels are `source_assertions_or_leads`; they are not overlay results and must not be inserted into counted evidence without the responsible overlay or VCEP route.
 
-Start with a compact `Bundle Route Plan`:
+Use this compact bundle sequence, then expand triggered bundles through the routing core registry:
 
 1. `baseline_context_bundle` for disease entity, inheritance, transcript, mechanism, multiple-disorder boundary, and dominant-negative/LoF/GoF sensitivity.
 2. `population_frequency_bundle` for BA1/BS1/BS2/PM2/BP2/BP5 frequency and benign-context gates.
@@ -107,17 +109,19 @@ Start with a compact `Bundle Route Plan`:
 9. `cnv_sv_bundle` for structural-variant/CNV evidence intake; final ACMG evidence must still route through the appropriate ACMG overlays and compatibility resolution.
 10. `final_combine_bundle` after overlay audit passes.
 
-Then expand each triggered bundle using the routing core registry. A bundle row is not counted evidence; counted criteria still require overlay result, route audit outcome `overlay_applied` or `overlay_deferred_to_vcep`, and compatibility resolution.
+A bundle row is not counted evidence. Counted criteria still require overlay result, route audit outcome `overlay_applied` or `overlay_deferred_to_vcep`, Evidence Compatibility Resolution, and validator PASS.
 
-External-agent compliance check: before final classification, list each evidence code considered, the route bundle, and the overlay route used. If a code is assigned without the responsible overlay or VCEP rule, revise the evidence table before combining criteria.
+### Criterion Ownership Index
 
-Final hard-stop audit: the report may present a final classification only when the ACMG assessment bundle validates and every counted evidence item has route outcome `overlay_applied` or `overlay_deferred_to_vcep`. If any counted item lacks that route outcome, or if the bundle is absent or invalid, label the result `draft classification`, move that item to `Criteria With status: not_assessed` or `Source Assertions / Leads`, and do not compute the final ACMG tier from it.
+| Criterion / evidence type | Owning route |
+| --- | --- |
+| Protein-level PS1 or PM5 from same amino acid, same codon, or same residue comparison | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` |
+| PS1 from same predicted splicing event comparison | `tooluniverse-acmg-ps1-splicing-similarity-refinement` |
+| BP1, PP2, and PM1 for missense mechanism or regional constraint | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
+| BP2 and BP5 with cis/trans, alternate diagnosis, or benign clinical context | `tooluniverse-acmg-benign-context-refinement` |
+| BP7 or RNA no-splicing-impact evidence | `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA/no-splicing-impact context supports it |
 
-Keep `Source Assertions / Leads` separate from `Current Counted Evidence`. ClinVar, HGMD, LOVD, VCEP, laboratory reports, or a paper's ACMG classification may guide retrieval, but the final ACMG tier is based only on evidence that was independently routed through an overlay or current VCEP rule.
-
-Use the routing core's canonical output fields where practical: `applied_evidence`, `status`, `reason`, `consumed_evidence`, and `routed_to`. Use `status` values `applied`, `no_evidence`, `not_assessed`, `not_applicable`, or `not_used`.
-
-For every counted criterion, report `guidance_authority` as one of `ClinGen/SVI primary`, `ACMG/AMP baseline`, `VCEP-specific`, `practice/local refinement`, or `source lead only`. Formal ClinGen/SVI recommendations and VCEP specifications should be distinguished from ACGS 2024, non-ClinGen literature, or local operational guardrails. Practice/local refinements may help apply under-specified ACMG/AMP criteria, but they must be labeled as such and must not be presented as ClinGen/SVI primary guidance.
+BP1 stays in the missense mechanism/regional overlay because it depends on whether missense variation is disease-relevant for the same gene-disease context. Do not route BP1 through benign-context unless a current VCEP explicitly says otherwise.
 
 ---
 
@@ -143,11 +147,13 @@ PubMed_search_articles(query="GENE disease dominant-negative")
 
 ## Phase 1: Population Frequency (BA1, BS1, BS2, PM2)
 
-Population AF is among the strongest evidence in either direction. A variant at >5% may qualify for BA1 stand-alone benign evidence, but only after `tooluniverse-acmg-ba1-exception-list-refinement` confirms the Ghosh et al. 2018 BA1 definition: AF >0.05 in a qualifying general continental population dataset with at least 2,000 observed alleles, no exception-list match, no inadequate founder-population-only signal, and no gene- or variant-specific BA1 modification. Absent from gnomAD supports pathogenicity only through PM2, now usually applied as `PM2_Supporting` per ClinGen guidance.
+Use the `population_frequency_bundle` and route to the owning overlays instead of assigning frequency evidence in this dispatcher:
 
-Use ancestry-specific AF, not just global. A variant at 8% in East Asian populations but rare globally is benign in that ancestry context. For BS1, the threshold depends on disease prevalence and inheritance — the default is 1% for common diseases, 0.1% for rare. When absence, extreme rarity, coverage adequacy, PM2 strength, or the `PVS1 + PM2_Supporting` combination affects classification, use `tooluniverse-acmg-pm2-absence-rarity-refinement`. That overlay follows the ClinGen SVI PM2 v1.0 recommendation: PM2 should default to Supporting strength, absence from a database is not evidence unless the allele and locus are adequately represented, BA1/BS1/BS2 override PM2, and valid `PVS1 + PM2_Supporting` can support Likely Pathogenic when no conflicting evidence is present.
+- `tooluniverse-acmg-ba1-exception-list-refinement` for BA1 stand-alone review.
+- `tooluniverse-acmg-pm2-absence-rarity-refinement` for PM2 absence/rarity, coverage adequacy, and PM2 strength.
+- `tooluniverse-acmg-benign-context-refinement` for BS1, BS2, BP2, BP5, and benign-context requirements such as disease prevalence, penetrance, ancestry, unaffected-carrier interpretability, phase, and alternate diagnosis.
 
-When benign-context evidence is possible, use `tooluniverse-acmg-benign-context-refinement` for BA1, BS1, BS2, BP2, and BP5. That overlay keeps BA1 exception-list logic on the Ghosh et al. 2018 ClinGen/SVI path and labels ACGS 2024 details for BS1/BS2/BP2/BP5 as `practice/local refinement` unless a VCEP makes them disease-specific. BA1/BS1 require disease prevalence, penetrance, allelic/genetic heterogeneity, inheritance, and max credible ancestry AF; BS2 requires well-phenotyped healthy individuals old enough for the disease's expected onset and penetrance; BP2 requires a clear cis/trans and inheritance context; BP5 requires an alternate P/LP molecular diagnosis that explains the patient's main phenotype. If disease threshold, phenotype, unaffected status, phase, or alternate-diagnosis context is missing, mark the specific benign criterion with `status: not_assessed` and ask for the missing fields rather than weakening PM2.
+Population data retrieval is context only until the appropriate overlay returns a routed result. If disease threshold, penetrance, phenotype, unaffected status, phase, or alternate-diagnosis context is missing, report the relevant criterion as `not_assessed` and request the missing fields.
 
 ```python
 gnomad_search_variants(query="rs28897743")          # get gnomAD variant ID
@@ -162,11 +168,7 @@ If gnomAD data is unavailable, note the gap and continue — absence of data is 
 
 ## Phase 2: Computational Predictions (PP3, BP4)
 
-For missense variants, use `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` before assigning PP3/BP4. That overlay follows Pejaver et al. 2022 ClinGen SVI recommendations: select one calibrated missense predictor before inspecting scores, map the score to calibrated evidence-strength intervals, avoid uncalibrated majority voting, and do not use developer-default SIFT/PolyPhen/CADD thresholds as ACMG evidence.
-
-The refinement supports `PP3_Strong`, `PP3_Moderate`, `PP3_Supporting`, `BP4_VeryStrong`, `BP4_Strong`, `BP4_Moderate`, and `BP4_Supporting` when the selected tool and score meet calibrated thresholds. `BP4_Moderate` requires explicit downstream combiner handling if the classifier only implements the original 2015 ACMG/AMP evidence-strength table.
-
-If no Pejaver-calibrated score, pre-specified tool hierarchy, or current VCEP threshold is available, report PP3/BP4 as `status: not_assessed` or `no_evidence`. Do not assign `PP3_Supporting` from a pattern such as SIFT deleterious plus PolyPhen probably damaging plus high CADD.
+Use `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` for missense prediction evidence. Predictor tools return prediction context only; PP3/BP4 strength must come from the PP3/BP4 overlay or an in-scope VCEP rule. Do not use SIFT/PolyPhen/CADD voting or developer-default thresholds as counted ACMG evidence.
 
 ```python
 MyVariant_get_pathogenicity_scores(variant_id="...") # REVEL, CADD, SIFT, PolyPhen-2, GERP, PhyloP, VEST4
@@ -176,23 +178,19 @@ EnsemblVEP_annotate_hgvs(hgvs_notation="...") # consequence, transcript, SIFT/Po
 
 For non-missense variants, skip missense PP3/BP4 and focus on the relevant mechanism-specific evidence. Splice prediction/RNA evidence belongs in Phase 5 and the splicing overlays, not this missense-prediction pathway.
 
-If the gene-disease context may involve dominant-negative, antimorphic, gain-of-function, or mixed mechanisms, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before using PP3/BP4 as part of a missense-mediated disease model. Predictor scores can support generic deleteriousness or benignity, but they do not prove or exclude dominant interference. For genes where pathogenicity depends on dominant-negative missense/in-frame mechanisms, document that the variant class is compatible with that mechanism before allowing PP3 to contribute to classification.
-
-**Mechanism complement for VUS-resolution narratives**: PP3/BP4 calibrated prediction evidence tells you whether the variant score supports pathogenicity or benignity, not why the protein may be affected. For a VUS resolution report where the verdict needs a mechanistic explanation, add `ESM_explain_variant_mechanism(sequence=..., position=..., ref_aa=..., alt_aa=...)` — returns lost/gained ESMC-6B SAE feature categories (catalytic / ligand-binding / ptm / structural-stability / domain / etc.) with a one-line summary. This does not change PP3 strength but turns "PP3_Moderate satisfied (REVEL 0.78)" into "PP3_Moderate satisfied — and SAE shows catalytic-feature loss at position X, consistent with active-site disruption." Requires `ESM_API_KEY`; missense only.
+If the gene-disease context may involve dominant-negative, antimorphic, gain-of-function, or mixed mechanisms, run `tooluniverse-acmg-dominant-negative-mechanism-refinement` before using predictor evidence in a missense-mediated disease model. Protein mechanism tools can explain biological plausibility, but they do not change PP3/BP4 strength unless the owning overlay or VCEP says so.
 
 ---
 
-## Phase 3: Clinical Database Evidence (PS1, PM5, PP5, BP6)
+## Phase 3: Source Assertions and Comparison Evidence (PS1, PM5, PP5, BP6)
 
-ClinVar aggregates clinical lab classifications. The reasoning: if the same amino acid change (different nucleotide) is established pathogenic, that is strong evidence (PS1) because the mechanism is the amino acid change. If a different pathogenic missense occurs at the same residue, that is moderate evidence (PM5) — the residue is functionally important. When PS1 or PM5 may apply to an ordinary missense variant because of the same amino-acid substitution, same residue, or same codon as a known pathogenic variant, use `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement`. That overlay checks transcript/protein equivalence, comparison-variant independence, circularity, amino-acid-mediated mechanism, and splicing/DNA-level confounding before assigning PS1 or PM5.
+ClinVar, HGMD, VCEP, lab reports, GeneBe/InterVar labels, and paper ACMG codes are source leads until primary evidence is routed. Use:
 
-For PS1/PM5, a comparison variant's ClinVar, HGMD, VCEP, or paper label is only a lead. Confirm the comparison variant's independent P/LP status, non-circular evidence, same disease context, and shared amino-acid-mediated mechanism before counting PS1/PM5. If the comparison evidence cannot be traced beyond a source label, record `status: not_assessed` or `not_used` rather than applying PS1/PM5.
+- `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` for protein-level PS1/PM5 comparison evidence.
+- `tooluniverse-acmg-ps1-splicing-similarity-refinement` for same predicted splicing-event PS1 comparison evidence.
+- `tooluniverse-acmg-pp5-bp6-reputable-source-refinement` for PP5/BP6 source review; by default PP5/BP6 should not be counted and should lead to primary-evidence retrieval.
 
-When PS1 may apply because the variant has the same predicted RNA-splicing event as a known pathogenic or likely pathogenic variant, use `tooluniverse-acmg-ps1-splicing-similarity-refinement`. That overlay adapts Walker et al. 2023 ClinGen SVI Splicing Subgroup Table 2 for PS1 strength based on same-event splice prediction, donor/acceptor motif position, P versus LP comparison variant status, and the VUA's PP3/PVS1 baseline. If direct RNA assay evidence is present for the VUA, resolve `PVS1_Strength (RNA)` or `BP7_Strong (RNA)` first, then apply PS1-splicing only for independent comparison-variant evidence and remove duplicate PP3/PS3/BS3 uses.
-
-If the gene-disease context may involve dominant-negative mechanism, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PS1/PM5. Same amino acid or same residue evidence should not be transferred between dominant-negative, haploinsufficiency, splicing LoF, and unrelated gain-of-function mechanisms without same-mechanism support.
-
-When a reputable source, ClinVar assertion, lab report, expert panel, or database label is the only basis for PP5 or BP6, use `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`. That overlay follows Biesecker and Harrison 2018 / ClinGen SVI guidance recommending discontinuation of PP5/BP6. Do not count PP5/BP6 by default. Treat the source assertion as a lead, retrieve primary evidence, and route that evidence to the appropriate criteria. Conflicting ClinVar interpretations should trigger primary-evidence review rather than PP5/BP6 scoring.
+Do not count comparison evidence unless the owning overlay confirms independence, same disease/mechanism context, non-circularity, and absence of splicing/DNA/RNA confounding.
 
 ```python
 ClinVar_search_variants(query="BRCA2 c.5946delT")
@@ -202,17 +200,14 @@ civic_get_variants_by_gene(gene_id=19)   # BRCA2 CIViC ID is 19
 
 ---
 
-## Phase 4: Functional Domain and Protein Analysis (PM1, PP2, BP1, PM4, BP3)
+## Phase 4: Functional Region and Protein-Length Evidence (PM1, PP2, BP1, PM4, BP3)
 
-Variants in well-established functional domains with known pathogenic variant enrichment are more likely pathogenic. PM1 (moderate pathogenic) requires the variant to be in a hotspot domain with low benign variation — use InterPro domain architecture and UniProt active/binding sites to assess. When a missense variant may qualify for PM1 because it lies in a constrained regional missense-depleted region, hotspot, or subdomain with low benign variation, use `tooluniverse-acmg-pm1-regional-missense-constraint-refinement`. That overlay adapts PMID:38645134 regional missense mutational intolerance guidance for PM1 while keeping prediction-only MPC/AlphaMissense evidence separate from PP3 and resolving PM1/PP2 selection: retain PM1 over PP2 when PM1 is met, retain PP2 over PM1_Supporting when only supporting regional evidence is met, and follow current VCEP rules when they differ.
+Use the owning overlays instead of assigning these criteria in the dispatcher:
 
-Broad domain membership alone is not PM1. PM1 requires hotspot, critical residue, regional constraint, pathogenic enrichment with low benign variation, or a disease-specific/VCEP rule. Database or paper statements that PM1 was applied are leads only until the regional/domain basis is independently reviewed.
+- `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` for PM1, PP2, BP1, regional missense constraint, hotspot, critical residue, and PM1/PP2/BP1 priority.
+- `tooluniverse-acmg-pm4-bp3-protein-length-refinement` for PM4/BP3 protein-length, in-frame indel, repeat-region, stop-loss, and altered-product contexts.
 
-PP2 and BP1 are mutually exclusive. PP2 (supporting pathogenic) applies to missense in genes where missense is the known mechanism and benign missense rate is low (mis_z > 3.09). BP1 (supporting benign) applies to missense in genes where only truncating variants cause disease (LOF-only mechanism) — a missense in such a gene is unlikely to be pathogenic.
-
-If pathogenic missense variants act through a dominant-negative mechanism, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before assigning PM1/PP2/BP1. BP1 is unsafe when pathogenic dominant-negative missense variants are established for the same disease context.
-
-When a protein length change may qualify for PM4 or BP3, use `tooluniverse-acmg-pm4-bp3-protein-length-refinement`. That overlay handles in-frame insertions/deletions, single amino-acid indels, repeat regions, stop-loss variants, and last-exon gain-of-function truncating variants. ACMG/AMP 2015 is the baseline authority for PM4/BP3; ACGS 2024 single-amino-acid, stop-loss, and last-exon altered-product details are `practice/local refinement` unless a current VCEP or gene-specific rule adopts them. The overlay keeps the same operational guards: a single amino-acid in-frame indel defaults to at most `PM4_Supporting` unless gene-specific evidence justifies moderate strength; PM4 is not used together with PVS1 for the same length-changing effect; BP3 is limited to in-frame indels in repetitive or low-complexity regions without known function; stop-loss variants with predicted nonstop decay route to PVS1 rather than PM4; and last-exon truncating variants in gain-of-function/altered-product contexts may route through PM4 rather than PVS1.
+Broad domain membership, mechanism hypotheses, and source labels are leads only. Run dominant-negative/mechanism refinement before PM1/PP2/BP1 when DN/GoF/mixed mechanism could affect criterion use.
 
 ```python
 UniProt_get_function_by_accession(accession="P51587")        # active sites, binding sites
@@ -223,17 +218,11 @@ gnomad_get_gene_constraints(gene_symbol="BRCA2")              # mis_z for PP2/BP
 
 ---
 
-## Phase 5: Splice Impact Assessment (PVS1)
+## Phase 5: LoF and Splicing Evidence (PVS1, BP7, PS1-Splicing)
 
-PVS1 is the strongest single pathogenic criterion. A null variant (nonsense/frameshift/canonical splice/initiation codon) in a gene where LOF is the established mechanism can activate PVS1, but the full strength depends on context.
+Use `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` for the baseline Abou Tayoun et al. 2018 PVS1 decision tree and `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA assay, observed transcript consequence, published RNA-splicing evidence, or no-splicing-impact RNA evidence affects PVS1/BP7. SpliceAI-only evidence is prediction context and must not trigger RNA-assay PVS1 by itself.
 
-Apply PVS1 through `tooluniverse-acmg-pvs1-lof-decision-tree-refinement` before assigning a final PVS1 strength. That overlay follows the Abou Tayoun et al. 2018 ClinGen SVI PVS1 decision tree for nonsense, frameshift, canonical splice, initiation codon/start-loss, exon-level deletion/duplication, whole-gene deletion, NMD escape, altered-protein consequence, rescue transcript, and LoF applicability branches. Output should be `PVS1`, `PVS1_Strong`, `PVS1_Moderate`, `PVS1_Supporting`, `PVS1_N/A`, or `applied_evidence: none` with `status: not_assessed`.
-
-Apply PVS1 at full strength only when the LoF decision tree supports it: predicted null variant + LoF is known mechanism for the exact gene-disease context + the PTC is expected to undergo NMD or the whole-gene/exon event is LoF-equivalent + no rescue transcript or alternative initiation model preserves clinically relevant function. Under the Abou Tayoun et al. 2018 baseline tree, NMD is generally not predicted when the PTC occurs in the 3' most exon or within the 3' most 50 nucleotides of the penultimate exon. Downgrade PVS1 through the truncated-protein branch when NMD is not predicted, and apply additional transcript-specific NMD escape rules only when supported by a VCEP or separate current source. Treat LoFTEE as supporting annotation, not as a substitute for direct transcript-structure review. Do NOT apply PVS1 if LOF mechanism is uncertain.
-
-If the disease mechanism is dominant-negative, mixed, or not explicitly resolved, use `tooluniverse-acmg-dominant-negative-mechanism-refinement` before applying PVS1. A null allele in a dominant-negative disease gene should not automatically receive PVS1 unless haploinsufficiency/LoF is established for that exact gene-disease context. If the gene has separate recessive LoF and dominant missense/in-frame disease contexts, keep them separate in the evidence table and state which context receives PVS1.
-
-**RNA/splicing refinement**: When RNA assay evidence, published RNA-splicing evidence, in-frame exon skipping, partial/complex aberrant transcript profiles, or Walker 2023 splicing-specific evidence affects PVS1 or BP7, use `tooluniverse-acmg-pvs1-splicing-refinement` after the 2018 LoF decision-tree branch is identified. RNA evidence demonstrating LoF transcript(s) is captured as `PVS1_Strength (RNA)`, RNA evidence demonstrating no splicing impact may support `BP7_Strong (RNA)`, and the same RNA-splicing evidence should not be double-counted as PS3/BS3 or PP3/BP4. If PS1-splicing similarity is also considered, direct RNA observations override prediction-based same-event assumptions; use PS1 only when the comparison variant evidence is independent.
+Use dominant-negative/mechanism refinement before PVS1 when LoF/HI applicability is uncertain or the gene-disease context has DN, GoF, recessive LoF, or mixed mechanisms. Use PS1-splicing only for independent comparison-variant evidence and let Evidence Compatibility Resolution remove duplicate PP3/PS3/BS3/RNA uses.
 
 ```python
 EnsemblVEP_annotate_hgvs(hgvs_notation="...")   # splice_donor_variant, splice_acceptor_variant
@@ -302,7 +291,7 @@ Hard-stop rule: if any evidence row in the final counted table lacks a valid rou
 
 After the hard-stop audit passes, run Evidence Compatibility Resolution through `tooluniverse-acmg-overlay-routing-core` before any final combination.
 
-This gate does not assign evidence strength. It resolves already-routed evidence before combine by keeping, dropping, capping, splitting, deferring to VCEP, or blocking incompatible evidence.
+This gate does not assign evidence strength. It resolves already-routed evidence before combine by keeping, dropping, capping, splitting, deferring to VCEP, or blocking incompatible evidence. The complete compatibility matrix lives in `tooluniverse-acmg-overlay-routing-core`; do not duplicate or locally reinterpret it here.
 
 Required outputs:
 
@@ -311,21 +300,6 @@ Required outputs:
 - `caps_applied`: PM1+PP3, PP1+PP4, PM3 homozygous, PS2/PM6 high-heterogeneity, or VCEP caps.
 - `context_splits`: separate disease, inheritance, mechanism, or transcript contexts that require separate classifications.
 - `unresolved_conflicts`: unresolved conflicts that block final classification.
-
-Use these compatibility rules unless a current VCEP explicitly supersedes them:
-
-- BA1 valid excludes PM2/BS1; BS1/BS2 exclude PM2 for the same frequency or healthy-carrier rationale.
-- Do not combine evidence across mutually exclusive diseases, inheritance models, mechanisms, or transcript contexts; split classifications when needed.
-- PVS1 canonical splice excludes same-mechanism PP3; `PVS1_Strength (RNA)` excludes PS3 and same-mechanism PP3/BP4; `BP7_Strong (RNA)` excludes BS3 and contradicted PS1-splicing.
-- PVS1 and PM4 cannot consume the same protein-length or LoF consequence; PM4 and BP3 are mutually exclusive; whole-gene deletion should not be double-counted as both PVS1 and separate CNV dosage evidence unless allowed.
-- PS3/BS3 excludes the same assay, DMS, or MAVE source as PP3/BP4; multiple assays are not stacked unless VCEP, OddsPath, or a validated combination rule permits it.
-- PP2 and BP1 are mutually exclusive; PM1/PP2/PP3 follows the PM1 overlay priority and PM1+PP3 cap; PM1/PM5/PM4 cannot reuse the same residue/domain rationale unless independent.
-- PS1 and PM5 cannot both use the same comparison relationship; protein-level PS1/PM5 cannot use comparison variants whose pathogenicity is splicing/DNA/RNA-mediated.
-- The same proband or individual cannot support PS4 plus PM3, PS2/PM6, PP1, or PP4.
-- PP1/PP4 combined evidence is capped at +5.0 and cannot mix Biesecker points with informative-meioses fallback for the same pedigree.
-- PM3 circularity, duplicate probands, homozygous cap, and PS2/PM6 high-genetic-heterogeneity cap must be resolved before final combine.
-- PP5/BP6 source labels, abstract-only evidence, inaccessible full text, unread supplements, and low-confidence figure/OCR evidence cannot enter `current_counted_evidence_resolved`.
-- Literature-backed counted evidence must include `literature_provenance` with full-text, supplement, and figure/table status. Abstract-only sources are retained as leads and should trigger full-text/supplement retrieval or a user PDF request; they are not counted unless a current VCEP explicitly allows abstract-level use and the exception is recorded in route audit.
 
 If `unresolved_conflicts` is not empty, report `draft classification` and do not run ACMG qualitative or Bayesian final combine.
 

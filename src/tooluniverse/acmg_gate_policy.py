@@ -16,6 +16,13 @@ ACMG_GATE_NOTICE = (
     "validator_status: PASS."
 )
 
+SOURCE_LEAD_NOTICE = (
+    "Automated classifier, database label, predictor score, or annotation output "
+    "is a source lead or route trigger only. It is not ACMG counted evidence "
+    "until routed through an overlay or in-scope VCEP and validated in an "
+    "acmg_assessment_bundle."
+)
+
 HIGH_RISK_ACMG_GATE_TOOLS = {
     "GeneBe_classify_variant",
     "GeneBe_classify_variants_batch",
