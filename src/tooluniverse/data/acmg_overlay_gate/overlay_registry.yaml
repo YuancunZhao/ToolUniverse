@@ -198,6 +198,7 @@ overlays:
   - healthy adult carriers or unaffected individuals
   - cis/trans benign phase evidence
   - alternate molecular diagnosis proposed to explain the phenotype
+  - user context mentions unaffected adult carrier, healthy homozygote, observed in unaffected, alternate diagnosis, another molecular diagnosis, cis, trans, or phase evidence
   - BA1 blocked but frequency may still support BS1
   cross_routes:
   - criterion: BP1
@@ -463,6 +464,7 @@ overlays:
   - literature family series or figures with genotype-phenotype relationships
   - PP1, BS4, or PP4 locus evidence proposed from family data
   - diagnostic-yield PP4 and segregation evidence may share the same locus, family, or individuals
+  - user context mentions segregation, affected relatives, co-segregation, pedigree, or cascade testing
   enforcement_level: must_route_if_hit
   route_kind: evidence_scoring
   expected_default_status: not_assessed
@@ -492,6 +494,7 @@ overlays:
   - in trans, phase unknown, one-parent-supported, homozygous, or compound heterozygous evidence
   - VUS on the other allele or PM3 point scoring
   - proband phase, genotype, or circularity affects recessive evidence
+  - user context mentions compound heterozygous, in trans, phase confirmed, biallelic, or recessive affected proband evidence
   enforcement_level: must_route_if_hit
   route_kind: evidence_scoring
   expected_default_status: not_assessed
@@ -519,6 +522,7 @@ overlays:
   - PS2, PM6, recurrent de novo, phenotype specificity, or SVI de novo point scoring
   - trio data, family data, or literature case data propose de novo evidence
   - inheritance model or phenotype specificity affects de novo strength
+  - user context mentions de novo, trio, parents negative, maternity/paternity confirmed, parentage confirmed, or parental mosaicism
   enforcement_level: must_route_if_hit
   route_kind: evidence_scoring
   expected_default_status: not_assessed
@@ -652,6 +656,7 @@ overlays:
   - literature case phenotype or disease ascertainment must be extracted before criterion scoring
   - PP4, BP5, BS2, PM3, PS2, PM6, PP1, BS4, or rare-disease PS4 lacks required clinical context
   - phenotype specificity or diagnostic yield affects evidence routing
+  - user context mentions HPO terms, highly specific phenotype, unaffected adult carrier, healthy homozygote, affected relatives, phase, de novo, or alternate diagnosis
   enforcement_level: must_route_if_hit
   route_kind: evidence_intake
   expected_default_status: not_assessed

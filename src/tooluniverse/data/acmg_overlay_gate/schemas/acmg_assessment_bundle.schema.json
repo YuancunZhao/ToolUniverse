@@ -32,7 +32,21 @@
     },
     "classification": {
       "type": "string",
-      "description": "Optional ACMG five-tier label. Must be interpreted only when classification_status is final classification and the validator returns PASS."
+      "description": "Optional ACMG five-tier label. Must be interpreted only when classification_status is final classification, validator_status is PASS, semantic_combiner_status is PASS, and final_classification_allowed is true."
+    },
+    "semantic_combiner_status": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "NOT_APPLICABLE"],
+      "description": "Optional persisted semantic combiner result. The validator also recomputes this field."
+    },
+    "computed_classification": {
+      "type": ["string", "null"],
+      "description": "Classification recomputed from compatibility-resolved counted evidence by the conservative semantic combiner."
+    },
+    "semantic_violations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Reasons the reported final label is unsupported by resolved counted evidence."
     },
     "disease_context": {
       "$ref": "#/$defs/diseaseContext"

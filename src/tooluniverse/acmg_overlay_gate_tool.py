@@ -151,18 +151,45 @@ class ACMGOverlayGateTool(BaseTool):
         }
 
     def _run_finalize_assessment(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute final-classification gate status.
+
+        final_allowed requires ALL of:
+          - validator_status == "PASS" (policy/trace + semantic combiner integrated)
+          - semantic_combiner_status == "PASS" (explicit re-check for readability)
+          - final_classification_allowed is True
+          - bundle requests final classification
+          - compatibility-resolved counted evidence is non-empty
+          - literature is reviewed / not needed
+        """
         bundle = self._extract_bundle(arguments)
         validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
         validator_status = validation["validator_status"]
+        validator_result = validation.get("validator_result") or {}
+        semantic_status = validator_result.get("semantic_combiner_status") if isinstance(validator_result, dict) else None
+
         bundle_final_requested = self._bundle_requests_final_classification(bundle)
         counted = self._bundle_counted_evidence(bundle)
         literature_ready = self._bundle_literature_final_ready(bundle)
-        final_allowed = validator_status == "PASS" and bundle_final_requested and bool(counted) and literature_ready
+
+        gates_pass = (
+            validator_status == "PASS"
+            and semantic_status == "PASS"
+            and bundle_final_requested
+            and bool(counted)
+            and literature_ready
+        )
+        final_allowed = gates_pass
+
         blocked = self._missing_for_final_from_validation(validation, bundle_final_requested)
+        if validator_status != "PASS":
+            blocked.append("validator_status is not PASS")
+        if semantic_status != "PASS":
+            blocked.append("semantic_combiner_status is not PASS")
         if not counted:
             blocked.append("no compatibility-resolved counted evidence")
         if not literature_ready:
             blocked.append("literature hits are not fully reviewed or no literature coverage is documented")
+
         return {
             "status": "success",
             "tool_role": "ACMG finalization gate; not an ACMG classifier",
@@ -170,12 +197,13 @@ class ACMGOverlayGateTool(BaseTool):
             "not_final_entrypoint": True,
             "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
             "validator_status": validator_status,
+            "semantic_combiner_status": semantic_status,
             "final_classification_allowed": final_allowed,
             "final_answer_policy": "allowed" if final_allowed else "forbidden",
             "allowed_response": "final classification" if final_allowed else "draft classification only",
             "counted_evidence": counted,
             "blocked_reasons": blocked,
-            "validator_result": validation.get("validator_result"),
+            "validator_result": validator_result,
             "violations": validation.get("violations", []),
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
@@ -184,14 +212,22 @@ class ACMGOverlayGateTool(BaseTool):
         text = str(arguments.get("final_answer_text") or arguments.get("answer") or "")
         harness_result = arguments.get("harness_result") or arguments.get("workflow_result") or {}
         has_final_label = self._contains_final_acmg_label(text)
-        allowed = isinstance(harness_result, dict) and harness_result.get("final_classification_allowed") is True
+        allowed = (
+            isinstance(harness_result, dict)
+            and harness_result.get("validator_status") == "PASS"
+            and harness_result.get("semantic_combiner_status") == "PASS"
+            and harness_result.get("final_classification_allowed") is True
+        )
         validator_pass = isinstance(harness_result, dict) and harness_result.get("validator_status") == "PASS"
+        semantic_pass = isinstance(harness_result, dict) and harness_result.get("semantic_combiner_status") == "PASS"
         evidence_without_overlay = self._contains_counted_evidence_without_overlay(text, harness_result)
         violations = []
         if has_final_label and not allowed:
             violations.append("final_acmg_label_without_final_classification_allowed_true")
         if has_final_label and not validator_pass:
             violations.append("final_acmg_label_without_validator_pass")
+        if has_final_label and not semantic_pass:
+            violations.append("final_acmg_label_without_semantic_combiner_pass")
         if evidence_without_overlay:
             violations.append("counted_evidence_without_overlay_applied_or_vcep")
         status = "FAIL" if violations else "PASS"
@@ -419,7 +455,40 @@ class ACMGOverlayGateTool(BaseTool):
     def _contains_final_acmg_label(self, text: str) -> bool:
         if not text:
             return False
-        return bool(re.search(r"\b(Pathogenic|Likely Pathogenic|VUS|Likely Benign|Benign)\b", text, re.IGNORECASE))
+        full_label = re.compile(
+            r"\b("
+            r"Likely\s+Pathogenic|Likely\s+Benign|"
+            r"Pathogenic|Benign|VUS|"
+            r"Variants?\s+of\s+(?:Uncertain|Unknown)\s+Significance|"
+            r"Uncertain\s+Significance"
+            r")\b",
+            re.IGNORECASE,
+        )
+        paired_abbreviation = re.compile(
+            r"(?<![A-Za-z0-9])(?:P\s*/\s*LP|LP\s*/\s*P|LB\s*/\s*B|B\s*/\s*LB)(?![A-Za-z0-9])",
+            re.IGNORECASE,
+        )
+        standalone_abbreviation = re.compile(
+            r"(?<![A-Za-z0-9])(?:LP|LB|VUS)(?![A-Za-z0-9])"
+            r"(?!(?:\s+(?:score|value|cell|phenotype|domain|gene|frequency|population|protein))\b)",
+            re.IGNORECASE,
+        )
+        contextual_single_letter = re.compile(
+            r"\b(?:ACMG(?:\s+classification)?|final(?:\s+classification)?|classification|"
+            r"classified\s+as|result|verdict)\b"
+            r"\s*(?::|=|\bis\b|\bas\b)?\s*[\"]?(?:P|B)[\"]?"
+            r"(?=$|[\s.;,)\]])",
+            re.IGNORECASE,
+        )
+        return any(
+            pattern.search(text)
+            for pattern in (
+                full_label,
+                paired_abbreviation,
+                standalone_abbreviation,
+                contextual_single_letter,
+            )
+        )
 
     def _contains_counted_evidence_without_overlay(self, text: str, harness_result: Any) -> bool:
         if not re.search(r"\b(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:_[A-Za-z]+)?\b", text):
@@ -566,7 +635,69 @@ class ACMGOverlayGateTool(BaseTool):
         return False
 
     def _select_discovery_routes(self, entries: List[Dict[str, Any]], arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return []
+        context_routes = self._user_context_route_candidates(arguments)
+        if not context_routes:
+            return []
+        by_group = {str(entry.get("criterion_group")): entry for entry in entries}
+        selected = []
+        for route in context_routes:
+            group = str(route.get("criterion_group"))
+            entry = by_group.get(group)
+            row = self._route_row(entry) if entry else {"criterion_group": group}
+            row.update({
+                "source_type": "user_context",
+                "route_outcome": route.get("route_outcome", "overlay_required"),
+                "counted": False,
+                "trigger_text": route.get("trigger_text"),
+                "reason": route.get("reason"),
+            })
+            selected.append(row)
+        return selected
+
+    def _user_context_route_candidates(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        context_text = "\n".join(
+            self._stringify_context(arguments.get(key))
+            for key in (
+                "family_context",
+                "phenotype_context",
+                "disease_context",
+                "inheritance_context",
+                "zygosity",
+                "phase_context",
+            )
+            if arguments.get(key) is not None
+        )
+        triggers = (
+            ("de_novo_ps2_pm6", re.compile(r"\b(de novo|trio|parents?\s+negative|parental testing|maternity|paternity|parentage|mosaicism)\b", re.IGNORECASE)),
+            ("pp1_bs4_pp4_segregation", re.compile(r"\b(segregation|co-segregation|cosegregation|affected relatives?|pedigree|cascade)\b", re.IGNORECASE)),
+            ("pm3_in_trans", re.compile(r"\b(compound heterozyg|in trans|phase confirmed|phased|biallelic|trans configuration)\b", re.IGNORECASE)),
+            ("phenotype_dependent_pp4", re.compile(r"\b(HPO|phenotype specificity|highly specific phenotype|specific phenotype|diagnostic yield)\b", re.IGNORECASE)),
+            ("benign_context_bs2", re.compile(r"\b(unaffected adult carrier|healthy homozygote|healthy carrier|observed in unaffected|unaffected individual)\b", re.IGNORECASE)),
+            ("benign_context_bp5", re.compile(r"\b(alternate diagnosis|alternative diagnosis|another molecular diagnosis|explains phenotype)\b", re.IGNORECASE)),
+        )
+        routes = []
+        for group, pattern in triggers:
+            match = pattern.search(context_text)
+            if match:
+                routes.append({
+                    "criterion_group": group,
+                    "source_type": "user_context",
+                    "route_outcome": "overlay_required",
+                    "counted": False,
+                    "trigger_text": match.group(0),
+                    "reason": "User context can trigger route planning only; criterion-specific validator must pass before evidence can be counted.",
+                })
+        return routes
+
+    def _stringify_context(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        try:
+            return json.dumps(value, ensure_ascii=False, sort_keys=True)
+        except TypeError:
+            return str(value)
 
     def _recommended_tool_calls(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = [dict(row) for row in RECOMMENDED_ACMG_INTAKE_TOOLS]

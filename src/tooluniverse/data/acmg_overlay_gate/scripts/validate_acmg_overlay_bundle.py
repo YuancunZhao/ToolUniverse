@@ -8,6 +8,7 @@ ToolUniverse tools, assign ACMG strengths, or compute final classifications.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
@@ -80,6 +81,19 @@ COUNTED_EVIDENCE_COVERAGE_REQUIREMENTS = {
     "PP4": {"clinical_context", "literature"},
     "PS4": {"literature"},
 }
+
+
+def _load_semantic_combiner():
+    path = Path(__file__).resolve().with_name("acmg_semantic_combiner.py")
+    spec = importlib.util.spec_from_file_location("acmg_semantic_combiner", path)
+    module = importlib.util.module_from_spec(spec) if spec and spec.loader else None
+    if module is None or spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load acmg_semantic_combiner.py")
+    spec.loader.exec_module(module)
+    return module
+
+
+SEMANTIC_COMBINER = _load_semantic_combiner()
 
 
 def severity_rank(status: str) -> int:
@@ -533,6 +547,13 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
         for category in ("population", "computational", "functional_database"):
             if category not in categories:
                 add(DRAFT_ONLY, "missing_missense_coverage_audit", f"Missense assessment lacks `{category}` coverage audit.")
+        for row in coverage:
+            if not isinstance(row, dict) or str(row.get("source_category", "")) != "functional_database":
+                continue
+            if row.get("query_status") == "not_applicable":
+                reason = str(row.get("not_applicable_reason") or row.get("explicit_reason") or row.get("reason") or "")
+                if not re.search(r"\b(non-missense|not\s+a\s+missense|variant\s+type|context\s+inapplicable|database\s+not\s+relevant)\b", reason, re.IGNORECASE):
+                    add(DRAFT_ONLY, "missense_functional_database_not_applicable_without_explicit_reason", "Missense functional_database coverage cannot be not_applicable without an explicit variant/context inapplicability reason.")
 
     for row in coverage:
         if not isinstance(row, dict):
@@ -605,12 +626,17 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
             if not any(counted_row_matches_resolved(row, resolved) for row in valid_counted_rows):
                 add(DRAFT_ONLY, "resolved_evidence_without_counted_audit_match", "Resolved counted evidence must match at least one counted route_audit row.")
 
+    semantic = SEMANTIC_COMBINER.validate_bundle_semantics(bundle)
+    if final_requested and semantic["semantic_combiner_status"] == FAIL:
+        for violation in semantic["semantic_violations"]:
+            add(FAIL, "semantic_combiner_validation_failed", violation)
+
     if status != PASS and final_requested and str(bundle.get("classification_status", "")).lower() == "final classification":
         # DRAFT_ONLY is the normal downgrade for incomplete traces. FAIL remains
         # reserved for direct bypass patterns such as counted source labels.
         pass
 
-    return {"status": status, "violations": violations}
+    return {"status": status, "violations": violations, **semantic}
 
 
 def validate_minimal(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
@@ -707,12 +733,50 @@ def validate_minimal(payload: Any, registry: list[dict[str, Any]]) -> dict[str, 
             if not any(counted_row_matches_resolved(row, resolved) for row in valid_counted_rows):
                 add(DRAFT_ONLY, "resolved_evidence_without_counted_audit_match", "Resolved counted evidence must match at least one counted route_audit row.")
 
-    return {"status": status, "violations": violations}
+    semantic = SEMANTIC_COMBINER.validate_bundle_semantics(bundle)
+    if final_requested and semantic["semantic_combiner_status"] == FAIL:
+        for violation in semantic["semantic_violations"]:
+            add(FAIL, "semantic_combiner_validation_failed", violation)
+
+    return {"status": status, "violations": violations, **semantic}
+
+
+def run_fixture_dir(fixtures_dir: Path, registry_path: Path, mode: str, pretty: bool) -> int:
+    results = []
+    failed = 0
+    for fixture in sorted(fixtures_dir.glob("*.json")):
+        payload = load_json(fixture)
+        expected = str(payload.get("expected_validator_status", "")).strip().upper()
+        registry = load_registry(registry_path)
+        result = validate_minimal(payload, registry) if mode == "minimal" else validate(payload, registry)
+        actual = result["status"]
+        ok = actual == expected
+        failed += 0 if ok else 1
+        results.append(
+            {
+                "fixture": fixture.name,
+                "expected": expected,
+                "actual": actual,
+                "ok": ok,
+                "semantic_combiner_status": result.get("semantic_combiner_status"),
+                "computed_classification": result.get("computed_classification"),
+                "reported_classification": result.get("reported_classification"),
+                "violations": result.get("violations", []),
+            }
+        )
+    summary = {
+        "status": PASS if failed == 0 else FAIL,
+        "fixture_count": len(results),
+        "results": results,
+    }
+    json.dump(summary, sys.stdout, ensure_ascii=False, indent=2 if pretty else None, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0 if failed == 0 else 1
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate a ToolUniverse ACMG overlay assessment bundle.")
-    parser.add_argument("output_json", type=Path, help="Agent output JSON or raw ACMG assessment bundle JSON.")
+    parser.add_argument("output_json", type=Path, nargs="?", help="Agent output JSON or raw ACMG assessment bundle JSON.")
     parser.add_argument(
         "--registry",
         type=Path,
@@ -726,7 +790,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Validation profile. strict is the default gate; minimal only runs lightweight anti-bypass checks.",
     )
     parser.add_argument("--pretty", action="store_true", help="Pretty-print validation JSON.")
+    parser.add_argument("--fixtures", type=Path, help="Run every JSON fixture in this directory and compare expected_validator_status.")
     args = parser.parse_args(argv)
+
+    if args.fixtures:
+        return run_fixture_dir(args.fixtures, args.registry, args.mode, args.pretty)
+
+    if args.output_json is None:
+        parser.error("output_json is required unless --fixtures is supplied")
 
     payload = load_json(args.output_json)
     registry = load_registry(args.registry)

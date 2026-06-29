@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tooluniverse.org/schemas/acmg-overlay-result.schema.json",
+  "title": "ToolUniverse ACMG Overlay Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "overlay_skill",
+    "criterion",
+    "applied_evidence",
+    "status",
+    "guidance_authority",
+    "reason",
+    "consumed_evidence",
+    "source_of_truth"
+  ],
+  "properties": {
+    "overlay_skill": {
+      "type": "string",
+      "pattern": "^tooluniverse-acmg-[a-z0-9-]+$"
+    },
+    "criterion": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_/+-]+$"
+    },
+    "applied_evidence": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Use 'none' when no evidence is applied."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "applied",
+        "no_evidence",
+        "not_assessed",
+        "not_applicable",
+        "not_used"
+      ]
+    },
+    "guidance_authority": {
+      "type": "string",
+      "enum": [
+        "ClinGen/SVI primary",
+        "ACMG/AMP baseline",
+        "VCEP-specific",
+        "practice/local refinement",
+        "source lead only"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "consumed_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "routed_to": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_of_truth": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rule_path": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocking_reasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "needs_manual_review": {
+      "type": "boolean"
+    },
+    "literature_provenance": {
+      "$ref": "#/$defs/literatureProvenance"
+    }
+  },
+  "$defs": {
+    "literatureProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_text_status",
+        "supplement_status",
+        "figure_status",
+        "counted_evidence_allowed",
+        "reason"
+      ],
+      "properties": {
+        "pmid": {
+          "type": "string"
+        },
+        "doi": {
+          "type": "string"
+        },
+        "full_text_status": {
+          "type": "string",
+          "enum": [
+            "full_text_read",
+            "abstract_only",
+            "source_unavailable",
+            "not_needed"
+          ]
+        },
+        "supplement_status": {
+          "type": "string",
+          "enum": [
+            "supplement_read",
+            "unavailable",
+            "not_needed"
+          ]
+        },
+        "figure_status": {
+          "type": "string",
+          "enum": [
+            "figure_readable",
+            "not_interpretable",
+            "not_needed"
+          ]
+        },
+        "counted_evidence_allowed": {
+          "type": "boolean"
+        },
+        "vcep_allows_abstract_level_use": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tooluniverse.org/schemas/acmg-overlay-bundle-route-plan.schema.json",
+  "title": "ToolUniverse ACMG Overlay Bundle Route Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "bundle_route_plan"],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "bundle_route_plan": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundle",
+          "trigger_found",
+          "required_overlays",
+          "required_checks",
+          "coverage_required",
+          "status",
+          "reason",
+          "expanded_route_rows_required"
+        ],
+        "properties": {
+          "bundle": {
+            "type": "string",
+            "enum": [
+              "baseline_context_bundle",
+              "population_frequency_bundle",
+              "consequence_lof_bundle",
+              "splice_bundle",
+              "missense_bundle",
+              "protein_length_bundle",
+              "clinical_observation_bundle",
+              "literature_functional_bundle",
+              "cnv_sv_bundle",
+              "final_combine_bundle"
+            ]
+          },
+          "trigger_found": {
+            "type": "boolean"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "required_overlays": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^tooluniverse-acmg-[a-z0-9-]+$"
+            },
+            "default": []
+          },
+          "required_checks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "coverage_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "not_triggered",
+              "completed",
+              "blocked",
+              "expanded"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expanded_route_rows_required": {
+            "type": "boolean"
+          },
+          "expanded_route_row_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "missing_inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          }
+        }
+      }
+    }
+  }
+}

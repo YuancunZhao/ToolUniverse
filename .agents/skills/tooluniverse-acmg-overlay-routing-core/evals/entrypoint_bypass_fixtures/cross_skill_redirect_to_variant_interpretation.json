@@ -1,0 +1,6 @@
+{
+  "id": "cross_skill_redirect_to_variant_interpretation",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "A cross-skill instruction routes final ACMG classification to the intake-only variant-interpretation skill.",
+  "text": "For ACMG pathogenicity classification, use tooluniverse-variant-interpretation. It can provide ACMG classification and clinical significance."
+}

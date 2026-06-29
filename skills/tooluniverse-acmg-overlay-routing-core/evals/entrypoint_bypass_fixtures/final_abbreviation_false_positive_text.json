@@ -1,0 +1,5 @@
+{
+  "id": "final_abbreviation_false_positive_text",
+  "expected_entrypoint_status": "PASS",
+  "text": "Non-final shorthand-like biomedical text:\nLP score\nB cell phenotype\nP value\nprotein B domain\nthe variant is in gene B\npopulation frequency"
+}

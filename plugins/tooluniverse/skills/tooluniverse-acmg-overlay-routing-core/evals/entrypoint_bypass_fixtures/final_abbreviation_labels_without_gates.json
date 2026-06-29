@@ -1,0 +1,5 @@
+{
+  "id": "final_abbreviation_labels_without_gates",
+  "expected_entrypoint_status": "FAIL",
+  "text": "ACMG shorthand final-label bypass cases without validator gates:\nLP\nThis variant is LP.\nACMG classification: LP\nfinal classification = LP\nLikely pathogenic (LP)\nP/LP\nLB\nACMG classification: LB\nLikely benign (LB)\nLB/B\nclassification: P\nclassification: B\nvariant of unknown significance"
+}

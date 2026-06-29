@@ -643,7 +643,7 @@ Research Skills
       :class-card: hover-lift
       :shadow: md
 
-      Systematic clinical variant interpretation from raw variant calls to ACMG-classified recommendations with structural impact analysis.
+      Variant evidence intake from raw variant calls to source, structural, and route-candidate summaries for overlay-gated ACMG workflows.
 
       +++
       :bdg-info:`tooluniverse-variant-interpretation`

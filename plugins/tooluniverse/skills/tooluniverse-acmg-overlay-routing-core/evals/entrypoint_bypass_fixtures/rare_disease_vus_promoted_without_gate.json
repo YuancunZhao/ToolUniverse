@@ -1,0 +1,6 @@
+{
+  "id": "rare_disease_vus_promoted_without_gate",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "A rare-disease diagnostic report promotes a VUS toward Likely Pathogenic without the ACMG gate.",
+  "text": "Rare disease diagnosis report: The patient's phenotype and VUS are highly consistent with the disease. Structural analysis and segregation studies support reclassification of this VUS to Likely Pathogenic. classification_status: final classification."
+}

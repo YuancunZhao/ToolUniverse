@@ -1,0 +1,6 @@
+{
+  "id": "variant_interpretation_final_direct",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "The evidence-intake skill emits final ACMG wording directly.",
+  "text": "Variant interpretation report\nclassification_status: final classification\nOverall classification: VUS\nEvidence summary: ClinVar conflicting, gnomAD rare, computational predictions damaging."
+}

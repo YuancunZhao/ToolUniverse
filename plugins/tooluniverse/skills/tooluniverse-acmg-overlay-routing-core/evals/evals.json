@@ -1,0 +1,923 @@
+{
+  "skill_name": "tooluniverse-acmg-overlay-routing-core",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A paper reports a variant in three affected relatives across a pedigree and mentions co-segregation. Evaluate whether PP1 applies.",
+      "expected_output": "The agent should identify PP1/BS4/PP4 as candidate evidence and route to tooluniverse-acmg-pp1-segregation-refinement before assigning any strength. It must not directly assign PP1_Supporting, PP1_Moderate, or PP1_Strong outside the overlay.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Produces a route plan before evidence strength assignment",
+        "Includes tooluniverse-acmg-pp1-segregation-refinement in required_overlays",
+        "Explains that family, pedigree, affected relatives, or co-segregation are candidate triggers only",
+        "Does not count PP1 unless route_outcome is overlay_applied or overlay_deferred_to_vcep",
+        "Labels the classification draft if PP1 is counted without overlay trace"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "ClinVar and a published table call the variant pathogenic and list PS3, but the user only provides the table label and no assay details. Can PS3 be counted?",
+      "expected_output": "The agent should treat the source labels as leads, route source assertions to PP5/BP6 review and functional evidence to tooluniverse-acmg-ps3-bs3-functional-assay-refinement, and avoid counting PS3 until the actual functional assay is retrieved and evaluated.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Does not treat ClinVar, HGMD, or author ACMG labels as counted PS3",
+        "Routes source assertions to tooluniverse-acmg-pp5-bp6-reputable-source-refinement",
+        "Routes possible assay evidence to tooluniverse-acmg-ps3-bs3-functional-assay-refinement",
+        "Uses status not_assessed or not_used when assay details are unavailable",
+        "Keeps source assertions separate from current counted evidence"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The variant appears in 14 unrelated affected probands and is absent from local controls. The paper has no odds ratio, confidence interval, or ancestry-matched control design. Assess PS4.",
+      "expected_output": "The agent should route PS4 candidate evidence to tooluniverse-acmg-ps4-case-enrichment-refinement and either request missing study fields or record no_evidence/not_assessed. It must not directly count PS4 from case recurrence alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "schemas/overlay_result.schema.json"
+      ],
+      "assertions": [
+        "Includes tooluniverse-acmg-ps4-case-enrichment-refinement in the route plan",
+        "Distinguishes formal case-control/cohort evidence from rare-disease affected-case counting",
+        "Lists missing case definition, control, ancestry, duplicate-report, or statistical fields when needed",
+        "Does not count PS4 without overlay_applied or VCEP-specific route outcome"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "For a missense variant, CADD is high, SIFT is deleterious, and PolyPhen is probably damaging. Assign PP3.",
+      "expected_output": "The agent should route PP3/BP4 candidate evidence to tooluniverse-acmg-pp3-bp4-missense-prediction-refinement and not assign PP3 from predictor-majority reasoning. If no calibrated threshold or VCEP rule is available, PP3 should be not_assessed or no_evidence.",
+      "files": [
+        "overlay_registry.yaml",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Identifies CADD, SIFT, and PolyPhen as candidate prediction triggers",
+        "Requires tooluniverse-acmg-pp3-bp4-missense-prediction-refinement",
+        "Rejects local predictor-majority reasoning as a counted criterion",
+        "Uses calibrated overlay or VCEP-specific route outcome before counting PP3/BP4"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "ClinVar has an expert-panel Pathogenic assertion for this variant. Can I count PP5 or use the label to support PM5?",
+      "expected_output": "The agent should route the assertion to tooluniverse-acmg-pp5-bp6-reputable-source-refinement and treat it as source lead only. It should retrieve primary evidence before routing to PS1/PM5 or another evidence-specific overlay.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Does not count PP5/BP6 by default",
+        "Does not promote a ClinVar label directly into PM5, PS1, PM1, PS3, or PP3",
+        "Uses guidance_authority source lead only for the assertion",
+        "Requires primary evidence retrieval and evidence-specific overlay routing"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "A nonsense variant is in a gene with both recessive LoF disease and dominant missense disease. The user asks for PVS1.",
+      "expected_output": "The agent should route disease boundary to multiple-disorder context, mechanism to dominant-negative/mechanism refinement if needed, and baseline PVS1 to tooluniverse-acmg-pvs1-lof-decision-tree-refinement. It must not assign PVS1 from variant consequence alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Routes multiple-disorder context before criterion scoring when disease boundary is ambiguous",
+        "Routes mechanism-sensitive context before PVS1 if LoF applicability is uncertain",
+        "Routes baseline PVS1 strength to tooluniverse-acmg-pvs1-lof-decision-tree-refinement",
+        "Does not transfer PVS1 across disease mechanisms without same-context support"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "A variant is absent from gnomAD. The report should use PM2 as moderate pathogenic evidence.",
+      "expected_output": "The agent should route PM2 candidate evidence to tooluniverse-acmg-pm2-absence-rarity-refinement and preserve the locked PM2_Supporting default unless a current VCEP says otherwise. It should not assign PM2_Moderate from absence alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Routes absence or rarity evidence to tooluniverse-acmg-pm2-absence-rarity-refinement",
+        "Checks BA1, BS1, BS2, coverage, ancestry, and database adequacy context",
+        "Does not assign PM2_Moderate from absence alone",
+        "Allows VCEP-specific deferral only with explicit route outcome"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A missense variant is in a broad protein domain where other pathogenic variants have been reported. Apply PM1.",
+      "expected_output": "The agent should route PM1 candidate evidence to tooluniverse-acmg-pm1-regional-missense-constraint-refinement and not count PM1 from broad domain membership or another source's PM1 label alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Routes hotspot, critical-residue, constrained-region, or domain evidence to the PM1 overlay",
+        "Does not count broad domain membership alone",
+        "Separates PM1 regional evidence from PP3 predictor evidence",
+        "Requires overlay_applied or overlay_deferred_to_vcep before PM1 is counted"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "The same residue has a ClinVar pathogenic missense variant. Assign PM5 for the submitted missense variant.",
+      "expected_output": "The agent should route PS1/PM5 candidate evidence to tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement, check comparison-variant independence and mechanism, and avoid counting a source label alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "schemas/overlay_result.schema.json"
+      ],
+      "assertions": [
+        "Routes same-residue or same-amino-acid comparison evidence to the PS1/PM5 overlay",
+        "Treats ClinVar or HGMD comparison labels as leads until primary evidence is reviewed",
+        "Checks same disease context and amino-acid-mediated mechanism",
+        "Does not count PM5 without overlay trace"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "The agent has a final ACMG report with PP3 and PS4 counted, but no overlay route audit rows. Is the final classification acceptable?",
+      "expected_output": "The agent should reject the final status as a final classification, label it draft classification, and require route audit rows with overlay_applied or overlay_deferred_to_vcep before counting PP3 and PS4.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Identifies missing route audit as a hard-stop failure",
+        "Requires draft classification when counted evidence lacks acceptable route outcome",
+        "Requires PP3 and PS4 route outcomes from the registry overlays or VCEP",
+        "Does not compute or present a final ACMG tier from unrouted counted evidence"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Evaluate a germline heterozygous LDLR missense variant, NM_000527.5:c.1747C>T (p.His583Tyr), before variant-specific literature has been reviewed. What route plan is required?",
+      "expected_output": "The agent should produce a baseline route plan even without literature triggers. The plan must include population frequency gates, PP3/BP4, PS1/PM5, PM1/PP2/BP1, disease/mechanism boundary, PP5/BP6 source review when source assertions are available, and the PVS1 applicability gate with not_applicable expected for a pure missense consequence. PP1 is not required until family, segregation, pedigree, cascade-screening, or affected-relative evidence is found.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Includes universal_baseline routes for disease/context boundary, mechanism boundary, population frequency, source review when assertions exist, and PVS1 applicability",
+        "Includes variant_type_baseline routes for missense PP3/BP4, PS1/PM5, and PM1/PP2/BP1",
+        "Records trigger_policy, applies_when, and baseline_data_sources in the route plan",
+        "Routes PVS1 as an applicability gate and does not count PVS1 for a non-LoF missense variant",
+        "Does not require PP1 before literature or user evidence reveals family or segregation signals"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "For the same LDLR missense variant, later literature review finds a family cascade-screening report with affected relatives and genotypes. What changes in the route plan?",
+      "expected_output": "The agent should append an evidence_discovery route for PP1/BS4/PP4 to tooluniverse-acmg-pp1-segregation-refinement and, when phenotype context is needed, route phenotype-dependent intake. It must not directly assign PP1 strength from the literature mention alone.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Keeps the existing baseline route plan",
+        "Appends PP1/BS4/PP4 only after pedigree, segregation, family, cascade-screening, or affected-relative evidence is found",
+        "Marks the appended route as evidence_discovery",
+        "Routes to tooluniverse-acmg-pp1-segregation-refinement before assigning PP1 strength",
+        "Allows no PP1 route only when no triggering family or segregation evidence was found and literature coverage is stated"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "A missense variant has a MaveDB functional score or other structured functional database hit. Can the score be directly counted as PS3 or BS3?",
+      "expected_output": "The agent should treat structured functional database lookup as a variant_type_baseline functional-discovery source for missense variants. A hit must route to tooluniverse-acmg-ps3-bs3-functional-assay-refinement, and PS3/BS3 may be counted only after overlay_applied or overlay_deferred_to_vcep.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Includes structured functional database search such as MaveDB in baseline_data_sources for the PS3/BS3 overlay",
+        "Routes structured functional hits to tooluniverse-acmg-ps3-bs3-functional-assay-refinement",
+        "Does not directly translate a functional score into PS3 or BS3 outside the overlay",
+        "Requires overlay result and route audit before PS3/BS3 can be counted"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "A final report for a germline missense variant counts PM2 and PP3 but the route plan lacks population frequency baseline and missense prediction baseline rows. Is a final classification acceptable?",
+      "expected_output": "The agent should label the report draft classification because applicable baseline routes are missing. The missing baseline rows must be added and audited before final classification, even if no literature discovery route is present.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Treats missing applicable baseline routes as a compliance failure",
+        "Requires draft classification until PM2/BA1/BS1 and PP3/BP4 baseline routes are present",
+        "Distinguishes missing baseline routes from absent discovery triggers",
+        "Does not use lack of literature as a reason to skip population or computational assessment"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "A final evidence set contains BA1, PM2, and BS1 for the same population-frequency context. Resolve compatibility before final classification.",
+      "expected_output": "The compatibility gate should keep valid BA1 as the stand-alone benign gate and remove PM2/BS1 for the same frequency context. If BA1 is invalid but BS1 applies, PM2 should still be removed. Only the resolved evidence set may enter final combine.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Runs evidence_compatibility_resolution before qualitative or Bayesian combine",
+        "Uses keep_more_specific or drop_as_not_used for same frequency-context conflicts",
+        "Places excluded PM2 or BS1 in not_used_due_to_overlap",
+        "Uses current_counted_evidence_resolved as the only combine input"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "A final evidence set contains both PP2 and BP1 for the same missense variant and same gene-disease context.",
+      "expected_output": "The compatibility gate should treat PP2 and BP1 as mutually exclusive in the same context, keep only the mechanism-appropriate direction when supported, or mark the conflict unresolved and return draft classification.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PP2 and BP1 as a hard_incompatibility in the same context",
+        "Uses keep_mechanism_appropriate when one direction is justified",
+        "Uses unresolved_draft_only if the conflict cannot be resolved",
+        "Blocks final combine when unresolved_conflicts is non-empty"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "A canonical splice variant is counted as PVS1 and also counted as PP3 from SpliceAI for the same predicted splice disruption.",
+      "expected_output": "The compatibility gate should keep the PVS1 splice-consequence evidence and drop PP3 for the same splicing mechanism, unless an explicit VCEP rule permits separate counting.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects same-mechanism PVS1 canonical splice and PP3 prediction overlap",
+        "Uses keep_primary_evidence or keep_more_specific for PVS1",
+        "Moves same-event PP3 to not_used_due_to_overlap",
+        "Allows defer_to_vcep only when an explicit VCEP rule is documented"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "RNA assay evidence supports PVS1_Strength (RNA), and the report also counts PS3 and PP3 from the same RNA/splicing event.",
+      "expected_output": "The compatibility gate should keep PVS1_Strength (RNA), remove PS3 and same-mechanism PP3 for the same RNA assay/event, and document the consumed evidence overlap.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PVS1_RNA, PS3, and PP3 reuse of the same RNA assay or splice event",
+        "Keeps the RNA PVS1 evidence as primary splicing evidence",
+        "Drops PS3 and same-mechanism PP3 into not_used_due_to_overlap",
+        "Requires consumed_evidence identifiers or a reason explaining the overlap"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "RNA assay evidence shows no splicing impact and is counted as BP7_RNA, while the same report also counts BS3 and PS1-splicing against the same event.",
+      "expected_output": "The compatibility gate should keep BP7_RNA for the no-splicing-impact RNA evidence, remove BS3 for the same assay, and block contradicted PS1-splicing unless independent comparison evidence remains.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects BP7_RNA and BS3 use of the same no-impact RNA assay",
+        "Detects contradiction between direct no-impact RNA evidence and PS1-splicing",
+        "Keeps direct RNA evidence over predicted same-event comparison evidence",
+        "Marks unresolved contradiction as draft-only if independent evidence cannot be separated"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "A protein length-changing variant is counted as PVS1, PM4, and BP3 based on the same in-frame exon event.",
+      "expected_output": "The compatibility gate should prevent PVS1 and PM4/BP3 from using the same consequence, keep the evidence path that matches the routed mechanism, and mark incompatible benign/pathogenic directions unresolved if necessary.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PVS1 and PM4 same protein-length or LoF consequence reuse",
+        "Detects PM4 and BP3 opposing interpretation of the same in-frame/repeat event",
+        "Uses keep_mechanism_appropriate or unresolved_draft_only",
+        "Does not send both PM4 and BP3 for the same event into current_counted_evidence_resolved"
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "A whole-gene deletion in a haploinsufficient gene is counted as PVS1 and also counted as an independent CNV dosage criterion from the same deletion.",
+      "expected_output": "The compatibility gate should prevent double counting the same whole-gene deletion as both PVS1 and separate CNV dosage evidence unless a specified framework explicitly permits it.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects same-event whole-gene deletion reuse",
+        "Keeps the mechanism-appropriate evidence or defers to an explicit SV/CNV framework",
+        "Places duplicate dosage evidence in not_used_due_to_overlap when not permitted",
+        "Documents defer_to_vcep or defer_to_structural_variant_framework when applicable in reason"
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "A report upgrades PS3 because three publications contain broadly concordant functional assays, but no VCEP, OddsPath, or formal combination rule is cited.",
+      "expected_output": "The compatibility gate should not allow automatic stacking of multiple assays. It should require the PS3/BS3 overlay result to select the best-calibrated assay once or document a formal combination rule.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects multiple functional assays being stacked without formal rule",
+        "Uses keep_primary_evidence for the best-supported assay when appropriate",
+        "Uses cap_combined_strength or unresolved_draft_only when combination is unclear",
+        "Does not permit final combine from automatically upgraded PS3 evidence"
+      ]
+    },
+    {
+      "id": 23,
+      "prompt": "The same DMS/MAVE experiment is counted once as PS3 and again as PP3/BP4 computational evidence.",
+      "expected_output": "The compatibility gate should prevent reuse of the same assay or DMS dataset as both functional and computational evidence unless a formal calibrated rule says otherwise.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PS3/BS3 and PP3/BP4 reuse of the same DMS or MAVE dataset",
+        "Keeps primary functional or calibrated predictor evidence according to provenance",
+        "Drops duplicated evidence into not_used_due_to_overlap",
+        "Requires explicit VCEP or formal calibration to count both"
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Two comparable functional assays give conflicting pathogenic and benign results, and the report counts PS3 and BS3 together.",
+      "expected_output": "The compatibility gate should not allow both conflicting comparable assays to enter final combine. It should return not_used or unresolved draft-only unless a VCEP/formal calibration resolves the conflict.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects comparable conflicting assays",
+        "Does not include both PS3 and BS3 for the same functional question in resolved evidence",
+        "Uses unresolved_draft_only when no formal resolution exists",
+        "Blocks Bayesian posterior when assay conflict remains unresolved"
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "A missense variant is counted with PM1, PP2, and PP3; PM1 and PP3 use the same regional constraint/prediction rationale.",
+      "expected_output": "The compatibility gate should apply PM1/PP2 priority rules, keep PP2 over PM1_Supporting when applicable, keep PM1 over PP2 when PM1 is stronger, and cap PM1+PP3 combined contribution at Strong when both remain independently justified.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Applies PM1 versus PP2 priority according to routed strengths",
+        "Detects shared regional or prediction rationale between PM1 and PP3",
+        "Uses cap_combined_strength for PM1 plus PP3 when both remain",
+        "Records the cap in caps_applied"
+      ]
+    },
+    {
+      "id": 26,
+      "prompt": "The same comparison variant relationship is used to count both PS1 and PM5 for a missense variant.",
+      "expected_output": "The compatibility gate should treat PS1 and PM5 as mutually exclusive for the same comparison relationship, keeping the more specific applicable comparison criterion or returning draft-only if unresolved.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PS1 and PM5 same comparison relationship overlap",
+        "Uses keep_more_specific for the valid comparison category",
+        "Drops the weaker or inapplicable comparison evidence",
+        "Blocks final combine if the comparison mechanism or independence is unresolved"
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "PM5 and PM1 both rely on the same pathogenic residue observation, and an in-frame indel overlapping that residue is also counted as PM4.",
+      "expected_output": "The compatibility gate should prevent reusing the same residue/domain rationale across PM5, PM1, and PM4 unless independent evidence is documented.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects shared residue/domain rationale across PM5, PM1, and PM4",
+        "Keeps independently supported evidence only",
+        "Places duplicated rationale in not_used_due_to_overlap",
+        "Uses unresolved_draft_only if independence cannot be determined"
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "The same affected proband is counted under PS4, PM3, PS2, PP1, and PP4 in a final evidence set.",
+      "expected_output": "The compatibility gate should split clinical observation evidence by role: biallelic recessive proband routes to PM3, de novo observation to PS2/PM6, family segregation to PP1/BS4, phenotype specificity to PP4, and case enrichment to PS4 without reusing the same individual across incompatible roles.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects same-individual reuse across PS4, PM3, PS2/PM6, PP1, and PP4",
+        "Uses keep_primary_evidence or split_by_context according to observation role",
+        "Routes recessive biallelic probands to PM3 rather than PS4",
+        "Drops duplicated individual-level evidence from resolved evidence"
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "A pedigree report combines Biesecker 2024 PP1/PP4 points with an informative-meioses fallback for the same pedigree and exceeds the +5.0 locus-evidence cap.",
+      "expected_output": "The compatibility gate should enforce the PP1/PP4 +5.0 cap and prevent mixing the Biesecker combined-points method with fallback meioses counting for the same pedigree.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects mixed PP1/PP4 scoring methods for the same pedigree",
+        "Applies cap_combined_strength with the +5.0 locus-evidence cap",
+        "Records the cap in caps_applied",
+        "Removes fallback-derived evidence when combined points already consume the pedigree"
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "A de novo observation uses phenotype specificity to upgrade PS2/PM6, and the report also counts standalone PP4 from the same phenotype; high genetic heterogeneity is also present.",
+      "expected_output": "The compatibility gate should prevent double counting phenotype specificity in PS2/PM6 and PP4, and enforce the high-genetic-heterogeneity de novo row cap when applicable.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects phenotype specificity consumed by PS2/PM6 and PP4",
+        "Drops or caps duplicate PP4 unless a VCEP explicitly permits it",
+        "Applies PS2/PM6 high-heterogeneity cap when routed",
+        "Records any cap in caps_applied"
+      ]
+    },
+    {
+      "id": 31,
+      "prompt": "PM3 evidence includes circular use of variant A to classify variant B and then variant B to classify variant A, duplicate probands, and homozygous observations above the default cap.",
+      "expected_output": "The compatibility gate should block PM3 circularity, de-duplicate repeated probands, and apply the homozygous PM3 default cap unless a VCEP-specific rule overrides it.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects PM3 circularity and duplicate probands",
+        "Uses drop_as_not_used for circular or duplicate observations",
+        "Applies homozygous PM3 default cap 1.0 when applicable",
+        "Uses defer_to_vcep only with explicit disease-specific rule"
+      ]
+    },
+    {
+      "id": 32,
+      "prompt": "A gene has distinct dominant and recessive disorders, and the final evidence set mixes dominant missense PS4/PM1 evidence with recessive LoF PM3/PVS1 evidence.",
+      "expected_output": "The compatibility gate should split evidence by disease, inheritance, and mechanism context rather than combine across mutually exclusive contexts.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects mutually exclusive disease or mechanism contexts",
+        "Uses split_by_context and records context_splits",
+        "Prevents cross-context evidence from entering one resolved evidence set",
+        "Requires separate final classifications or draft status when target context is unresolved"
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "The route audit passes for all counted evidence, but no evidence compatibility resolution artifact is present before final qualitative classification.",
+      "expected_output": "The agent should stop at draft classification and require evidence compatibility resolution before qualitative ACMG or Bayesian combine.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/route_audit.schema.json",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Treats missing compatibility resolution as a final-combine hard stop",
+        "Requires current_counted_evidence_resolved before final combine",
+        "Does not compute qualitative ACMG classification from unresolved evidence",
+        "Does not compute Bayesian posterior without compatibility artifact"
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "The Bayesian calculator receives PM4/BP3 and PS4/PM3 conflicts marked unresolved by the compatibility gate.",
+      "expected_output": "The Bayesian framework should refuse to compute final posterior probability and return draft classification until unresolved_conflicts is empty.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Detects non-empty unresolved_conflicts",
+        "Does not calculate OddsPath or posterior probability",
+        "Reports draft classification only",
+        "Requires resolved evidence set before Bayesian calculation"
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "A rare-disease diagnostic report template lists AlphaMissense, CADD, and EVE as PP3 support, PM2 as Moderate from absent gnomAD, and multiple affected family members as PS4 Strong.",
+      "expected_output": "The agent should treat the rare-disease diagnosis output as candidate evidence only. It must route prediction context, population rarity, and family/case evidence to the relevant ACMG overlays before any counted strength or final classification.",
+      "files": [
+        "../tooluniverse-rare-disease-diagnosis/REPORT_TEMPLATE.md",
+        "../tooluniverse-rare-disease-diagnosis/DIAGNOSTIC_WORKFLOW.md",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Does not directly count PM2_Moderate from absent gnomAD in rare-disease reports",
+        "Does not directly count PP3 from AlphaMissense/CADD/EVE concordance",
+        "Does not directly count PS4 from affected family members without PS4 or PP1 routing",
+        "Requires tooluniverse-acmg-variant-classification before final ACMG classification"
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "A variant-interpretation helper returns acmg_pp3=true because two predictors are damaging and no predictor is benign.",
+      "expected_output": "The helper should return prediction context and a candidate route only. PP3/BP4 strength must be assigned by the calibrated PP3/BP4 overlay or a current VCEP, not by local predictor voting.",
+      "files": [
+        "../tooluniverse-variant-interpretation/TOOLS_REFERENCE.md",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Does not expose acmg_pp3 or acmg_bp4 as final helper outputs",
+        "Returns candidate_route to tooluniverse-acmg-pp3-bp4-missense-prediction-refinement",
+        "Labels predictor output as prediction_context or retrieval_context",
+        "Rejects local predictor-majority reasoning as counted PP3/BP4"
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "The Bayesian quick start is invoked with a raw Current Counted Evidence table but no Evidence Compatibility Resolution artifact.",
+      "expected_output": "The Bayesian framework should stop, label the result draft classification, and require current_counted_evidence_resolved with empty unresolved_conflicts before calculating OddsPath or posterior probability.",
+      "files": [
+        "../tooluniverse-acmg-bayesian-classification-framework/QUICK_START.md",
+        "schemas/evidence_compatibility.schema.json",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Requires current_counted_evidence_resolved as Bayesian input",
+        "Requires unresolved_conflicts to be empty",
+        "Does not compute OddsPath from raw counted evidence",
+        "Reports draft classification when compatibility artifact is missing"
+      ]
+    },
+    {
+      "id": 38,
+      "prompt": "A splice-region variant has a high SpliceAI score but no RNA assay, published RNA evidence, or observed transcript consequence. The agent routes it to PVS1_RNA.",
+      "expected_output": "The registry and routing contract should keep SpliceAI-only evidence in prediction/comparison routes. PVS1_RNA is not triggered without RNA assay, published RNA evidence, or observed transcript consequence.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Treats SpliceAI-only evidence as prediction context",
+        "Routes prediction-only splicing evidence to PP3/BP4, PS1-splicing comparison, or VCEP",
+        "Does not trigger PVS1_RNA from SpliceAI-only evidence",
+        "Requires RNA assay, published RNA evidence, or observed transcript consequence for Walker/RNA refinement"
+      ]
+    },
+    {
+      "id": 39,
+      "prompt": "Evaluate LDLR NM_000527.5:c.1747C>T (p.His583Tyr) as a germline heterozygous missense variant under the query-aware contract.",
+      "expected_output": "The agent should produce both a baseline route plan and a coverage audit. Coverage must include population sources such as gnomAD/ClinVar frequency, ClinVar/source assertions, VEP or calibrated predictor sources, MaveDB or equivalent structured functional database, and literature search. Missing discovery routes are acceptable only when the coverage audit supports no trigger.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json",
+        "schemas/coverage_audit.schema.json"
+      ],
+      "assertions": [
+        "Route plan includes enforcement_level and route_kind for baseline rows",
+        "Coverage audit includes population, source_assertion, computational, functional_database, and literature categories",
+        "MaveDB or equivalent structured functional database coverage is recorded for the missense variant",
+        "PP1 absence before family evidence is justified by coverage audit rather than silent omission"
+      ]
+    },
+    {
+      "id": 40,
+      "prompt": "A missense variant is assessed, MaveDB is queried, and no structured functional score set or variant hit is found. Should PS3/BS3 overlay be forced?",
+      "expected_output": "The agent should record functional_database coverage with query_status no_hit or unavailable and should not force PS3/BS3 overlay. PS3/BS3 remains not triggered unless another functional evidence signal is found.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json"
+      ],
+      "assertions": [
+        "Records MaveDB or structured functional database query coverage",
+        "Uses query_status no_hit or unavailable as appropriate",
+        "Does not force tooluniverse-acmg-ps3-bs3-functional-assay-refinement when no hit exists",
+        "Does not count PS3 or BS3 from absence of structured functional data"
+      ]
+    },
+    {
+      "id": 41,
+      "prompt": "A missense variant has a MaveDB score hit. The agent wants to count BS3 directly from the score because the value looks normal.",
+      "expected_output": "The MaveDB hit should trigger tooluniverse-acmg-ps3-bs3-functional-assay-refinement. The score cannot be directly interpreted as PS3 or BS3 without overlay result and route audit.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Records the structured functional hit in coverage_audit.hits",
+        "Includes tooluniverse-acmg-ps3-bs3-functional-assay-refinement in triggered_routes",
+        "Rejects direct PS3/BS3 counting from the raw functional score",
+        "Requires overlay_applied or overlay_deferred_to_vcep before any PS3/BS3 counted evidence"
+      ]
+    },
+    {
+      "id": 42,
+      "prompt": "ClinVar has a reviewed Pathogenic label for a variant, but no criterion codes or primary-evidence details are available in the retrieved record.",
+      "expected_output": "The label should trigger PP5/BP6 source review only. It should not automatically fan out to PS3, PM5, PM1, PP3, or other evidence overlays without explicit criterion codes, primary-evidence keywords, or retrievable primary evidence.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json"
+      ],
+      "assertions": [
+        "Routes the ClinVar label to tooluniverse-acmg-pp5-bp6-reputable-source-refinement",
+        "Records source_assertion coverage and keeps the label source lead only",
+        "Does not automatically trigger PS3/PM5/PM1/PP3 from the label alone",
+        "Does not count PP5/BP6 by default"
+      ]
+    },
+    {
+      "id": 43,
+      "prompt": "A paper table classifies a variant as Pathogenic and explicitly lists PS3+PM1+PM2+PM5+PP3, but the table does not include primary evidence details.",
+      "expected_output": "The paper label remains source-only, but explicit criterion codes may fan out to the corresponding overlays as candidate routes. None of those criteria may be counted until primary evidence is retrieved and routed through overlay results.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Routes the paper assertion to PP5/BP6 source review",
+        "Uses explicit criterion codes to create candidate routes for PS3, PM1, PM2, PM5, and PP3/BP4",
+        "Keeps the paper label itself source lead only",
+        "Does not count any fanned-out criterion without overlay trace and primary evidence"
+      ]
+    },
+    {
+      "id": 44,
+      "prompt": "Literature coverage for a missense variant finds no family, pedigree, segregation, cascade-screening, affected-relative, or informative-meiosis evidence. Is PP1 missing from the route plan a failure?",
+      "expected_output": "PP1 absence is acceptable only if the coverage audit records the literature sources queried, query_status success or no_hit, no PP1 trigger hits, and the PP1 route in not_triggered_routes with a reason.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json"
+      ],
+      "assertions": [
+        "Requires literature coverage audit when PP1 is omitted",
+        "Records no family or segregation trigger hit",
+        "Lists PP1/BS4/PP4 in not_triggered_routes with a reason",
+        "Does not treat PP1 omission as failure when coverage supports no trigger"
+      ]
+    },
+    {
+      "id": 45,
+      "prompt": "A PubMed abstract says the variant was transmitted from an affected parent, but the full text and pedigree details are not available. Can PP1 be counted?",
+      "expected_output": "The abstract-level family evidence should trigger PP1/BS4/PP4 routing, but it cannot directly count PP1 strength. The route should record the evidence level as abstract and the overlay result should be not_assessed or no_evidence unless enough pedigree details are available.",
+      "files": [
+        "overlay_registry.yaml",
+        "overlay_route_contract.md",
+        "schemas/coverage_audit.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Records the abstract-level family hit in coverage_audit.hits",
+        "Triggers tooluniverse-acmg-pp1-segregation-refinement",
+        "Does not count PP1 strength from abstract-only family evidence",
+        "Requests or records missing pedigree details needed for PP1 scoring"
+      ]
+    },
+    {
+      "id": 46,
+      "prompt": "A germline missense variant is submitted with no literature hits. Produce an efficient route plan.",
+      "expected_output": "The agent should produce a bundle route plan including baseline_context_bundle, population_frequency_bundle, missense_bundle, and final_combine_bundle, then expand triggered bundles into detailed registry rows. It should not route PVS1 LoF, CNV/SV, or RNA-assay PVS1 as triggered evidence unless independent triggers exist.",
+      "files": [
+        "SKILL.md",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Uses Route Bundle Quick Planner or equivalent bundle route plan",
+        "Expands triggered bundles into detailed route-plan rows before evidence counting",
+        "Includes route_bundle where structured route-plan output is used",
+        "Does not invoke consequence_lof_bundle, cnv_sv_bundle, or RNA-assay splicing refinement for a plain missense variant without triggers"
+      ]
+    },
+    {
+      "id": 47,
+      "prompt": "A deletion overlaps a ClinGen HI gene. The structural-variant skill returns gene content, dosage, frequency, and overlap evidence. Can it present final germline ACMG Pathogenic classification by itself?",
+      "expected_output": "No. The SV skill is intake/retrieval only for germline ACMG classification. It should return SV evidence summary and ACMG route candidates, then route final counted evidence through ACMG overlays, route audit, compatibility resolution, and final combine.",
+      "files": [
+        "SKILL.md",
+        "overlay_route_contract.md",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Uses cnv_sv_bundle for SV/CNV intake",
+        "Routes PVS1, PM4/BP3, frequency, de novo, PS4, and segregation evidence to relevant overlays as applicable",
+        "Does not accept standalone SV pathogenicity score or direct ACMG code table as final germline ACMG classification",
+        "Requires current_counted_evidence_resolved before final combine"
+      ]
+    },
+    {
+      "id": 48,
+      "prompt": "The Bayesian framework receives raw counted evidence from an agent but no evidence compatibility artifact.",
+      "expected_output": "The agent should reject final posterior calculation and return draft-only status until Evidence Compatibility Resolution provides current_counted_evidence_resolved with empty unresolved_conflicts.",
+      "files": [
+        "overlay_route_contract.md",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Requires Evidence Compatibility Resolution before Bayesian combine",
+        "Consumes only current_counted_evidence_resolved",
+        "Blocks final posterior when unresolved_conflicts are missing or non-empty",
+        "Labels the result draft classification rather than final classification"
+      ]
+    },
+    {
+      "id": 49,
+      "prompt": "Create a structured bundle route plan for a plain germline missense SNV before literature evidence is found.",
+      "expected_output": "The agent should emit bundle_route_plan output compatible with schemas/bundle_route_plan.schema.json. It should trigger baseline_context_bundle, population_frequency_bundle, missense_bundle, literature_functional_bundle coverage, and final_combine_bundle. It should not trigger consequence_lof_bundle, cnv_sv_bundle, or RNA-assay PVS1 unless independent evidence appears.",
+      "files": [
+        "SKILL.md",
+        "QUICK_START.md",
+        "schemas/bundle_route_plan.schema.json",
+        "schemas/route_plan.schema.json"
+      ],
+      "assertions": [
+        "Uses bundle_route_plan as a first-class structured artifact",
+        "Uses required_overlays for ACMG overlays and required_checks for non-ACMG checks",
+        "Marks expanded_route_rows_required true for triggered bundles before evidence counting",
+        "Does not treat bundle rows as counted evidence"
+      ]
+    },
+    {
+      "id": 50,
+      "prompt": "Create a bundle route plan for a germline frameshift SNV in a candidate LoF disease gene.",
+      "expected_output": "The agent should trigger baseline_context_bundle, population_frequency_bundle, consequence_lof_bundle, literature_functional_bundle coverage, and final_combine_bundle. It should not trigger missense_bundle unless a separate missense/comparison issue is present.",
+      "files": [
+        "schemas/bundle_route_plan.schema.json",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Routes frameshift consequence through consequence_lof_bundle",
+        "Requires PVS1 LoF decision-tree overlay after context review",
+        "Does not run missense prediction/comparison bundles for a pure frameshift",
+        "Requires expanded route rows before PVS1 or PM2 can be counted"
+      ]
+    },
+    {
+      "id": 51,
+      "prompt": "A deep intronic variant has a high SpliceAI score but no RNA assay, RT-PCR, minigene, or observed transcript evidence.",
+      "expected_output": "The agent should trigger splice_bundle for prediction/comparison routing but must not treat the case as RNA-assay PVS1. PVS1-splicing refinement is reserved for RNA assay, published RNA evidence, or observed transcript consequence.",
+      "files": [
+        "schemas/bundle_route_plan.schema.json",
+        "SKILL.md"
+      ],
+      "assertions": [
+        "Triggers splice_bundle for prediction context",
+        "Does not mark RNA-assay PVS1 as triggered from SpliceAI alone",
+        "Uses required_checks or route notes to separate prediction-only evidence from RNA evidence",
+        "Requires expanded overlay route rows before PP3/BP4 or PS1-splicing can be counted"
+      ]
+    },
+    {
+      "id": 52,
+      "prompt": "A variant has RNA assay evidence showing an aberrant transcript consequence.",
+      "expected_output": "The agent should trigger splice_bundle with tooluniverse-acmg-pvs1-splicing-refinement, include transcript consequence evidence, and require double-counting checks before final combine.",
+      "files": [
+        "schemas/bundle_route_plan.schema.json",
+        "schemas/evidence_compatibility.schema.json"
+      ],
+      "assertions": [
+        "Triggers splice_bundle for RNA assay evidence",
+        "Includes tooluniverse-acmg-pvs1-splicing-refinement in required_overlays",
+        "Requires Evidence Compatibility Resolution before final combine",
+        "Prevents double counting RNA evidence as PVS1_RNA plus PS3/BS3 or same-mechanism PP3/BP4"
+      ]
+    },
+    {
+      "id": 53,
+      "prompt": "Create a bundle route plan for a whole-gene deletion CNV while SV/CNV overlay is not implemented.",
+      "expected_output": "The agent should trigger cnv_sv_bundle and list tooluniverse-structural-variant-analysis as a required_check, not as an ACMG required_overlay. Final counted evidence must be routed through existing ACMG overlays such as PVS1, PM2/BA1/BS1, PS2/PM6, PS4, PP1, PM4/BP3, and compatibility resolution when applicable.",
+      "files": [
+        "schemas/bundle_route_plan.schema.json",
+        "schemas/route_plan.schema.json",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Allows tooluniverse-structural-variant-analysis in required_checks",
+        "Keeps required_overlays limited to tooluniverse-acmg-* skills",
+        "Does not produce standalone SV/CNV final ACMG classification",
+        "Requires expanded ACMG overlay route rows before any evidence is counted"
+      ]
+    },
+    {
+      "id": 54,
+      "prompt": "An agent emits only a bundle route plan with population_frequency_bundle and missense_bundle and then tries to count PM2 and PP3 directly.",
+      "expected_output": "The report should be draft-only. Bundle rows are not counted evidence; PM2 and PP3 require expanded route_plan rows, overlay results, route audit outcomes, and compatibility resolution before final combine.",
+      "files": [
+        "schemas/bundle_route_plan.schema.json",
+        "schemas/route_plan.schema.json",
+        "schemas/route_audit.schema.json"
+      ],
+      "assertions": [
+        "Rejects counted evidence from bundle rows alone",
+        "Requires expanded_route_rows_required to be satisfied before counting",
+        "Requires overlay_applied or overlay_deferred_to_vcep for PM2 and PP3",
+        "Keeps classification draft until route audit and compatibility resolution pass"
+      ]
+    },
+    {
+      "id": 55,
+      "prompt": "A PubMed abstract reports a functional assay result and the agent counts PS3, but the full text, supplement, and figure/table details have not been read.",
+      "expected_output": "The abstract should be preserved as a literature lead and should trigger full-text/supplement retrieval or a user PDF request. PS3 cannot enter current_counted_evidence_resolved from abstract-only support; the report must remain draft or mark PS3 not_assessed until provenance is sufficient.",
+      "files": [
+        "schemas/route_audit.schema.json",
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py"
+      ],
+      "assertions": [
+        "Requires literature_provenance for counted literature-backed evidence",
+        "Blocks abstract_only literature from counted PS3 by default",
+        "Keeps the citation as source lead rather than deleting it",
+        "Requests full text, supplement, figure, or table before final counting"
+      ]
+    },
+    {
+      "id": 56,
+      "prompt": "A current disease-specific VCEP explicitly permits an abstract-level case-count rule for a criterion, and the route audit records VCEP-specific authority and literature_provenance with vcep_allows_abstract_level_use true.",
+      "expected_output": "The route may proceed only as a VCEP-specific exception with the provenance exception recorded. Generic ACMG overlays must not treat this as permission to count abstract-only evidence for other criteria.",
+      "files": [
+        "schemas/route_audit.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "overlay_route_contract.md"
+      ],
+      "assertions": [
+        "Allows abstract-level use only when guidance_authority is VCEP-specific",
+        "Requires vcep_allows_abstract_level_use true",
+        "Does not generalize the exception to ClinGen/SVI primary or practice/local refinement rows",
+        "Still requires compatibility resolution before final combine"
+      ]
+    },
+    {
+      "id": 57,
+      "prompt": "A functional annotation skill reports CADD 28 and the agent counts PP3 directly from that annotation output.",
+      "expected_output": "The report should fail or remain draft-only because non-ACMG annotation skills cannot be used as overlay_applied sources for counted ACMG evidence. Prediction context must route to the calibrated PP3/BP4 overlay or an in-scope VCEP.",
+      "files": [
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/outer_skill_cadd_pp3_counted.json"
+      ],
+      "assertions": [
+        "Rejects non-ACMG skill as overlay_applied counted source",
+        "Routes CADD/AlphaMissense/REVEL context to PP3/BP4 overlay",
+        "Does not count local CADD thresholds"
+      ]
+    },
+    {
+      "id": 58,
+      "prompt": "A healthy carrier is used for BS2 in an adult-onset or reduced-penetrance disease, but no penetrance_context is reported.",
+      "expected_output": "The final classification should be draft-only until penetrance type, age of onset, unaffected-carrier interpretability, and source are recorded. Reduced penetrance can make the healthy-carrier observation non-informative.",
+      "files": [
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/reduced_penetrance_bs2_missing_context.json"
+      ],
+      "assertions": [
+        "Requires penetrance_context for BS2/BS4/PP1/PP4/PM2/PS4/BS1 use",
+        "Blocks naive BS2 from healthy carrier without penetrance context",
+        "Keeps the observation as clinical context when not countable"
+      ]
+    },
+    {
+      "id": 59,
+      "prompt": "A VCEP rule is cited for PP3, but the VCEP disease or variant-type scope does not match the current interpretation context.",
+      "expected_output": "The VCEP label should be retained as a source lead or context note, but counted evidence must fall back to the generic overlay unless vcep_context.scope_match is exact or partial for the relevant criterion.",
+      "files": [
+        "schemas/acmg_assessment_bundle.schema.json",
+        "scripts/validate_acmg_overlay_bundle.py",
+        "evals/validator_fixtures/vcep_scope_mismatch_counted.json"
+      ],
+      "assertions": [
+        "Requires vcep_context for VCEP-deferred counted evidence",
+        "Blocks VCEP-deferred counted evidence when scope_match is mismatch",
+        "Falls back to generic overlay responsibility"
+      ]
+    }
+  ]
+}

@@ -100,12 +100,12 @@ result = tu.tools.gnomad_search_variants(
 # Returns: AF, ancestry-specific AFs, AC, AN, homozygotes
 ```
 
-**ACMG Frequency Thresholds**:
-| Frequency | Code | Application |
+**ACMG Frequency Routing**:
+| Frequency context | Route | Application |
 |-----------|------|-------------|
-| >5% | BA1 | Benign (stand-alone) |
-| >1% | BS1 | Strong benign |
-| Absent | PM2 | Supporting pathogenic |
+| >5% candidate | BA1 exception-list overlay | Benign stand-alone only after Ghosh 2018 BA1 exception-list and dataset-adequacy review |
+| High for disease but BA1 not valid | Benign-context overlay | Assess BS1 using disease-specific prevalence, penetrance, heterogeneity, inheritance, and ancestry-specific max AF |
+| Absent or rare after coverage review | PM2 overlay | Assess through `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting strength |
 
 **Ancestry-Specific Populations**:
 | Code | Population |
@@ -124,6 +124,8 @@ result = tu.tools.gnomad_search_variants(
 
 Authoritative curation of gene-disease relationships from ClinGen.
 
+When disease context, mechanism, clinical context, source assertions, or literature extraction affects ACMG evidence assignment, use `tooluniverse-acmg-overlay-routing-core` before criterion-specific overlays. Gene-disease validity and dosage sensitivity are separate evidence types: definitive gene-disease validity does not automatically establish haploinsufficiency/triplosensitivity, and a non-sufficient dosage score does not refute recessive, gain-of-function, dominant-negative, or other non-dosage disease mechanisms.
+
 ### Gene Validity
 
 | Tool | Purpose | Key Parameters |
@@ -140,9 +142,9 @@ result = tu.tools.ClinGen_search_gene_validity(gene="BRCA1")
 **Validity Classification Interpretation**:
 | Classification | ACMG Impact | Usage |
 |----------------|-------------|-------|
-| **Definitive** | Supports PS4, PP4 | Strong gene-disease evidence |
-| **Strong** | Supports PP4 | Good evidence for classification |
-| **Moderate** | Supports PP4 (weak) | Use with caution |
+| **Definitive** | Background for PS4, PP4 | Strong gene-disease evidence; still requires patient phenotype and criterion-specific overlay |
+| **Strong** | Background for PP4 | Good gene-disease evidence; still requires phenotype specificity |
+| **Moderate** | Do not use alone for PP4 | Use with caution and prefer VCEP guidance |
 | **Limited** | Do not apply PP4 | Insufficient evidence |
 | **Disputed/Refuted** | Contra-evidence | Gene likely NOT causative |
 
@@ -176,7 +178,7 @@ result = tu.tools.ClinGen_search_dosage_sensitivity(gene="MECP2")
 | `ClinGen_get_actionability_pediatric` | Pediatric actionability | `gene` (optional) |
 
 **Why ClinGen is Critical**:
-- Required for **PP4** (phenotype specificity)
+- Required for **PP4** (phenotype specificity); when PP4 interacts with PP1/BS4, use the ClinGen 2024 combined PP1/BS4/PP4 overlay
 - Establishes gene-disease validity before classification
 - Dosage scores critical for **PVS1** in CNV interpretation
 - Actionability informs return of incidental findings
@@ -219,13 +221,13 @@ quick = tu.tools.SpliceAI_get_max_delta(
 | DS_DG | Donor Gain (creates new donor) |
 | DS_DL | Donor Loss (disrupts existing) |
 
-**Score Interpretation for ACMG**:
-| Max Delta Score | Interpretation | ACMG Support |
+**Score Interpretation for Routing**:
+| Max Delta Score | Interpretation | Evidence route |
 |-----------------|----------------|--------------|
-| ≥0.8 | High splice impact | PP3 (strong) |
-| 0.5-0.8 | Moderate impact | PP3 (supporting) |
-| 0.2-0.5 | Low impact | PP3 (weak) |
-| <0.2 | Likely no impact | BP7 (if synonymous) |
+| ≥0.8 | High splice-impact prediction | Route prediction evidence to the relevant splicing/prediction overlay; do not assign strength here |
+| 0.5-0.8 | Moderate splice-impact prediction | Route prediction evidence to the relevant splicing/prediction overlay |
+| 0.2-0.5 | Low splice-impact prediction | Record as weak prediction context |
+| <0.2 | Low predicted splice impact | Record as benign prediction context; direct RNA/no-splicing evidence uses the RNA splicing overlay |
 
 **When to Use**:
 - Intronic variants within ±50bp of splice sites
@@ -258,12 +260,12 @@ result = tu.tools.CADD_get_variant_score(
 ```
 
 **CADD PHRED Score Interpretation**:
-| Score | Meaning | ACMG Support |
+| Score | Meaning | ACMG use |
 |-------|---------|--------------|
-| ≥30 | Top 0.1% deleterious | PP3 (strong) |
-| ≥20 | Top 1% deleterious | PP3 (supporting) |
-| 15-20 | Uncertain | Neutral |
-| <15 | Likely benign | BP4 (supporting) |
+| ≥30 | Top 0.1% deleterious | Retrieval/orientation only; assign PP3/BP4 through the calibrated overlay or VCEP |
+| ≥20 | Top 1% deleterious | Retrieval/orientation only |
+| 15-20 | Uncertain | Retrieval/orientation only |
+| <15 | Lower predicted deleteriousness | Retrieval/orientation only |
 
 ---
 
@@ -286,11 +288,11 @@ result = tu.tools.AlphaMissense_get_variant_score(
 ```
 
 **AlphaMissense Thresholds** (from Cheng et al., Science 2023):
-| Score | Classification | ACMG Support |
+| Score | Classification | ACMG use |
 |-------|----------------|--------------|
-| >0.564 | Pathogenic | PP3 (strong) |
-| 0.34-0.564 | Ambiguous | Neutral |
-| <0.34 | Benign | BP4 (strong) |
+| >0.564 | Pathogenic | Retrieval/orientation only; assign PP3/BP4 through the calibrated overlay or VCEP |
+| 0.34-0.564 | Ambiguous | Retrieval/orientation only |
+| <0.34 | Benign | Retrieval/orientation only |
 
 **Why Use AlphaMissense**:
 - ~90% accuracy on ClinVar pathogenic variants
@@ -333,16 +335,16 @@ result = tu.tools.ESM_score_variant_sae_batch(
 # Forge cost: 20 calls (1 ref + 19 mut), not 38 (2 per variant)
 ```
 
-**Mapping SAE categories → ACMG support**:
-| SAE category lost | Mechanistic claim | ACMG line |
+**Mapping SAE categories to mechanism narrative**:
+| SAE category lost | Mechanistic claim | Evidence use |
 |---|---|---|
-| `catalytic` | Active-site disruption | PS3 (functional) candidate; supports PP3 |
-| `ligand-binding` | Substrate/cofactor binding loss | Supports PP3 |
-| `ptm` | Post-translational modification site | Supports PP3 |
-| `domain` / `motif` | Domain integrity loss | Supports PP3 |
-| `structural-stability` | Disulfide / coiled-coil disruption | Supports PP3 |
-| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Supports PP3 |
-| (no interpretable change) | No mechanistic signal | Do not strengthen PP3 above the predictor score alone |
+| `catalytic` | Active-site disruption | Mechanism narrative; route any evidence-code use to the relevant overlay |
+| `ligand-binding` | Substrate/cofactor binding loss | Mechanism narrative only |
+| `ptm` | Post-translational modification site | Mechanism narrative only |
+| `domain` / `motif` | Domain integrity loss | Mechanism narrative only |
+| `structural-stability` | Disulfide / coiled-coil disruption | Mechanism narrative only |
+| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Mechanism narrative only |
+| (no interpretable change) | No mechanistic signal | Do not change predictor evidence strength |
 
 **Requires**: `ESM_API_KEY` (free non-commercial token at https://forge.evolutionaryscale.ai) and `pip install 'esm @ git+https://github.com/evolutionaryscale/esm@ee891c52'` (PyPI esm 3.2.x lacks SAEConfig). Outputs governed by EvolutionaryScale Cambrian Inference License — non-commercial use only.
 
@@ -375,10 +377,10 @@ result = tu.tools.EVE_get_variant_score(
 ```
 
 **EVE Score Interpretation**:
-| Score | Classification | ACMG Support |
+| Score | Classification | ACMG use |
 |-------|----------------|--------------|
-| >0.5 | Likely pathogenic | PP3 |
-| ≤0.5 | Likely benign | BP4 |
+| >0.5 | Likely pathogenic | Retrieval/orientation only; assign PP3/BP4 through the calibrated overlay or VCEP |
+| <=0.5 | Likely benign | Retrieval/orientation only |
 
 **Note**: EVE covers ~3,000 disease-related genes. Use `EVE_get_gene_info` to check coverage.
 
@@ -386,15 +388,16 @@ result = tu.tools.EVE_get_variant_score(
 
 ### Integrating Prediction Tools
 
-**Best Practice for VUS Classification**:
+**Best Practice for VUS Prediction Retrieval**:
 
 ```python
 def get_multi_predictor_evidence(tu, variant_info):
     """
-    Combine multiple predictors for robust PP3/BP4 assignment.
+    Retrieve multiple predictors for orientation.
+    Do not assign PP3/BP4 here; route to the calibrated overlay or VCEP.
     """
     evidence = []
-    
+
     # 1. CADD (all variants)
     cadd = tu.tools.CADD_get_variant_score(
         chrom=variant_info['chrom'],
@@ -409,7 +412,7 @@ def get_multi_predictor_evidence(tu, variant_info):
             'score': score,
             'damaging': score >= 20
         })
-    
+
     # 2. AlphaMissense (missense only)
     if variant_info.get('uniprot_id') and variant_info.get('aa_change'):
         am = tu.tools.AlphaMissense_get_variant_score(
@@ -423,7 +426,7 @@ def get_multi_predictor_evidence(tu, variant_info):
                 'classification': am['data'].get('classification'),
                 'damaging': am['data'].get('classification') == 'pathogenic'
             })
-    
+
     # 3. EVE (via VEP)
     eve = tu.tools.EVE_get_variant_score(
         chrom=variant_info['chrom'],
@@ -439,17 +442,17 @@ def get_multi_predictor_evidence(tu, variant_info):
                 'score': eve_scores[0].get('eve_score'),
                 'damaging': eve_scores[0].get('eve_score', 0) > 0.5
             })
-    
+
     # Consensus
     damaging = sum(1 for e in evidence if e.get('damaging'))
     benign = sum(1 for e in evidence if not e.get('damaging'))
-    
+
     return {
-        'predictions': evidence,
+        'prediction_context': evidence,
         'damaging_count': damaging,
         'benign_count': benign,
-        'acmg_pp3': damaging >= 2 and benign == 0,
-        'acmg_bp4': benign >= 2 and damaging == 0
+        'candidate_route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement',
+        'route_status': 'candidate_only_until_overlay_or_vcep'
     }
 ```
 
@@ -483,12 +486,12 @@ gene_muts = tu.tools.COSMIC_get_mutations_by_gene(
 # Returns: All mutations with cancer type distribution
 ```
 
-**COSMIC Evidence for ACMG**:
-| Finding | ACMG Code | Application |
-|---------|-----------|-------------|
-| Recurrent somatic hotspot | PS3 | Functional evidence |
-| Frequent in COSMIC (>100) | PM1 | Hotspot/functional domain |
-| Rare in COSMIC | - | Consider other evidence |
+**COSMIC Context for Variant Interpretation**:
+| Finding | Use | Application |
+|---------|-----|-------------|
+| Recurrent somatic hotspot | Cancer-context lead | Route tumor-specific interpretation to the cancer variant workflow; do not treat as germline PS3 |
+| Frequent in COSMIC | Literature/domain lead | Use to guide literature review or PM1/domain context, then assess through the relevant overlay |
+| Rare in COSMIC | Context only | Consider other evidence |
 
 ### OMIM - Mendelian Disease Context
 
@@ -568,12 +571,12 @@ vda = tu.tools.DisGeNET_get_vda(
 )
 ```
 
-**DisGeNET Score for ACMG**:
-| Score | Strength | ACMG Code |
-|-------|----------|-----------|
-| >0.7 | Strong gene-disease | PP4 (phenotype specific) |
-| 0.4-0.7 | Moderate evidence | Supporting |
-| <0.4 | Weak/Literature only | Insufficient |
+**DisGeNET Score for Gene-Disease Background**:
+| Score | Background context | ACMG route note |
+|-------|--------------------|-----------------|
+| >0.7 | Strong gene-disease context | Background only; PP4 still requires supplied phenotype and, when applicable, combined PP1/BS4/PP4 review |
+| 0.4-0.7 | Moderate gene-disease context | Background only; do not count as ACMG evidence |
+| <0.4 | Weak or literature-only context | Insufficient for variant-level ACMG evidence |
 
 ---
 
@@ -864,28 +867,28 @@ result = tu.tools.PubMed_search_articles(
 ```python
 def annotate_variant(tu, variant_hgvs, gene):
     """Complete variant annotation workflow."""
-    
+
     # Phase 1: Get aggregated annotations
     annotations = tu.tools.MyVariant_query_variants(
         variant_id=variant_hgvs,
         fields="clinvar,gnomad,cadd,dbnsfp"
     )
-    
+
     # Phase 2: ClinVar detail
     clinvar = tu.tools.ClinVar_search_variants(variant=variant_hgvs)
-    
+
     # Phase 3: Population frequency
     gnomad = tu.tools.gnomad_search_variants(variant=variant_hgvs)
-    
+
     # Phase 4: Gene context
     omim = tu.tools.OMIM_search(query=gene)
-    
+
     # Phase 5: Literature
     literature = tu.tools.PubMed_search_articles(
         query=f"{gene} AND {variant_hgvs}",
         max_results=20
     )
-    
+
     return {
         'annotations': annotations,
         'clinvar': clinvar,
@@ -900,10 +903,10 @@ def annotate_variant(tu, variant_hgvs, gene):
 ```python
 def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
     """Structural analysis for VUS missense variants."""
-    
+
     # Try PDB first
     pdb_structures = tu.tools.PDBe_get_uniprot_mappings(uniprot_id=uniprot_id)
-    
+
     if pdb_structures:
         # Use best resolution experimental structure
         best_pdb = sorted(pdb_structures, key=lambda x: x.get('resolution', 10))[0]
@@ -913,13 +916,13 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
         # Fallback to AlphaFold
         structure = tu.tools.alphafold_get_prediction(accession=uniprot_id)
         structure_source = "AlphaFold DB"
-    
+
     # Get domain information
     domains = tu.tools.InterPro_get_protein_domains(accession=uniprot_id)
-    
+
     # Get functional sites
     functions = tu.tools.UniProt_get_function_by_accession(accession=uniprot_id)
-    
+
     # Analyze residue context
     analysis = {
         'structure_source': structure_source,
@@ -927,76 +930,13 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
         'functional_sites': find_nearby_sites(functions, residue_position),
         'pm1_applicable': assess_pm1(domains, functions, residue_position)
     }
-    
+
     return analysis
 ```
 
 ### Example 3: ACMG Classification
 
-```python
-def calculate_acmg_classification(evidence_codes):
-    """Calculate ACMG classification from evidence codes."""
-    
-    # Count evidence
-    pathogenic = {
-        'very_strong': [],
-        'strong': [],
-        'moderate': [],
-        'supporting': []
-    }
-    benign = {
-        'stand_alone': [],
-        'strong': [],
-        'supporting': []
-    }
-    
-    for code, strength in evidence_codes:
-        if code.startswith(('PVS', 'PS', 'PM', 'PP')):
-            # Pathogenic evidence
-            if strength == 'very_strong':
-                pathogenic['very_strong'].append(code)
-            elif strength == 'strong':
-                pathogenic['strong'].append(code)
-            elif strength == 'moderate':
-                pathogenic['moderate'].append(code)
-            else:
-                pathogenic['supporting'].append(code)
-        else:
-            # Benign evidence
-            if code == 'BA1':
-                benign['stand_alone'].append(code)
-            elif strength == 'strong':
-                benign['strong'].append(code)
-            else:
-                benign['supporting'].append(code)
-    
-    # Apply ACMG rules
-    if benign['stand_alone']:
-        return 'Benign'
-    
-    if len(benign['strong']) >= 2:
-        return 'Benign'
-    
-    vs = len(pathogenic['very_strong'])
-    s = len(pathogenic['strong'])
-    m = len(pathogenic['moderate'])
-    p = len(pathogenic['supporting'])
-    
-    if (vs >= 1 and (s >= 1 or m >= 1 or m >= 2 or p >= 2)) or \
-       (s >= 2) or \
-       (s >= 1 and m >= 3):
-        return 'Pathogenic'
-    
-    if (vs >= 1 and m >= 1) or \
-       (s >= 1 and m >= 1 or m >= 2) or \
-       (s >= 1 and p >= 2):
-        return 'Likely Pathogenic'
-    
-    if len(benign['strong']) >= 1 and len(benign['supporting']) >= 1:
-        return 'Likely Benign'
-    
-    return 'VUS'
-```
+Do not use a local helper function to calculate final ACMG classification from evidence-code counts. Route final evidence strength assignment and classification to `tooluniverse-acmg-variant-classification`, which applies the overlay routing core, criterion-specific refinements, source-evidence handling, VCEP precedence, and duplicate-evidence safeguards.
 
 ---
 
@@ -1035,43 +975,37 @@ def calculate_acmg_classification(evidence_codes):
 
 ---
 
-## ACMG Code Quick Reference
+## ACMG Route Quick Reference
 
-### Pathogenic Codes
-| Code | Strength | Trigger |
-|------|----------|---------|
-| PVS1 | Very Strong | Null in LOF gene |
-| PS1 | Strong | Same AA as pathogenic |
-| PS2 | Strong | De novo (confirmed) |
-| PS3 | Strong | Functional studies |
-| PS4 | Strong | Prevalence in affected |
-| PM1 | Moderate | Functional domain |
-| PM2 | Moderate | Absent from controls |
-| PM3 | Moderate | Trans with pathogenic |
-| PM4 | Moderate | Protein length change |
-| PM5 | Moderate | Novel at known position |
-| PM6 | Moderate | De novo (unconfirmed) |
-| PP1 | Supporting | Segregation |
-| PP2 | Supporting | Low missense rate gene |
-| PP3 | Supporting | Computational predictions |
-| PP4 | Supporting | Phenotype specific |
-| PP5 | Supporting | Reputable source |
+This is a route index, not an evidence-strength table. Use
+`tooluniverse-acmg-variant-classification` and
+`tooluniverse-acmg-overlay-routing-core` for final evidence assignment, route
+audit, Evidence Compatibility Resolution, and final combine.
 
-### Benign Codes
-| Code | Strength | Trigger |
+### Pathogenic/Context Candidate Routes
+| Candidate | Trigger | Required route |
 |------|----------|---------|
-| BA1 | Stand-alone | MAF >5% |
-| BS1 | Strong | High frequency |
-| BS2 | Strong | Homozygotes healthy |
-| BS3 | Strong | No functional effect |
-| BS4 | Strong | No segregation |
-| BP1 | Supporting | Missense in LOF gene |
-| BP2 | Supporting | Observed trans |
-| BP3 | Supporting | In-frame, no function |
-| BP4 | Supporting | Benign predictions |
-| BP5 | Supporting | Alternate explanation |
-| BP6 | Supporting | Reputable source |
-| BP7 | Supporting | Synonymous |
+| PVS1 | Predicted LoF, canonical splice, start-loss, exon deletion/duplication, or whole-gene deletion | `tooluniverse-acmg-pvs1-lof-decision-tree-refinement`; RNA refinement only with RNA assay or observed transcript evidence |
+| PS1/PM5 | Same amino acid or same residue comparison variant | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement`; source labels are leads only |
+| PS1-splicing | Same predicted splice event as an independent P/LP comparison variant | `tooluniverse-acmg-ps1-splicing-similarity-refinement` |
+| PS2/PM6 | De novo or trio evidence | `tooluniverse-acmg-de-novo-evidence-refinement` |
+| PS3/BS3 | Functional assay or structured functional database hit | `tooluniverse-acmg-ps3-bs3-functional-assay-refinement` |
+| PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment evidence | `tooluniverse-acmg-ps4-case-enrichment-refinement` |
+| PM1/PP2/BP1 | Hotspot, functional region, regional missense constraint, or missense mechanism context | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
+| PM2 | Absent or rare population frequency | `tooluniverse-acmg-pm2-absence-rarity-refinement`; PM2 defaults to Supporting if applied |
+| PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous evidence | `tooluniverse-acmg-pm3-in-trans-refinement` |
+| PM4/BP3 | In-frame indel, stop-loss, altered product, repeat/low-complexity region | `tooluniverse-acmg-pm4-bp3-protein-length-refinement` |
+| PP1/BS4/PP4 | Segregation, non-segregation, family, pedigree, phenotype-locus evidence | `tooluniverse-acmg-pp1-segregation-refinement` and phenotype-dependent intake when needed |
+| PP3/BP4 | Computational prediction evidence | `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP; no local predictor voting |
+| PP5/BP6 | Reputable-source assertion | `tooluniverse-acmg-pp5-bp6-reputable-source-refinement`; not counted by default |
+
+### Benign/Frequency Candidate Routes
+| Candidate | Trigger | Required route |
+|------|----------|---------|
+| BA1 | AF >0.05 candidate or stand-alone benign frequency claim | `tooluniverse-acmg-ba1-exception-list-refinement` before benign classification |
+| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, cis/trans context, or alternate diagnosis | `tooluniverse-acmg-benign-context-refinement` |
+| RNA no-splicing-impact evidence | Synonymous/intronic variant with direct RNA or appropriate splicing no-impact evidence | `tooluniverse-acmg-pvs1-splicing-refinement`; prediction-only low splice scores remain prediction context |
+| Final compatibility | Any final counted evidence set | Evidence Compatibility Resolution in `tooluniverse-acmg-overlay-routing-core`; only `current_counted_evidence_resolved` may enter final combine |
 
 ---
 
@@ -1093,12 +1027,12 @@ def calculate_acmg_classification(evidence_codes):
 3. EVE (unsupervised, complements AlphaMissense)
 4. SIFT/PolyPhen (legacy, for comparison)
 
-### Concordance for PP3/BP4
-| Predictors Agreeing | ACMG Application |
+### Prediction Evidence Routing
+| Prediction pattern | ACMG application |
 |---------------------|------------------|
-| All damaging (≥3) | PP3 (supporting pathogenic) |
-| All benign (≥3) | BP4 (supporting benign) |
-| Mixed | Neither |
+| Concordant damaging outputs | Route to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP |
+| Concordant benign outputs | Route to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP |
+| Mixed outputs | Record discordance and route to the overlay; do not resolve by local voting |
 
 ---
 

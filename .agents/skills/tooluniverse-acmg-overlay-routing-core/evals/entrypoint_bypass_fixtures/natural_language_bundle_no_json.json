@@ -1,0 +1,6 @@
+{
+  "id": "natural_language_bundle_no_json",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "A markdown route plan table is not a machine-checkable assessment bundle.",
+  "text": "ACMG classification: Likely Pathogenic\n\nBundle Route Plan:\n| Criterion | Route outcome |\n| PVS1 | overlay_applied |\n| PM2 | overlay_applied |\n\nThe route audit table above supports final classification."
+}

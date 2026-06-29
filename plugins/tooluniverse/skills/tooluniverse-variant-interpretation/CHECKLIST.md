@@ -10,6 +10,13 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] Executive summary completed (not `[Interpreting...]`)
 - [ ] Data sources section populated
 
+### Confidentiality, Transparency, and Human Review
+- [ ] Patient-level data are de-identified; no names, dates of birth, medical record numbers, direct contact details, or other identifiers included
+- [ ] Public evidence is separated from unpublished drafts, meeting notes, internal deliberations, or restricted case-level evidence
+- [ ] AI-assisted drafting/evidence-retrieval statement included when the output is used for notes, curation drafts, or clinical interpretation drafts
+- [ ] Final report states that clinical or ClinGen/VCEP use requires qualified human review
+- [ ] No automatic publication, distribution, or final classification without human review
+
 ### Phase 1: Variant Identity
 - [ ] Gene symbol identified
 - [ ] HGVS c. notation provided
@@ -37,12 +44,11 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] ClinGen gene validity (if available)
 
 ### Phase 4: Computational Predictions
-- [ ] ≥3 predictors reported
-- [ ] SIFT score and interpretation
-- [ ] PolyPhen-2 score and interpretation
-- [ ] CADD score (raw and phred)
-- [ ] Concordance assessed (agree/disagree)
-- [ ] PP3 or BP4 applied appropriately
+- [ ] Relevant predictor scores reported when available
+- [ ] Selected predictor source and coverage documented
+- [ ] Discordance recorded without local vote-based evidence assignment
+- [ ] PP3/BP4 evidence routed to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or current VCEP
+- [ ] Non-missense and splice predictions routed to the appropriate criterion-specific overlay
 
 ### Phase 5: Structural Analysis (for missense)
 - [ ] Protein structure source identified (PDB/AlphaFold)
@@ -63,7 +69,7 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] All evidence codes explicitly listed
 - [ ] Each code has strength modifier
 - [ ] Code justification provided
-- [ ] Classification calculated correctly
+- [ ] Final classification produced by `tooluniverse-acmg-variant-classification`
 - [ ] Classification stated in executive summary
 
 ### Phase 8: Clinical Recommendations
@@ -105,29 +111,35 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] Not double-counted
 
 ### Common Errors to Avoid
-- [ ] PM2 without checking gnomAD
-- [ ] PP3 without multiple concordant predictions
-- [ ] PVS1 for non-null variants
-- [ ] PS3 without true functional evidence
-- [ ] Applying same evidence to multiple codes
+- [ ] PM2 without PM2 overlay review of population representation and coverage
+- [ ] PP3/BP4 from local predictor consensus rather than the calibrated overlay or VCEP
+- [ ] PVS1 without the LoF decision-tree overlay and mechanism gate
+- [ ] PS3/BS3 without functional-assay refinement
+- [ ] PS3/BS3 from segregation, case recurrence, HGMD/ClinVar labels, or another author's ACMG code rather than actual functional assay data
+- [ ] PM1, PM5, PS3, or PP3 assigned directly from a reputable-source label without primary evidence extraction
+- [ ] Applying the same evidence to multiple codes
 
 ---
 
-## Classification Calculation
+## Classification Routing Verification
 
-### Verify Math
-| Classification | Minimum Evidence |
-|----------------|-----------------|
-| Pathogenic | ≥1 VeryStrong + ≥1 Strong/Moderate |
-| Likely Pathogenic | ≥1 Strong + ≥2 Moderate |
-| VUS | Insufficient evidence |
-| Likely Benign | ≥1 Strong + ≥1 Supporting (benign) |
-| Benign | ≥1 StandAlone OR ≥2 Strong (benign) |
+### Verify Routing
+| Step | Requirement |
+|------|-------------|
+| Context routing | `tooluniverse-acmg-overlay-routing-core` used when disease, mechanism, phenotype, source, or literature context affects evidence |
+| Evidence assignment | Criterion-specific overlays used for refined strengths |
+| Final classification | `tooluniverse-acmg-variant-classification` produces the final call |
+
+### External-Agent Overlay Audit
+- [ ] Every counted ACMG code has an overlay route recorded as `overlay_applied`, `overlay_not_applicable`, `overlay_not_assessed`, or `overlay_deferred_to_vcep`
+- [ ] Source assertions from ClinVar, HGMD, LOVD, expert panels, lab reports, or published ACMG classifications are routed through PP5/BP6 source review before being used as leads
+- [ ] Failed tool calls are retried or marked as missing; manual summaries are not used to replace essential counted evidence
+- [ ] Literature-derived clinical evidence is routed to the correct overlay: functional assay -> PS3/BS3, segregation -> PP1/BS4, case enrichment -> PS4, biallelic recessive proband -> PM3, de novo -> PS2/PM6
 
 ### Classification Cross-Check
 - [ ] Evidence codes align with final classification
 - [ ] No conflicting codes ignored
-- [ ] Classification matches standard algorithms
+- [ ] Classification matches the ACMG workflow and applicable VCEP/overlay rules
 
 ---
 
@@ -153,7 +165,7 @@ Pre-delivery verification checklist for variant interpretation reports.
 | Section | Minimum Requirement |
 |---------|---------------------|
 | Population frequencies | gnomAD + ≥3 ancestry groups |
-| Computational predictors | ≥3 tools |
+| Computational predictors | Relevant predictor outputs and PP3/BP4 overlay route |
 | Literature searches | ≥2 search strategies |
 | ACMG codes | All applicable documented |
 | Clinical recommendations | ≥1 per classification type |
@@ -282,7 +294,7 @@ Calculate before delivery:
 | Variant identity complete | 10 |
 | gnomAD with ancestry | 10 |
 | ClinVar documented | 10 |
-| ≥3 predictors | 10 |
+| Predictor context and overlay route | 10 |
 | Structural analysis | 15 |
 | Literature search | 10 |
 | ACMG codes with rationale | 20 |

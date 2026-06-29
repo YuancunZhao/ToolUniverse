@@ -16,6 +16,23 @@ Summary:
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
+## ACMG Overlay Semantic Guard Hardening: 2026-06-29
+
+This change closes remaining architecture bypass paths where a trace-compliant bundle or generated answer could still present an unsupported ACMG five-tier label.
+
+- Adds `scripts/check_skill_duplicate_drift.py` so deployment copies under `skills/`, `plugin/skills/`, or `plugins/tooluniverse/skills/` fail if they drift from canonical `.agents/skills` copies for `tooluniverse-variant-interpretation`, `tooluniverse-acmg-variant-classification`, or `tooluniverse-acmg-overlay-routing-core`.
+- Updates `tooluniverse-variant-interpretation` to be intake/handoff only and removes unconditional final-verdict language from `tooluniverse-acmg-variant-classification`.
+- Adds `acmg_semantic_combiner.py` and integrates it into `validate_acmg_overlay_bundle.py`; validator output now includes `semantic_combiner_status`, `computed_classification`, `reported_classification`, and `semantic_violations`.
+- Requires validator PASS plus semantic combiner PASS for final five-tier labels and extends entrypoint bypass checks to reject final answers that lack semantic PASS.
+- Extends final-answer detection to ACMG shorthand labels (`P`, `LP`, `VUS`, `LB`, `B`, and paired forms) with context-gated handling for single-letter labels and false-positive fixtures for unrelated biomedical text.
+- Mirrors the same hardened final-label policy into `src/tooluniverse/acmg_overlay_gate_tool.py`, requires `semantic_combiner_status: PASS` in the runtime final-answer guard, converts user clinical context into non-counted discovery routes, and prevents missing functional-database queries from being reported as `not_applicable`.
+- Adds semantic regression fixtures for PM2_Supporting-only pathogenic output, no counted evidence with likely pathogenic output, BA1 benign PASS, BA1 pathogenic FAIL, and draft-only no-final output.
+- Adds `acmg_context_triggers.py` to convert user family, phenotype, de novo, segregation, phase, unaffected-carrier, and alternate-diagnosis context into non-counted route candidates only.
+- Extends `overlay_registry.yaml` trigger metadata for user-context discovery routes while keeping criterion ownership and coverage requirements centralized in the registry.
+- Adds `acmg_final_answer_guard.py`, schema fields for semantic combiner output, stricter missense functional-database coverage semantics, `docs/acmg_overlay_architecture.md`, and project-level AGENTS guardrails.
+
+This is anti-bypass and validation hardening only. It does not change ACMG evidence thresholds, VCEP precedence, criterion-specific overlay rules, or clinical truth claims beyond the conservative semantic combiner coverage implemented here.
+
 ## ACMG Harness Front-Door Execution: 2026-06-29
 
 This change upgrades the ACMG MCP front-door from a preflight-only gate to a lightweight executable harness while preserving the existing medical rule boundaries.
