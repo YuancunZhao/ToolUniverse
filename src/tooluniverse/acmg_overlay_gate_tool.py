@@ -24,6 +24,7 @@ from .acmg_gate_policy import (
     REQUIRED_ACMG_COVERAGE_CATEGORIES,
     SOURCE_LEAD_NOTICE,
 )
+from .acmg_harness_runner import ACMGHarnessRunner
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -58,10 +59,21 @@ class ACMGOverlayGateTool(BaseTool):
         if not isinstance(arguments, dict):
             return {"status": "error", "error": "arguments must be an object"}
 
+        mode = str(arguments.get("mode") or "assess").lower()
+        if mode not in {"assess", "plan_only", "validate_bundle"}:
+            return {"status": "error", "error": "mode must be 'assess', 'plan_only', or 'validate_bundle'"}
         output_mode = str(arguments.get("output_mode") or "compact").lower()
         if output_mode not in {"compact", "full"}:
             return {"status": "error", "error": "output_mode must be 'compact' or 'full'"}
 
+        if mode == "assess":
+            return self._run_harness(arguments, output_mode)
+        if mode == "validate_bundle":
+            return self._run_validate_bundle(arguments, output_mode)
+
+        return self._run_plan_only(arguments, output_mode)
+
+    def _run_plan_only(self, arguments: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
         registry_entries = self._load_registry_entries()
         baseline_routes = self._select_baseline_routes(registry_entries, arguments)
         discovery_routes = self._select_discovery_routes(registry_entries, arguments)
@@ -76,6 +88,7 @@ class ACMGOverlayGateTool(BaseTool):
         response = {
             "status": "success",
             "tool_role": "ACMG overlay compliance gate and preflight planner; not an ACMG classifier",
+            "mode": "plan_only",
             "output_mode": output_mode,
             "classification_status": classification_status,
             "validator_status": validator_status,
@@ -97,6 +110,114 @@ class ACMGOverlayGateTool(BaseTool):
         if output_mode == "full":
             return response
         return self._compact_response(response, bundle is not None)
+
+    def _run_validate_bundle(self, arguments: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
+        bundle = self._extract_bundle(arguments)
+        validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
+        validator_status = validation["validator_status"]
+        bundle_final_requested = self._bundle_requests_final_classification(bundle)
+        final_allowed = validator_status == "PASS" and bundle_final_requested
+        response = {
+            "status": "success",
+            "tool_role": "ACMG overlay compliance gate validator wrapper; not an ACMG classifier",
+            "mode": "validate_bundle",
+            "output_mode": output_mode,
+            "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
+            "validator_status": validator_status,
+            "final_classification_allowed": final_allowed,
+            "variant": self._variant_summary(arguments),
+            "source_assertions_or_leads": self._normalize_source_leads(arguments.get("source_outputs_or_leads")),
+            "validated_bundle_present": bundle is not None,
+            "acmg_assessment_bundle_status": "validated_input_bundle_not_echoed" if bundle else "missing",
+            "validator_result": validation.get("validator_result"),
+            "violations": validation.get("violations", []),
+            "candidate_evidence": [],
+            "counted_evidence": [],
+            "not_counted_source_leads": [],
+            "coverage_audit_summary": [],
+            "missing_for_final": self._missing_for_final_from_validation(validation, bundle_final_requested),
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+        if output_mode == "full":
+            response["acmg_assessment_bundle"] = bundle
+        return response
+
+    def _run_harness(self, arguments: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
+        registry_entries = self._load_registry_entries()
+        runner = ACMGHarnessRunner(
+            run_tool=self._run_tool,
+            registry_entries=registry_entries,
+            route_row=self._route_row,
+            select_baseline_routes=self._select_baseline_routes,
+        )
+        harness = runner.assess(arguments)
+        validation = self._validate_bundle(harness["acmg_assessment_bundle"])
+        validator_status = validation["validator_status"]
+        counted = [
+            row
+            for row in harness.get("route_audit", [])
+            if isinstance(row, dict) and row.get("counted") is True
+        ]
+        validation_missing = self._missing_for_final_from_validation(validation)
+        missing_for_final = harness.get("missing_for_final", []) + validation_missing
+        final_allowed = validator_status == "PASS" and not missing_for_final and bool(counted)
+        response = {
+            "status": "success",
+            "tool_role": "ACMG executable overlay harness; not an independent ACMG classifier",
+            "mode": "assess",
+            "output_mode": output_mode,
+            "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
+            "validator_status": validator_status,
+            "final_classification_allowed": final_allowed,
+            "variant": self._variant_summary(arguments),
+            "candidate_evidence": harness.get("candidate_evidence", []),
+            "counted_evidence": counted,
+            "not_counted_source_leads": harness.get("source_assertions_or_leads", []),
+            "coverage_audit_summary": harness.get("coverage_audit_summary", []),
+            "missing_for_final": missing_for_final,
+            "validator_result": validation.get("validator_result"),
+            "violations": validation.get("violations", []),
+            "source_assertions_or_leads": harness.get("source_assertions_or_leads", []),
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+        if output_mode == "full":
+            response.update({
+                "tool_calls": harness.get("tool_calls", []),
+                "derived_identifiers": harness.get("derived_identifiers", {}),
+                "coverage_audit": harness.get("coverage_audit", []),
+                "overlay_results": harness.get("overlay_results", []),
+                "route_audit": harness.get("route_audit", []),
+                "acmg_assessment_bundle": harness.get("acmg_assessment_bundle"),
+            })
+        return response
+
+    def _run_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+        from .tools._shared_client import get_shared_client
+
+        return get_shared_client().run_one_function(
+            {"name": tool_name, "arguments": arguments},
+            use_cache=False,
+            validate=True,
+        )
+
+    def _bundle_requests_final_classification(self, bundle: Dict[str, Any] | None) -> bool:
+        if not isinstance(bundle, dict):
+            return False
+        payload = bundle.get("acmg_assessment_bundle") if "acmg_assessment_bundle" in bundle else bundle
+        return isinstance(payload, dict) and payload.get("classification_status") == CLASSIFICATION_FINAL
+
+    def _missing_for_final_from_validation(self, validation: Dict[str, Any], bundle_final_requested: bool = True) -> List[str]:
+        if validation.get("validator_status") == "PASS":
+            if bundle_final_requested:
+                return []
+            return ["bundle classification_status is not final classification"]
+        missing = []
+        for row in validation.get("violations", []):
+            if isinstance(row, dict):
+                code = row.get("code")
+                message = row.get("message")
+                missing.append(f"{code}: {message}" if code and message else str(row))
+        return missing
 
     def _repo_root_candidates(self) -> Iterable[Path]:
         here = Path(__file__).resolve()
@@ -156,6 +277,7 @@ class ACMGOverlayGateTool(BaseTool):
         return {
             "status": response["status"],
             "tool_role": response["tool_role"],
+            "mode": response.get("mode", "plan_only"),
             "output_mode": "compact",
             "classification_status": response["classification_status"],
             "validator_status": response["validator_status"],

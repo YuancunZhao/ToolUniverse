@@ -1,14 +1,14 @@
 [
   {
     "name": "ACMG_overlay_gate_assess_variant",
-    "description": "Front-door ACMG overlay compliance gate for germline variant pathogenicity assessment. Use this before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, MaveDB, ClinGen/G2P, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it provides preflight guidance, recommends required coverage and online literature intake, normalizes direct tool outputs as source leads/coverage hits, optionally validates a supplied acmg_assessment_bundle, and tells whether final classification is allowed. Use output_mode=full only when a full assessment-bundle skeleton and route rows are needed. Final ACMG/pathogenicity wording requires actual literature coverage and validator_status: PASS.",
+    "description": "Executable front-door ACMG overlay harness for germline variant pathogenicity assessment. Use mode=assess to perform the ACMG-gated assessment before GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, MaveDB, ClinGen/G2P, or other direct evidence tools when the user asks for ACMG classification, pathogenicity, clinical significance, VUS/Benign/Pathogenic five-tier output, or germline variant interpretation. This tool is not an ACMG classifier; it orchestrates existing ToolUniverse evidence tools, records coverage, normalizes direct outputs as source leads, produces an acmg_assessment_bundle, runs the strict validator, and tells whether final classification is allowed. Do not manually combine GeneBe, ClinVar, SpliceAI, or literature outputs into ACMG criteria outside this harness. Use mode=plan_only for preflight only and mode=validate_bundle to validate a supplied bundle. Final ACMG/pathogenicity wording requires actual literature coverage and validator_status: PASS.",
     "type": "ACMGOverlayGateTool",
     "parameter": {
       "type": "object",
       "properties": {
         "variant": {
           "type": "string",
-          "description": "Variant identifier or HGVS expression, e.g. NM_000142.5:c.1075+95C>G or chr4:1803931C>G."
+          "description": "Variant identifier or HGVS expression, e.g. NM_000142.5:c.1075+95C>G or chr4:1803931C>G. Required for mode=assess; optional for mode=validate_bundle when the bundle already contains variant context."
         },
         "gene": {
           "type": "string",
@@ -52,11 +52,18 @@
           ],
           "default": "compact",
           "description": "Use compact for concise CLI/agent output. Use full to include the full acmg_assessment_bundle skeleton and full route rows."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "assess",
+            "plan_only",
+            "validate_bundle"
+          ],
+          "default": "assess",
+          "description": "assess runs the executable ACMG harness; plan_only returns preflight guidance only; validate_bundle only validates a supplied acmg_assessment_bundle."
         }
-      },
-      "required": [
-        "variant"
-      ]
+      }
     },
     "fields": {
       "operation": "assess_variant"
@@ -139,6 +146,40 @@
         },
         "bundle_required_fields": {
           "type": "array"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "candidate_evidence": {
+          "type": "array"
+        },
+        "counted_evidence": {
+          "type": "array"
+        },
+        "not_counted_source_leads": {
+          "type": "array"
+        },
+        "coverage_audit_summary": {
+          "type": "array"
+        },
+        "missing_for_final": {
+          "type": "array"
+        },
+        "tool_calls": {
+          "type": "array",
+          "description": "Full output only: executed harness tool calls and statuses."
+        },
+        "coverage_audit": {
+          "type": "array",
+          "description": "Full output only: generated coverage audit rows."
+        },
+        "overlay_results": {
+          "type": "array",
+          "description": "Full output only: generated overlay result rows."
+        },
+        "route_audit": {
+          "type": "array",
+          "description": "Full output only: generated route audit rows."
         }
       }
     },
@@ -166,8 +207,8 @@
         "germline",
         "compliance"
       ],
-      "estimated_execution_time": "< 2 seconds without bundle; < 5 seconds with validator",
-      "tool_role": "front-door compliance gate, not classifier"
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "executable ACMG overlay harness and validator gate; not an ACMG classifier"
     }
   }
 ]

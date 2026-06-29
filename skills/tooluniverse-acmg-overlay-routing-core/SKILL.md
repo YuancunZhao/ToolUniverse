@@ -6,11 +6,11 @@ disable-model-invocation: true
 
 # ACMG Overlay Routing Core
 
-This skill is the portable routing and compliance contract for ToolUniverse ACMG/AMP overlay skills. It does not assign ACMG evidence by itself and does not change any criterion threshold, strength adjustment, or VCEP rule.
+This skill is the portable routing and compliance contract for ToolUniverse ACMG/AMP overlay skills. It does not change any criterion threshold, strength adjustment, or VCEP rule.
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
-For ToolUniverse MCP workflows, call `ACMG_overlay_gate_assess_variant` first. It is the front-door preflight and validator wrapper for germline ACMG/pathogenicity tasks. It is not a classifier.
+For ToolUniverse MCP workflows, call `ACMG_overlay_gate_assess_variant` first with the default `mode: "assess"`. It is the executable front-door harness for germline ACMG/pathogenicity tasks: it runs available ToolUniverse intake tools, performs online literature coverage, normalizes high-risk tool outputs as source leads, assembles an assessment bundle, and runs the strict validator. It is not a new ACMG rule set and it must not be bypassed by manually combining GeneBe, InterVar, ClinVar, SpliceAI, VEP, MyVariant, gnomAD, MaveDB, or literature hits into counted ACMG evidence.
 
 For portable use by external agents, this skill exposes three primary gate artifacts:
 
@@ -24,11 +24,11 @@ Supporting reference artifacts are available for implementers, but external agen
 - `schemas/bundle_route_plan.schema.json`, `schemas/route_plan.schema.json`, `schemas/overlay_result.schema.json`, `schemas/route_audit.schema.json`, `schemas/coverage_audit.schema.json`, and `schemas/evidence_compatibility.schema.json`: internal/reference schemas used to explain bundle sections.
 - `evals/evals.json` and `evals/validator_fixtures/`: regression cases for detecting direct evidence assignment that bypasses overlays.
 
-These files are a portable compliance gate, not a full runtime. They do not invoke tools, query databases, compute final ACMG classifications, or modify evidence thresholds. The validator only checks whether an external agent produced enough trace to present a final classification.
+These files are the portable compliance source for the MCP harness and for external agents. The registry and schemas define routing and trace requirements; the validator checks whether a generated or supplied bundle has enough trace to present a final classification. They do not modify evidence thresholds, VCEP precedence, or final combination rules.
 
 **Hard gate:** without a validator-passing ACMG assessment bundle, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, and not-assessed criteria.
 
-The compact gate tool output intentionally does not include full route rows or an empty bundle skeleton. Use `output_mode=full` only when constructing fixtures or debugging bundle assembly.
+The compact gate tool output intentionally does not include full route rows or an empty bundle skeleton. Use `mode=plan_only` for preflight-only output, `mode=validate_bundle` for bundle validation only, and `output_mode=full` when constructing fixtures or debugging bundle assembly.
 
 Apply the compliance layer in two route-planning passes followed by coverage, audit, and compatibility resolution:
 

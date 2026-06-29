@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 try:
     from .acmg_gate_policy import (
+        ACMG_ALLOWED_USE,
         ACMG_FRONT_DOOR_TOOL_NAME,
         ACMG_GATE_NOTICE,
         HIGH_RISK_ACMG_GATE_TOOLS,
@@ -23,6 +24,7 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
     _policy_module = importlib.util.module_from_spec(_policy_spec)
     _policy_spec.loader.exec_module(_policy_module)
     ACMG_FRONT_DOOR_TOOL_NAME = _policy_module.ACMG_FRONT_DOOR_TOOL_NAME
+    ACMG_ALLOWED_USE = _policy_module.ACMG_ALLOWED_USE
     ACMG_GATE_NOTICE = _policy_module.ACMG_GATE_NOTICE
     HIGH_RISK_ACMG_GATE_TOOLS = _policy_module.HIGH_RISK_ACMG_GATE_TOOLS
 
@@ -81,9 +83,9 @@ def acmg_gate_tool_search_entry() -> Dict[str, Any]:
         "description": (
             "Front-door ACMG overlay compliance gate. Use this before GeneBe, "
             "InterVar, ClinVar, SpliceAI, MyVariant, VEP, or other direct tools "
-            "for germline ACMG/pathogenicity final classification. It provides "
-            "preflight guidance, normalizes source leads, validates an "
-            "acmg_assessment_bundle, and reports whether final classification is allowed."
+            "for germline ACMG/pathogenicity final classification. Use mode=assess "
+            "to run the ACMG-gated harness; do not manually combine GeneBe, ClinVar, "
+            "SpliceAI, or literature outputs into ACMG criteria."
         ),
         "type": "ACMGOverlayGateTool",
         "category": "acmg_overlay_gate",
@@ -189,14 +191,23 @@ def attach_acmg_gate_notice(tool_name: str, result: Any) -> Any:
         return result
     result.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
     result.setdefault("recommended_front_door_tool", ACMG_FRONT_DOOR_TOOL_NAME)
+    result.setdefault("acmg_countable_evidence", False)
+    result.setdefault("allowed_use", ACMG_ALLOWED_USE)
+    result.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
     metadata = result.setdefault("metadata", {})
     if isinstance(metadata, dict):
         metadata.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
         metadata.setdefault("recommended_front_door_tool", ACMG_FRONT_DOOR_TOOL_NAME)
+        metadata.setdefault("acmg_countable_evidence", False)
+        metadata.setdefault("allowed_use", ACMG_ALLOWED_USE)
+        metadata.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
     else:
         result["metadata"] = {
             "original_metadata": metadata,
             "acmg_gate_notice": ACMG_GATE_NOTICE,
             "recommended_front_door_tool": ACMG_FRONT_DOOR_TOOL_NAME,
+            "acmg_countable_evidence": False,
+            "allowed_use": ACMG_ALLOWED_USE,
+            "must_route_through": ACMG_FRONT_DOOR_TOOL_NAME,
         }
     return result

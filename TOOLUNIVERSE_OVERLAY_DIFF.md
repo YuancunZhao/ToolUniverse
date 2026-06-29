@@ -16,6 +16,20 @@ Summary:
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
+## ACMG Harness Front-Door Execution: 2026-06-29
+
+This change upgrades the ACMG MCP front-door from a preflight-only gate to a lightweight executable harness while preserving the existing medical rule boundaries.
+
+- Adds an ACMG harness runner used by `ACMG_overlay_gate_assess_variant(mode="assess")` to call existing ToolUniverse intake tools for variant normalization, source assertions, population/computational/splicing inputs, disease context, and online literature coverage.
+- Keeps `mode="plan_only"` for the previous compact preflight behavior and adds `mode="validate_bundle"` for validator-only workflows.
+- Assembles an `acmg_assessment_bundle`, runs the strict validator, and sets `final_classification_allowed: true` only when the validator passes and compatibility-resolved counted evidence is present.
+- Records tool failures in coverage audit instead of silently skipping evidence collection; failed or unavailable coverage keeps the result as `draft classification`.
+- Keeps GeneBe, InterVar, ClinVar, SpliceAI, VEP, MyVariant, gnomAD, MaveDB/DMS, ClinGen/G2P, and literature outputs as source leads, coverage hits, or route inputs unless routed through overlay results and route audit.
+- Extends high-risk direct tool notices with machine-readable fields: `acmg_countable_evidence: false`, `allowed_use: source_lead_or_route_input`, and `must_route_through: ACMG_overlay_gate_assess_variant`.
+- Updates routing-core documentation so ordinary agents use the harness output rather than manually combining direct MCP tool outputs into ACMG criteria.
+
+This is harness execution and anti-bypass hardening only. It does not change ACMG evidence thresholds, strength mappings, VCEP precedence, PM2/PP3 locked rules, database tool behavior, or final combiner logic.
+
 ## Structural Consistency Cleanup: 2026-06-29
 
 This change tightens machine-readable ownership and runtime discovery without changing any ACMG evidence threshold, strength mapping, VCEP precedence, overlay rule semantics, validator hard-stop behavior, or final classification logic.

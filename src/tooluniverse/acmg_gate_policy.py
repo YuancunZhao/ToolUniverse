@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 ACMG_FRONT_DOOR_TOOL_NAME = "ACMG_overlay_gate_assess_variant"
+ACMG_ALLOWED_USE = "source_lead_or_route_input"
 
 ACMG_GATE_NOTICE = (
     "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, "
