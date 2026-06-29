@@ -57,31 +57,87 @@ class ACMGHarnessRunner:
         self.select_baseline_routes = select_baseline_routes
 
     def assess(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        planned = self.plan_routes(arguments)
+        collected = self.collect_evidence(arguments)
+        applied = self.apply_overlay_routes(collected["candidate_evidence"])
+        bundle = self.assemble_bundle(
+            arguments,
+            collected["derived_identifiers"],
+            planned["route_plan"] + self._triggered_route_plan(arguments, collected["candidate_evidence"], planned["route_plan"]),
+            collected["coverage_audit"],
+            applied["overlay_results"],
+            applied["route_audit"],
+            collected["source_assertions_or_leads"],
+        )
+
+        return {
+            **planned,
+            **collected,
+            **applied,
+            "acmg_assessment_bundle": bundle,
+            "missing_for_final": self.missing_for_final(collected["coverage_audit"], applied["overlay_results"], applied["route_audit"]),
+        }
+
+    def plan_routes(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        route_plan = self.select_baseline_routes(self.registry_entries, arguments)
+        coverage_requirements = [
+            {"source_category": "population", "required_before_final": True},
+            {"source_category": "computational", "required_before_final": True},
+            {"source_category": "source_assertion", "required_before_final": False},
+            {"source_category": "literature", "required_before_final": True, "must_be_online": True},
+            {"source_category": "functional_database", "required_before_final": True},
+            {"source_category": "disease_context", "required_before_final": True},
+        ]
+        return {
+            "workflow_stage": "plan_routes",
+            "route_plan": route_plan,
+            "coverage_requirements": coverage_requirements,
+            "blocked_until": ["collect_evidence", "review_literature", "apply_overlay_routes", "validate_bundle"],
+        }
+
+    def collect_evidence(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         variant = str(arguments.get("variant") or "")
         gene = str(arguments.get("gene") or "")
         transcript = str(arguments.get("transcript") or "")
-
         tool_calls = self._collect_evidence(variant, gene, transcript)
         source_leads = self._source_leads(tool_calls, arguments.get("source_outputs_or_leads"))
         derived = self._derive_identifiers(variant, tool_calls)
         coverage_audit = self._coverage_audit(tool_calls, derived)
         candidate_evidence = self._candidate_evidence(tool_calls, derived)
-        route_plan = self._route_plan(arguments, candidate_evidence)
-        overlay_results, route_audit = self._overlay_adapters(candidate_evidence)
-        bundle = self._bundle(arguments, derived, route_plan, coverage_audit, overlay_results, route_audit, source_leads)
-
         return {
+            "workflow_stage": "collect_evidence",
             "tool_calls": [row.as_dict() for row in tool_calls],
             "derived_identifiers": derived,
             "coverage_audit": coverage_audit,
             "coverage_audit_summary": self._coverage_summary(coverage_audit),
+            "literature_status": self._literature_status(coverage_audit),
             "candidate_evidence": candidate_evidence,
+            "route_triggers": self._route_triggers(candidate_evidence),
+            "source_assertions_or_leads": source_leads,
+        }
+
+    def apply_overlay_routes(self, candidate_evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+        overlay_results, route_audit = self._overlay_adapters(candidate_evidence)
+        return {
+            "workflow_stage": "apply_overlay_routes",
             "overlay_results": overlay_results,
             "route_audit": route_audit,
-            "source_assertions_or_leads": source_leads,
-            "acmg_assessment_bundle": bundle,
-            "missing_for_final": self._missing_for_final(coverage_audit, overlay_results, route_audit),
         }
+
+    def assemble_bundle(
+        self,
+        arguments: Dict[str, Any],
+        derived: Dict[str, Any],
+        route_plan: List[Dict[str, Any]],
+        coverage_audit: List[Dict[str, Any]],
+        overlay_results: List[Dict[str, Any]],
+        route_audit: List[Dict[str, Any]],
+        source_leads: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        return self._bundle(arguments, derived, route_plan, coverage_audit, overlay_results, route_audit, source_leads)
+
+    def missing_for_final(self, coverage: List[Dict[str, Any]], overlay_results: List[Dict[str, Any]], route_audit: List[Dict[str, Any]]) -> List[str]:
+        return self._missing_for_final(coverage, overlay_results, route_audit)
 
     def _safe_call(self, tool_name: str, arguments: Dict[str, Any], source_category: str) -> ToolCallResult:
         try:
@@ -285,14 +341,25 @@ class ACMGHarnessRunner:
 
     def _route_plan(self, arguments: Dict[str, Any], candidate_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         route_plan = self.select_baseline_routes(self.registry_entries, arguments)
+        route_plan.extend(self._triggered_route_plan(arguments, candidate_evidence, route_plan))
+        return route_plan
+
+    def _triggered_route_plan(
+        self,
+        arguments: Dict[str, Any],
+        candidate_evidence: List[Dict[str, Any]],
+        existing_routes: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        del arguments
+        appended = []
         wanted = {self._criterion_to_group(row.get("criterion")) for row in candidate_evidence}
-        existing = {row.get("criterion_group") for row in route_plan if isinstance(row, dict)}
+        existing = {row.get("criterion_group") for row in existing_routes if isinstance(row, dict)}
         for entry in self.registry_entries:
             group = entry.get("criterion_group")
             if group in wanted and group not in existing:
-                route_plan.append(self.route_row(entry))
+                appended.append(self.route_row(entry))
                 existing.add(group)
-        return route_plan
+        return appended
 
     def _criterion_to_group(self, criterion: Any) -> str:
         return {
@@ -336,6 +403,23 @@ class ACMGHarnessRunner:
                 "reason": "Harness generated a route candidate only; evidence is not counted until the overlay applies or VCEP defers it.",
             })
         return overlay_results, route_audit
+
+    def _route_triggers(self, candidate_evidence: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        triggers = []
+        for candidate in candidate_evidence:
+            criterion = str(candidate.get("criterion"))
+            if criterion == "none":
+                continue
+            group = self._criterion_to_group(criterion)
+            triggers.append({
+                "route_family": group or "unknown_route",
+                "source_category": candidate.get("source_category"),
+                "target_overlay": self._criterion_overlay(criterion),
+                "counted": False,
+                "final_ready": False,
+                "reason": candidate.get("reason", "Route trigger only; not counted ACMG evidence."),
+            })
+        return triggers
 
     def _criterion_overlay(self, criterion: str) -> str:
         return {
@@ -421,17 +505,50 @@ class ACMGHarnessRunner:
             {
                 "source_category": row.get("source_category"),
                 "query_status": row.get("query_status"),
+                "search_status": row.get("query_status"),
                 "hit_count": len(row.get("hits") or []),
                 "triggered_routes": row.get("triggered_routes", []),
+                "literature_review_status": self._literature_review_status(row),
+                "final_ready": self._coverage_row_final_ready(row),
             }
             for row in coverage
         ]
+
+    def _literature_status(self, coverage: List[Dict[str, Any]]) -> Dict[str, Any]:
+        row = next((item for item in coverage if item.get("source_category") == "literature"), {})
+        return {
+            "literature_search_status": row.get("query_status", "unavailable"),
+            "literature_review_status": self._literature_review_status(row),
+            "hit_count": len(row.get("hits") or []),
+            "final_ready": self._coverage_row_final_ready(row),
+            "reason": row.get("reason", "literature coverage not available"),
+        }
+
+    def _literature_review_status(self, row: Dict[str, Any]) -> str | None:
+        if row.get("source_category") != "literature":
+            return None
+        hit_count = len(row.get("hits") or [])
+        status = row.get("query_status")
+        if status == "no_hit":
+            return "reviewed_not_needed"
+        if status == "success" and hit_count == 0:
+            return "reviewed_not_needed"
+        if status == "success" and hit_count > 0:
+            return row.get("literature_review_status") or "not_reviewed"
+        return "not_reviewed"
+
+    def _coverage_row_final_ready(self, row: Dict[str, Any]) -> bool:
+        if row.get("source_category") == "literature":
+            return self._literature_review_status(row) in {"reviewed_full", "reviewed_not_needed"}
+        return row.get("query_status") in {"success", "no_hit", "not_applicable"}
 
     def _missing_for_final(self, coverage: List[Dict[str, Any]], overlay_results: List[Dict[str, Any]], route_audit: List[Dict[str, Any]]) -> List[str]:
         missing = []
         for row in coverage:
             if row.get("source_category") in {"literature", "population", "computational", "disease_context"} and row.get("query_status") in {"failed", "unavailable"}:
                 missing.append(f"{row.get('source_category')} coverage is {row.get('query_status')}")
+            if row.get("source_category") == "literature" and not self._coverage_row_final_ready(row):
+                missing.append(f"literature review status is {self._literature_review_status(row)}")
         if not any(row.get("counted") is True for row in route_audit):
             missing.append("no overlay-applied counted evidence; final classification remains draft")
         if any(row.get("status") == "not_assessed" for row in overlay_results):

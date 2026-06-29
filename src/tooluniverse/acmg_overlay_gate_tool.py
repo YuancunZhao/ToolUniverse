@@ -9,6 +9,7 @@ leads.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,7 @@ CLASSIFICATION_DRAFT = "draft classification"
 CLASSIFICATION_FINAL = "final classification"
 VALIDATOR_NOT_RUN = "NOT_RUN"
 VALIDATOR_DRAFT_ONLY = "DRAFT_ONLY"
+ACMG_ORDINARY_ENTRYPOINT = "ACMG_overlay_gate_assess_variant"
 
 SOURCE_LEAD_KEYWORDS = (
     "genebe",
@@ -54,10 +56,21 @@ class ACMGOverlayGateTool(BaseTool):
         self.operation = self.tool_config.get("fields", {}).get("operation", "assess_variant")
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        if self.operation != "assess_variant":
-            return {"status": "error", "error": f"Unknown operation: {self.operation}"}
         if not isinstance(arguments, dict):
             return {"status": "error", "error": "arguments must be an object"}
+
+        if self.operation == "plan_variant_assessment":
+            return self._run_plan_variant_assessment(arguments)
+        if self.operation == "collect_variant_evidence":
+            return self._run_collect_variant_evidence(arguments)
+        if self.operation == "apply_overlay_routes":
+            return self._run_apply_overlay_routes(arguments)
+        if self.operation == "finalize_assessment":
+            return self._run_finalize_assessment(arguments)
+        if self.operation == "guard_final_answer":
+            return self._run_guard_final_answer(arguments)
+        if self.operation != "assess_variant":
+            return {"status": "error", "error": f"Unknown operation: {self.operation}"}
 
         mode = str(arguments.get("mode") or "assess").lower()
         if mode not in {"assess", "plan_only", "validate_bundle"}:
@@ -72,6 +85,127 @@ class ACMGOverlayGateTool(BaseTool):
             return self._run_validate_bundle(arguments, output_mode)
 
         return self._run_plan_only(arguments, output_mode)
+
+    def _runner(self) -> ACMGHarnessRunner:
+        registry_entries = self._load_registry_entries()
+        return ACMGHarnessRunner(
+            run_tool=self._run_tool,
+            registry_entries=registry_entries,
+            route_row=self._route_row,
+            select_baseline_routes=self._select_baseline_routes,
+        )
+
+    def _run_plan_variant_assessment(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        planned = self._runner().plan_routes(arguments)
+        return {
+            "status": "success",
+            "tool_role": "ACMG workflow planner; not an ACMG classifier",
+            "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
+            "not_final_entrypoint": True,
+            "classification_status": CLASSIFICATION_DRAFT,
+            "final_classification_allowed": False,
+            "final_answer_policy": "forbidden",
+            "variant": self._variant_summary(arguments),
+            **planned,
+            "required_next_actions": ["collect_evidence", "review_literature", "apply_overlay_routes", "finalize_assessment"],
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+
+    def _run_collect_variant_evidence(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        collected = self._runner().collect_evidence(arguments)
+        return {
+            "status": "success",
+            "tool_role": "ACMG evidence collector; not an ACMG classifier",
+            "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
+            "not_final_entrypoint": True,
+            "classification_status": CLASSIFICATION_DRAFT,
+            "final_classification_allowed": False,
+            "final_answer_policy": "forbidden",
+            "variant": self._variant_summary(arguments),
+            "route_triggers": collected["route_triggers"],
+            "coverage_audit_summary": collected["coverage_audit_summary"],
+            "literature_status": collected["literature_status"],
+            "source_assertions_or_leads": collected["source_assertions_or_leads"],
+            "coverage_audit": collected["coverage_audit"],
+            "tool_calls": collected["tool_calls"],
+            "required_next_actions": ["review_literature", "apply_overlay_routes", "finalize_assessment"],
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+
+    def _run_apply_overlay_routes(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        candidate_evidence = arguments.get("candidate_evidence")
+        if not isinstance(candidate_evidence, list):
+            candidate_evidence = self._candidate_evidence_from_route_triggers(arguments.get("route_triggers"))
+        applied = self._runner().apply_overlay_routes(candidate_evidence)
+        return {
+            "status": "success",
+            "tool_role": "ACMG overlay route dispatcher; not an ACMG classifier",
+            "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
+            "not_final_entrypoint": True,
+            "classification_status": CLASSIFICATION_DRAFT,
+            "final_classification_allowed": False,
+            "final_answer_policy": "forbidden",
+            **applied,
+            "required_next_actions": ["assemble_bundle", "validate_bundle", "finalize_assessment"],
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+
+    def _run_finalize_assessment(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        bundle = self._extract_bundle(arguments)
+        validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
+        validator_status = validation["validator_status"]
+        bundle_final_requested = self._bundle_requests_final_classification(bundle)
+        counted = self._bundle_counted_evidence(bundle)
+        literature_ready = self._bundle_literature_final_ready(bundle)
+        final_allowed = validator_status == "PASS" and bundle_final_requested and bool(counted) and literature_ready
+        blocked = self._missing_for_final_from_validation(validation, bundle_final_requested)
+        if not counted:
+            blocked.append("no compatibility-resolved counted evidence")
+        if not literature_ready:
+            blocked.append("literature hits are not fully reviewed or no literature coverage is documented")
+        return {
+            "status": "success",
+            "tool_role": "ACMG finalization gate; not an ACMG classifier",
+            "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
+            "not_final_entrypoint": True,
+            "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
+            "validator_status": validator_status,
+            "final_classification_allowed": final_allowed,
+            "final_answer_policy": "allowed" if final_allowed else "forbidden",
+            "allowed_response": "final classification" if final_allowed else "draft classification only",
+            "counted_evidence": counted,
+            "blocked_reasons": blocked,
+            "validator_result": validation.get("validator_result"),
+            "violations": validation.get("violations", []),
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
+
+    def _run_guard_final_answer(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        text = str(arguments.get("final_answer_text") or arguments.get("answer") or "")
+        harness_result = arguments.get("harness_result") or arguments.get("workflow_result") or {}
+        has_final_label = self._contains_final_acmg_label(text)
+        allowed = isinstance(harness_result, dict) and harness_result.get("final_classification_allowed") is True
+        validator_pass = isinstance(harness_result, dict) and harness_result.get("validator_status") == "PASS"
+        evidence_without_overlay = self._contains_counted_evidence_without_overlay(text, harness_result)
+        violations = []
+        if has_final_label and not allowed:
+            violations.append("final_acmg_label_without_final_classification_allowed_true")
+        if has_final_label and not validator_pass:
+            violations.append("final_acmg_label_without_validator_pass")
+        if evidence_without_overlay:
+            violations.append("counted_evidence_without_overlay_applied_or_vcep")
+        status = "FAIL" if violations else "PASS"
+        return {
+            "status": status,
+            "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
+            "not_final_entrypoint": True,
+            "has_final_acmg_label": has_final_label,
+            "final_classification_allowed": allowed,
+            "validator_status": harness_result.get("validator_status") if isinstance(harness_result, dict) else None,
+            "violations": violations,
+            "allowed_response": "final classification" if status == "PASS" and allowed else "draft classification only",
+            "acmg_gate_notice": ACMG_GATE_NOTICE,
+        }
 
     def _run_plan_only(self, arguments: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
         registry_entries = self._load_registry_entries()
@@ -143,13 +277,7 @@ class ACMGOverlayGateTool(BaseTool):
         return response
 
     def _run_harness(self, arguments: Dict[str, Any], output_mode: str) -> Dict[str, Any]:
-        registry_entries = self._load_registry_entries()
-        runner = ACMGHarnessRunner(
-            run_tool=self._run_tool,
-            registry_entries=registry_entries,
-            route_row=self._route_row,
-            select_baseline_routes=self._select_baseline_routes,
-        )
+        runner = self._runner()
         harness = runner.assess(arguments)
         validation = self._validate_bundle(harness["acmg_assessment_bundle"])
         validator_status = validation["validator_status"]
@@ -169,12 +297,16 @@ class ACMGOverlayGateTool(BaseTool):
             "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
             "validator_status": validator_status,
             "final_classification_allowed": final_allowed,
+            "final_answer_policy": "allowed" if final_allowed else "forbidden",
+            "allowed_response": "final classification" if final_allowed else "draft classification only",
             "variant": self._variant_summary(arguments),
-            "candidate_evidence": harness.get("candidate_evidence", []),
+            "route_triggers": harness.get("route_triggers", []),
             "counted_evidence": counted,
             "not_counted_source_leads": harness.get("source_assertions_or_leads", []),
             "coverage_audit_summary": harness.get("coverage_audit_summary", []),
+            "literature_status": harness.get("literature_status", {}),
             "missing_for_final": missing_for_final,
+            "required_next_actions": self._required_next_actions_from_missing(missing_for_final),
             "validator_result": validation.get("validator_result"),
             "violations": validation.get("violations", []),
             "source_assertions_or_leads": harness.get("source_assertions_or_leads", []),
@@ -185,6 +317,7 @@ class ACMGOverlayGateTool(BaseTool):
                 "tool_calls": harness.get("tool_calls", []),
                 "derived_identifiers": harness.get("derived_identifiers", {}),
                 "coverage_audit": harness.get("coverage_audit", []),
+                "candidate_evidence": harness.get("candidate_evidence", []),
                 "overlay_results": harness.get("overlay_results", []),
                 "route_audit": harness.get("route_audit", []),
                 "acmg_assessment_bundle": harness.get("acmg_assessment_bundle"),
@@ -218,6 +351,102 @@ class ACMGOverlayGateTool(BaseTool):
                 message = row.get("message")
                 missing.append(f"{code}: {message}" if code and message else str(row))
         return missing
+
+    def _candidate_evidence_from_route_triggers(self, route_triggers: Any) -> List[Dict[str, Any]]:
+        if not isinstance(route_triggers, list):
+            return []
+        group_to_criterion = {
+            "pm2_absence_rarity": "PM2",
+            "ba1_exception_list": "BA1",
+            "pp3_bp4_missense_prediction": "PP3",
+            "pm4_bp3_protein_length": "PM4",
+            "ps3_bs3_functional_assay": "PS3",
+            "de_novo_ps2_pm6": "PS2",
+            "ps4_case_enrichment": "PS4",
+            "pp1_bs4_pp4_segregation": "PP1",
+            "reputable_source_review": "PP5",
+            "pvs1_lof_decision_tree": "PVS1",
+        }
+        candidates = []
+        for trigger in route_triggers:
+            if not isinstance(trigger, dict):
+                continue
+            criterion = group_to_criterion.get(str(trigger.get("route_family") or ""))
+            if not criterion:
+                continue
+            candidates.append({
+                "criterion": criterion,
+                "candidate_strength": "route_trigger_only",
+                "source_category": trigger.get("source_category"),
+                "reason": trigger.get("reason", "Route trigger supplied to overlay dispatcher."),
+            })
+        return candidates
+
+    def _bundle_payload(self, bundle: Dict[str, Any] | None) -> Dict[str, Any]:
+        if not isinstance(bundle, dict):
+            return {}
+        payload = bundle.get("acmg_assessment_bundle") if "acmg_assessment_bundle" in bundle else bundle
+        return payload if isinstance(payload, dict) else {}
+
+    def _bundle_counted_evidence(self, bundle: Dict[str, Any] | None) -> List[Any]:
+        payload = self._bundle_payload(bundle)
+        compatibility = payload.get("compatibility_resolution")
+        if not isinstance(compatibility, dict):
+            return []
+        counted = compatibility.get("current_counted_evidence_resolved")
+        return counted if isinstance(counted, list) else []
+
+    def _bundle_literature_final_ready(self, bundle: Dict[str, Any] | None) -> bool:
+        payload = self._bundle_payload(bundle)
+        coverage = payload.get("coverage_audit")
+        if not isinstance(coverage, list):
+            return False
+        literature_rows = [row for row in coverage if isinstance(row, dict) and row.get("source_category") == "literature"]
+        if not literature_rows:
+            return False
+        for row in literature_rows:
+            status = row.get("query_status")
+            hits = row.get("hits") if isinstance(row.get("hits"), list) else []
+            review_status = row.get("literature_review_status")
+            if status == "no_hit":
+                return True
+            if status == "success" and not hits:
+                return True
+            if status == "success" and hits and review_status in {"reviewed_full", "reviewed_not_needed"}:
+                return True
+        return False
+
+    def _contains_final_acmg_label(self, text: str) -> bool:
+        if not text:
+            return False
+        return bool(re.search(r"\b(Pathogenic|Likely Pathogenic|VUS|Likely Benign|Benign)\b", text, re.IGNORECASE))
+
+    def _contains_counted_evidence_without_overlay(self, text: str, harness_result: Any) -> bool:
+        if not re.search(r"\b(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:_[A-Za-z]+)?\b", text):
+            return False
+        if not isinstance(harness_result, dict):
+            return True
+        route_audit = harness_result.get("route_audit") or []
+        if not isinstance(route_audit, list):
+            return True
+        return not any(
+            isinstance(row, dict)
+            and row.get("counted") is True
+            and row.get("route_outcome") in {"overlay_applied", "overlay_deferred_to_vcep"}
+            for row in route_audit
+        )
+
+    def _required_next_actions_from_missing(self, missing: List[str]) -> List[str]:
+        actions = []
+        text = " ".join(missing).lower()
+        if "literature" in text:
+            actions.append("review_literature_hits_or_document_no_hit")
+        if "counted evidence" in text or "overlay" in text:
+            actions.append("apply_overlay_routes_before_counting")
+        if "coverage" in text:
+            actions.append("complete_required_coverage")
+        actions.append("rerun_acmg_finalize_assessment")
+        return list(dict.fromkeys(actions))
 
     def _repo_root_candidates(self) -> Iterable[Path]:
         here = Path(__file__).resolve()

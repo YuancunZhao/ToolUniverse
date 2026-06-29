@@ -208,7 +208,439 @@
         "compliance"
       ],
       "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
-      "tool_role": "executable ACMG overlay harness and validator gate; not an ACMG classifier"
+      "tool_role": "executable ACMG overlay harness and validator gate; not an ACMG classifier",
+      "workflow_visibility": "public_controller",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
+    }
+  },
+  {
+    "name": "ACMG_plan_variant_assessment",
+    "description": "Advanced/internal ACMG workflow step. Ordinary ACMG/pathogenicity final-classification requests should call ACMG_overlay_gate_assess_variant with mode=assess. This step plans the ACMG-gated workflow for a germline variant, generating route plan, required coverage categories, and blocked workflow steps. It does not assign ACMG evidence or final classification.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "description": "Variant identifier or HGVS expression."
+        },
+        "gene": {
+          "type": "string",
+          "description": "Gene symbol, if known."
+        },
+        "transcript": {
+          "type": "string",
+          "description": "Transcript accession, if known."
+        },
+        "consequence": {
+          "type": "string",
+          "description": "Known or suspected consequence."
+        },
+        "variant_type": {
+          "type": "string",
+          "description": "Variant type summary."
+        },
+        "disease_context": {
+          "description": "Disease, inheritance, mechanism, or VCEP context."
+        },
+        "phenotype_context": {
+          "description": "Patient or cohort phenotype context."
+        },
+        "family_context": {
+          "description": "Family, segregation, de novo, phase, or affected-relative context."
+        }
+      }
+    },
+    "fields": {
+      "operation": "plan_variant_assessment"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "classification_status": {
+          "type": "string"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "final_answer_policy": {
+          "type": "string"
+        },
+        "ordinary_entrypoint": {
+          "type": "string"
+        },
+        "not_final_entrypoint": {
+          "type": "boolean"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        },
+        "route_plan": {
+          "type": "array"
+        },
+        "coverage_requirements": {
+          "type": "array"
+        },
+        "blocked_until": {
+          "type": "array"
+        }
+      }
+    },
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
+    "metadata": {
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "ACMG advanced/internal workflow step; not an ACMG classifier",
+      "workflow_visibility": "advanced_internal_step",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
+    }
+  },
+  {
+    "name": "ACMG_collect_variant_evidence",
+    "description": "Advanced/internal ACMG workflow step. Ordinary ACMG/pathogenicity final-classification requests should call ACMG_overlay_gate_assess_variant with mode=assess. This step collects ToolUniverse evidence inputs using existing tools and outputs source leads, coverage hits, route triggers, and literature status only; never counted ACMG evidence.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "description": "Variant identifier or HGVS expression."
+        },
+        "gene": {
+          "type": "string",
+          "description": "Gene symbol, if known."
+        },
+        "transcript": {
+          "type": "string",
+          "description": "Transcript accession, if known."
+        },
+        "consequence": {
+          "type": "string",
+          "description": "Known or suspected consequence."
+        },
+        "variant_type": {
+          "type": "string",
+          "description": "Variant type summary."
+        },
+        "disease_context": {
+          "description": "Disease, inheritance, mechanism, or VCEP context."
+        },
+        "phenotype_context": {
+          "description": "Patient or cohort phenotype context."
+        },
+        "family_context": {
+          "description": "Family, segregation, de novo, phase, or affected-relative context."
+        },
+        "source_outputs_or_leads": {
+          "type": "array",
+          "items": {},
+          "description": "Optional existing direct tool outputs to normalize as source leads."
+        }
+      }
+    },
+    "fields": {
+      "operation": "collect_variant_evidence"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "classification_status": {
+          "type": "string"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "final_answer_policy": {
+          "type": "string"
+        },
+        "ordinary_entrypoint": {
+          "type": "string"
+        },
+        "not_final_entrypoint": {
+          "type": "boolean"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        },
+        "route_triggers": {
+          "type": "array"
+        },
+        "coverage_audit_summary": {
+          "type": "array"
+        },
+        "literature_status": {
+          "type": "object"
+        },
+        "source_assertions_or_leads": {
+          "type": "array"
+        }
+      }
+    },
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
+    "metadata": {
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "ACMG advanced/internal workflow step; not an ACMG classifier",
+      "workflow_visibility": "advanced_internal_step",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
+    }
+  },
+  {
+    "name": "ACMG_apply_overlay_routes",
+    "description": "Advanced/internal ACMG workflow step. Ordinary ACMG/pathogenicity final-classification requests should call ACMG_overlay_gate_assess_variant with mode=assess. This step dispatches ACMG route triggers to thin overlay adapters and returns overlay_result and route_audit rows only; it does not compute a final ACMG classification.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "route_triggers": {
+          "type": "array",
+          "items": {},
+          "description": "Route triggers from ACMG_collect_variant_evidence."
+        },
+        "candidate_evidence": {
+          "type": "array",
+          "items": {},
+          "description": "Full/internal candidate evidence rows, if available."
+        }
+      }
+    },
+    "fields": {
+      "operation": "apply_overlay_routes"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "classification_status": {
+          "type": "string"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "final_answer_policy": {
+          "type": "string"
+        },
+        "ordinary_entrypoint": {
+          "type": "string"
+        },
+        "not_final_entrypoint": {
+          "type": "boolean"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        },
+        "overlay_results": {
+          "type": "array"
+        },
+        "route_audit": {
+          "type": "array"
+        }
+      }
+    },
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
+    "metadata": {
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "ACMG advanced/internal workflow step; not an ACMG classifier",
+      "workflow_visibility": "advanced_internal_step",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
+    }
+  },
+  {
+    "name": "ACMG_finalize_assessment",
+    "description": "Advanced/internal ACMG workflow step. Ordinary ACMG/pathogenicity final-classification requests should call ACMG_overlay_gate_assess_variant with mode=assess. This step finalizes an ACMG workflow bundle by running the strict validator and final gate. Final classification is allowed only with validator PASS, reviewed literature coverage, and compatibility-resolved counted evidence.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "acmg_assessment_bundle": {
+          "type": "object",
+          "description": "Machine-checkable ACMG assessment bundle."
+        }
+      }
+    },
+    "fields": {
+      "operation": "finalize_assessment"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "classification_status": {
+          "type": "string"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "final_answer_policy": {
+          "type": "string"
+        },
+        "ordinary_entrypoint": {
+          "type": "string"
+        },
+        "not_final_entrypoint": {
+          "type": "boolean"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        },
+        "validator_status": {
+          "type": "string"
+        },
+        "allowed_response": {
+          "type": "string"
+        },
+        "blocked_reasons": {
+          "type": "array"
+        },
+        "counted_evidence": {
+          "type": "array"
+        }
+      }
+    },
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
+    "metadata": {
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "ACMG advanced/internal workflow step; not an ACMG classifier",
+      "workflow_visibility": "advanced_internal_step",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
+    }
+  },
+  {
+    "name": "ACMG_guard_final_answer",
+    "description": "Advanced/internal ACMG workflow step. Ordinary ACMG/pathogenicity final-classification requests should call ACMG_overlay_gate_assess_variant with mode=assess. This step guards a proposed final natural-language ACMG/pathogenicity answer against harness bypass and returns FAIL if final five-tier wording appears without final_classification_allowed=true and validator_status PASS.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "final_answer_text": {
+          "type": "string",
+          "description": "Proposed final answer text to audit."
+        },
+        "harness_result": {
+          "type": "object",
+          "description": "ACMG workflow/controller result used to justify the answer."
+        }
+      }
+    },
+    "fields": {
+      "operation": "guard_final_answer"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "ordinary_entrypoint": {
+          "type": "string"
+        },
+        "not_final_entrypoint": {
+          "type": "boolean"
+        },
+        "has_final_acmg_label": {
+          "type": "boolean"
+        },
+        "final_classification_allowed": {
+          "type": "boolean"
+        },
+        "validator_status": {
+          "type": "string"
+        },
+        "violations": {
+          "type": "array"
+        },
+        "allowed_response": {
+          "type": "string"
+        },
+        "acmg_gate_notice": {
+          "type": "string"
+        }
+      }
+    },
+    "label": [
+      "ACMG",
+      "overlay",
+      "gate",
+      "variant",
+      "pathogenicity",
+      "germline"
+    ],
+    "metadata": {
+      "tags": [
+        "ACMG_gate",
+        "variant_interpretation",
+        "pathogenicity",
+        "germline",
+        "compliance"
+      ],
+      "estimated_execution_time": "plan_only/validate_bundle usually < 5 seconds; assess depends on ToolUniverse intake and online literature tools",
+      "tool_role": "ACMG advanced/internal workflow step; not an ACMG classifier",
+      "workflow_visibility": "advanced_internal_step",
+      "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
     }
   }
 ]

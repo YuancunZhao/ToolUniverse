@@ -81,11 +81,12 @@ def acmg_gate_tool_search_entry() -> Dict[str, Any]:
         "name": ACMG_FRONT_DOOR_TOOL_NAME,
         "tool_name": ACMG_FRONT_DOOR_TOOL_NAME,
         "description": (
-            "Front-door ACMG overlay compliance gate. Use this before GeneBe, "
+            "Front-door ACMG workflow controller. Use this before GeneBe, "
             "InterVar, ClinVar, SpliceAI, MyVariant, VEP, or other direct tools "
             "for germline ACMG/pathogenicity final classification. Use mode=assess "
-            "to run the ACMG-gated harness; do not manually combine GeneBe, ClinVar, "
-            "SpliceAI, or literature outputs into ACMG criteria."
+            "to run plan, collect, literature review tracking, overlay routing, "
+            "bundle validation, and final gate; do not manually combine GeneBe, "
+            "ClinVar, SpliceAI, or literature outputs into ACMG criteria."
         ),
         "type": "ACMGOverlayGateTool",
         "category": "acmg_overlay_gate",

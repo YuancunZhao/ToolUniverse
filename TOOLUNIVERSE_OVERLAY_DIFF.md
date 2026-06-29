@@ -20,6 +20,11 @@ Summary:
 
 This change upgrades the ACMG MCP front-door from a preflight-only gate to a lightweight executable harness while preserving the existing medical rule boundaries.
 
+- Adds workflow controller step tools: `ACMG_plan_variant_assessment`, `ACMG_collect_variant_evidence`, `ACMG_apply_overlay_routes`, `ACMG_finalize_assessment`, and `ACMG_guard_final_answer`.
+- Marks `ACMG_overlay_gate_assess_variant(mode="assess")` as the single public/ordinary ACMG workflow entrypoint; step tools are metadata-tagged as advanced/internal surfaces for controlled orchestration, debugging, fixtures, and final-answer auditing, not a manual sequence ordinary agents must remember.
+- Splits the controller into route planning, evidence collection, overlay route dispatch, finalization, and final-answer guarding while still using existing ToolUniverse evidence tools and ACMG overlay skills as rule sources.
+- Changes compact controller output from evidence-code-like `candidate_evidence` to non-counted `route_triggers` with `counted=false` and `final_ready=false`.
+- Tracks `literature_search_status` separately from `literature_review_status`; literature hits that are not reviewed keep final classification blocked.
 - Adds an ACMG harness runner used by `ACMG_overlay_gate_assess_variant(mode="assess")` to call existing ToolUniverse intake tools for variant normalization, source assertions, population/computational/splicing inputs, disease context, and online literature coverage.
 - Keeps `mode="plan_only"` for the previous compact preflight behavior and adds `mode="validate_bundle"` for validator-only workflows.
 - Assembles an `acmg_assessment_bundle`, runs the strict validator, and sets `final_classification_allowed: true` only when the validator passes and compatibility-resolved counted evidence is present.

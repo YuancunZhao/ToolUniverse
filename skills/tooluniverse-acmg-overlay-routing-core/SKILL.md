@@ -10,7 +10,9 @@ This skill is the portable routing and compliance contract for ToolUniverse ACMG
 
 Use it to decide which context overlays must run before evidence-specific overlays, to keep output labels consistent, and to avoid circular or duplicated evidence use.
 
-For ToolUniverse MCP workflows, call `ACMG_overlay_gate_assess_variant` first with the default `mode: "assess"`. It is the executable front-door harness for germline ACMG/pathogenicity tasks: it runs available ToolUniverse intake tools, performs online literature coverage, normalizes high-risk tool outputs as source leads, assembles an assessment bundle, and runs the strict validator. It is not a new ACMG rule set and it must not be bypassed by manually combining GeneBe, InterVar, ClinVar, SpliceAI, VEP, MyVariant, gnomAD, MaveDB, or literature hits into counted ACMG evidence.
+For ToolUniverse MCP workflows, ordinary agents must call `ACMG_overlay_gate_assess_variant` first with the default `mode: "assess"`. It is the single public executable workflow controller for germline ACMG/pathogenicity tasks: it plans routes, collects available ToolUniverse evidence inputs, tracks literature search/review status, normalizes high-risk tool outputs as source leads, dispatches overlay route adapters, assembles an assessment bundle, and runs the strict validator. It is not a new ACMG rule set and it must not be bypassed by manually combining GeneBe, InterVar, ClinVar, SpliceAI, VEP, MyVariant, gnomAD, MaveDB, or literature hits into counted ACMG evidence.
+
+Advanced/debug only: the internal step tools `ACMG_plan_variant_assessment`, `ACMG_collect_variant_evidence`, `ACMG_apply_overlay_routes`, `ACMG_finalize_assessment`, and `ACMG_guard_final_answer` are not ordinary final-classification entrypoints. They are for controlled orchestration, debugging, fixtures, and final-answer auditing. Ordinary agents should call the controller instead of manually sequencing these steps, and must treat route triggers as non-counted until overlay route audit passes.
 
 For portable use by external agents, this skill exposes three primary gate artifacts:
 
@@ -28,7 +30,7 @@ These files are the portable compliance source for the MCP harness and for exter
 
 **Hard gate:** without a validator-passing ACMG assessment bundle, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, and not-assessed criteria.
 
-The compact gate tool output intentionally does not include full route rows or an empty bundle skeleton. Use `mode=plan_only` for preflight-only output, `mode=validate_bundle` for bundle validation only, and `output_mode=full` when constructing fixtures or debugging bundle assembly.
+The compact controller output intentionally does not include full route rows, an empty bundle skeleton, or candidate evidence-strength labels such as `PM2` / `PP3_Moderate` / `PM4`. It exposes `route_triggers` with `counted=false` and `final_ready=false`. Use `mode=plan_only` for preflight-only output, `mode=validate_bundle` for bundle validation only, and `output_mode=full` when constructing fixtures or debugging bundle assembly.
 
 Apply the compliance layer in two route-planning passes followed by coverage, audit, and compatibility resolution:
 

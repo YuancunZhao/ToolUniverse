@@ -10,7 +10,9 @@ An agent may summarize evidence without the bundle, but the output must stay `dr
 
 This rule also applies when evidence comes from direct ToolUniverse MCP tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, or user-supplied family/phenotype context. Those outputs are source leads, coverage hits, route triggers, or annotation inputs until they enter the bundle and the validator returns `PASS`.
 
-For MCP workflows, start with `ACMG_overlay_gate_assess_variant` in the default `mode: "assess"`. It is the executable front-door harness for germline ACMG/pathogenicity tasks: it runs ToolUniverse intake tools when available, performs online literature coverage, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, builds an assessment bundle, runs the strict validator, and allows final classification only when `final_classification_allowed: true`. Use `mode: "plan_only"` only for preflight guidance, and `mode: "validate_bundle"` only when validating a supplied bundle. The default `output_mode` is `compact`; use `output_mode: "full"` only when you need the full bundle skeleton and route rows for debugging or fixture construction.
+For MCP workflows, ordinary agents must call `ACMG_overlay_gate_assess_variant` in the default `mode: "assess"`. It is the single public workflow controller for germline ACMG/pathogenicity tasks: it plans routes, collects ToolUniverse evidence inputs, tracks literature search/review status, normalizes GeneBe/InterVar/ClinVar and similar outputs as source leads, dispatches overlay route adapters, builds an assessment bundle, runs the strict validator, and allows final classification only when `final_classification_allowed: true`. Use `mode: "plan_only"` only for preflight guidance, and `mode: "validate_bundle"` only when validating a supplied bundle. The default `output_mode` is `compact`; use `output_mode: "full"` only when you need internal route rows for debugging or fixture construction.
+
+Advanced/debug only: the controller also exposes internal step tools, `ACMG_plan_variant_assessment`, `ACMG_collect_variant_evidence`, `ACMG_apply_overlay_routes`, `ACMG_finalize_assessment`, and `ACMG_guard_final_answer`. Ordinary agents should not call these as a manual sequence; they are for controlled orchestration, debugging, fixtures, and final-answer auditing. The ACMG skills remain the rule source for criterion-specific interpretation.
 
 This applies to English and Chinese variant-classification queries. For example, `根据ACMG规则评估 ... 杂合变异致病性` and direct `Tool_Finder_Keyword` searches should surface `ACMG_overlay_gate_assess_variant` before direct tools such as GeneBe, InterVar, SpliceAI, MyVariant, ClinVar, or VEP. Direct `execute_tool` calls to high-risk variant evidence tools should return an `acmg_gate_notice` and `recommended_front_door_tool` so tool output remains a source lead or route input until validated.
 
@@ -19,10 +21,10 @@ Final classification requires actual online literature coverage. A PubMed/PMC/Eu
 ## Three-Step Workflow
 
 1. Call `ACMG_overlay_gate_assess_variant` with `mode: "assess"` for the default automated path.
-2. Review the harness output: `coverage_audit_summary`, `candidate_evidence`, `not_counted_source_leads`, and `missing_for_final` explain what was found and what still blocks final classification.
-3. Present final ACMG/pathogenicity wording only when the harness returns `validator_status: "PASS"` and `final_classification_allowed: true`. Otherwise keep `classification_status: "draft classification"` and use `missing_for_final` to complete the remaining coverage or overlay work.
+2. Review `route_triggers`, `coverage_audit_summary`, `literature_status`, `not_counted_source_leads`, and `missing_for_final`. Route triggers are not ACMG counted evidence.
+3. Present final ACMG/pathogenicity wording only when the controller returns `validator_status: "PASS"` and `final_classification_allowed: true`. Otherwise keep `classification_status: "draft classification"` and use `required_next_actions` to complete the remaining coverage, literature review, overlay, or validator work.
 
-Manual bundle workflows are still supported: use `mode: "plan_only"` to get recommended intake steps, then submit an `acmg_assessment_bundle` with `mode: "validate_bundle"`. The same final gate applies.
+Manual bundle workflows are still supported for expert/debug use: use `mode: "plan_only"` to get recommended intake steps, then submit an `acmg_assessment_bundle` with `mode: "validate_bundle"`. Ordinary final-classification workflows should use `mode: "assess"` so the controller owns the full state machine. The same final gate applies.
 
 ## Required Bundle
 

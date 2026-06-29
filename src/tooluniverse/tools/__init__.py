@@ -26,6 +26,11 @@ from ._shared_client import get_shared_client, reset_shared_client
 
 # Import all tools
 from .ACMG_overlay_gate_assess_variant import ACMG_overlay_gate_assess_variant
+from .ACMG_apply_overlay_routes import ACMG_apply_overlay_routes
+from .ACMG_collect_variant_evidence import ACMG_collect_variant_evidence
+from .ACMG_finalize_assessment import ACMG_finalize_assessment
+from .ACMG_guard_final_answer import ACMG_guard_final_answer
+from .ACMG_plan_variant_assessment import ACMG_plan_variant_assessment
 from .ACC_list_guidelines import ACC_list_guidelines
 from .ADA_get_standards_section import ADA_get_standards_section
 from .ADA_list_standards_sections import ADA_list_standards_sections
@@ -2780,6 +2785,11 @@ from .web_search import web_search
 
 __all__ = [
     "ACMG_overlay_gate_assess_variant",
+    "ACMG_plan_variant_assessment",
+    "ACMG_guard_final_answer",
+    "ACMG_finalize_assessment",
+    "ACMG_collect_variant_evidence",
+    "ACMG_apply_overlay_routes",
     "get_shared_client",
     "reset_shared_client",
     "ACC_list_guidelines",
