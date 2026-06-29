@@ -23,7 +23,7 @@
     "fields": {
       "endpoint": "https://rest.variantvalidator.org/VariantValidator/variantvalidator/{genome_build}/{variant_description}/{select_transcripts}"
     },
-    "type": "BaseRESTTool",
+    "type": "VariantValidatorTool",
     "test_examples": [
       {"genome_build": "GRCh38", "variant_description": "NM_007294.4:c.5266dup", "select_transcripts": "NM_007294.4"},
       {"genome_build": "GRCh38", "variant_description": "NM_000179.3:c.943C>T", "select_transcripts": "NM_000179.3"}
@@ -119,7 +119,11 @@
           "default": "GRCh38"
         }
       },
-      "required": ["gene_symbol"]
+      "anyOf": [
+        {"required": ["gene_symbol"]},
+        {"required": ["gene"]},
+        {"required": ["gene_name"]}
+      ]
     },
     "fields": {
       "endpoint": "https://rest.variantvalidator.org/VariantValidator/tools/gene2transcripts_v2/{gene_symbol}/{transcript_set}/all/{genome_build}",
@@ -128,7 +132,7 @@
         "content-type": "application/json"
       }
     },
-    "type": "BaseRESTTool",
+    "type": "VariantValidatorTool",
     "test_examples": [
       {"gene_symbol": "TP53", "transcript_set": "mane", "genome_build": "GRCh38"},
       {"gene_symbol": "BRCA1", "transcript_set": "mane", "genome_build": "GRCh38"}
@@ -203,7 +207,7 @@
       "endpoint": "https://rest.variantvalidator.org/VariantFormatter/variantformatter/{genome_build}/{variant_description}/refseq/all/False",
       "headers": {"Accept": "application/json"}
     },
-    "type": "BaseRESTTool",
+    "type": "VariantValidatorTool",
     "test_examples": [
       {"genome_build": "GRCh38", "variant_description": "NC_000017.11:g.50198002C>A"}
     ],

@@ -30,7 +30,6 @@ import json
 import random
 import string
 import os
-import tempfile
 import time
 import hashlib
 import warnings
@@ -65,6 +64,7 @@ from .logging_config import (
     set_log_level,
 )
 from .cache.result_cache_manager import ResultCacheManager
+from .cache.cache_config import build_cache_config
 from .output_hook import HookManager
 from .default_config import default_tool_files, get_default_hook_config
 from .acmg_gate_search import attach_acmg_gate_notice
@@ -429,41 +429,14 @@ class ToolUniverse:
             self.hook_manager = None
             self.logger.debug("Output hooks disabled")
 
-        # Initialize caching configuration
-        cache_enabled = (
-            os.getenv("TOOLUNIVERSE_CACHE_ENABLED", "true").lower() in _TRUTHY_VALUES
-        )
-        persistence_enabled = (
-            os.getenv("TOOLUNIVERSE_CACHE_PERSIST", "true").lower() in _TRUTHY_VALUES
-        )
-        memory_size = int(os.getenv("TOOLUNIVERSE_CACHE_MEMORY_SIZE", "256"))
-        default_ttl_env = os.getenv("TOOLUNIVERSE_CACHE_DEFAULT_TTL")
-        default_ttl = int(default_ttl_env) if default_ttl_env else None
-        singleflight_enabled = (
-            os.getenv("TOOLUNIVERSE_CACHE_SINGLEFLIGHT", "true").lower()
-            in _TRUTHY_VALUES
-        )
-
-        cache_path = os.getenv("TOOLUNIVERSE_CACHE_PATH")
-        if not cache_path and persistence_enabled:
-            base_dir = os.getenv("TOOLUNIVERSE_CACHE_DIR")
-            if not base_dir:
-                base_dir = os.path.join(str(Path.home()), ".tooluniverse")
-            os.makedirs(base_dir, exist_ok=True)
-            if not os.access(base_dir, os.W_OK) and not os.getenv(
-                "TOOLUNIVERSE_CACHE_DIR"
-            ):
-                base_dir = os.path.join(tempfile.gettempdir(), "tooluniverse")
-                os.makedirs(base_dir, exist_ok=True)
-            cache_path = os.path.join(base_dir, "cache.sqlite")
-
+        cache_config = build_cache_config()
         self.cache_manager = ResultCacheManager(
-            memory_size=memory_size,
-            persistent_path=cache_path if persistence_enabled else None,
-            enabled=cache_enabled,
-            persistence_enabled=persistence_enabled,
-            singleflight=singleflight_enabled,
-            default_ttl=default_ttl,
+            memory_size=cache_config.memory_size,
+            persistent_path=cache_config.persistent_path,
+            enabled=cache_config.enabled,
+            persistence_enabled=cache_config.persistence_enabled,
+            singleflight=cache_config.singleflight_enabled,
+            default_ttl=cache_config.default_ttl,
         )
 
         self._strict_validation = (

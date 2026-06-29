@@ -38,6 +38,7 @@ STATIC_LAZY_REGISTRY = {
     "BasePythonExecutor": "python_executor_tool",
     "BaseRESTTool": "base_rest_tool",
     "BaseTool": "base_tool",
+    "VariantValidatorTool": "variant_validator_tool",
     "BgeeTool": "bgee_tool",
     "BiGGModelsTool": "bigg_models_tool",
     "BinaryDownloadTool": "file_download_tool",

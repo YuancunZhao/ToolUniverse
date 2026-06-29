@@ -36,6 +36,7 @@ controlled_values:
   - must_audit_if_counted
   route_kind_values:
   - applicability_gate
+  - evidence_intake
   - evidence_scoring
   - source_review
   - functional_discovery
@@ -89,6 +90,66 @@ defaults:
   - split_by_context
   - defer_to_vcep
   - unresolved_draft_only
+criterion_ownership:
+  PVS1:
+  - pvs1_lof_decision_tree
+  - pvs1_splicing
+  PS1:
+  - ps1_pm5_amino_acid_equivalence
+  - ps1_splicing_similarity
+  PS2:
+  - de_novo_ps2_pm6
+  PS3:
+  - ps3_bs3_functional_assay
+  PS4:
+  - ps4_case_enrichment
+  PM1:
+  - pm1_regional_missense_constraint
+  PM2:
+  - pm2_absence_rarity
+  PM3:
+  - pm3_in_trans
+  PM4:
+  - pm4_bp3_protein_length
+  PM5:
+  - ps1_pm5_amino_acid_equivalence
+  PM6:
+  - de_novo_ps2_pm6
+  PP1:
+  - pp1_bs4_pp4_segregation
+  PP2:
+  - pm1_regional_missense_constraint
+  PP3:
+  - pp3_bp4_missense_prediction
+  PP4:
+  - pp1_bs4_pp4_segregation
+  PP5:
+  - reputable_source_review
+  BA1:
+  - ba1_exception_list
+  - benign_context
+  BS1:
+  - benign_context
+  BS2:
+  - benign_context
+  BS3:
+  - ps3_bs3_functional_assay
+  BS4:
+  - pp1_bs4_pp4_segregation
+  BP1:
+  - pm1_regional_missense_constraint
+  BP2:
+  - benign_context
+  BP3:
+  - pm4_bp3_protein_length
+  BP4:
+  - pp3_bp4_missense_prediction
+  BP5:
+  - benign_context
+  BP6:
+  - reputable_source_review
+  BP7:
+  - pvs1_splicing
 overlays:
 - criterion_group: ba1_exception_list
   covered_criteria:
@@ -138,6 +199,10 @@ overlays:
   - cis/trans benign phase evidence
   - alternate molecular diagnosis proposed to explain the phenotype
   - BA1 blocked but frequency may still support BS1
+  cross_routes:
+  - criterion: BP1
+    route_to: pm1_regional_missense_constraint
+    reason: BP1 is benign evidence but depends on missense disease mechanism and PM1/PP2/BP1 priority; do not include BP1 in benign_context covered_criteria.
   enforcement_level: must_query
   route_kind: evidence_scoring
   expected_default_status: not_assessed
@@ -284,7 +349,7 @@ overlays:
   - PVS1, PVS1_Strong, PVS1_Moderate, PVS1_Supporting, or PVS1_N/A proposed
   - transcript structure or LoF mechanism determines evidence strength
   enforcement_level: must_plan
-  route_kind: applicability_gate
+  route_kind: evidence_scoring
   expected_default_status: not_applicable
 - criterion_group: pvs1_splicing
   covered_criteria:
@@ -311,7 +376,7 @@ overlays:
   - SpliceAI-only or other prediction-only evidence is prediction/comparison context, not RNA assay evidence.
   - Route prediction-only splicing evidence to PP3/BP4 prediction guidance, PS1-splicing comparison guidance, or VCEP; do not trigger PVS1_RNA without RNA assay, published RNA evidence, or observed transcript consequence.
   enforcement_level: must_route_if_hit
-  route_kind: applicability_gate
+  route_kind: evidence_scoring
   expected_default_status: not_assessed
   hit_trigger_evidence_types:
   - RNA assay
@@ -342,7 +407,7 @@ overlays:
   - For missense variants, structured functional database lookup is a variant_type_baseline functional-discovery source.
   - Literature functional assays remain evidence_discovery signals; once found, they must be routed to the same overlay before counting.
   enforcement_level: must_query
-  route_kind: functional_discovery
+  route_kind: evidence_scoring
   expected_default_status: not_assessed
   hit_trigger_evidence_types:
   - MaveDB hit
@@ -487,7 +552,7 @@ overlays:
   route_kind: evidence_scoring
   expected_default_status: not_assessed
 - criterion_group: dominant_negative_mechanism
-  covered_criteria:
+  gated_criteria:
   - PVS1
   - PS1
   - PM5
@@ -525,7 +590,7 @@ overlays:
   route_kind: applicability_gate
   expected_default_status: not_assessed
 - criterion_group: multiple_disorder_context
-  covered_criteria:
+  gated_criteria:
   - PVS1
   - PS1
   - PM5
@@ -561,7 +626,7 @@ overlays:
   route_kind: applicability_gate
   expected_default_status: not_assessed
 - criterion_group: phenotype_dependent_intake
-  covered_criteria:
+  intake_criteria:
   - PP4
   - PS4
   - PP1
@@ -588,7 +653,7 @@ overlays:
   - PP4, BP5, BS2, PM3, PS2, PM6, PP1, BS4, or rare-disease PS4 lacks required clinical context
   - phenotype specificity or diagnostic yield affects evidence routing
   enforcement_level: must_route_if_hit
-  route_kind: evidence_scoring
+  route_kind: evidence_intake
   expected_default_status: not_assessed
   hit_trigger_evidence_types:
   - patient phenotype needed
@@ -598,7 +663,7 @@ overlays:
   - phase context
   - phenotype specificity needed
 - criterion_group: reputable_source_review
-  covered_criteria:
+  source_review_criteria:
   - PP5
   - BP6
   overlay_skill: tooluniverse-acmg-pp5-bp6-reputable-source-refinement
@@ -622,7 +687,7 @@ overlays:
   route_kind: source_review
   expected_default_status: not_used
 - criterion_group: evidence_compatibility_resolution
-  covered_criteria:
+  compatibility_criteria:
   - BA1
   - BS1
   - BS2

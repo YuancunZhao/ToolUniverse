@@ -2115,6 +2115,7 @@ from .VEuPathDB_list_gene_searches import VEuPathDB_list_gene_searches
 from .VEuPathDB_list_organism_searches import VEuPathDB_list_organism_searches
 from .VEuPathDB_list_record_types import VEuPathDB_list_record_types
 from .VariantValidator_gene2transcripts import VariantValidator_gene2transcripts
+from .VariantValidator_format_genomic_to_transcripts import VariantValidator_format_genomic_to_transcripts
 from .VariantValidator_validate_variant import VariantValidator_validate_variant
 from .WAQI_get_air_quality import WAQI_get_air_quality
 from .WFGY_triage_llm_rag_failure import WFGY_triage_llm_rag_failure
@@ -4464,6 +4465,7 @@ __all__ = [
     "VEuPathDB_list_organism_searches",
     "VEuPathDB_list_record_types",
     "VariantValidator_gene2transcripts",
+    "VariantValidator_format_genomic_to_transcripts",
     "VariantValidator_validate_variant",
     "WAQI_get_air_quality",
     "WFGY_triage_llm_rag_failure",

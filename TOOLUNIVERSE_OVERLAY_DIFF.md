@@ -1,11 +1,11 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-25
+Last updated: 2026-06-29
 
 Baseline comparison:
 
-- Upstream: `mims-harvard/ToolUniverse`, `upstream/main` at `574a7027`
-- Overlay branch: `YuancunZhao/ToolUniverse`, `codex/skills-overlay` at `073b2199`
+- Upstream: `mims-harvard/ToolUniverse`, `upstream/main` at `e2520a96`
+- Overlay branch: `YuancunZhao/ToolUniverse`, `codex/skills-overlay` worktree based on `0a45af05`
 - Diff command: `git diff --name-status upstream/main...codex/skills-overlay -- skills`
 
 Summary:
@@ -15,6 +15,31 @@ Summary:
 - Deleted upstream skills: 0
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
+
+## Structural Consistency Cleanup: 2026-06-29
+
+This change tightens machine-readable ownership and runtime discovery without changing any ACMG evidence threshold, strength mapping, VCEP precedence, overlay rule semantics, validator hard-stop behavior, or final classification logic.
+
+- Adds `VariantValidatorTool` to the static lazy registry so frozen or static-discovery environments can load the dedicated VariantValidator implementation without relying on AST fallback.
+- Adds `criterion_ownership` to `tooluniverse-acmg-overlay-routing-core/overlay_registry.yaml`, covering all 28 ACMG criteria and explicitly disambiguating dual-owner criteria such as protein-level PS1 versus splicing PS1, baseline PVS1 versus RNA/splicing PVS1, and BP1 ownership by the PM1/PP2/BP1 missense mechanism overlay.
+- Reserves `covered_criteria` for routes that actually assign or withhold evidence strength. Non-scoring routes now use `gated_criteria`, `intake_criteria`, `source_review_criteria`, or `compatibility_criteria` for their affected scope.
+- Updates the runtime ACMG gate registry, assessment-bundle schema, route-plan schema, gate tool route rows, and validator terminology to use scoring ownership rather than broad affected-criterion scope.
+- Rewrites residual SV/CNV and common-pattern wording so non-ACMG intake skills emit evidence summaries and route candidates, not standalone final germline ACMG classifications or direct evidence-strength assignments.
+- Adds regression tests for VariantValidator static lazy discovery and ACMG overlay registry ownership semantics.
+
+## Structural Deduplication and VariantValidator Implementation: 2026-06-29
+
+This change reduces duplicated ACMG dispatcher text and moves VariantValidator from a pure generic REST configuration to a small dedicated, testable tool implementation.
+
+- Compresses `tooluniverse-acmg-variant-classification/SKILL.md` further into a dispatcher/reporting workflow. The main skill now points to `tooluniverse-acmg-overlay-routing-core` as the only source of truth for route-bundle definitions, status values, guidance-authority labels, criterion ownership, route audit, coverage audit, Evidence Compatibility Resolution, and validator hard gates.
+- Keeps the canonical Route Bundle Quick Planner and compatibility matrix in `tooluniverse-acmg-overlay-routing-core`; the main ACMG skill no longer maintains a duplicate bundle table.
+- Adds a BP1 cross-route stub to `tooluniverse-acmg-benign-context-refinement` and a `cross_routes` note in `overlay_registry.yaml`: BP1 is benign evidence but remains owned by `pm1_regional_missense_constraint` because it depends on missense disease mechanism and PM1/PP2/BP1 priority.
+- Adds `VariantValidatorTool` for `VariantValidator_validate_variant`, `VariantValidator_gene2transcripts`, and `VariantValidator_format_genomic_to_transcripts`, preserving tool names and return format while centralizing URL encoding, alias/default handling, HTTP error normalization, and non-JSON diagnostics.
+- Adds a typed wrapper export for `VariantValidator_format_genomic_to_transcripts`, matching the existing validate/gene2transcripts wrapper surface.
+- Extracts ToolUniverse startup cache environment parsing and fallback cache-path selection into `cache/cache_config.py`, preserving the existing fallback from unwritable home cache directories to the system temporary directory.
+- Adds mocked unit tests for VariantValidator URL encoding, aliases/defaults, HTTP/non-JSON error handling, and formatter wrapper forwarding.
+
+This is structural cleanup only. It does not change ACMG evidence thresholds, strength mappings, VCEP precedence, overlay rule semantics, validator hard-stop behavior, or final classification logic.
 
 ## ACMG Gate Complexity Consolidation: 2026-06-27
 

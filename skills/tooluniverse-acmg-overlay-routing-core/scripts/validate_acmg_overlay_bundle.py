@@ -314,9 +314,19 @@ def invalid_context_artifact_reason(name: str, value: Any) -> str | None:
     return None
 
 
-def covered_criteria(registry: list[dict[str, Any]]) -> set[str]:
+def scoring_criteria(registry: list[dict[str, Any]]) -> set[str]:
+    """Criteria owned by evidence-scoring overlays.
+
+    The registry reserves `covered_criteria` for overlays that can actually
+    assign or withhold ACMG evidence strength. Applicability, intake, source
+    review, and final compatibility routes use separate scope fields and do not
+    define criterion ownership.
+    """
+
     criteria = set()
     for row in registry:
+        if row.get("route_kind") != "evidence_scoring":
+            continue
         for criterion in as_list(row.get("covered_criteria")):
             criteria.add(str(criterion))
     return criteria
@@ -428,7 +438,7 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
     coverage = as_list(bundle.get("coverage_audit"))
     route_audit = as_list(bundle.get("route_audit"))
     compatibility = bundle.get("compatibility_resolution")
-    covered = covered_criteria(registry)
+    covered = scoring_criteria(registry)
 
     classification_status = bundle.get("classification_status")
     if classification_status not in CLASSIFICATION_STATUS_VALUES:
@@ -630,7 +640,7 @@ def validate_minimal(payload: Any, registry: list[dict[str, Any]]) -> dict[str, 
     route_audit = as_list(bundle.get("route_audit"))
     coverage = as_list(bundle.get("coverage_audit"))
     compatibility = bundle.get("compatibility_resolution")
-    covered = covered_criteria(registry)
+    covered = scoring_criteria(registry)
 
     classification_status = bundle.get("classification_status")
     if classification_status not in CLASSIFICATION_STATUS_VALUES:

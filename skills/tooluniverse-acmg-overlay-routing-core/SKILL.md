@@ -14,7 +14,7 @@ For ToolUniverse MCP workflows, call `ACMG_overlay_gate_assess_variant` first. I
 
 For portable use by external agents, this skill exposes three primary gate artifacts:
 
-- `overlay_registry.yaml`: the single rule index for covered criteria, mandatory overlay skills, trigger policies, enforcement levels, countable route outcomes, and baseline data-source categories.
+- `overlay_registry.yaml`: the single rule index for scoring ownership, non-scoring route scopes, mandatory overlay skills, trigger policies, enforcement levels, countable route outcomes, and baseline data-source categories. In the registry, `covered_criteria` is reserved for evidence-scoring overlays; context gates, intake routes, source review, and compatibility resolution use their own scope fields.
 - `schemas/acmg_assessment_bundle.schema.json`: the minimal final-report bundle schema. A final ACMG classification requires this bundle to contain route planning, coverage audit, overlay results, route audit, compatibility resolution, and classification status.
 - `scripts/validate_acmg_overlay_bundle.py`: dependency-free validator for the assessment bundle. It returns `PASS`, `DRAFT_ONLY`, or `FAIL`. The default mode is strict and keeps baseline, coverage, context, compatibility, and source-label bypass checks enabled; `--mode minimal` is only for lightweight integrations.
 
@@ -66,6 +66,8 @@ Practice/local refinements must be explicitly labeled in the output and must not
 ## Criterion Ownership Index
 
 Use this index when a criterion name could route to more than one overlay:
+
+The machine-readable version is `criterion_ownership` in `overlay_registry.yaml`. It identifies scoring owners. Non-scoring routes may still gate, intake, review, or resolve those criteria through `gated_criteria`, `intake_criteria`, `source_review_criteria`, or `compatibility_criteria`.
 
 | Criterion / evidence type | Owning route |
 | --- | --- |

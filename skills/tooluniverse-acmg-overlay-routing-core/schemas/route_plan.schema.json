@@ -82,6 +82,7 @@
             "type": "string",
             "enum": [
               "applicability_gate",
+              "evidence_intake",
               "evidence_scoring",
               "source_review",
               "functional_discovery",

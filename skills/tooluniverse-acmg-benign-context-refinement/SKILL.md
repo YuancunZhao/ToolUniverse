@@ -18,6 +18,8 @@ This overlay does not change the PM2 overlay. Population rarity/absence still fo
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions. In this overlay, BA1 exception-list review is a prerequisite for BA1 only; BS1/BS2/BP2/BP5 remain here.
 
+BP1 cross-route stub: BP1 is a benign criterion, but this overlay does not assess it. If BP1 is proposed or the agent searches benign criteria for a missense variant in a gene where missense variation is not an established disease mechanism, route BP1 to `tooluniverse-acmg-pm1-regional-missense-constraint-refinement`. Keep BP1 out of this overlay's covered criteria unless a current in-scope VCEP explicitly moves it.
+
 Guidance authority:
 
 - BA1 exception-list and generic stand-alone BA1 review follow Ghosh et al. 2018 as `ClinGen/SVI primary`.
@@ -161,6 +163,7 @@ Benign-context refinement:
 | `MedGen_search_conditions`, HPO/MONDO/Monarch tools | Disease and phenotype context. |
 | `tooluniverse-acmg-ba1-exception-list-refinement` | Ghosh 2018 BA1 stand-alone threshold, exception list, founder-population caveats, and gene/variant-specific BA1 modifications. |
 | `tooluniverse-acmg-phenotype-dependent-evidence-refinement` | Patient phenotype, healthy status, and alternate-diagnosis checks. |
+| `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` | Cross-route for BP1, because BP1 depends on missense disease mechanism and PP2/BP1/PM1 priority. |
 
 ---
 

@@ -223,8 +223,8 @@ This is good clinical-genetics practice (ClinVar tier disagreement is common) AN
 | **Filtering** | VAF, depth, quality, PASS, variant type, mutation type, consequence, chromosome, SV size |
 | **Statistics** | Ti/Tv ratio, per-sample VAF/depth stats, mutation type distribution, SV size distribution |
 | **Annotation** | MyVariant.info (aggregates ClinVar, dbSNP, gnomAD, CADD, SIFT, PolyPhen) |
-| **SV/CNV Analysis** | gnomAD SV population frequencies, DGVa/dbVar known SVs, ClinGen dosage sensitivity |
-| **Clinical Interpretation** | ACMG/ClinGen CNV pathogenicity classification using haploinsufficiency/triplosensitivity scores |
+| **SV/CNV Evidence Intake** | gnomAD SV population frequencies, DGVa/dbVar known SVs, ClinGen dosage sensitivity, and ACMG route-candidate context |
+| **Clinical Context Routing** | Evidence summaries and candidate routes for downstream ACMG overlays; this skill does not produce final germline ACMG pathogenicity classifications |
 | **DataFrame** | Convert to pandas for advanced analytics |
 | **Reporting** | Markdown reports with tables and statistics, SV clinical reports |
 
@@ -244,7 +244,7 @@ This is good clinical-genetics practice (ClinVar tier disagreement is common) AN
 
 **Phase 6: Report** → Markdown tables, direct answers, DataFrame export.
 
-**Phase 7: SV/CNV Analysis** (if applicable) → gnomAD SV frequencies, ClinGen dosage sensitivity, ACMG pathogenicity classification.
+**Phase 7: SV/CNV Evidence Intake** (if applicable) → gnomAD SV frequencies, ClinGen dosage sensitivity, overlap summaries, and ACMG route candidates. Final germline ACMG classification must route through `tooluniverse-acmg-variant-classification` and the applicable overlays.
 
 ---
 

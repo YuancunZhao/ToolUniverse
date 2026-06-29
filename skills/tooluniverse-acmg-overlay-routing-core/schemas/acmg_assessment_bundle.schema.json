@@ -55,6 +55,22 @@
             "type": "array",
             "items": { "type": "string" }
           },
+          "gated_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "intake_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "source_review_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "compatibility_criteria": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
           "overlay_skill": { "type": "string" },
           "trigger_policy": {
             "type": "string",
@@ -66,7 +82,7 @@
           },
           "route_kind": {
             "type": "string",
-            "enum": ["applicability_gate", "evidence_scoring", "source_review", "functional_discovery", "compatibility_gate"]
+            "enum": ["applicability_gate", "evidence_intake", "evidence_scoring", "source_review", "functional_discovery", "compatibility_gate"]
           },
           "status": {
             "type": "string",

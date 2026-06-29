@@ -130,6 +130,35 @@ def test_variantvalidator_wrapper_forwards_arguments(monkeypatch):
     assert client.run_one_function.call_args.kwargs["validate"] is False
 
 
+def test_variantvalidator_formatter_wrapper_forwards_arguments(monkeypatch):
+    module, shared = _load_wrapper_module(
+        "VariantValidator_format_genomic_to_transcripts", monkeypatch
+    )
+
+    client = MagicMock()
+    client.run_one_function.return_value = {"status": "ok"}
+    shared.get_shared_client.return_value = client
+    with patch.object(module, "get_shared_client", shared.get_shared_client):
+        result = module.VariantValidator_format_genomic_to_transcripts(
+            variant_description="NC_000017.11:g.50198002C>A",
+            genome_build="GRCh38",
+            use_cache=True,
+            validate=False,
+        )
+
+    assert result == {"status": "ok"}
+    payload = client.run_one_function.call_args.args[0]
+    assert payload == {
+        "name": "VariantValidator_format_genomic_to_transcripts",
+        "arguments": {
+            "genome_build": "GRCh38",
+            "variant_description": "NC_000017.11:g.50198002C>A",
+        },
+    }
+    assert client.run_one_function.call_args.kwargs["use_cache"] is True
+    assert client.run_one_function.call_args.kwargs["validate"] is False
+
+
 @pytest.mark.parametrize(
     ("module_name", "function_name", "kwargs", "expected_name", "expected_arguments"),
     [

@@ -140,6 +140,10 @@ class ACMGOverlayGateTool(BaseTool):
         return {
             "criterion_group": entry.get("criterion_group"),
             "covered_criteria": entry.get("covered_criteria", []),
+            "gated_criteria": entry.get("gated_criteria", []),
+            "intake_criteria": entry.get("intake_criteria", []),
+            "source_review_criteria": entry.get("source_review_criteria", []),
+            "compatibility_criteria": entry.get("compatibility_criteria", []),
             "overlay_skill": entry.get("overlay_skill"),
             "trigger_policy": entry.get("trigger_policy"),
             "enforcement_level": entry.get("enforcement_level"),

@@ -96,32 +96,7 @@ Any final five-tier ACMG answer must include a validator summary block equivalen
 
 If the validator summary is absent, malformed, or not `PASS`, use `classification_status: draft classification` and do not present `Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign` as a final classification. Automated classifier outputs such as GeneBe, ClinVar-derived summaries, commercial/lab labels, or paper ACMG labels are `source_assertions_or_leads`; they are not overlay results and must not be inserted into counted evidence without the responsible overlay or VCEP route.
 
-Use this compact bundle sequence, then expand triggered bundles through the routing core registry:
-
-1. `baseline_context_bundle` for disease entity, inheritance, transcript, mechanism, multiple-disorder boundary, and dominant-negative/LoF/GoF sensitivity.
-2. `population_frequency_bundle` for BA1/BS1/BS2/PM2/BP2/BP5 frequency and benign-context gates.
-3. `consequence_lof_bundle` only for LoF-like consequences such as nonsense, frameshift, canonical splice, start-loss, exon-level CNV, or whole-gene deletion.
-4. `splice_bundle` for splice prediction, PS1-splicing comparison, or RNA assay evidence; SpliceAI-only evidence is prediction context and does not trigger RNA-assay PVS1.
-5. `missense_bundle` only for missense/amino-acid substitution consequences, covering PP3/BP4, PS1/PM5, PM1/PP2/BP1, and structured functional-discovery lookup.
-6. `protein_length_bundle` for in-frame indels, stop-loss, altered-product, and repeat-region effects.
-7. `clinical_observation_bundle` only after de novo, segregation, biallelic phase, affected/unaffected, healthy-carrier, alternate-diagnosis, or phenotype-specific evidence is present or requested.
-8. `literature_functional_bundle` only after source/literature coverage finds functional assay, case-control/cohort, case series, figure/table/supplement, or paper-label triggers.
-9. `cnv_sv_bundle` for structural-variant/CNV evidence intake; final ACMG evidence must still route through the appropriate ACMG overlays and compatibility resolution.
-10. `final_combine_bundle` after overlay audit passes.
-
-A bundle row is not counted evidence. Counted criteria still require overlay result, route audit outcome `overlay_applied` or `overlay_deferred_to_vcep`, Evidence Compatibility Resolution, and validator PASS.
-
-### Criterion Ownership Index
-
-| Criterion / evidence type | Owning route |
-| --- | --- |
-| Protein-level PS1 or PM5 from same amino acid, same codon, or same residue comparison | `tooluniverse-acmg-ps1-pm5-amino-acid-equivalence-refinement` |
-| PS1 from same predicted splicing event comparison | `tooluniverse-acmg-ps1-splicing-similarity-refinement` |
-| BP1, PP2, and PM1 for missense mechanism or regional constraint | `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` |
-| BP2 and BP5 with cis/trans, alternate diagnosis, or benign clinical context | `tooluniverse-acmg-benign-context-refinement` |
-| BP7 or RNA no-splicing-impact evidence | `tooluniverse-acmg-pvs1-splicing-refinement` only when RNA/no-splicing-impact context supports it |
-
-BP1 stays in the missense mechanism/regional overlay because it depends on whether missense variation is disease-relevant for the same gene-disease context. Do not route BP1 through benign-context unless a current VCEP explicitly says otherwise.
+Create a structured `Bundle Route Plan` using the routing core's Route Bundle Quick Planner, then expand triggered bundles into `route_plan.schema.json` rows before any evidence is counted. A bundle row is never counted evidence. Criterion ownership, including the PS1 split and BP1 route, is defined only in the routing core Criterion Ownership Index.
 
 ---
 
@@ -451,11 +426,11 @@ machine key: `user_needed_inputs`
 ## Common Patterns
 
 **Pattern 1: Known pathogenic frameshift** — "Classify BRCA2 c.5946delT"
-Phase 0 (validate) → Phase 1 (gnomAD absent, PM2_Supporting) → Phase 3 (ClinVar Pathogenic assertion used as lead only; no PP5) → Phase 4 (DNA repair domain, PM1 if overlay confirms an eligible critical region) → Phase 5 (frameshift + LOF gene, PVS1 decision-tree overlay) → Phase 6 (functional assay evidence routed to PS3/BS3 if present)
+Phase 0 (validate) → Phase 1 (gnomAD absent/rare population context routed to the PM2 overlay) → Phase 3 (ClinVar Pathogenic assertion used as lead only; no PP5) → Phase 4 (DNA repair domain routed to PM1 only if the PM1 overlay confirms an eligible critical region) → Phase 5 (frameshift + LOF gene routed to the PVS1 decision-tree overlay) → Phase 6 (functional assay evidence routed to PS3/BS3 if present)
 Final result can be reported only after route audit, Evidence Compatibility Resolution, and validator PASS; PP5 is not counted from the ClinVar source label.
 
 **Pattern 2: Missense VUS** — "Is BRCA1 p.Arg1699Gln pathogenic?"
-Phase 0 → Phase 1 (rare, PM2_Supporting) → Phase 2 (REVEL 0.82, PP3_Moderate by calibrated missense-prediction overlay) → Phase 3 (ClinVar VUS) → Phase 4 (BRCT domain, PM1; PM1+PP3 contribution capped at Strong) → Phase 6 (reduced activity, PS3_Moderate)
+Phase 0 → Phase 1 (rare population context routed to the PM2 overlay) → Phase 2 (REVEL score routed to the calibrated PP3/BP4 missense-prediction overlay) → Phase 3 (ClinVar VUS source lead) → Phase 4 (BRCT domain routed to PM1/PP2/BP1; PM1+PP3 cap handled by compatibility resolution) → Phase 6 (reduced activity routed to PS3/BS3 functional-assay overlay)
 Final result can be reported only after route audit, Evidence Compatibility Resolution, validator PASS, and documentation of the PM1+PP3 cap.
 
 **Pattern 3: Common benign variant** — "ACMG for rs1800497"
