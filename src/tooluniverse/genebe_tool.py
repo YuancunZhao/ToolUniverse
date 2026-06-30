@@ -18,7 +18,7 @@ from typing import Any, Dict
 
 import requests
 
-from .acmg_gate_policy import ACMG_GATE_NOTICE
+from .acmg_gate import ACMG_GATE_NOTICE
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 

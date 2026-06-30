@@ -18,17 +18,17 @@ from typing import Any, Dict, Iterable, List
 
 import yaml
 
-from .acmg_gate_policy import (
+from .acmg_gate import (
     ACMG_GATE_NOTICE,
     DISCOVERY_NO_HIT_ROUTES,
     RECOMMENDED_ACMG_INTAKE_TOOLS,
     REQUIRED_ACMG_COVERAGE_CATEGORIES,
     SOURCE_LEAD_NOTICE,
+    compute_finalization_gate,
     contains_final_acmg_label,
+    discover_user_context_routes,
 )
-from .acmg_gate.context_triggers import discover_user_context_routes
 from .acmg_harness_runner import ACMGHarnessRunner
-from .acmg_gate.finalizer import compute_finalization_gate
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -209,7 +209,7 @@ class ACMGOverlayGateTool(BaseTool):
     def _run_guard_final_answer(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         text = str(arguments.get("final_answer_text") or arguments.get("answer") or "")
         harness_result = arguments.get("harness_result") or arguments.get("workflow_result") or {}
-        has_final_label = self._contains_final_acmg_label(text)
+        has_final_label = contains_final_acmg_label(text)
         gate = compute_finalization_gate(
             validator_status=harness_result.get("validator_status") if isinstance(harness_result, dict) else None,
             semantic_combiner_status=harness_result.get("semantic_combiner_status") if isinstance(harness_result, dict) else None,
@@ -500,9 +500,6 @@ class ACMGOverlayGateTool(BaseTool):
             literature_ready=self._bundle_literature_final_ready(bundle),
         )
 
-    def _contains_final_acmg_label(self, text: str) -> bool:
-        return contains_final_acmg_label(text)
-
     def _contains_counted_evidence_without_overlay(self, text: str, harness_result: Any) -> bool:
         if not re.search(r"\b(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:_[A-Za-z]+)?\b", text):
             return False
@@ -648,7 +645,7 @@ class ACMGOverlayGateTool(BaseTool):
         return False
 
     def _select_discovery_routes(self, entries: List[Dict[str, Any]], arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        context_routes = self._user_context_route_candidates(arguments)
+        context_routes = discover_user_context_routes(arguments)
         if not context_routes:
             return []
         by_group = {str(entry.get("criterion_group")): entry for entry in entries}
@@ -666,9 +663,6 @@ class ACMGOverlayGateTool(BaseTool):
             })
             selected.append(row)
         return selected
-
-    def _user_context_route_candidates(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        return discover_user_context_routes(arguments)
 
     def _recommended_tool_calls(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = [dict(row) for row in RECOMMENDED_ACMG_INTAKE_TOOLS]

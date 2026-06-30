@@ -15,8 +15,6 @@ DUPLICATE_ROOTS = [
     ROOT / "plugin" / "skills",
     ROOT / "plugins" / "tooluniverse" / "skills",
 ]
-PACKAGED_ACMG_SCRIPT_ROOT = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "scripts"
-PACKAGED_ACMG_SCHEMA_ROOT = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "schemas"
 PROTECTED_SKILLS = [
     "tooluniverse",
     "tooluniverse-variant-interpretation",
@@ -30,13 +28,15 @@ PROTECTED_SKILLS = [
     "tooluniverse-structural-variant-analysis",
     "tooluniverse-protein-sae-variant-interpretation",
 ]
-PROTECTED_ACMG_WRAPPER_SCRIPTS = [
-    "acmg_context_triggers.py",
+ACMG_WRAPPER_SCRIPT_ROOT = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "scripts"
+PACKAGED_ACMG_WRAPPER_SCRIPT_ROOT = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "scripts"
+REQUIRED_ACMG_WRAPPER_SCRIPTS = [
     "acmg_final_answer_guard.py",
-    "acmg_registry.py",
     "acmg_semantic_combiner.py",
-    "check_entrypoint_bypass_fixtures.py",
+    "acmg_context_triggers.py",
+    "acmg_registry.py",
     "validate_acmg_overlay_bundle.py",
+    "check_entrypoint_bypass_fixtures.py",
 ]
 
 # Cache/build noise to ignore
@@ -121,6 +121,26 @@ def compare_dirs(canonical: Path, duplicate: Path) -> list[str]:
     return problems
 
 
+def compare_packaged_acmg_wrappers() -> list[str]:
+    problems: list[str] = []
+    if not ACMG_WRAPPER_SCRIPT_ROOT.exists():
+        return [f"canonical ACMG wrapper directory missing: {ACMG_WRAPPER_SCRIPT_ROOT}"]
+    if not PACKAGED_ACMG_WRAPPER_SCRIPT_ROOT.exists():
+        return [f"packaged ACMG wrapper directory missing: {PACKAGED_ACMG_WRAPPER_SCRIPT_ROOT}"]
+    for filename in REQUIRED_ACMG_WRAPPER_SCRIPTS:
+        canonical = ACMG_WRAPPER_SCRIPT_ROOT / filename
+        packaged = PACKAGED_ACMG_WRAPPER_SCRIPT_ROOT / filename
+        if not canonical.exists():
+            problems.append(f"canonical ACMG wrapper script missing: {canonical}")
+            continue
+        if not packaged.exists():
+            problems.append(f"packaged ACMG wrapper script missing: {packaged}")
+            continue
+        if not filecmp.cmp(canonical, packaged, shallow=False):
+            problems.append(f"drifted packaged ACMG wrapper script: {packaged}")
+    return problems
+
+
 def scan_unsafe_phrases(path: Path) -> list[str]:
     """Scan a directory tree for unsafe direct-classification phrases."""
     hits: list[str] = []
@@ -196,38 +216,6 @@ def main() -> int:
                 continue
             problems.extend(compare_dirs(canonical, duplicate))
 
-    canonical_acmg_scripts = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "scripts"
-    if not PACKAGED_ACMG_SCRIPT_ROOT.exists():
-        problems.append(f"packaged ACMG script root missing: {PACKAGED_ACMG_SCRIPT_ROOT}")
-    for script_name in PROTECTED_ACMG_WRAPPER_SCRIPTS:
-        canonical_script = canonical_acmg_scripts / script_name
-        packaged_script = PACKAGED_ACMG_SCRIPT_ROOT / script_name
-        if not canonical_script.exists():
-            problems.append(f"canonical ACMG wrapper missing: {canonical_script}")
-            continue
-        if not packaged_script.exists():
-            problems.append(f"packaged ACMG wrapper missing: {packaged_script}")
-            continue
-        if not filecmp.cmp(canonical_script, packaged_script, shallow=False):
-            problems.append(f"drifted packaged ACMG wrapper: {packaged_script}")
-
-    # Check packaged schemas match canonical schemas
-    canonical_acmg_schemas = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "schemas"
-    if PACKAGED_ACMG_SCHEMA_ROOT.exists() and canonical_acmg_schemas.exists():
-        for schema_name in ("acmg_assessment_bundle.schema.json",):
-            canonical_schema = canonical_acmg_schemas / schema_name
-            packaged_schema = PACKAGED_ACMG_SCHEMA_ROOT / schema_name
-            if canonical_schema.exists() and packaged_schema.exists():
-                if not filecmp.cmp(canonical_schema, packaged_schema, shallow=False):
-                    problems.append(f"drifted packaged ACMG schema: {packaged_schema}")
-
-    # Check packaged overlay_registry.yaml matches canonical
-    canonical_registry = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "overlay_registry.yaml"
-    packaged_registry = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "overlay_registry.yaml"
-    if canonical_registry.exists() and packaged_registry.exists():
-        if not filecmp.cmp(canonical_registry, packaged_registry, shallow=False):
-            problems.append(f"drifted packaged overlay_registry.yaml: {packaged_registry}")
-
     # Also scan all protected mirrors for unsafe phrases
     all_roots = [CANONICAL_ROOT] + DUPLICATE_ROOTS
     for root in all_roots:
@@ -237,12 +225,14 @@ def main() -> int:
                 problems.extend(scan_unsafe_phrases(skill_dir))
                 problems.extend(scan_protected_skill_policy(skill, skill_dir))
 
+    problems.extend(compare_packaged_acmg_wrappers())
+
     if problems:
         print("Skill duplicate drift detected:")
         for problem in problems:
             print(f"- {problem}")
         return 1
-    print("PASS: all protected Skill mirrors match canonical skills/")
+    print("PASS: protected Skill mirrors and packaged ACMG wrapper scripts match canonical sources")
     return 0
 
 

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from tooluniverse.acmg_gate_search import add_acmg_gate_to_search_payload
-from tooluniverse.acmg_gate_policy import SOURCE_LEAD_NOTICE
+from tooluniverse.acmg_gate import SOURCE_LEAD_NOTICE
 from tooluniverse.acmg_harness_runner import ACMGHarnessRunner, ToolCallResult
 from tooluniverse.acmg_overlay_gate_tool import ACMGOverlayGateTool
 

@@ -21,24 +21,70 @@ from pkgutil import extend_path
 
 __path__ = extend_path(__path__, __name__)
 
-from .execute_function import ToolUniverse
-from .base_tool import BaseTool
-from .default_config import default_tool_files
-from .profile import (
-    ProfileLoader,
-    validate_profile_config,
-    validate_with_schema,
-    validate_yaml_file_with_schema,
-    validate_yaml_format_by_template,
-    PROFILE_SCHEMA,
-)
+try:
+    from .execute_function import ToolUniverse
+    from .base_tool import BaseTool
+    from .default_config import default_tool_files
+    from .profile import (
+        ProfileLoader,
+        validate_profile_config,
+        validate_with_schema,
+        validate_yaml_file_with_schema,
+        validate_yaml_format_by_template,
+        PROFILE_SCHEMA,
+    )
+    from .tool_registry import (
+        register_tool,
+        get_tool_registry,
+        get_tool_class_lazy,
+        auto_discover_tools,
+    )
+    _CORE_IMPORT_ERROR = None
+except ImportError as exc:
+    # Keep lightweight subpackages importable in minimal environments, e.g.
+    # `from tooluniverse.acmg_gate import ...` during direct policy checks.
+    _CORE_IMPORT_ERROR = exc
+    default_tool_files = []
+    PROFILE_SCHEMA = {}
 
-from .tool_registry import (
-    register_tool,
-    get_tool_registry,
-    get_tool_class_lazy,
-    auto_discover_tools,
-)
+    class ToolUniverse:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError("ToolUniverse core dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    class BaseTool:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError("ToolUniverse core dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    class ProfileLoader:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError("ToolUniverse profile dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    def validate_profile_config(*args: Any, **kwargs: Any) -> Any:
+        raise ImportError("ToolUniverse profile dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    def validate_with_schema(*args: Any, **kwargs: Any) -> Any:
+        raise ImportError("ToolUniverse profile dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    def validate_yaml_file_with_schema(*args: Any, **kwargs: Any) -> Any:
+        raise ImportError("ToolUniverse profile dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    def validate_yaml_format_by_template(*args: Any, **kwargs: Any) -> Any:
+        raise ImportError("ToolUniverse profile dependencies are unavailable.") from _CORE_IMPORT_ERROR
+
+    def register_tool(*args: Any, **kwargs: Any) -> Any:
+        def decorator(cls: Any) -> Any:
+            return cls
+
+        return decorator
+
+    def get_tool_registry() -> dict[str, Any]:
+        return {}
+
+    def get_tool_class_lazy(name: str) -> Any:
+        return None
+
+    def auto_discover_tools(lazy: bool = True) -> dict[str, Any]:
+        return {}
 
 _TRUTHY_VALUES = {"true", "1", "yes"}
 

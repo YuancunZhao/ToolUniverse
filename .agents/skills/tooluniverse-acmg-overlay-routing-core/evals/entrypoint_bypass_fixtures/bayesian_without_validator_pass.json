@@ -1,0 +1,6 @@
+{
+  "id": "bayesian_without_validator_pass",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "Bayesian framework produces final classification without validator PASS and semantic combiner PASS.",
+  "text": "Bayesian Classification Report\n\nEvidence points: PVS1=8.0, PS1=4.0, PM2=2.0\nPosterior probability: 0.994\nOddsPath: 178.0\n\nFinal Bayesian classification: Pathogenic\nclassification_status: final classification\n\nThis variant is classified as Pathogenic based on Bayesian posterior probability > 0.99."
+}

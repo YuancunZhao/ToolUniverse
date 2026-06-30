@@ -6,7 +6,7 @@ import json
 from typing import Any, Dict, List
 
 try:
-    from .acmg_gate.policy import (
+    from .acmg_gate import (
         ACMG_ALLOWED_USE,
         ACMG_FRONT_DOOR_TOOL_NAME,
         ACMG_GATE_NOTICE,
@@ -22,8 +22,9 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
     import importlib.util
     from pathlib import Path
 
-    _policy_path = Path(__file__).with_name("acmg_gate") / "policy.py"
-    _policy_spec = importlib.util.spec_from_file_location("tooluniverse.acmg_gate.policy", _policy_path)
+    _here = Path(__file__).resolve().parent / "acmg_gate"
+    _policy_path = _here / "policy.py"
+    _policy_spec = importlib.util.spec_from_file_location("acmg_gate_policy", _policy_path)
     if _policy_spec is None or _policy_spec.loader is None:
         raise
     _policy_module = importlib.util.module_from_spec(_policy_spec)

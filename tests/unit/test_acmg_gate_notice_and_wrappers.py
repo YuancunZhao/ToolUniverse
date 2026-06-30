@@ -31,7 +31,7 @@ def _load_wrapper_module(module_stem, monkeypatch):
 
 
 def test_genebe_uses_shared_acmg_gate_notice():
-    from tooluniverse.acmg_gate_policy import ACMG_GATE_NOTICE
+    from tooluniverse.acmg_gate import ACMG_GATE_NOTICE
     from tooluniverse.genebe_tool import GeneBeTool
 
     tool = GeneBeTool({"name": "GeneBe_classify_variant", "type": "GeneBeTool", "fields": {}})
@@ -54,7 +54,7 @@ def test_genebe_uses_shared_acmg_gate_notice():
 
 
 def test_overlay_gate_source_leads_use_shared_notice():
-    from tooluniverse.acmg_gate_policy import SOURCE_LEAD_NOTICE
+    from tooluniverse.acmg_gate import SOURCE_LEAD_NOTICE
     from tooluniverse.acmg_overlay_gate_tool import ACMGOverlayGateTool
 
     tool = ACMGOverlayGateTool({"name": "ACMG_overlay_gate_assess_variant", "type": "ACMGOverlayGateTool"})
@@ -68,7 +68,7 @@ def test_tool_json_acmg_gate_notices_are_canonical():
     import json
     from pathlib import Path
 
-    from tooluniverse.acmg_gate_policy import ACMG_GATE_NOTICE
+    from tooluniverse.acmg_gate import ACMG_GATE_NOTICE
 
     data_dir = Path(__file__).parents[2] / "src" / "tooluniverse" / "data"
     seen = []

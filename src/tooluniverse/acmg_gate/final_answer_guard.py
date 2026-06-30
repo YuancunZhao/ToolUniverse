@@ -19,21 +19,25 @@ def _canonical_detector_path() -> Path | None:
 
 
 try:
-    from tooluniverse.acmg_gate.final_label_detector import (
-        contains_final_acmg_label as _canonical_contains_final_acmg_label,
-        final_acmg_label_matches,
-    )
-except Exception:  # pragma: no cover - standalone script from canonical repo.
-    _detector_path = _canonical_detector_path()
-    if _detector_path is None:
-        raise
-    _spec = importlib.util.spec_from_file_location("acmg_final_label_detector", _detector_path)
-    if _spec is None or _spec.loader is None:
-        raise
-    _module = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_module)
-    _canonical_contains_final_acmg_label = _module.contains_final_acmg_label
-    final_acmg_label_matches = _module.final_acmg_label_matches
+    from . import contains_final_acmg_label as _canonical_contains_final_acmg_label
+    from . import final_acmg_label_matches
+except ImportError:
+    try:
+        from tooluniverse.acmg_gate import (
+            contains_final_acmg_label as _canonical_contains_final_acmg_label,
+        )
+        from tooluniverse.acmg_gate import final_acmg_label_matches
+    except Exception:  # pragma: no cover - standalone script from canonical repo.
+        _detector_path = _canonical_detector_path()
+        if _detector_path is None:
+            raise
+        _spec = importlib.util.spec_from_file_location("acmg_final_label_detector", _detector_path)
+        if _spec is None or _spec.loader is None:
+            raise
+        _module = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_module)
+        _canonical_contains_final_acmg_label = _module.contains_final_acmg_label
+        final_acmg_label_matches = _module.final_acmg_label_matches
 
 
 def _matches(text: str) -> list[str]:

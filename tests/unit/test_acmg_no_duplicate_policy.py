@@ -65,7 +65,136 @@ def test_no_wrong_skill_final_route() -> None:
     assert not offenders, offenders
 
 
+def test_no_context_trigger_regex_in_gate_tool() -> None:
+    """acmg_overlay_gate_tool.py must not define local context trigger regex."""
+    gate_tool_path = ROOT / "src/tooluniverse/acmg_overlay_gate_tool.py"
+    assert gate_tool_path.exists(), f"Missing: {gate_tool_path}"
+    text = gate_tool_path.read_text(encoding="utf-8", errors="replace")
+    # These trigger names may appear only in the group_to_criterion dict (for route
+    # dispatching), not as regex patterns.  Check that no re.compile() wraps them.
+    trigger_names = (
+        "de_novo_ps2_pm6",
+        "pp1_bs4_pp4_segregation",
+        "pm3_in_trans",
+        "phenotype_dependent_pp4",
+        "benign_context_bs2",
+        "benign_context_bp5",
+    )
+    # Find each trigger name and verify the surrounding line is a dict entry
+    for name in trigger_names:
+        idx = text.find(name)
+        if idx == -1:
+            continue
+        # Extract the line containing the trigger name
+        line_start = text.rfind("\n", 0, idx) + 1
+        line_end = text.find("\n", idx)
+        if line_end == -1:
+            line_end = len(text)
+        line = text[line_start:line_end]
+        # Must be a dict key-value entry, not a re.compile()
+        assert "re.compile" not in line, f"context trigger regex found in gate tool: {line.strip()!r}"
+        assert '":' in line or '": ' in line or "' :" in line, f"unexpected trigger usage: {line.strip()!r}"
+
+
+def test_no_criterion_helpers_in_harness_runner() -> None:
+    """acmg_harness_runner.py must not define _criterion_to_group or _criterion_overlay."""
+    runner_path = ROOT / "src/tooluniverse/acmg_harness_runner.py"
+    assert runner_path.exists(), f"Missing: {runner_path}"
+    text = runner_path.read_text(encoding="utf-8", errors="replace")
+    assert "_criterion_to_group" not in text, "harness_runner defines _criterion_to_group"
+    assert "_criterion_overlay" not in text, "harness_runner defines _criterion_overlay"
+
+
+def test_agents_skill_mirrors_exist() -> None:
+    """All 11 protected skill mirrors must exist under .agents/skills."""
+    agents_root = ROOT / ".agents" / "skills"
+    protected = [
+        "tooluniverse",
+        "tooluniverse-variant-interpretation",
+        "tooluniverse-acmg-variant-classification",
+        "tooluniverse-acmg-overlay-routing-core",
+        "tooluniverse-rare-disease-diagnosis",
+        "tooluniverse-rare-disease-genomics",
+        "tooluniverse-variant-functional-annotation",
+        "tooluniverse-regulatory-variant-analysis",
+        "tooluniverse-variant-to-mechanism",
+        "tooluniverse-structural-variant-analysis",
+        "tooluniverse-protein-sae-variant-interpretation",
+    ]
+    missing = []
+    for skill in protected:
+        skill_dir = agents_root / skill
+        if not skill_dir.exists():
+            missing.append(skill)
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            missing.append(f"{skill}/SKILL.md")
+    assert not missing, f"Missing .agents/skills mirrors: {missing}"
+
+    # Verify key wrapper scripts exist for the routing-core skill
+    scripts_dir = agents_root / "tooluniverse-acmg-overlay-routing-core" / "scripts"
+    required_scripts = [
+        "acmg_final_answer_guard.py",
+        "acmg_semantic_combiner.py",
+        "acmg_context_triggers.py",
+        "acmg_registry.py",
+        "validate_acmg_overlay_bundle.py",
+        "check_entrypoint_bypass_fixtures.py",
+    ]
+    missing_scripts = [s for s in required_scripts if not (scripts_dir / s).exists()]
+    assert not missing_scripts, f"Missing .agents ACMG wrapper scripts: {missing_scripts}"
+
+
+def test_packaged_acmg_wrappers_match_canonical() -> None:
+    """Packaged ACMG wrapper scripts must stay byte-identical to canonical wrappers."""
+    import filecmp
+
+    canonical_dir = ROOT / "skills/tooluniverse-acmg-overlay-routing-core/scripts"
+    packaged_dir = ROOT / "src/tooluniverse/data/acmg_overlay_gate/scripts"
+    required_scripts = [
+        "acmg_final_answer_guard.py",
+        "acmg_semantic_combiner.py",
+        "acmg_context_triggers.py",
+        "acmg_registry.py",
+        "validate_acmg_overlay_bundle.py",
+        "check_entrypoint_bypass_fixtures.py",
+    ]
+    assert packaged_dir.exists(), f"Missing packaged ACMG wrapper directory: {packaged_dir}"
+    missing = [s for s in required_scripts if not (packaged_dir / s).exists()]
+    assert not missing, f"Missing packaged ACMG wrapper scripts: {missing}"
+    drifted = [
+        s
+        for s in required_scripts
+        if not filecmp.cmp(canonical_dir / s, packaged_dir / s, shallow=False)
+    ]
+    assert not drifted, f"Drifted packaged ACMG wrapper scripts: {drifted}"
+
+
+def test_acmg_gate_public_import_surface() -> None:
+    """The canonical ACMG import surface must expose semantic status aliases."""
+    from tooluniverse.acmg_gate import (
+        SEMANTIC_FAIL,
+        SEMANTIC_NOT_APPLICABLE,
+        SEMANTIC_PASS,
+    )
+
+    assert SEMANTIC_PASS == "PASS"
+    assert SEMANTIC_FAIL == "FAIL"
+    assert SEMANTIC_NOT_APPLICABLE == "NOT_APPLICABLE"
+    namespace: dict[str, object] = {}
+    exec("from tooluniverse.acmg_gate import *", namespace)
+    assert namespace["SEMANTIC_PASS"] == "PASS"
+    assert namespace["SEMANTIC_FAIL"] == "FAIL"
+    assert namespace["SEMANTIC_NOT_APPLICABLE"] == "NOT_APPLICABLE"
+
+
 if __name__ == "__main__":
     test_no_duplicate_policy_regex()
     test_no_wrong_skill_final_route()
+    test_no_context_trigger_regex_in_gate_tool()
+    test_no_criterion_helpers_in_harness_runner()
+    test_agents_skill_mirrors_exist()
+    test_packaged_acmg_wrappers_match_canonical()
+    test_acmg_gate_public_import_surface()
     print("PASS test_acmg_no_duplicate_policy")

@@ -12,8 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
-from .acmg_gate.registry import criterion_to_group, criterion_to_overlay
-from .acmg_gate_policy import SOURCE_LEAD_NOTICE
+from .acmg_gate import SOURCE_LEAD_NOTICE, criterion_to_group, criterion_to_overlay
 
 
 CLASSIFICATION_DRAFT = "draft classification"
