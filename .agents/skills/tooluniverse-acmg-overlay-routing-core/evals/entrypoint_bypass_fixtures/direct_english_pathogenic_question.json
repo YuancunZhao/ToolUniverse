@@ -1,6 +1,0 @@
-{
-  "id": "direct_english_pathogenic_question",
-  "expected_entrypoint_status": "FAIL",
-  "reason": "Direct English question answered with final ACMG label without overlay gate.",
-  "text": "Is this variant likely pathogenic?\n\nBased on database queries, this variant is classified as Likely Pathogenic.\n\nACMG classification: Likely Pathogenic\n\nThe variant is rare in population databases and predicted damaging by multiple computational tools."
-}

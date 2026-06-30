@@ -1,5 +1,0 @@
-{
-  "id": "fgfr3_chinese_direct_mcp_final",
-  "expected_entrypoint_status": "FAIL",
-  "text": "User asks: 根据ACMG规则评估 FGFR3;NM_000142.5:c.1075+95C>G 杂合变异致病性。\n\nAssistant calls mcp__tooluniverse__execute_tool with Tool_Finder_Keyword, then directly executes GeneBe_classify_variant, InterVar_classify_variant, SpliceAI_predict_splice, EnsemblVEP_annotate_hgvs, and MyVariant_get_pathogenicity_scores. GeneBe reports Likely_pathogenic and InterVar returns an automated ACMG output. SpliceAI suggests possible splice impact.\n\n最终ACMG分类：Likely Pathogenic。\n计分证据：PM2、PP3、PP5、PVS1_supporting。\n\nNo acmg_assessment_bundle was emitted and no validator summary was run."
-}

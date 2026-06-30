@@ -1,6 +1,0 @@
-{
-  "id": "bayesian_final_without_validator_pass",
-  "expected_entrypoint_status": "FAIL",
-  "reason": "A Bayesian final tier is reported without a machine-checkable bundle or validator PASS.",
-  "text": "Final ACMG Bayesian classification: Likely Pathogenic. Evidence compatibility resolution completed and posterior probability is 0.974, so the final classification is Likely Pathogenic."
-}

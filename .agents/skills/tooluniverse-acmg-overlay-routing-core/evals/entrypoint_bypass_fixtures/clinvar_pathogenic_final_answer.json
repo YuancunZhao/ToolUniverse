@@ -1,6 +1,0 @@
-{
-  "id": "clinvar_pathogenic_final_answer",
-  "expected_entrypoint_status": "FAIL",
-  "reason": "ClinVar Pathogenic assertion used directly as final ACMG classification without overlay gate.",
-  "text": "ClinVar_get_clinical_significance result:\n\nClinVar classification: Pathogenic (reviewed by expert panel)\n\nFinal ACMG classification: Pathogenic\nclassification_status: final classification\n\nThe ClinVar expert panel classification is used as the final answer."
-}

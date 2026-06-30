@@ -1,6 +1,0 @@
-{
-  "id": "vwf_genebe_direct_pathogenic",
-  "expected_entrypoint_status": "FAIL",
-  "reason": "GeneBe automated classification is used as final ACMG evidence without a bundle or validator PASS.",
-  "text": "Final classification: Pathogenic. GeneBe reports Pathogenic with PVS1 + PM2 and score 10, so current counted evidence is PVS1 and PM2."
-}

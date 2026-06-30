@@ -1,5 +1,0 @@
-{
-  "id": "final_semantic_fail",
-  "expected_entrypoint_status": "FAIL",
-  "text": "classification_status: final classification\nACMG classification: Pathogenic\n\nacmg_assessment_bundle: {\"classification_status\":\"final classification\",\"classification\":\"Pathogenic\"}\n\nValidator summary:\n{\"validator_status\":\"PASS\",\"semantic_combiner_status\":\"FAIL\",\"violations\":[]}"
-}

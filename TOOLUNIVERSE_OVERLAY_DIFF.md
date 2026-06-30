@@ -11,7 +11,7 @@ Baseline: `mims-harvard/ToolUniverse` upstream/main vs `YuancunZhao/ToolUniverse
 - **Canonical runtime:** `src/tooluniverse/acmg_gate/` — single import surface (`__init__.py`) exporting 37 symbols
 - **Key modules:** `intent_detector.py`, `final_label_detector.py`, `policy.py`, `finalizer.py`, `semantic_combiner.py`, `context_triggers.py`, `registry.py`, `validate_acmg_overlay_bundle.py`, `check_entrypoint_bypass_fixtures.py`
 - **Skill-side bridges:** `skills/tooluniverse-acmg-overlay-routing-core/scripts/` → thin wrappers delegating to canonical runtime
-- **Mirrors:** `.agents/skills/`, `plugin/skills/`, `plugins/tooluniverse/skills/` — drift-checked by `scripts/check_skill_duplicate_drift.py`
+- **Mirrors:** `plugin/skills/`, `plugins/tooluniverse/skills/` — drift-checked by `scripts/check_skill_duplicate_drift.py`. `.agents/skills/` is a local-only generated mirror (gitignored).
 - **Tests:** 9 test files (8 unit + 1 integration), 33 validator fixtures, 21 bypass fixtures
 
 ## Architecture Rules

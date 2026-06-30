@@ -11,7 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_ROOT = ROOT / "skills"
 DUPLICATE_ROOTS = [
-    ROOT / ".agents" / "skills",
     ROOT / "plugin" / "skills",
     ROOT / "plugins" / "tooluniverse" / "skills",
 ]

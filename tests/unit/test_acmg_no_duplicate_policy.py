@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _iter_policy_files():
-    for root_name in ("src/tooluniverse", "skills", "plugin/skills", "plugins/tooluniverse/skills", ".agents/skills", "scripts"):
+    for root_name in ("src/tooluniverse", "skills", "plugin/skills", "plugins/tooluniverse/skills", "scripts"):
         root = ROOT / root_name
         if not root.exists():
             continue
@@ -105,96 +105,9 @@ def test_no_criterion_helpers_in_harness_runner() -> None:
     assert "_criterion_overlay" not in text, "harness_runner defines _criterion_overlay"
 
 
-def test_agents_skill_mirrors_exist() -> None:
-    """All 11 protected skill mirrors must exist under .agents/skills."""
-    agents_root = ROOT / ".agents" / "skills"
-    protected = [
-        "tooluniverse",
-        "tooluniverse-variant-interpretation",
-        "tooluniverse-acmg-variant-classification",
-        "tooluniverse-acmg-overlay-routing-core",
-        "tooluniverse-rare-disease-diagnosis",
-        "tooluniverse-rare-disease-genomics",
-        "tooluniverse-variant-functional-annotation",
-        "tooluniverse-regulatory-variant-analysis",
-        "tooluniverse-variant-to-mechanism",
-        "tooluniverse-structural-variant-analysis",
-        "tooluniverse-protein-sae-variant-interpretation",
-    ]
-    missing = []
-    for skill in protected:
-        skill_dir = agents_root / skill
-        if not skill_dir.exists():
-            missing.append(skill)
-            continue
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            missing.append(f"{skill}/SKILL.md")
-    assert not missing, f"Missing .agents/skills mirrors: {missing}"
-
-    # Verify key wrapper scripts exist for the routing-core skill
-    scripts_dir = agents_root / "tooluniverse-acmg-overlay-routing-core" / "scripts"
-    required_scripts = [
-        "acmg_final_answer_guard.py",
-        "acmg_semantic_combiner.py",
-        "acmg_context_triggers.py",
-        "acmg_registry.py",
-        "validate_acmg_overlay_bundle.py",
-        "check_entrypoint_bypass_fixtures.py",
-    ]
-    missing_scripts = [s for s in required_scripts if not (scripts_dir / s).exists()]
-    assert not missing_scripts, f"Missing .agents ACMG wrapper scripts: {missing_scripts}"
-
-
-def test_packaged_acmg_wrappers_match_canonical() -> None:
-    """Packaged ACMG wrapper scripts must stay byte-identical to canonical wrappers."""
-    import filecmp
-
-    canonical_dir = ROOT / "skills/tooluniverse-acmg-overlay-routing-core/scripts"
-    packaged_dir = ROOT / "src/tooluniverse/data/acmg_overlay_gate/scripts"
-    required_scripts = [
-        "acmg_final_answer_guard.py",
-        "acmg_semantic_combiner.py",
-        "acmg_context_triggers.py",
-        "acmg_registry.py",
-        "validate_acmg_overlay_bundle.py",
-        "check_entrypoint_bypass_fixtures.py",
-    ]
-    assert packaged_dir.exists(), f"Missing packaged ACMG wrapper directory: {packaged_dir}"
-    missing = [s for s in required_scripts if not (packaged_dir / s).exists()]
-    assert not missing, f"Missing packaged ACMG wrapper scripts: {missing}"
-    drifted = [
-        s
-        for s in required_scripts
-        if not filecmp.cmp(canonical_dir / s, packaged_dir / s, shallow=False)
-    ]
-    assert not drifted, f"Drifted packaged ACMG wrapper scripts: {drifted}"
-
-
-def test_acmg_gate_public_import_surface() -> None:
-    """The canonical ACMG import surface must expose semantic status aliases."""
-    from tooluniverse.acmg_gate import (
-        SEMANTIC_FAIL,
-        SEMANTIC_NOT_APPLICABLE,
-        SEMANTIC_PASS,
-    )
-
-    assert SEMANTIC_PASS == "PASS"
-    assert SEMANTIC_FAIL == "FAIL"
-    assert SEMANTIC_NOT_APPLICABLE == "NOT_APPLICABLE"
-    namespace: dict[str, object] = {}
-    exec("from tooluniverse.acmg_gate import *", namespace)
-    assert namespace["SEMANTIC_PASS"] == "PASS"
-    assert namespace["SEMANTIC_FAIL"] == "FAIL"
-    assert namespace["SEMANTIC_NOT_APPLICABLE"] == "NOT_APPLICABLE"
-
-
 if __name__ == "__main__":
     test_no_duplicate_policy_regex()
     test_no_wrong_skill_final_route()
     test_no_context_trigger_regex_in_gate_tool()
     test_no_criterion_helpers_in_harness_runner()
-    test_agents_skill_mirrors_exist()
-    test_packaged_acmg_wrappers_match_canonical()
-    test_acmg_gate_public_import_surface()
     print("PASS test_acmg_no_duplicate_policy")

@@ -1,6 +1,0 @@
-{
-  "id": "direct_chinese_pathogenic_question",
-  "expected_entrypoint_status": "FAIL",
-  "reason": "Direct Chinese question about variant pathogenicity without overlay gate.",
-  "text": "这个变异可能致病吗？\n\n根据数据库查询结果，BRCA2 c.5946delT 变异在 ClinVar 中报告为 Pathogenic，gnomAD 频率极低。\n最终分类: 可能致病\n\nACMG classification: Likely Pathogenic"
-}

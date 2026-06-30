@@ -1,6 +1,0 @@
-{
-  "id": "valid_bundle_validator_pass",
-  "expected_entrypoint_status": "PASS",
-  "reason": "Final wording is accompanied by the required bundle marker and validator PASS summary.",
-  "text": "classification_status: final classification\nACMG classification: Likely Pathogenic\n\nacmg_assessment_bundle: {\"route_plan\": [], \"coverage_audit\": [], \"overlay_results\": [], \"route_audit\": [], \"compatibility_resolution\": {}}\n\nValidator summary:\n{\"validator_status\":\"PASS\",\"semantic_combiner_status\":\"PASS\",\"violations\":[]}\n\nsource_assertions_or_leads: ClinVar entry retained as lead only, not counted evidence."
-}

@@ -1,5 +1,0 @@
-{
-  "id": "fgfr3_direct_mcp_no_online_literature",
-  "expected_entrypoint_status": "FAIL",
-  "text": "User asks: 根据ACMG规则评估 FGFR3;NM_000142.5:c.1075+95C>G 杂合变异致病性。\n\nAssistant calls mcp__tooluniverse__find_tools and mcp__tooluniverse__execute_tool with GeneBe_classify_variant, SpliceAI_predict_splice, EnsemblVEP_annotate_hgvs, ClinVar_get_clinical_significance, and NCBIVariation_rsid_lookup. GeneBe reports Likely_pathogenic with criteria PS3, PM2, PP3_Moderate, PP5. SpliceAI reports DS_DG=0.97. ClinVar reports Pathogenic single submitter.\n\nNo PubMed, PMC, EuropePMC, or ToolUniverse literature search was run. No literature coverage audit was emitted.\n\nFINAL ACMG CLASSIFICATION: Likely Pathogenic.\nApplied evidence: PM2, PM4, PP3_Moderate, PP1_Moderate, PP4, PP5.\nNo acmg_assessment_bundle was emitted and no validator summary was run."
-}
