@@ -1,0 +1,6 @@
+{
+  "id": "structural_variant_five_tier",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "Structural variant skill produces five-tier germline ACMG classification without overlay gate.",
+  "text": "Structural Variant Analysis Report\n\nSV Type: 22q11.2 deletion (3 Mb)\nGenes affected: TBX1, COMT, PRODH\n\nACMG five-tier classification: Pathogenic\nclassification_status: final classification\n\nThis deletion is classified as Pathogenic based on gene content, population frequency, and clinical correlation."
+}

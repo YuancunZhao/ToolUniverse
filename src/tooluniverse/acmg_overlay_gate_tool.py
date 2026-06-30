@@ -26,6 +26,7 @@ from .acmg_gate_policy import (
     SOURCE_LEAD_NOTICE,
     contains_final_acmg_label,
 )
+from .acmg_gate.context_triggers import discover_user_context_routes
 from .acmg_harness_runner import ACMGHarnessRunner
 from .acmg_gate.finalizer import compute_finalization_gate
 from .base_tool import BaseTool
@@ -255,7 +256,14 @@ class ACMGOverlayGateTool(BaseTool):
         validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
 
         validator_status = validation["validator_status"]
-        final_allowed = validator_status == "PASS"
+        validator_result = validation.get("validator_result") if isinstance(validation.get("validator_result"), dict) else {}
+        gate = self._finalization_gate_from_bundle(
+            bundle,
+            validator_status=validator_status,
+            semantic_status=validator_result.get("semantic_combiner_status"),
+            policy_allows_final=bundle is not None,
+        )
+        final_allowed = bool(gate["final_allowed"])
         classification_status = CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT
 
         response = {
@@ -276,6 +284,8 @@ class ACMGOverlayGateTool(BaseTool):
             "source_assertions_or_leads": source_leads,
             "acmg_assessment_bundle": bundle or self._bundle_skeleton(arguments, baseline_routes, discovery_routes, source_leads),
             "validator_result": validation.get("validator_result"),
+            "semantic_combiner_status": validator_result.get("semantic_combiner_status"),
+            "finalization_gate": gate,
             "violations": validation.get("violations", []),
             "next_actions": self._next_actions(validation, baseline_routes, discovery_routes),
             "acmg_gate_notice": ACMG_GATE_NOTICE,
@@ -288,8 +298,15 @@ class ACMGOverlayGateTool(BaseTool):
         bundle = self._extract_bundle(arguments)
         validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
         validator_status = validation["validator_status"]
+        validator_result = validation.get("validator_result") if isinstance(validation.get("validator_result"), dict) else {}
         bundle_final_requested = self._bundle_requests_final_classification(bundle)
-        final_allowed = validator_status == "PASS" and bundle_final_requested
+        gate = self._finalization_gate_from_bundle(
+            bundle,
+            validator_status=validator_status,
+            semantic_status=validator_result.get("semantic_combiner_status"),
+            policy_allows_final=True,
+        )
+        final_allowed = bool(gate["final_allowed"])
         response = {
             "status": "success",
             "tool_role": "ACMG overlay compliance gate validator wrapper; not an ACMG classifier",
@@ -297,6 +314,7 @@ class ACMGOverlayGateTool(BaseTool):
             "output_mode": output_mode,
             "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
             "validator_status": validator_status,
+            "semantic_combiner_status": validator_result.get("semantic_combiner_status"),
             "final_classification_allowed": final_allowed,
             "variant": self._variant_summary(arguments),
             "source_assertions_or_leads": self._normalize_source_leads(arguments.get("source_outputs_or_leads")),
@@ -309,6 +327,7 @@ class ACMGOverlayGateTool(BaseTool):
             "not_counted_source_leads": [],
             "coverage_audit_summary": [],
             "missing_for_final": self._missing_for_final_from_validation(validation, bundle_final_requested),
+            "finalization_gate": gate,
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
         if output_mode == "full":
@@ -320,6 +339,7 @@ class ACMGOverlayGateTool(BaseTool):
         harness = runner.assess(arguments)
         validation = self._validate_bundle(harness["acmg_assessment_bundle"])
         validator_status = validation["validator_status"]
+        validator_result = validation.get("validator_result") if isinstance(validation.get("validator_result"), dict) else {}
         counted = [
             row
             for row in harness.get("route_audit", [])
@@ -327,7 +347,13 @@ class ACMGOverlayGateTool(BaseTool):
         ]
         validation_missing = self._missing_for_final_from_validation(validation)
         missing_for_final = harness.get("missing_for_final", []) + validation_missing
-        final_allowed = validator_status == "PASS" and not missing_for_final and bool(counted)
+        gate = self._finalization_gate_from_bundle(
+            harness.get("acmg_assessment_bundle"),
+            validator_status=validator_status,
+            semantic_status=validator_result.get("semantic_combiner_status"),
+            policy_allows_final=not missing_for_final,
+        )
+        final_allowed = bool(gate["final_allowed"])
         response = {
             "status": "success",
             "tool_role": "ACMG executable overlay harness; not an independent ACMG classifier",
@@ -335,6 +361,7 @@ class ACMGOverlayGateTool(BaseTool):
             "output_mode": output_mode,
             "classification_status": CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT,
             "validator_status": validator_status,
+            "semantic_combiner_status": validator_result.get("semantic_combiner_status"),
             "final_classification_allowed": final_allowed,
             "final_answer_policy": "allowed" if final_allowed else "forbidden",
             "allowed_response": "final classification" if final_allowed else "draft classification only",
@@ -345,6 +372,7 @@ class ACMGOverlayGateTool(BaseTool):
             "coverage_audit_summary": harness.get("coverage_audit_summary", []),
             "literature_status": harness.get("literature_status", {}),
             "missing_for_final": missing_for_final,
+            "finalization_gate": gate,
             "required_next_actions": self._required_next_actions_from_missing(missing_for_final),
             "validator_result": validation.get("validator_result"),
             "violations": validation.get("violations", []),
@@ -454,6 +482,23 @@ class ACMGOverlayGateTool(BaseTool):
             if status == "success" and hits and review_status in {"reviewed_full", "reviewed_not_needed"}:
                 return True
         return False
+
+    def _finalization_gate_from_bundle(
+        self,
+        bundle: Dict[str, Any] | None,
+        *,
+        validator_status: str,
+        semantic_status: str | None,
+        policy_allows_final: bool,
+    ) -> Dict[str, Any]:
+        return compute_finalization_gate(
+            validator_status=validator_status,
+            semantic_combiner_status=semantic_status,
+            final_classification_allowed=policy_allows_final,
+            bundle_final_requested=self._bundle_requests_final_classification(bundle),
+            counted_evidence=self._bundle_counted_evidence(bundle),
+            literature_ready=self._bundle_literature_final_ready(bundle),
+        )
 
     def _contains_final_acmg_label(self, text: str) -> bool:
         return contains_final_acmg_label(text)
@@ -623,49 +668,7 @@ class ACMGOverlayGateTool(BaseTool):
         return selected
 
     def _user_context_route_candidates(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
-        context_text = "\n".join(
-            self._stringify_context(arguments.get(key))
-            for key in (
-                "family_context",
-                "phenotype_context",
-                "disease_context",
-                "inheritance_context",
-                "zygosity",
-                "phase_context",
-            )
-            if arguments.get(key) is not None
-        )
-        triggers = (
-            ("de_novo_ps2_pm6", re.compile(r"\b(de novo|trio|parents?\s+negative|parental testing|maternity|paternity|parentage|mosaicism)\b", re.IGNORECASE)),
-            ("pp1_bs4_pp4_segregation", re.compile(r"\b(segregation|co-segregation|cosegregation|affected relatives?|pedigree|cascade)\b", re.IGNORECASE)),
-            ("pm3_in_trans", re.compile(r"\b(compound heterozyg|in trans|phase confirmed|phased|biallelic|trans configuration)\b", re.IGNORECASE)),
-            ("phenotype_dependent_pp4", re.compile(r"\b(HPO|phenotype specificity|highly specific phenotype|specific phenotype|diagnostic yield)\b", re.IGNORECASE)),
-            ("benign_context_bs2", re.compile(r"\b(unaffected adult carrier|healthy homozygote|healthy carrier|observed in unaffected|unaffected individual)\b", re.IGNORECASE)),
-            ("benign_context_bp5", re.compile(r"\b(alternate diagnosis|alternative diagnosis|another molecular diagnosis|explains phenotype)\b", re.IGNORECASE)),
-        )
-        routes = []
-        for group, pattern in triggers:
-            match = pattern.search(context_text)
-            if match:
-                routes.append({
-                    "criterion_group": group,
-                    "source_type": "user_context",
-                    "route_outcome": "overlay_required",
-                    "counted": False,
-                    "trigger_text": match.group(0),
-                    "reason": "User context can trigger route planning only; criterion-specific validator must pass before evidence can be counted.",
-                })
-        return routes
-
-    def _stringify_context(self, value: Any) -> str:
-        if value is None:
-            return ""
-        if isinstance(value, str):
-            return value
-        try:
-            return json.dumps(value, ensure_ascii=False, sort_keys=True)
-        except TypeError:
-            return str(value)
+        return discover_user_context_routes(arguments)
 
     def _recommended_tool_calls(self, arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
         calls = [dict(row) for row in RECOMMENDED_ACMG_INTAKE_TOOLS]

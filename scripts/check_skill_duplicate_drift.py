@@ -11,10 +11,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_ROOT = ROOT / "skills"
 DUPLICATE_ROOTS = [
+    ROOT / ".agents" / "skills",
     ROOT / "plugin" / "skills",
     ROOT / "plugins" / "tooluniverse" / "skills",
 ]
 PACKAGED_ACMG_SCRIPT_ROOT = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "scripts"
+PACKAGED_ACMG_SCHEMA_ROOT = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "schemas"
 PROTECTED_SKILLS = [
     "tooluniverse",
     "tooluniverse-variant-interpretation",
@@ -208,6 +210,23 @@ def main() -> int:
             continue
         if not filecmp.cmp(canonical_script, packaged_script, shallow=False):
             problems.append(f"drifted packaged ACMG wrapper: {packaged_script}")
+
+    # Check packaged schemas match canonical schemas
+    canonical_acmg_schemas = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "schemas"
+    if PACKAGED_ACMG_SCHEMA_ROOT.exists() and canonical_acmg_schemas.exists():
+        for schema_name in ("acmg_assessment_bundle.schema.json",):
+            canonical_schema = canonical_acmg_schemas / schema_name
+            packaged_schema = PACKAGED_ACMG_SCHEMA_ROOT / schema_name
+            if canonical_schema.exists() and packaged_schema.exists():
+                if not filecmp.cmp(canonical_schema, packaged_schema, shallow=False):
+                    problems.append(f"drifted packaged ACMG schema: {packaged_schema}")
+
+    # Check packaged overlay_registry.yaml matches canonical
+    canonical_registry = CANONICAL_ROOT / "tooluniverse-acmg-overlay-routing-core" / "overlay_registry.yaml"
+    packaged_registry = ROOT / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "overlay_registry.yaml"
+    if canonical_registry.exists() and packaged_registry.exists():
+        if not filecmp.cmp(canonical_registry, packaged_registry, shallow=False):
+            problems.append(f"drifted packaged overlay_registry.yaml: {packaged_registry}")
 
     # Also scan all protected mirrors for unsafe phrases
     all_roots = [CANONICAL_ROOT] + DUPLICATE_ROOTS

@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List
 
+from .acmg_gate.registry import criterion_to_group, criterion_to_overlay
 from .acmg_gate_policy import SOURCE_LEAD_NOTICE
 
 
@@ -350,7 +351,7 @@ class ACMGHarnessRunner:
     ) -> List[Dict[str, Any]]:
         del arguments
         appended = []
-        wanted = {self._criterion_to_group(row.get("criterion")) for row in candidate_evidence}
+        wanted = {self._registry_criterion_group(row.get("criterion")) for row in candidate_evidence}
         existing = {row.get("criterion_group") for row in existing_routes if isinstance(row, dict)}
         for entry in self.registry_entries:
             group = entry.get("criterion_group")
@@ -359,17 +360,17 @@ class ACMGHarnessRunner:
                 existing.add(group)
         return appended
 
-    def _criterion_to_group(self, criterion: Any) -> str:
-        return {
-            "PM2": "pm2_absence_rarity",
-            "PP3": "pp3_bp4_missense_prediction",
-            "PS3": "ps3_bs3_functional_assay",
-            "PS2": "de_novo_ps2_pm6",
-            "PS4": "ps4_case_enrichment",
-            "PP1": "pp1_bs4_pp4_segregation",
-            "PP5": "reputable_source_review",
-            "PM4": "pm4_bp3_protein_length",
-        }.get(str(criterion), "")
+    def _registry_criterion_group(self, criterion: Any) -> str:
+        try:
+            return criterion_to_group(str(criterion)) or ""
+        except Exception:
+            return ""
+
+    def _registry_overlay_for_criterion(self, criterion: Any) -> str:
+        try:
+            return criterion_to_overlay(str(criterion)) or "tooluniverse-acmg-overlay-routing-core"
+        except Exception:
+            return "tooluniverse-acmg-overlay-routing-core"
 
     def _overlay_adapters(self, candidate_evidence: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         overlay_results = []
@@ -378,7 +379,7 @@ class ACMGHarnessRunner:
             criterion = str(candidate.get("criterion"))
             if criterion == "none":
                 continue
-            overlay = self._criterion_overlay(criterion)
+            overlay = self._registry_overlay_for_criterion(criterion)
             status = "not_used" if criterion in {"PP5"} else "not_assessed"
             applied = None
             reason = candidate.get("reason", "")
@@ -408,28 +409,16 @@ class ACMGHarnessRunner:
             criterion = str(candidate.get("criterion"))
             if criterion == "none":
                 continue
-            group = self._criterion_to_group(criterion)
+            group = self._registry_criterion_group(criterion)
             triggers.append({
                 "route_family": group or "unknown_route",
                 "source_category": candidate.get("source_category"),
-                "target_overlay": self._criterion_overlay(criterion),
+                "target_overlay": self._registry_overlay_for_criterion(criterion),
                 "counted": False,
                 "final_ready": False,
                 "reason": candidate.get("reason", "Route trigger only; not counted ACMG evidence."),
             })
         return triggers
-
-    def _criterion_overlay(self, criterion: str) -> str:
-        return {
-            "PM2": "tooluniverse-acmg-pm2-absence-rarity-refinement",
-            "PP3": "tooluniverse-acmg-pp3-bp4-missense-prediction-refinement",
-            "PS3": "tooluniverse-acmg-ps3-bs3-functional-assay-refinement",
-            "PS2": "tooluniverse-acmg-de-novo-evidence-refinement",
-            "PS4": "tooluniverse-acmg-ps4-case-enrichment-refinement",
-            "PP1": "tooluniverse-acmg-pp1-segregation-refinement",
-            "PP5": "tooluniverse-acmg-pp5-bp6-reputable-source-refinement",
-            "PM4": "tooluniverse-acmg-pm4-bp3-protein-length-refinement",
-        }.get(criterion, "tooluniverse-acmg-overlay-routing-core")
 
     def _bundle(
         self,

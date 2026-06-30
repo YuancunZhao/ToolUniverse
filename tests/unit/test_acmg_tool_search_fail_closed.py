@@ -43,6 +43,28 @@ def test_fail_closed_search() -> None:
         assert row["must_route_through"] == "ACMG_overlay_gate_assess_variant"
 
 
+def test_query_string_positional_argument_is_safe() -> None:
+    search = _load()
+    payload = {"tools": [{"name": "GeneBe_classify_variant"}, {"name": "SomeGenericVariantTool"}]}
+    updated = search.add_acmg_gate_to_search_payload(payload, "Is this variant likely pathogenic?")
+    assert [row["name"] for row in updated["tools"]] == [
+        "ACMG_overlay_gate_assess_variant",
+        "GeneBe_classify_variant",
+    ]
+
+
+def test_query_helper_routes_through_intent_detector() -> None:
+    search = _load()
+    payload = {"tools": [{"name": "GeneBe_classify_variant"}, {"name": "SomeGenericVariantTool"}]}
+    updated = search.add_acmg_gate_to_search_payload_for_query(payload, "variant pathogenicity")
+    assert [row["name"] for row in updated["tools"]] == [
+        "ACMG_overlay_gate_assess_variant",
+        "GeneBe_classify_variant",
+    ]
+
+
 if __name__ == "__main__":
     test_fail_closed_search()
+    test_query_string_positional_argument_is_safe()
+    test_query_helper_routes_through_intent_detector()
     print("PASS test_acmg_tool_search_fail_closed")

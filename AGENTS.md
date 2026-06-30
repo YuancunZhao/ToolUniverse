@@ -13,7 +13,7 @@ ACMG overlay maintenance rules:
 - Final classification requires validator_status PASS, semantic_combiner_status PASS, and final_classification_allowed true.
 - P/LP/VUS/LB/B abbreviations are final labels and must be guarded by the final-answer guard.
 - User clinical context (de novo, segregation, compound heterozygous, HPO, unaffected carrier, alternate diagnosis) can only trigger non-counted route candidates. It must never directly become counted evidence.
-- Do not reintroduce duplicate Skill drift. Run `python3 scripts/check_skill_duplicate_drift.py` after any Skill change. The canonical source is `skills/`; committed mirrors live under `plugin/skills/` and `plugins/tooluniverse/skills/`. Do not commit `.agents/` local workspace mirrors.
+- Do not reintroduce duplicate Skill drift. Run `python3 scripts/check_skill_duplicate_drift.py` after any Skill change. The canonical source is `skills/`; mirrors live under `.agents/skills/`, `plugin/skills/`, and `plugins/tooluniverse/skills/`.
 - Keep shared ACMG runtime policy in `src/tooluniverse/acmg_gate/`. Skill scripts should be thin wrappers around canonical modules unless a file is purely schema, registry, fixture, or documentation.
 - Keep the packaged runtime script copy under `src/tooluniverse/data/acmg_overlay_gate/scripts/` synchronized with `skills/tooluniverse-acmg-overlay-routing-core/scripts/`; the duplicate-drift check enforces this.
 

@@ -134,8 +134,26 @@ def _payload_limit(payload: Dict[str, Any]) -> int | None:
     return limit if limit > 0 else None
 
 
-def add_acmg_gate_to_search_payload(payload: Any, intent: ACMGIntent | str | None = None) -> Any:
-    intent_value = ACMGIntent(intent) if isinstance(intent, str) else intent
+def _coerce_intent(intent_or_query: ACMGIntent | str | None) -> ACMGIntent | None:
+    if isinstance(intent_or_query, ACMGIntent) or intent_or_query is None:
+        return intent_or_query
+    if isinstance(intent_or_query, str):
+        try:
+            return ACMGIntent(intent_or_query)
+        except ValueError:
+            return detect_acmg_intent(intent_or_query)
+    return None
+
+
+def add_acmg_gate_to_search_payload(
+    payload: Any,
+    intent_or_query: ACMGIntent | str | None = None,
+    *,
+    intent: ACMGIntent | str | None = None,
+) -> Any:
+    if intent is not None and intent_or_query is not None:
+        raise TypeError("Pass either positional intent_or_query or keyword-only intent, not both.")
+    intent_value = _coerce_intent(intent if intent is not None else intent_or_query)
     final_classification_intent = intent_value == ACMGIntent.ACMG_FINAL_CLASSIFICATION
     if isinstance(payload, list):
         return prepend_acmg_gate_tool(payload, final_classification_intent=final_classification_intent)
@@ -165,6 +183,10 @@ def add_acmg_gate_to_search_payload(payload: Any, intent: ACMGIntent | str | Non
         "result": payload,
         "tools": [acmg_gate_tool_search_entry()],
     }
+
+
+def add_acmg_gate_to_search_payload_for_query(payload: Any, query: str) -> Any:
+    return add_acmg_gate_to_search_payload(payload, intent=detect_acmg_intent(query))
 
 
 def is_high_risk_acmg_tool(tool_name: str) -> bool:

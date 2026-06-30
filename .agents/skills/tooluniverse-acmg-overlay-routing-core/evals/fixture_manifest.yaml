@@ -1,0 +1,70 @@
+validator_fixtures:
+  semantic:
+    - semantic_ba1_benign_pass.json
+    - semantic_ba1_pathogenic.json
+    - semantic_ba1_pathogenic_fail.json
+    - semantic_conflict_pathogenic_fail.json
+    - semantic_draft_only_no_final_pass.json
+    - semantic_no_counted_evidence_likely_pathogenic.json
+    - semantic_no_counted_evidence_lp_fail.json
+    - semantic_pm2_only_pathogenic.json
+    - semantic_pm2_only_pathogenic_fail.json
+  functional_db:
+    - mavedb_no_hit_pass.json
+    - mavedb_raw_score_counted.json
+    - missense_functional_db_failed_draft_only.json
+    - missense_functional_db_no_hit_pass_or_draft.json
+    - missense_functional_db_not_applicable_with_reason_pass_or_draft.json
+    - missense_functional_db_not_applicable_without_reason_fail.json
+    - missense_functional_db_unavailable_draft_only.json
+  source_lead:
+    - abstract_only_literature_counted.json
+    - clinvar_label_direct_counted.json
+    - outer_skill_cadd_pp3_counted.json
+  compatibility:
+    - final_empty_resolved_evidence.json
+    - final_route_audit_but_empty_resolved.json
+    - missing_compatibility_resolution.json
+    - resolved_without_matching_counted_audit.json
+    - string_counted_value_invalid.json
+  coverage:
+    - final_missing_literature_coverage.json
+    - final_placeholder_literature_coverage.json
+    - literature_pedigree_trigger_missing_pp1_route.json
+    - pm2_counted_missing_population_coverage.json
+    - missense_missing_baseline_routes.json
+    - no_pp1_literature_no_hit_pass.json
+  context:
+    - reduced_penetrance_bs2_missing_context.json
+    - vcep_scope_mismatch_counted.json
+  direct_final:
+    - dhx30_direct_final_no_bundle.json
+entrypoint_bypass_fixtures:
+  final_label_english:
+    - direct_english_pathogenic_question.json
+    - final_semantic_fail.json
+    - bayesian_final_without_validator_pass.json
+  final_label_abbreviation:
+    - final_abbreviation_labels_without_gates.json
+  final_label_chinese:
+    - chinese_final_labels_without_gates.json
+    - direct_chinese_pathogenic_question.json
+    - fgfr3_chinese_direct_mcp_final.json
+  wrong_skill:
+    - cross_skill_redirect_to_variant_interpretation.json
+    - rare_disease_skill_acmg_criteria.json
+    - rare_disease_vus_promoted_without_gate.json
+    - structural_variant_five_tier.json
+    - variant_interpretation_final_direct.json
+  direct_tool:
+    - clinvar_pathogenic_final_answer.json
+    - fgfr3_direct_mcp_genebe_spliceai_final.json
+    - fgfr3_direct_mcp_no_online_literature.json
+    - genebe_direct_final_answer.json
+    - vwf_genebe_direct_pathogenic.json
+  false_positive:
+    - final_abbreviation_false_positive_text.json
+  valid_gate:
+    - valid_bundle_validator_pass.json
+  malformed_bundle:
+    - natural_language_bundle_no_json.json

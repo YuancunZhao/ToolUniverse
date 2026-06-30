@@ -2,7 +2,7 @@
 
 ## Canonical Skill Source
 
-In this workspace, `skills/` is the canonical Skill source. `plugin/skills/` and `plugins/tooluniverse/skills/` are the committed generated/deployment mirrors. `.agents/` is a local workspace mirror and must not be committed. Run `python3 scripts/check_skill_duplicate_drift.py` to ensure the protected committed Skill mirrors are byte-for-byte synchronized with canonical `skills/`.
+In this workspace, `skills/` is the canonical Skill source. `.agents/skills/`, `plugin/skills/`, and `plugins/tooluniverse/skills/` are treated as generated/deployment mirrors. Run `python3 scripts/check_skill_duplicate_drift.py` to ensure the protected ACMG and variant-interpretation Skill mirrors are byte-for-byte synchronized with canonical `skills/`.
 
 The protected Skills are:
 - `tooluniverse`

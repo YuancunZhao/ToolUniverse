@@ -34,7 +34,7 @@ _CONTEXTUAL_SINGLE_LETTER_RE = re.compile(
 _CHINESE_FINAL_CONTEXT_RE = re.compile(
     r"(ACMG\s*分类|最终分类|最终判断|变异分类|分类结果|判读结果|"
     r"结论[：:]|该变异为|此变异为|这个变异为|该位点为|这个位点为|"
-    r"该突变为|这个突变为)"
+    r"该突变为|这个突变为|评级为|分级为|判定为)"
 )
 _CHINESE_FINAL_LABEL_RE = re.compile(r"(可能致病|临床意义不明|不确定意义|意义不明|可能良性|致病|良性)")
 

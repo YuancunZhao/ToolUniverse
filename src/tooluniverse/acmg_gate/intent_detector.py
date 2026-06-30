@@ -15,6 +15,7 @@ class ACMGIntent(str, Enum):
 
 
 _FINAL_CLASSIFICATION_PHRASES = (
+    # English — direct final-classification queries
     "is this variant pathogenic",
     "is this variant likely pathogenic",
     "what is the acmg classification",
@@ -33,10 +34,18 @@ _FINAL_CLASSIFICATION_PHRASES = (
     "5-tier",
     "likely pathogenic",
     "pathogenic variant",
+    # English — clinical contexts implying ACMG final classification
+    "germline testing",
+    "hereditary cancer panel",
+    "carrier screening",
+    "variant of unknown significance",
+    "missense variant classification",
+    # Chinese — direct final-classification queries
     "致病性",
     "是不是致病",
     "是否致病",
     "可能致病吗",
+    "可能致病",
     "位点严重吗",
     "变异能否解释表型",
     "能否解释表型",
@@ -54,6 +63,21 @@ _FINAL_CLASSIFICATION_PHRASES = (
     "变异分类",
     "acmg分类",
     "acmg 分类",
+    # Chinese — clinical contexts implying ACMG final classification
+    "遗传性肿瘤",
+    "携带者筛查",
+    "产前诊断",
+    "基因panel",
+    "基因 panel",
+    "致病性不明",
+    "错义变异分类",
+    "无义变异",
+    "移码变异",
+    "剪切位点变异",
+    "有危害吗",
+    "良性还是致病",
+    "需不需要报",
+    "基因报告解读",
 )
 
 _ACMG_RELATED_TERMS = (
@@ -78,6 +102,18 @@ _ACMG_RELATED_TERMS = (
     "罕见病",
     "全外显子",
     "基因检测",
+    # Chinese clinical contexts
+    "胚系",
+    "遗传病",
+    "孟德尔",
+    "常染色体显性",
+    "常染色体隐性",
+    "x连锁",
+    "新生突变",
+    # English clinical
+    "hereditary",
+    "carrier",
+    "germline",
 )
 
 _VARIANT_CONTEXT_TERMS = (
@@ -94,6 +130,9 @@ _VARIANT_CONTEXT_TERMS = (
     "杂合",
     "纯合",
     "测序",
+    "突变位点",
+    "变异位点",
+    "致病性",
 )
 
 _FALSE_POSITIVE_PHRASES = (
@@ -109,6 +148,9 @@ _FALSE_POSITIVE_PHRASES = (
     "良性肿瘤",
     "病原体具有致病性",
     "b细胞",
+    "致病机制",
+    "良性疾病",
+    "可能致病机制",
 )
 
 _STRONG_VARIANT_PATTERNS = (
@@ -157,6 +199,14 @@ def detect_acmg_intent(query: str) -> ACMGIntent:
         or "致病" in lowered
         or "临床意义" in lowered
         or "报阳性" in lowered
+    ):
+        return ACMGIntent.ACMG_FINAL_CLASSIFICATION
+    # Chinese judgment/rating phrases signal classification intent
+    if any(term in lowered for term in ("判定为", "评级为", "分级为")) and (
+        has_variant
+        or "致病" in lowered
+        or "良性" in lowered
+        or "临床意义" in lowered
     ):
         return ACMGIntent.ACMG_FINAL_CLASSIFICATION
     if contains_strong_variant_pattern(text) and (

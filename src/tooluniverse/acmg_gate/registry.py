@@ -11,7 +11,19 @@ try:
 except Exception:  # pragma: no cover - optional in minimal script environments.
     yaml = None
 
-REGISTRY_PATH = Path(__file__).resolve().parents[1] / "overlay_registry.yaml"
+def _default_registry_path() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        for candidate in (
+            parent / "skills" / "tooluniverse-acmg-overlay-routing-core" / "overlay_registry.yaml",
+            parent / "src" / "tooluniverse" / "data" / "acmg_overlay_gate" / "overlay_registry.yaml",
+            parent / "overlay_registry.yaml",
+        ):
+            if candidate.exists():
+                return candidate
+    return Path(__file__).resolve().parents[1] / "overlay_registry.yaml"
+
+
+REGISTRY_PATH = _default_registry_path()
 
 
 def load_overlay_registry(path: str | Path | None = None) -> dict[str, Any]:

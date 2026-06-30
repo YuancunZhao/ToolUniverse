@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _iter_policy_files():
-    for root_name in ("src/tooluniverse", "skills", "plugin/skills", "plugins/tooluniverse/skills", "scripts"):
+    for root_name in ("src/tooluniverse", "skills", "plugin/skills", "plugins/tooluniverse/skills", ".agents/skills", "scripts"):
         root = ROOT / root_name
         if not root.exists():
             continue
@@ -29,12 +29,12 @@ def test_no_duplicate_policy_regex() -> None:
         ROOT / "src/tooluniverse/acmg_gate/check_entrypoint_bypass_fixtures.py",
     }
     forbidden_tokens = (
-        "FULL_FINAL_LABEL_RE",
-        "CHINESE_FINAL_LABEL_RE",
-        "PAIRED_ABBREVIATION_RE",
-        "STANDALONE_ABBREVIATION_RE",
-        "_ACMG_INTENT_TERMS",
-        "_HGVS_PATTERNS",
+        "FULL" + "_FINAL_LABEL_RE",
+        "CHINESE" + "_FINAL_LABEL_RE",
+        "PAIRED" + "_ABBREVIATION_RE",
+        "STANDALONE" + "_ABBREVIATION_RE",
+        "_ACMG" + "_INTENT_TERMS",
+        "_HGVS" + "_PATTERNS",
     )
     offenders = []
     for path in _iter_policy_files():
