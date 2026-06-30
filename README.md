@@ -13,6 +13,14 @@
 
 [//]: # (mcp-name: io.github.mims-harvard/tooluniverse)
 
+> ⚠️ **This is the ACMG Enhanced fork** ([YuancunZhao/ToolUniverse](https://github.com/YuancunZhao/ToolUniverse), branch `codex/skills-overlay`).
+> Adds ACMG/AMP variant pathogenicity classification with triple-gate validation, 22 criterion overlays, and Chinese+English intent detection.
+>
+> **One-line install:**
+> ```
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
+> ```
+
 ## Install
 
 **AI agent (recommended)** — open your AI agent and run:
