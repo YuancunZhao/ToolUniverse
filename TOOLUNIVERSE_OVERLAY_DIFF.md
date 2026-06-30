@@ -1,6 +1,6 @@
 # ToolUniverse Overlay Difference List
 
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 
 Baseline comparison:
 
@@ -16,11 +16,21 @@ Summary:
 - Changed files under `skills/`: 76
 - Net intended overlay diff: approximately 11700 insertions, 230 deletions
 
+## Mandatory ACMG Overlay Routing Policy: 2026-06-30
+
+- Adds canonical ACMG policy modules under `src/tooluniverse/acmg_gate/`: `intent_detector.py`, `final_label_detector.py`, `policy.py`, `finalizer.py`, `semantic_combiner.py`, `context_triggers.py`, `validate_acmg_overlay_bundle.py`, `check_entrypoint_bypass_fixtures.py`, `registry.py`, `fixture_utils.py`, and `final_answer_guard.py`.
+- Moves ToolUniverse ACMG search intent detection, final-label guard detection, source-lead metadata, finalization gate aggregation, semantic combiner validation, context-trigger routing, and fixture categorization to those canonical modules.
+- Converts `skills/tooluniverse-acmg-overlay-routing-core/scripts/` into thin wrappers over the canonical runtime modules and keeps the packaged copy in `src/tooluniverse/data/acmg_overlay_gate/scripts/` drift-checked.
+- Makes ACMG final-classification tool search fail closed by surfacing `ACMG_overlay_gate_assess_variant` as the ordinary entrypoint and marking direct high-risk tools as `source_lead_only`, `acmg_countable_evidence=false`, and `final_classification_allowed=false`.
+- Adds `evals/fixture_manifest.yaml` so validator and entrypoint-bypass fixtures report by category while preserving the existing pass/fail behavior.
+- Expands protected Skill drift checks to include the top-level router, overlapping rare-disease, regulatory, mechanism, structural, functional-annotation, and protein-SAE variant skills, plus the packaged ACMG wrapper scripts.
+- Documents the global runtime limitation: ToolUniverse can enforce routing after tool discovery/execution begins, but an upper-level LLM runtime still needs pre-answer and post-answer hooks to prevent no-tool bypass.
+
 ## ACMG Overlay Semantic Guard Hardening: 2026-06-29
 
 This change closes remaining architecture bypass paths where a trace-compliant bundle or generated answer could still present an unsupported ACMG five-tier label.
 
-- Adds `scripts/check_skill_duplicate_drift.py` so deployment copies under `skills/`, `plugin/skills/`, or `plugins/tooluniverse/skills/` fail if they drift from canonical `.agents/skills` copies for `tooluniverse-variant-interpretation`, `tooluniverse-acmg-variant-classification`, or `tooluniverse-acmg-overlay-routing-core`.
+- Adds `scripts/check_skill_duplicate_drift.py` so committed deployment copies under `plugin/skills/` and `plugins/tooluniverse/skills/` fail if they drift from canonical `skills/` copies for `tooluniverse-variant-interpretation`, `tooluniverse-acmg-variant-classification`, or `tooluniverse-acmg-overlay-routing-core`.
 - Updates `tooluniverse-variant-interpretation` to be intake/handoff only and removes unconditional final-verdict language from `tooluniverse-acmg-variant-classification`.
 - Adds `acmg_semantic_combiner.py` and integrates it into `validate_acmg_overlay_bundle.py`; validator output now includes `semantic_combiner_status`, `computed_classification`, `reported_classification`, and `semantic_violations`.
 - Requires validator PASS plus semantic combiner PASS for final five-tier labels and extends entrypoint bypass checks to reject final answers that lack semantic PASS.

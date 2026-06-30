@@ -37,15 +37,15 @@ Pre-delivery verification checklist for rare disease diagnostic reports.
 - [ ] Testing strategy recommended (single gene vs panel vs WES)
 - [ ] Cost-effectiveness considered
 
-### Phase 4: Variant Interpretation (if variants provided)
+### Phase 4: Variant Evidence Intake (if variants provided)
 - [ ] ClinVar ID and classification retrieved
 - [ ] gnomAD allele frequency checked
 - [ ] Population-specific frequencies noted
 - [ ] CADD/REVEL scores obtained
-- [ ] ACMG criteria systematically applied
-- [ ] Each criterion has evidence documented
-- [ ] Preliminary classification stated
-- [ ] Confidence in classification noted
+- [ ] Candidate ACMG routes listed
+- [ ] Source assertions kept separate from counted evidence
+- [ ] Final pathogenicity routed to `tooluniverse-acmg-variant-classification` when needed
+- [ ] Draft-only status noted when no validator PASS is available
 
 ### Phase 5: Structure Analysis (if VUS)
 - [ ] NVIDIA_API_KEY availability documented
@@ -55,7 +55,7 @@ Pre-delivery verification checklist for rare disease diagnostic reports.
 - [ ] Conservation data included
 - [ ] Nearby pathogenic variants noted
 - [ ] Structural evidence summarized
-- [ ] Impact on ACMG classification stated
+- [ ] ACMG route impact stated without assigning final classification locally
 
 ### Phase 6: Recommendations
 - [ ] ≥3 specific next steps listed
@@ -101,8 +101,8 @@ Pre-delivery verification checklist for rare disease diagnostic reports.
 ### Tier Definitions
 | Tier | Symbol | Criteria |
 |------|--------|----------|
-| T1 | ★★★ | Phenotype >80% + pathogenic variant OR clinical diagnosis met |
-| T2 | ★★☆ | Phenotype 60-80% OR likely pathogenic variant |
+| T1 | ★★★ | Phenotype >80% + ACMG-gated pathogenic variant OR clinical diagnosis met |
+| T2 | ★★☆ | Phenotype 60-80% OR externally reported / ACMG-gated likely pathogenic variant |
 | T3 | ★☆☆ | Phenotype 40-60% OR VUS in candidate gene |
 | T4 | ☆☆☆ | Phenotype <40% OR no supporting genetic evidence |
 
@@ -116,7 +116,7 @@ Pre-delivery verification checklist for rare disease diagnostic reports.
 | Candidate diseases | ≥5 ranked diseases (or all matching) |
 | Disease details | Top 3 with full feature comparison |
 | Gene panel | ≥5 genes with evidence levels |
-| ACMG criteria | All applicable criteria evaluated |
+| Variant routes | All applicable ACMG candidate routes listed or handed off |
 | Recommendations | ≥3 specific next steps |
 
 ---

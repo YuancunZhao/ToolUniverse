@@ -273,7 +273,7 @@ result = tu.tools.CADD_get_variant_score(
     version="GRCh38-v1.7"
 )
 # Returns: phred_score, raw_score, interpretation
-# PHRED ≥20 = top 1% deleterious (PP3 support)
+# PHRED >=20 is deleterious prediction context only; route PP3/BP4 to the calibrated overlay or VCEP.
 ```
 
 ### AlphaMissense (NEW)
@@ -311,14 +311,14 @@ result = tu.tools.ESM_explain_variant_mechanism(
 - `ESM_get_region_sae_features` — aggregate features over a residue range (e.g. characterize a domain or motif)
 - `ESM_describe_sae_feature` — biological category label for a feature_id (cached per id)
 
-**Mapping SAE categories → ACMG support**:
-| SAE category lost | Mechanistic claim | ACMG line |
+**Mapping SAE categories -> mechanism context**:
+| SAE category lost | Mechanistic claim | ACMG route note |
 |---|---|---|
-| `catalytic` | Active-site disruption | Mechanistic support for PP3 |
-| `ligand-binding` / `ptm` / `domain` | Functional site disruption | Supports PP3 |
-| `structural-stability` / `secondary-structure` | Fold-destabilizing | Supports PP3 |
-| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Supports PP3 |
-| (no interpretable change) | No mechanistic signal | Do not strengthen PP3 above the predictor score alone |
+| `catalytic` | Active-site disruption | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `ligand-binding` / `ptm` / `domain` | Functional site disruption | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `structural-stability` / `secondary-structure` | Fold-destabilizing | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Mechanism context only; route prediction evidence to PP3/BP4 overlay or VCEP |
+| (no interpretable change) | No mechanistic signal | Do not strengthen PP3/BP4 from SAE output inside this skill |
 
 **Requires**: `ESM_API_KEY` env var (free non-commercial token at https://forge.evolutionaryscale.ai) and `pip install 'esm @ git+https://github.com/evolutionaryscale/esm@ee891c52'` (SAE support on unmerged feature branch; PyPI esm 3.2.x lacks SAEConfig). Outputs governed by EvolutionaryScale Cambrian Inference License — non-commercial use only.
 
@@ -368,13 +368,18 @@ quick = tu.tools.SpliceAI_get_max_delta(
 | DS_DG | Donor Gain (creates new) |
 | DS_DL | Donor Loss (disrupts existing) |
 
-**Max Score Thresholds for ACMG**:
-| Max Delta Score | Interpretation | ACMG |
+**Max Score Interpretation for Routing**:
+| Max Delta Score | Interpretation | ACMG route |
 |-----------------|----------------|------|
-| ≥0.8 | High splice impact | PP3 (strong) |
-| 0.5-0.8 | Moderate impact | PP3 (supporting) |
-| 0.2-0.5 | Low impact | PP3 (weak) |
-| <0.2 | Likely no impact | BP7 (if synonymous) |
+| >=0.8 | High splice-prediction context | Prediction/comparison route; not counted here |
+| 0.5-0.8 | Moderate splice-prediction context | Prediction/comparison route; not counted here |
+| 0.2-0.5 | Low splice-prediction context | Prediction context only |
+| <0.2 | Low splice-prediction context | Do not assign BP7 here; BP7_RNA requires the splicing overlay and appropriate variant context |
+
+SpliceAI-only evidence is prediction context. Route it to PP3/BP4 prediction
+guidance, PS1-splicing comparison guidance, or a VCEP. Do not route
+prediction-only evidence to PVS1_RNA unless RNA assay, published RNA evidence,
+or observed transcript consequence is available.
 
 **When to Use SpliceAI**:
 - Intronic variants within ±50bp of splice sites
@@ -384,8 +389,10 @@ quick = tu.tools.SpliceAI_get_max_delta(
 
 ---
 
-**Prediction Tool Thresholds for PP3**:
-| Tool | Damaging | Uncertain | Benign |
+**Prediction Tool Orientation Thresholds**:
+These thresholds are retrieval context only. They do not assign PP3/BP4.
+
+| Tool | Damaging orientation | Uncertain | Benign orientation |
 |------|----------|-----------|--------|
 | **AlphaMissense** | >0.564 | 0.34-0.564 | <0.34 |
 | **CADD PHRED** | ≥20 | 15-20 | <15 |
@@ -394,9 +401,9 @@ quick = tu.tools.SpliceAI_get_max_delta(
 
 **Recommended Strategy for VUS**:
 1. Run all predictors (AlphaMissense, CADD, EVE for missense; SpliceAI for splice)
-2. If ≥2 concordant damaging → Strong PP3 support
-3. If ≥2 concordant benign → BP4 support
-4. If discordant → Weight AlphaMissense highest for missense, SpliceAI for splice
+2. Record prediction context and discordance
+3. Route missense prediction evidence to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or VCEP
+4. Route SpliceAI-only evidence as prediction/comparison context; do not use it as PVS1_RNA without RNA assay or observed transcript evidence
 
 ---
 
@@ -636,30 +643,30 @@ papers = tu.tools.SemanticScholar_search_papers(
 ```python
 def diagnose_rare_disease(tu, symptoms, patient_id):
     """Complete rare disease diagnostic workflow."""
-    
+
     # Phase 1: Standardize phenotype
     hpo_terms = []
     for symptom in symptoms:
         results = tu.tools.HPO_search_terms(query=symptom)
         if results:
             hpo_terms.append(results[0])
-    
+
     # Phase 2: Match diseases
     candidate_diseases = []
     for hpo in hpo_terms:
         diseases = tu.tools.HPO_get_diseases_by_phenotype(hp_id=hpo['id'])
         candidate_diseases.extend(diseases)
-    
+
     # Rank by frequency
     disease_counts = Counter(d['orpha_id'] for d in candidate_diseases)
     top_diseases = disease_counts.most_common(10)
-    
+
     # Phase 3: Build gene panel
     genes = set()
     for orpha_id, count in top_diseases:
         disease_genes = tu.tools.Orphanet_get_disease_genes(orpha_code=orpha_id)
         genes.update(disease_genes)
-    
+
     return {
         'hpo_terms': hpo_terms,
         'candidate_diseases': top_diseases,
@@ -671,26 +678,41 @@ def diagnose_rare_disease(tu, symptoms, patient_id):
 
 ```python
 def interpret_variant(tu, variant_hgvs, gene_symbol):
-    """Interpret a variant using ACMG criteria."""
-    
-    evidence = {}
-    
-    # PM2: Population frequency
+    """Collect variant evidence leads; route ACMG assignment to overlays."""
+
+    route_candidates = {}
+
+    # Population frequency lead
     freq = tu.tools.gnomad_get_variant(variant_id=variant_hgvs)
     if freq['allele_frequency'] < 0.00001:
-        evidence['PM2'] = {'strength': 'Moderate', 'reason': 'Absent from gnomAD'}
-    
-    # PP3: Computational predictions
+        route_candidates['population_rarity'] = {
+            'candidate': 'PM2',
+            'route': 'tooluniverse-acmg-pm2-absence-rarity-refinement',
+            'status': 'candidate_only',
+            'reason': 'Absent or rare in gnomAD; strength assigned only by PM2 overlay'
+        }
+
+    # Computational prediction lead
     cadd = tu.tools.CADD_get_scores(variant=variant_hgvs)
     if cadd['phred_score'] > 25:
-        evidence['PP3'] = {'strength': 'Supporting', 'reason': f'CADD={cadd["phred_score"]}'}
-    
-    # ClinVar
+        route_candidates['prediction_context'] = {
+            'candidate': 'PP3/BP4',
+            'route': 'tooluniverse-acmg-pp3-bp4-missense-prediction-refinement',
+            'status': 'candidate_only',
+            'reason': f'CADD={cadd["phred_score"]}; do not assign PP3 from CADD alone'
+        }
+
+    # ClinVar source lead
     clinvar = tu.tools.ClinVar_search_variants(query=variant_hgvs)
     if clinvar:
-        evidence['ClinVar'] = clinvar[0]['clinical_significance']
-    
-    return evidence
+        route_candidates['source_assertion'] = {
+            'source': 'ClinVar',
+            'assertion': clinvar[0]['clinical_significance'],
+            'route': 'tooluniverse-acmg-pp5-bp6-reputable-source-refinement',
+            'status': 'source_lead_only'
+        }
+
+    return route_candidates
 ```
 
 ### Example 3: Structure Analysis for VUS
@@ -698,27 +720,27 @@ def interpret_variant(tu, variant_hgvs, gene_symbol):
 ```python
 def analyze_vus_structure(tu, uniprot_id, variant_position):
     """Structural analysis for variant of uncertain significance."""
-    
+
     # Get protein sequence
     protein = tu.tools.UniProt_get_entry_by_accession(accession=uniprot_id)
     sequence = protein['sequence']
-    
+
     # Predict structure
     structure = tu.tools.NvidiaNIM_alphafold2(
         sequence=sequence,
         algorithm="mmseqs2"
     )
-    
+
     # Get domain annotations
     domains = tu.tools.InterPro_get_protein_domains(accession=uniprot_id)
-    
+
     # Check if variant in domain
     variant_domain = None
     for domain in domains:
         if domain['start'] <= variant_position <= domain['end']:
             variant_domain = domain
             break
-    
+
     return {
         'structure': structure,
         'plddt_at_position': get_plddt(structure, variant_position),

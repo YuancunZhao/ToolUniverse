@@ -1,16 +1,16 @@
 ---
 name: tooluniverse-protein-lof-mechanism
-description: "Propose the mechanism by which a missense variant causes loss-of-function (LoF), synthesizing evidence from 5 independent layers: AlphaMissense pathogenicity, AlphaFold structural context, ESMC sequence likelihood, SAE feature disruption, and DynaMut2 stability ΔΔG. Distinguishes 'structural stability LoF' (mis-folding) from 'direct functional disruption' (catalytic / binding / PTM site damage). Use for coding missense variants where you need a mechanistic causal model, not just a pathogenicity score."
+description: "Propose a molecular mechanism hypothesis for a missense variant by synthesizing AlphaMissense prediction context, AlphaFold structural context, ESMC sequence likelihood, SAE feature disruption, and DynaMut2 stability ΔΔG. Distinguishes possible structural-stability disruption from direct catalytic, binding, PTM, domain, or interface disruption. Use for coding missense variants where you need a mechanistic model, not an ACMG pathogenicity score."
 disable-model-invocation: true
 ---
 
 # Protein LoF Mechanism Synthesis
 
-For a single missense variant, integrate 5 independent computational signals to propose a specific loss-of-function mechanism. Each signal answers a different question:
+For a single missense variant, integrate 5 independent computational signals to propose a specific molecular mechanism hypothesis. Each signal answers a different question:
 
 | Signal | Tool | Answers |
 |---|---|---|
-| Pathogenicity | `AlphaMissense_get_variant_score` | "Is this variant damaging?" |
+| Prediction context | `AlphaMissense_get_variant_score` | "Does a calibrated prediction model flag this substitution?" |
 | Structural context | `alphafold_get_prediction` | "Is the mutation in a folded vs disordered region?" |
 | Sequence likelihood | `ESM_score_sequence` | "Is the substitution evolutionarily plausible?" |
 | Feature disruption | `ESM_explain_variant_mechanism` (or `ESM_score_variant_sae_disruption` + `ESM_describe_sae_feature` for raw control) | "Which biological feature breaks?" |
@@ -21,15 +21,17 @@ For a single missense variant, integrate 5 independent computational signals to 
 ## When to use this skill
 
 Apply for **missense (coding) variants** where:
-- You already have evidence the variant is damaging (or want to find out)
-- You need to know **WHY** it's damaging in molecular terms
+- You already have evidence or prediction context suggesting functional impact
+- You need to know **which molecular feature may be affected**
 - Downstream work depends on the mechanism: drug rescue strategies need to know what's broken, gene-therapy decisions need to distinguish "fix the protein" vs "replace the protein", clinical reporting wants a mechanism narrative
 
 **Not for** (use other skills instead):
 - Non-coding / regulatory variants → `tooluniverse-variant-to-mechanism`
-- ACMG pathogenicity classification → `tooluniverse-variant-interpretation`
+- ACMG pathogenicity classification → `tooluniverse-acmg-variant-classification`
 - Just the SAE feature disruption (without full synthesis) → `tooluniverse-protein-sae-variant-interpretation`
 - Cancer-specific drivers → `tooluniverse-cancer-variant-interpretation`
+
+**ACMG boundary**: this skill does not assign PVS1, PS3, PP3, PM1, or final ACMG classification. AlphaMissense/ESM/DynaMut2/SAE outputs are mechanism or prediction context. Route computational prediction evidence to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`; route functional assay evidence, if any, to `tooluniverse-acmg-ps3-bs3-functional-assay-refinement`; route mechanism-specific classification to `tooluniverse-acmg-variant-classification`.
 
 ---
 
@@ -81,7 +83,7 @@ Validate the reference residue:
 assert sequence[position - 1] == ref_aa, "Wrong sequence or wrong isoform"
 ```
 
-### Step 1: AlphaMissense pathogenicity
+### Step 1: AlphaMissense prediction context
 
 ```python
 AlphaMissense_get_variant_score(
@@ -90,11 +92,11 @@ AlphaMissense_get_variant_score(
     ref_aa="R",
     alt_aa="H",
 )
-# → returns score 0..1; ≥0.564 is the "likely pathogenic" threshold per the
-#   AlphaMissense paper. Above 0.9 is very confident damaging.
+# → returns score 0..1 and model-category context. Report it as prediction
+#   context only; do not assign PP3/BP4 here.
 ```
 
-If AlphaMissense says benign (≤0.34), the rest of the analysis is exploratory — most benign variants don't have a clear LoF mechanism.
+If AlphaMissense is in the benign range, the rest of the analysis is exploratory and should be reported as low-confidence mechanism context unless independent evidence exists.
 
 ### Step 2: AlphaFold structural context
 
@@ -189,12 +191,12 @@ Apply the upstream variant_lof_mechanism decision rule:
 
 | Signal pattern | Inferred mechanism |
 |---|---|
-| ddG > +1 kcal/mol **AND** ΔlogP < 0 | **Structural stability LoF** — mutation destabilizes the fold; protein may misfold / be degraded. Drug rescue strategy: pharmacological chaperones, refolding agents. |
-| ddG ≈ 0 (in [-0.5, +1]) **AND** SAE features lost are catalytic | **Direct catalytic LoF** — protein folds normally but the active site is broken. Strategy: substrate analog / cofactor supplementation. |
-| ddG ≈ 0 **AND** SAE features lost are ligand-binding | **Binding LoF** — fold preserved, binding pocket disrupted. Strategy: small-molecule restoration. |
-| ddG ≈ 0 **AND** SAE features lost are PTM | **PTM LoF** — regulatory site (phospho / glyco / ubiquitin) broken. Mechanism: dysregulation, not direct activity loss. |
-| ddG ≈ 0 **AND** SAE features lost are domain / motif | **Interface LoF** — protein-protein interaction surface affected. Strategy: PPI restoration. |
-| ddG > 0 + AlphaMissense pathogenic + ΔlogP < 0 but no clear SAE signal | **Generic damaging mutation** — clearly bad but mechanism unclear. Investigate via experimental assay. |
+| ddG > +1 kcal/mol **AND** ΔlogP < 0 | **Structural stability mechanism hypothesis** — mutation may destabilize the fold; protein may misfold / be degraded. |
+| ddG ≈ 0 (in [-0.5, +1]) **AND** SAE features lost are catalytic | **Direct catalytic mechanism hypothesis** — protein may fold normally but affect an active-site feature. |
+| ddG ≈ 0 **AND** SAE features lost are ligand-binding | **Binding mechanism hypothesis** — fold may be preserved while a binding pocket is affected. |
+| ddG ≈ 0 **AND** SAE features lost are PTM | **PTM mechanism hypothesis** — regulatory site may be altered. |
+| ddG ≈ 0 **AND** SAE features lost are domain / motif | **Interface/domain mechanism hypothesis** — protein-protein interaction or domain feature may be affected. |
+| ddG > 0 + AlphaMissense prediction signal + ΔlogP < 0 but no clear SAE signal | **Generic predicted-impact mechanism hypothesis** — mechanism remains unclear; investigate via experimental assay. |
 
 ### Step 7: Honest evidence grading
 
@@ -214,7 +216,7 @@ Before reporting, score the synthesis:
 Variant: {VARIANT_ID}  e.g.  P04637_R175H = TP53 R175H
 
 EVIDENCE LAYERS
-  1. AlphaMissense:   {score:.3f}  ({pathogenic|ambiguous|benign})
+  1. AlphaMissense:   {score:.3f}  ({model category})
   2. AlphaFold pLDDT: {plddt:.1f}  ({well-folded|flexible|disordered})
   3. ESMC ΔlogP:      {dlogp:+.3f}  ({implausible|tolerated})
   4. SAE feature loss: top 3 features lost, dominant category = {category}
@@ -223,11 +225,13 @@ EVIDENCE LAYERS
         Feature {f3.id}: Δ={f3.delta:+.3f}, category={cat3}
   5. DynaMut2 ΔΔG:    {ddg:+.2f} kcal/mol  ({destabilizing|neutral|stabilizing})
 
-PROPOSED MECHANISM: {one of the 6 categories from Step 6}
+PROPOSED MECHANISM HYPOTHESIS: {one of the 6 categories from Step 6}
 
 SUPPORTING LOGIC: {one paragraph synthesizing the signals}
 
 CONFIDENCE: {high|medium|low}
+
+ACMG ROUTE NOTE: This is mechanism context only. Do not count PVS1, PS3, PP3, or final ACMG classification from this report without the appropriate ACMG overlay route.
 
 LIMITATIONS: {any signals that conflicted, missing data, low pLDDT, etc.}
 ```
@@ -290,4 +294,3 @@ For LoF mechanism classification (this skill's use case), the binary distinction
 - Handles insertion/deletion variants (ThermoMPNN-I)
 
 If your work depends on any of those three, switch to ThermoMPNN. Otherwise DynaMut2 is sufficient for the LoF mechanism decision in this skill.
-

@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, Dict, List
 
 try:
-    from .acmg_gate_policy import (
+    from .acmg_gate.policy import (
         ACMG_ALLOWED_USE,
         ACMG_FRONT_DOOR_TOOL_NAME,
         ACMG_GATE_NOTICE,
+        ACMGIntent,
         HIGH_RISK_ACMG_GATE_TOOLS,
+        attach_acmg_gate_notice as attach_source_lead_policy,
+        detect_acmg_intent,
+        is_high_risk_acmg_tool as policy_is_high_risk_acmg_tool,
+        looks_like_acmg_gate_query,
+        source_lead_only_metadata,
     )
 except ImportError:  # pragma: no cover - used by standalone regression checker imports.
     import importlib.util
     from pathlib import Path
 
-    _policy_path = Path(__file__).with_name("acmg_gate_policy.py")
-    _policy_spec = importlib.util.spec_from_file_location("acmg_gate_policy", _policy_path)
+    _policy_path = Path(__file__).with_name("acmg_gate") / "policy.py"
+    _policy_spec = importlib.util.spec_from_file_location("tooluniverse.acmg_gate.policy", _policy_path)
     if _policy_spec is None or _policy_spec.loader is None:
         raise
     _policy_module = importlib.util.module_from_spec(_policy_spec)
@@ -27,53 +32,12 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
     ACMG_ALLOWED_USE = _policy_module.ACMG_ALLOWED_USE
     ACMG_GATE_NOTICE = _policy_module.ACMG_GATE_NOTICE
     HIGH_RISK_ACMG_GATE_TOOLS = _policy_module.HIGH_RISK_ACMG_GATE_TOOLS
-
-
-_ACMG_INTENT_TERMS = (
-    "acmg",
-    "pathogenicity",
-    "clinical significance",
-    "variant classification",
-    "variant interpretation",
-    "five-tier",
-    "5-tier",
-    "likely pathogenic",
-    "pathogenic",
-    "vus",
-    "致病性",
-    "变异解读",
-    "临床意义",
-    "评级",
-    "分类",
-    "杂合",
-    "纯合",
-    "acmg规则",
-)
-_VARIANT_CONTEXT_TERMS = (
-    "variant",
-    "germline",
-    "hgvs",
-    "gene",
-    "变异",
-    "基因",
-    "杂合",
-    "纯合",
-)
-_HGVS_PATTERNS = (
-    re.compile(r"\bN[MR]_\d+(?:\.\d+)?:[cgmnpr]\.", re.IGNORECASE),
-    re.compile(r"\b[gcpmn]\.\d+", re.IGNORECASE),
-    re.compile(r":[cp]\.", re.IGNORECASE),
-    re.compile(r"\bchr(?:[0-9]{1,2}|x|y|m):", re.IGNORECASE),
-    re.compile(r";\s*N[MR]_\d+", re.IGNORECASE),
-)
-
-
-def looks_like_acmg_gate_query(query: str) -> bool:
-    lowered = (query or "").lower()
-    has_intent = any(term in lowered for term in _ACMG_INTENT_TERMS)
-    has_variant_context = any(term in lowered for term in _VARIANT_CONTEXT_TERMS)
-    has_hgvs = any(pattern.search(query or "") for pattern in _HGVS_PATTERNS)
-    return has_intent and (has_variant_context or has_hgvs)
+    ACMGIntent = _policy_module.ACMGIntent
+    attach_source_lead_policy = _policy_module.attach_acmg_gate_notice
+    detect_acmg_intent = _policy_module.detect_acmg_intent
+    policy_is_high_risk_acmg_tool = _policy_module.is_high_risk_acmg_tool
+    looks_like_acmg_gate_query = _policy_module.looks_like_acmg_gate_query
+    source_lead_only_metadata = _policy_module.source_lead_only_metadata
 
 
 def acmg_gate_tool_search_entry() -> Dict[str, Any]:
@@ -98,6 +62,11 @@ def acmg_gate_tool_search_entry() -> Dict[str, Any]:
         "acmg_gate_notice": ACMG_GATE_NOTICE,
         "priority": "front_door_required_for_final_acmg_classification",
         "relevance_score": 9999.0,
+        "acmg_countable_evidence": False,
+        "final_classification_allowed": False,
+        "allowed_use": ACMG_ALLOWED_USE,
+        "must_route_through": ACMG_FRONT_DOOR_TOOL_NAME,
+        "source_lead_only": True,
     }
 
 
@@ -113,13 +82,15 @@ def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any]]:
     for item in tools:
         name = _search_item_name(item)
         if name in HIGH_RISK_ACMG_GATE_TOOLS:
+            if isinstance(item, dict):
+                item.update(source_lead_only_metadata())
             high_risk.append(item)
         else:
             other.append(item)
     return high_risk, other
 
 
-def prepend_acmg_gate_tool(tools: List[Any]) -> List[Any]:
+def prepend_acmg_gate_tool(tools: List[Any], *, final_classification_intent: bool = False) -> List[Any]:
     gate_entry = None
     remaining: List[Any] = []
     for item in tools:
@@ -131,11 +102,14 @@ def prepend_acmg_gate_tool(tools: List[Any]) -> List[Any]:
         gate_entry = acmg_gate_tool_search_entry()
 
     high_risk, other = _split_high_risk_tools(remaining)
+    if final_classification_intent:
+        return [gate_entry, *high_risk]
     return [gate_entry, *high_risk, *other]
 
 
 def add_acmg_gate_notice_to_search(serialized: str, query: str) -> str:
-    if not looks_like_acmg_gate_query(query):
+    intent = detect_acmg_intent(query)
+    if intent == ACMGIntent.NONE:
         return serialized
     try:
         payload = json.loads(serialized)
@@ -148,7 +122,7 @@ def add_acmg_gate_notice_to_search(serialized: str, query: str) -> str:
             },
             ensure_ascii=False,
         )
-    payload = add_acmg_gate_to_search_payload(payload)
+    payload = add_acmg_gate_to_search_payload(payload, intent=intent)
     return json.dumps(payload, ensure_ascii=False, default=str)
 
 
@@ -160,16 +134,26 @@ def _payload_limit(payload: Dict[str, Any]) -> int | None:
     return limit if limit > 0 else None
 
 
-def add_acmg_gate_to_search_payload(payload: Any) -> Any:
+def add_acmg_gate_to_search_payload(payload: Any, intent: ACMGIntent | str | None = None) -> Any:
+    intent_value = ACMGIntent(intent) if isinstance(intent, str) else intent
+    final_classification_intent = intent_value == ACMGIntent.ACMG_FINAL_CLASSIFICATION
     if isinstance(payload, list):
-        return prepend_acmg_gate_tool(payload)
+        return prepend_acmg_gate_tool(payload, final_classification_intent=final_classification_intent)
     if isinstance(payload, dict):
         payload.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
         payload.setdefault("recommended_front_door_tool", ACMG_FRONT_DOOR_TOOL_NAME)
+        payload.setdefault("final_classification_allowed", False)
+        payload.setdefault("source_lead_only", True)
+        payload.setdefault("acmg_countable_evidence", False)
+        payload.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
+        payload["acmg_intent"] = (intent_value or ACMGIntent.ACMG_RELATED).value
         limit = _payload_limit(payload)
         for key in ("tools", "results", "data"):
             if isinstance(payload.get(key), list):
-                tools = prepend_acmg_gate_tool(payload[key])
+                tools = prepend_acmg_gate_tool(
+                    payload[key],
+                    final_classification_intent=final_classification_intent,
+                )
                 payload[key] = tools[:limit] if limit else tools
                 break
         else:
@@ -184,31 +168,10 @@ def add_acmg_gate_to_search_payload(payload: Any) -> Any:
 
 
 def is_high_risk_acmg_tool(tool_name: str) -> bool:
-    return tool_name in HIGH_RISK_ACMG_GATE_TOOLS
+    return policy_is_high_risk_acmg_tool(tool_name)
 
 
 def attach_acmg_gate_notice(tool_name: str, result: Any) -> Any:
     if not is_high_risk_acmg_tool(tool_name) or not isinstance(result, dict):
         return result
-    result.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
-    result.setdefault("recommended_front_door_tool", ACMG_FRONT_DOOR_TOOL_NAME)
-    result.setdefault("acmg_countable_evidence", False)
-    result.setdefault("allowed_use", ACMG_ALLOWED_USE)
-    result.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
-    metadata = result.setdefault("metadata", {})
-    if isinstance(metadata, dict):
-        metadata.setdefault("acmg_gate_notice", ACMG_GATE_NOTICE)
-        metadata.setdefault("recommended_front_door_tool", ACMG_FRONT_DOOR_TOOL_NAME)
-        metadata.setdefault("acmg_countable_evidence", False)
-        metadata.setdefault("allowed_use", ACMG_ALLOWED_USE)
-        metadata.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
-    else:
-        result["metadata"] = {
-            "original_metadata": metadata,
-            "acmg_gate_notice": ACMG_GATE_NOTICE,
-            "recommended_front_door_tool": ACMG_FRONT_DOOR_TOOL_NAME,
-            "acmg_countable_evidence": False,
-            "allowed_use": ACMG_ALLOWED_USE,
-            "must_route_through": ACMG_FRONT_DOOR_TOOL_NAME,
-        }
-    return result
+    return attach_source_lead_policy(result)

@@ -1,0 +1,6 @@
+{
+  "id": "genebe_direct_final_answer",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "GeneBe output used directly as final ACMG classification without overlay gate.",
+  "text": "GeneBe_classify_variant result:\n\nVariant: NM_000059.4(BRCA2):c.5946delT\nGeneBe classification: Pathogenic\n\nFinal classification: Pathogenic\n\nThis variant is pathogenic based on the GeneBe automated classifier."
+}

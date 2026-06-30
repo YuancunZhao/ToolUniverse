@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-variant-functional-annotation
-description: Functional annotation of protein variants — ProtVar structural/functional context, ClinVar clinical classifications, gnomAD population frequencies, CADD deleteriousness, ClinGen gene-disease validity, plus FAVOR one-call comprehensive GRCh38 annotation. Use for variant annotation pipelines, missense effect prediction, and protein-level variant interpretation with functional context.
+description: Functional annotation of protein variants — ProtVar structural/functional context, ClinVar clinical classifications, gnomAD population frequencies, CADD deleteriousness, ClinGen gene-disease validity. Use for variant annotation pipelines, missense effect prediction, and protein-level variant interpretation with functional context.
 disable-model-invocation: true
 ---
 
@@ -10,10 +10,10 @@ Comprehensive functional annotation of protein variants by combining ProtVar str
 context, ClinVar clinical classifications, gnomAD population frequencies, CADD deleteriousness
 scoring, and ClinGen gene-disease validity.
 
-**Differentiation from tooluniverse-variant-interpretation**: This skill focuses specifically on
+**Differentiation from ACMG classification**: This skill focuses specifically on
 **protein-level functional evidence** — structural mapping, residue context, protein domain impact,
 and population allele frequencies. It does NOT produce full ACMG classifications or treatment
-recommendations. Use `tooluniverse-variant-interpretation` for complete ACMG clinical classification.
+recommendations. Use `tooluniverse-acmg-variant-classification` for final germline ACMG/pathogenicity classification.
 
 ## LOOK UP, DON'T GUESS
 When uncertain about any scientific fact, SEARCH databases first (PubMed, UniProt, ChEMBL, ClinVar, etc.) rather than reasoning from memory. A database-verified answer is always more reliable than a guess.
@@ -33,23 +33,25 @@ When analysis requires computation (statistics, data processing, scoring, enrich
 
 ---
 
-## Pathogenicity Reasoning Framework
+## Functional Annotation Context
 
-Assessing variant pathogenicity requires building a converging case from four independent evidence dimensions. No single metric is sufficient — concordance across dimensions defines confidence.
+This skill retrieves and summarizes biological context for a protein variant. It does not assign ACMG/AMP evidence strength, does not produce final germline pathogenicity classification, and does not replace `tooluniverse-acmg-variant-classification`.
+
+Use its output as `retrieval_context`, `prediction_context`, `protein_region_context`, or `source_assertion` input for the ACMG overlay workflow.
 
 **1. Conservation: Is the position evolutionarily constrained?**
-If the residue has been maintained across vertebrates or all eukaryotes, mutation is likely to disrupt function. ProtVar's conservation score and GERP/PhastCons from OpenCRAVAT quantify this. High conservation at a position raises prior probability of pathogenicity, especially for missense variants. Low conservation suggests the position tolerates variation.
+If the residue has been maintained across vertebrates or all eukaryotes, mutation may be more likely to affect protein function. ProtVar's conservation score and GERP/PhastCons from OpenCRAVAT quantify this. Report the values and route any computational evidence to the PP3/BP4 overlay or a current VCEP rule.
 
 **2. Location: Is it in a functionally critical region?**
-A variant in an annotated active site or binding site is mechanistically impactful regardless of its frequency. Domain membership matters: a variant in the DNA-binding domain of a transcription factor is more concerning than one in an unstructured linker. Secondary structure context from ProtVar (helix, sheet, loop) adds resolution — loop residues are typically less constrained. Post-translational modification sites (phosphorylation, ubiquitination) are also critical positions.
+A variant in an annotated active site, binding site, PTM site, or constrained domain can provide protein-region context. Do not convert broad domain membership into PM1 inside this skill. Route regional evidence to `tooluniverse-acmg-pm1-regional-missense-constraint-refinement` or the relevant VCEP.
 
 **3. Population frequency: Is it rare enough to be pathogenic?**
-Highly penetrant pathogenic variants for rare diseases are almost always absent from population databases or present at very low frequency (gnomAD AF < 0.001). A variant present in 1% of the population is unlikely to cause a severe early-onset Mendelian disease. Note the max population AF (which ancestry has it highest) and the homozygote count — homozygotes in gnomAD argue against full penetrance for a recessive condition.
+Report global AF, ancestry maximum AF, homozygote/hemizygote counts, and coverage caveats. Do not assign PM2, BA1, BS1, or BS2 here. Route frequency evidence to the ACMG population-frequency overlays.
 
 **4. Computational prediction: Do algorithms agree?**
-CADD PHRED ≥ 30 puts the variant in the top 0.1% most predicted-deleterious changes. REVEL ≥ 0.75 and AlphaMissense ≥ 0.564 indicate likely pathogenic predictions. When multiple tools agree, confidence in the computational signal increases; when they disagree, weight experimental evidence more heavily. CADD ≥ 20 supports the PP3 ACMG criterion; CADD < 10 supports BP4.
+CADD, REVEL, AlphaMissense, SIFT, PolyPhen, EVE, conservation, and similar scores are prediction context only. Do not assign PP3/BP4 by local predictor voting or raw thresholds in this skill. Route missense prediction evidence to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or a current VCEP.
 
-**Synthesizing the four dimensions**: A variant that is highly conserved, located in an active site, absent from gnomAD, and predicted deleterious by CADD and REVEL represents a strong pathogenicity signal even before looking at ClinVar. Conversely, a variant at a non-conserved position in a disordered region, present in 0.1% of the population, and predicted benign is unlikely pathogenic even if a ClinVar submitter once classified it as VUS. ClinVar classifications (especially multi-star entries from expert panels) override computational predictions; ClinGen gene-disease validity sets the context for interpreting any variant in that gene.
+**Synthesis boundary**: Summarize whether annotations are concordant, discordant, or incomplete. Keep ClinVar, HGMD, LOVD, lab reports, and paper labels as `source_assertion` leads until primary evidence is retrieved and routed. Final ACMG evidence strength must come from `tooluniverse-acmg-variant-classification`.
 
 ---
 
@@ -60,16 +62,18 @@ CADD PHRED ≥ 30 puts the variant in the top 0.1% most predicted-deleterious ch
 3. **Population frequency mandatory** — Always report gnomAD AF and note ancestry-specific values
 4. **Structural context required for missense** — Domain, active site, conservation
 5. **Report-first approach** — Create report file FIRST, update progressively
-6. **Evidence grading mandatory** — Grade all claims T1-T4
+6. **Route-aware reporting mandatory** — report candidate ACMG routes, not evidence strengths
 
 ---
 
-## Evidence Grading
+## Retrieval Confidence
 
-- **T1**: ClinVar pathogenic with ≥3 submitters; ClinGen definitive gene-disease
-- **T2**: ClinVar pathogenic 1-2 submitters; CADD PHRED >25; functional studies cited
-- **T3**: Computational prediction (CADD 15-25, AlphaMissense, SIFT/PolyPhen); ProtVar structural flag
-- **T4**: Population frequency annotation only; domain membership annotation
+- **High**: direct database record or curated source retrieved with stable identifier, version, and no conflict.
+- **Moderate**: multiple retrieved sources agree, but one or more details need ACMG overlay review.
+- **Low**: prediction-only, broad domain annotation, single-source assertion, or incomplete mapping.
+- **Lead only**: ClinVar/HGMD/LOVD/lab/paper label without primary-evidence extraction.
+
+Do not translate retrieval confidence into ACMG evidence strength.
 
 ---
 
@@ -115,12 +119,6 @@ Accepted input forms: HGVS coding (`NM_000546.6:c.524G>A`), HGVS protein (`NP_00
 
 ---
 
-## Phase 1a: One-Call Comprehensive Annotation (FAVOR)
-
-When the variant is available as a GRCh38 genomic coordinate, `FAVOR_annotate_variant(variant="chr-pos-ref-alt", e.g. "19-44908822-C-T")` returns frequency (BRAVO/TOPMed, gnomAD-by-ancestry, 1000G), deleteriousness (CADD, SIFT, PolyPhen, AlphaMissense), conservation, ClinVar, and regulatory annotation in a single call. Use it as the fast first pass to populate most report fields, then drill into ProtVar/gnomAD/CADD for residue-level or fallback detail. Requires a GRCh38 genomic notation (no protein-only or rsID-only input).
-
----
-
 ## Phase 1: ProtVar Protein-Level Annotation
 
 `ProtVar_map_variant` takes `hgvs`, `genomic` (chr:pos:ref:alt), or `protein_variant` (GENE pAA#AA) — at least one is required. Extract `accession` (UniProt ID) and `position` from the result.
@@ -153,7 +151,7 @@ Absence from gnomAD is noteworthy but does not independently establish pathogeni
 
 For missense variants, use annotators `"clinvar,gnomad3,sift,polyphen2,revel,alphamissense,cadd_exome"`. For splice-region variants, add `"spliceai,dbscsnv"`. For non-coding variants, add `"gerp,phastcons,dann"`.
 
-**When scores disagree**: If REVEL says benign but CADD says deleterious, weight REVEL more heavily for missense (it is specifically trained on missense). If multiple tools agree, the signal is more reliable. Document the concordance pattern in the report.
+**When scores disagree**: document the concordance pattern and route the prediction context to `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement` or a current VCEP. Do not resolve PP3/BP4 locally.
 
 ---
 
@@ -161,7 +159,7 @@ For missense variants, use annotators `"clinvar,gnomad3,sift,polyphen2,revel,alp
 
 `ClinVar_search_variants(query="GENE protein_change")` returns pathogenicity classifications and review status. `ClinVar_get_variant_details(variant_id)` provides the full submission breakdown.
 
-ClinVar review status (star ratings): 4 stars = practice guideline (highest confidence); 3 = expert panel reviewed; 2 = multiple submitters without conflict; 1 = single submitter; 0 = conflicting or not reviewed. Single-submitter VUS classifications carry limited weight; expert panel classifications override computational predictions.
+ClinVar review status (star ratings): 4 stars = practice guideline; 3 = expert panel reviewed; 2 = multiple submitters without conflict; 1 = single submitter; 0 = conflicting or not reviewed. Treat ClinVar classifications as source assertions. Expert-panel or practice-guideline labels are high-value leads, but they do not by themselves become ACMG counted evidence unless primary evidence is routed or a VCEP specification explicitly applies.
 
 If ClinVar is unavailable, use `OpenCRAVAT_annotate_variant` with `annotators="clinvar"` as a fallback.
 
@@ -184,31 +182,31 @@ If ClinVar is unavailable, use `OpenCRAVAT_annotate_variant` with `annotators="c
 **Canonical notation**: [HGVS c. and p.]
 
 ## Executive Summary
-(2-3 sentences: structural context, population frequency, pathogenicity signal)
+(2-3 sentences: structural context, population frequency, and candidate ACMG routes)
 
 ## 1. Variant Identity
 (Canonical HGVS, gene, transcript, consequence type, amino acid change)
 
-## 2. Protein Structural Context [T3-T4]
+## 2. Protein Structural Context
 (From ProtVar: domain, secondary structure, active/binding site, 3D coordinates)
 
-## 3. Functional Annotations [T3]
+## 3. Functional Annotations
 (Conservation, predicted impact, PTM proximity, domain function)
 
-## 4. Population Frequency [T4]
+## 4. Population Frequency
 (gnomAD global AF, max population AF, homozygote count)
 
-## 5. Deleteriousness Score [T3]
+## 5. Prediction Context
 (CADD PHRED, REVEL, AlphaMissense — note concordance or discordance)
 
-## 6. Clinical Classification [T1-T2]
+## 6. Source Assertions
 (ClinVar significance, review stars, submitter count)
 
-## 7. Gene-Disease Validity [T1]
+## 7. Gene-Disease Validity
 (ClinGen classification for relevant disease)
 
-## 8. Integrated Assessment
-(Reasoning across all four dimensions: conservation, location, frequency, prediction)
+## 8. Candidate ACMG Routes
+(Route population, prediction, protein-region, source assertion, or functional-study leads to the ACMG overlay workflow)
 
 ## Data Gaps
 (Any phase with no data; confidence caveats)
@@ -223,7 +221,6 @@ If ClinVar is unavailable, use `OpenCRAVAT_annotate_variant` with `annotators="c
 - `CADD_get_variant_score` unavailable → use OpenCRAVAT `cadd_exome` annotator
 - `ClinVar_search_variants` returns empty → use OpenCRAVAT `clinvar` annotator
 - `ClinGen_search_gene_validity` returns no data → note gene-disease relationship not curated by ClinGen
-- Individual annotation tools time out or you have a GRCh38 coordinate → `FAVOR_annotate_variant` returns frequency + CADD/SIFT/PolyPhen/AlphaMissense + conservation + ClinVar + regulatory in one call
 
 ---
 

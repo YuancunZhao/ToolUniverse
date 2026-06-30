@@ -2,7 +2,7 @@
   {
     "name": "InterVar_classify_variant",
     "description": "Retrieve InterVar automated ACMG/AMP 2015 germline variant classification output as a source lead and comparator for overlay-gated review. Returns InterVar clinical significance category and activation status of evidence criteria, but these automated criteria are not ACMG counted evidence and are not final ToolUniverse ACMG classification. For germline ACMG/pathogenicity final classification, route primary evidence through ACMG_overlay_gate_assess_variant, emit an acmg_assessment_bundle, and require validator_status: PASS.",
-    "acmg_gate_notice": "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, and related variant evidence tools provide source leads, coverage hits, route triggers, or annotation inputs only; they are not ACMG counted evidence. Final germline ACMG/pathogenicity output requires ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, and validator_status: PASS.",
+    "acmg_gate_notice": "ACMG gate: direct ToolUniverse tools such as GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, Ensembl VEP, gnomAD, MaveDB/DMS, ClinGen/G2P, GeneReviews, and related variant evidence tools provide source leads, coverage hits, route triggers, or annotation inputs only; they are not ACMG counted evidence. Final germline ACMG/pathogenicity output requires ACMG_overlay_gate_assess_variant, an acmg_assessment_bundle, validator_status: PASS, semantic_combiner_status: PASS, final_classification_allowed: true, and ACMG_guard_final_answer PASS.",
     "type": "InterVarTool",
     "parameter": {
       "type": "object",

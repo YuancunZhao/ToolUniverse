@@ -12,7 +12,11 @@ import re
 import math
 from collections import Counter, defaultdict
 from typing import Dict, List
-from .acmg_gate_search import add_acmg_gate_to_search_payload, looks_like_acmg_gate_query
+from .acmg_gate_search import (
+    add_acmg_gate_to_search_payload,
+    detect_acmg_intent,
+    looks_like_acmg_gate_query,
+)
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -738,7 +742,10 @@ class ToolFinderKeyword(BaseTool):
                     "tools": [],
                 }
                 if looks_like_acmg_gate_query(query_submitted):
-                    payload = add_acmg_gate_to_search_payload(payload)
+                    payload = add_acmg_gate_to_search_payload(
+                        payload,
+                        intent=detect_acmg_intent(query_submitted),
+                    )
                     payload["total_matches"] = len(payload.get("tools", []))
                 return json.dumps(payload, indent=2, ensure_ascii=False)
 
@@ -838,7 +845,10 @@ class ToolFinderKeyword(BaseTool):
             }
             if looks_like_acmg_gate_query(query_submitted):
                 before_len = len(payload.get("tools", []))
-                payload = add_acmg_gate_to_search_payload(payload)
+                payload = add_acmg_gate_to_search_payload(
+                    payload,
+                    intent=detect_acmg_intent(query_submitted),
+                )
                 payload["total_matches"] = total_scored + len(payload.get("tools", [])) - before_len
             return json.dumps(payload, indent=2, ensure_ascii=False)
 

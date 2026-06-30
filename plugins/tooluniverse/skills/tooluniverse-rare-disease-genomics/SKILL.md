@@ -1,10 +1,10 @@
 ---
-
 name: tooluniverse-rare-disease-genomics
-description: "Rare disease genomics — disease identification (Orphanet), causative gene discovery, gene-disease validity (GenCC), variant interpretation (ClinVar), and translational research (ClinicalTrials.gov, drug repurposing for orphans). Use for rare-disease-gene curation, novel-gene-discovery analysis, and rare-disease drug-development support."
+description: Rare disease genomics — disease identification (Orphanet), causative gene discovery, gene-disease validity (GenCC), variant evidence intake (ClinVar; hand off to tooluniverse-acmg-variant-classification for final ACMG classification), and translational research (ClinicalTrials.gov, drug repurposing for orphans). Use for rare-disease-gene curation, novel-gene-discovery analysis, and rare-disease drug-development support.
 triggers:
   - keywords: [rare disease, orphan disease, Orphanet, ORPHA, HPO, phenotype, genetic disorder, inborn error, GenCC, gene-disease validity, rare genetic, congenital, inherited disorder]
   - patterns: ["rare disease", "orphan disease", "genetic cause of", "what genes cause", "prevalence of", "clinical features of", "HPO phenotypes for", "pathogenic variants in"]
+disable-model-invocation: true
 ---
 
 ## COMPUTE, DON'T DESCRIBE
@@ -205,17 +205,19 @@ Use disease name + "genetics" or "gene" for genetic literature. For variant-spec
 
 ---
 
-## Evidence Grading
+## Gene-Disease Prioritization Tiers
 
-When synthesizing across phases, grade your confidence:
+When synthesizing across phases, grade confidence for **gene-disease prioritization only**. These tiers are not ACMG/AMP variant-level evidence strengths and must not be used to classify a specific variant. Variant-level pathogenicity assessment must route to `tooluniverse-acmg-variant-classification`.
 
-**Tier 1 (Definitive)**: GenCC Definitive from multiple submitters + ClinVar expert-reviewed pathogenic variants + Orphanet "Disease-causing germline mutation(s) in" assessed association. Example: FBN1 causing Marfan syndrome.
+**Tier 1 (Definitive gene-disease lead)**: GenCC Definitive from multiple submitters + ClinVar expert-reviewed variant assertions as source leads + Orphanet "Disease-causing germline mutation(s) in" assessed association. Example: FBN1 causing Marfan syndrome.
 
-**Tier 2 (Strong)**: GenCC Strong + ClinVar single-submitter pathogenic variants + Orphanet disease-causing. Strong but less replicated evidence.
+**Tier 2 (Strong gene-disease lead)**: GenCC Strong + ClinVar variant assertions as source leads + Orphanet disease-causing. Strong but less replicated gene-disease evidence.
 
-**Tier 3 (Moderate)**: GenCC Limited or Moderate + ClinVar VUS + Orphanet candidate gene. Emerging associations requiring further validation.
+**Tier 3 (Moderate gene-disease lead)**: GenCC Limited or Moderate + ClinVar VUS/source assertions + Orphanet candidate gene. Emerging associations requiring further validation.
 
-**Tier 4 (Preliminary)**: Literature only, animal models, or no GenCC/ClinVar data. Genes from case studies without independent replication.
+**Tier 4 (Preliminary gene-disease lead)**: Literature only, animal models, or no GenCC/ClinVar data. Genes from case studies without independent replication.
+
+ClinVar, HGMD, LOVD, laboratory, or paper labels found here are source leads. Do not convert them directly to PS1, PM5, PS3, PP3, PP5/BP6, or final ACMG classification. Retrieve the primary evidence and route it through the ACMG overlay workflow.
 
 ---
 

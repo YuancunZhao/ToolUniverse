@@ -23,6 +23,14 @@ paths: "*.csv,*.xlsx,*.tsv,*.vcf,*.fa,*.fasta,*.faa,*.h5ad,*.rds,*.bam"
 
 **DO NOT skip routing.** Even if you think you know the answer, the skill has conventions (e.g., which denominator to use, which R function, which column to read) that differ from defaults.
 
+## ACMG Pathogenicity Gate
+
+For any germline variant question asking for ACMG classification, pathogenicity, clinical significance, "is this variant pathogenic?", or a five-tier ACMG-style answer, route immediately to `tooluniverse-acmg-variant-classification`. Do not stop at `tooluniverse-variant-interpretation` for a final classification; that skill is evidence intake only for this use case.
+
+GeneBe, ClinVar, HGMD, LOVD, VCEP/lab assertions, paper ACMG labels, and other automated or secondary classifications are `source_assertions_or_leads`. They may guide retrieval and overlay routing, but they are not final classification evidence and must not be counted directly.
+
+Router-level hard gate: if the final answer uses any ACMG five-tier wording (`Pathogenic`, `Likely Pathogenic`, `VUS`, `Likely Benign`, or `Benign`), it must include a validator-passing `acmg_assessment_bundle` result from `tooluniverse-acmg-overlay-routing-core/scripts/validate_acmg_overlay_bundle.py`. Without `validator_status: PASS`, the answer must use `classification_status: draft classification` and avoid presenting the five-tier result as final.
+
 ## Critical Analysis Conventions
 
 ### RULE ZERO: Use the authoritative pipeline if one ships with the data
@@ -106,7 +114,6 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | "research", "profile", "**drug**", "medication", "therapeutic agent", "tell me about [drug]" | `Skill(skill="tooluniverse-drug-research")` |
 | "**literature review**", "papers about", "publications on", "research articles", "recent studies" | `Skill(skill="tooluniverse-literature-deep-research")` |
 | "research", "profile", "**target**", "protein target", "gene target", "target validation" | `Skill(skill="tooluniverse-target-research")` |
-| "**peptide target**", "**deorphanize**", "deorphanization", "**peptide off-target**", "what does [peptide] bind", "target of a peptide", "orphan peptide", "peptide doesn't bind [target]", "binds in [species] but not", "find the receptor for [peptide]" | `Skill(skill="tooluniverse-peptide-target-deorphanization")` |
 
 ### 3. Clinical Decision Support
 
@@ -124,7 +131,7 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | "**TCGA**", "cancer genomics cohort", "GDC analysis", "TCGA mutations", "pan-cancer" | `Skill(skill="tooluniverse-cancer-genomics-tcga")` |
 | "**immunotherapy response**", "checkpoint inhibitor response", "TMB", "MSI", "PD-L1", "ICI response" | `Skill(skill="tooluniverse-immunotherapy-response-prediction")` |
 | "**rare disease diagnosis**", "differential diagnosis", "phenotype matching", "HPO", "patient with [symptoms]" | `Skill(skill="tooluniverse-rare-disease-diagnosis")` |
-| "**variant interpretation**", "VUS", "pathogenicity", "clinical significance", "is [variant] pathogenic" | `Skill(skill="tooluniverse-variant-interpretation")` |
+| "**variant interpretation**", "VUS", "pathogenicity", "clinical significance", "is [variant] pathogenic" | `Skill(skill="tooluniverse-acmg-variant-classification")` for germline pathogenicity or ACMG final classification; use `tooluniverse-variant-interpretation` only for evidence intake or non-final annotation |
 | "**clinical guidelines**", "practice guidelines", "treatment guidelines", "dosing recommendations", "standard of care" | `Skill(skill="tooluniverse-clinical-guidelines")` |
 | "**patient stratification**", "precision medicine", "biomarker stratification", "treatment selection" | `Skill(skill="tooluniverse-precision-medicine-stratification")` |
 
@@ -133,7 +140,6 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | Keywords | Action |
 |----------|--------|
 | "**find binders**", "virtual screening", "hit identification", "compounds for [target]", "**IC50**", "**bioactivity**", "**binding affinity**", "**potency**", "**selectivity**", "**SAR**", "**structure-activity**", "**lead optimization**", "**hit-to-lead**" | `Skill(skill="tooluniverse-binder-discovery")` |
-| "**peptide target**", "**deorphanize**", "deorphanization", "**peptide off-target**", "what does [peptide] bind", "target of a peptide", "orphan peptide", "peptide doesn't bind [target]", "binds in [species] but not", "find the receptor for [peptide]" | `Skill(skill="tooluniverse-peptide-target-deorphanization")` |
 | "**drug repurposing**", "new indication", "existing drugs for [disease]", "repurpose [drug]" | `Skill(skill="tooluniverse-drug-repurposing")` |
 | "**drug target validation**", "target druggability", "validate target", "target assessment" | `Skill(skill="tooluniverse-drug-target-validation")` |
 | "**network pharmacology**", "polypharmacology", "compound-target network", "multi-target" | `Skill(skill="tooluniverse-network-pharmacology")` |

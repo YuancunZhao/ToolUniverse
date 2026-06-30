@@ -24,8 +24,10 @@ from .acmg_gate_policy import (
     RECOMMENDED_ACMG_INTAKE_TOOLS,
     REQUIRED_ACMG_COVERAGE_CATEGORIES,
     SOURCE_LEAD_NOTICE,
+    contains_final_acmg_label,
 )
 from .acmg_harness_runner import ACMGHarnessRunner
+from .acmg_gate.finalizer import compute_finalization_gate
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -171,24 +173,18 @@ class ACMGOverlayGateTool(BaseTool):
         counted = self._bundle_counted_evidence(bundle)
         literature_ready = self._bundle_literature_final_ready(bundle)
 
-        gates_pass = (
-            validator_status == "PASS"
-            and semantic_status == "PASS"
-            and bundle_final_requested
-            and bool(counted)
-            and literature_ready
+        gate = compute_finalization_gate(
+            validator_status=validator_status,
+            semantic_combiner_status=semantic_status,
+            final_classification_allowed=True,
+            bundle_final_requested=bundle_final_requested,
+            counted_evidence=counted,
+            literature_ready=literature_ready,
         )
-        final_allowed = gates_pass
+        final_allowed = bool(gate["final_allowed"])
 
         blocked = self._missing_for_final_from_validation(validation, bundle_final_requested)
-        if validator_status != "PASS":
-            blocked.append("validator_status is not PASS")
-        if semantic_status != "PASS":
-            blocked.append("semantic_combiner_status is not PASS")
-        if not counted:
-            blocked.append("no compatibility-resolved counted evidence")
-        if not literature_ready:
-            blocked.append("literature hits are not fully reviewed or no literature coverage is documented")
+        blocked.extend(reason for reason in gate["blocking_reasons"] if reason not in blocked)
 
         return {
             "status": "success",
@@ -203,6 +199,7 @@ class ACMGOverlayGateTool(BaseTool):
             "allowed_response": "final classification" if final_allowed else "draft classification only",
             "counted_evidence": counted,
             "blocked_reasons": blocked,
+            "finalization_gate": gate,
             "validator_result": validator_result,
             "violations": validation.get("violations", []),
             "acmg_gate_notice": ACMG_GATE_NOTICE,
@@ -212,12 +209,18 @@ class ACMGOverlayGateTool(BaseTool):
         text = str(arguments.get("final_answer_text") or arguments.get("answer") or "")
         harness_result = arguments.get("harness_result") or arguments.get("workflow_result") or {}
         has_final_label = self._contains_final_acmg_label(text)
-        allowed = (
-            isinstance(harness_result, dict)
-            and harness_result.get("validator_status") == "PASS"
-            and harness_result.get("semantic_combiner_status") == "PASS"
-            and harness_result.get("final_classification_allowed") is True
+        gate = compute_finalization_gate(
+            validator_status=harness_result.get("validator_status") if isinstance(harness_result, dict) else None,
+            semantic_combiner_status=harness_result.get("semantic_combiner_status") if isinstance(harness_result, dict) else None,
+            final_classification_allowed=(
+                isinstance(harness_result, dict)
+                and harness_result.get("final_classification_allowed") is True
+            ),
+            bundle_final_requested=True,
+            counted_evidence=[True],
+            literature_ready=True,
         )
+        allowed = bool(gate["final_allowed"])
         validator_pass = isinstance(harness_result, dict) and harness_result.get("validator_status") == "PASS"
         semantic_pass = isinstance(harness_result, dict) and harness_result.get("semantic_combiner_status") == "PASS"
         evidence_without_overlay = self._contains_counted_evidence_without_overlay(text, harness_result)
@@ -453,42 +456,7 @@ class ACMGOverlayGateTool(BaseTool):
         return False
 
     def _contains_final_acmg_label(self, text: str) -> bool:
-        if not text:
-            return False
-        full_label = re.compile(
-            r"\b("
-            r"Likely\s+Pathogenic|Likely\s+Benign|"
-            r"Pathogenic|Benign|VUS|"
-            r"Variants?\s+of\s+(?:Uncertain|Unknown)\s+Significance|"
-            r"Uncertain\s+Significance"
-            r")\b",
-            re.IGNORECASE,
-        )
-        paired_abbreviation = re.compile(
-            r"(?<![A-Za-z0-9])(?:P\s*/\s*LP|LP\s*/\s*P|LB\s*/\s*B|B\s*/\s*LB)(?![A-Za-z0-9])",
-            re.IGNORECASE,
-        )
-        standalone_abbreviation = re.compile(
-            r"(?<![A-Za-z0-9])(?:LP|LB|VUS)(?![A-Za-z0-9])"
-            r"(?!(?:\s+(?:score|value|cell|phenotype|domain|gene|frequency|population|protein))\b)",
-            re.IGNORECASE,
-        )
-        contextual_single_letter = re.compile(
-            r"\b(?:ACMG(?:\s+classification)?|final(?:\s+classification)?|classification|"
-            r"classified\s+as|result|verdict)\b"
-            r"\s*(?::|=|\bis\b|\bas\b)?\s*[\"]?(?:P|B)[\"]?"
-            r"(?=$|[\s.;,)\]])",
-            re.IGNORECASE,
-        )
-        return any(
-            pattern.search(text)
-            for pattern in (
-                full_label,
-                paired_abbreviation,
-                standalone_abbreviation,
-                contextual_single_letter,
-            )
-        )
+        return contains_final_acmg_label(text)
 
     def _contains_counted_evidence_without_overlay(self, text: str, harness_result: Any) -> bool:
         if not re.search(r"\b(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])(?:_[A-Za-z]+)?\b", text):

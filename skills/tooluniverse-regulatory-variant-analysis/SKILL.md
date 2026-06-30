@@ -23,8 +23,8 @@ Systematic regulatory variant interpretation: discover trait associations from G
 - "Map trait ontology terms for 'blood pressure' to EFO IDs"
 
 **NOT for** (use other skills instead):
-- Coding variant pathogenicity -> Use `tooluniverse-variant-interpretation`
-- Full clinical variant classification (ACMG) -> Use `tooluniverse-variant-interpretation`
+- Coding variant mechanism/context -> Use `tooluniverse-variant-interpretation` for intake only; route final germline pathogenicity to `tooluniverse-acmg-variant-classification`
+- Full clinical variant classification (ACMG) -> Use `tooluniverse-acmg-variant-classification` / `ACMG_overlay_gate_assess_variant`
 - Gene-disease associations (not variant-specific) -> Use `tooluniverse-gene-disease-association`
 - Pharmacogenomic variant annotation -> Use `tooluniverse-pharmacogenomics`
 - Epigenomics data processing (BED/narrowPeak files) -> Use `tooluniverse-epigenomics`

@@ -1,0 +1,6 @@
+{
+  "id": "chinese_final_labels_without_gates",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "Chinese ACMG final labels (致病, 可能致病, 临床意义不明, 可能良性, 良性) presented without overlay gate.",
+  "text": "变异解读报告\n\n最终 ACMG 分类: 致病\n\n其他变异:\n- FGFR3 c.1075+95C>G: 可能致病\n- CFTR p.Arg117His: 临床意义不明\n- G6PD p.Val68Met: 可能良性\n- UGT1A1 promoter variant: 良性\n\nclassification_status: final classification\n\n以上分类基于 ClinVar 和文献证据。"
+}

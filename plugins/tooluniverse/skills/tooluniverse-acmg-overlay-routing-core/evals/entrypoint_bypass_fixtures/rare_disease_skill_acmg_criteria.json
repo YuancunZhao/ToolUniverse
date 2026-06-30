@@ -1,0 +1,6 @@
+{
+  "id": "rare_disease_skill_acmg_criteria",
+  "expected_entrypoint_status": "FAIL",
+  "reason": "Rare disease skill assigns ACMG criteria and final classification without overlay gate.",
+  "text": "Rare Disease Diagnosis Report\n\nPatient phenotype: developmental delay, seizures, hypotonia\nCandidate gene: SCN2A\n\nACMG Evidence:\n- PS1: Same amino acid change as previously established pathogenic variant\n- PM2: Absent from population databases\n- PP3: Multiple computational tools predict damaging\n\nOverall classification: Pathogenic\nclassification_status: final classification\n\nThe SCN2A variant is classified as Pathogenic per ACMG guidelines."
+}

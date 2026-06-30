@@ -3,15 +3,20 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
+from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except Exception:  # pragma: no cover - optional in minimal script environments.
+    yaml = None
 
-REGISTRY_PATH = Path(__file__).resolve().parents[1] / "data" / "acmg_overlay_gate" / "overlay_registry.yaml"
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "overlay_registry.yaml"
 
 
 def load_overlay_registry(path: str | Path | None = None) -> dict[str, Any]:
+    if yaml is None:
+        raise RuntimeError("PyYAML is required to load overlay_registry.yaml")
     registry_path = Path(path) if path else REGISTRY_PATH
     payload = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
     return payload if isinstance(payload, dict) else {}

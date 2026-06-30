@@ -2,12 +2,33 @@
 
 ## Canonical Skill Source
 
-In this workspace, `skills/` is the canonical Skill source. `.agents/skills/`, `plugin/skills/`, and `plugins/tooluniverse/skills/` are treated as generated/deployment mirrors. Run `python3 scripts/check_skill_duplicate_drift.py` to ensure the protected ACMG and variant-interpretation Skill mirrors are byte-for-byte synchronized with canonical `skills/`.
+In this workspace, `skills/` is the canonical Skill source. `plugin/skills/` and `plugins/tooluniverse/skills/` are the committed generated/deployment mirrors. `.agents/` is a local workspace mirror and must not be committed. Run `python3 scripts/check_skill_duplicate_drift.py` to ensure the protected committed Skill mirrors are byte-for-byte synchronized with canonical `skills/`.
 
 The protected Skills are:
+- `tooluniverse`
 - `tooluniverse-variant-interpretation`
 - `tooluniverse-acmg-variant-classification`
 - `tooluniverse-acmg-overlay-routing-core`
+- `tooluniverse-rare-disease-diagnosis`
+- `tooluniverse-rare-disease-genomics`
+- `tooluniverse-variant-functional-annotation`
+- `tooluniverse-regulatory-variant-analysis`
+- `tooluniverse-variant-to-mechanism`
+- `tooluniverse-structural-variant-analysis`
+- `tooluniverse-protein-sae-variant-interpretation`
+
+The runtime Python implementation for shared ACMG guard policy lives in `src/tooluniverse/acmg_gate/`. Skill scripts under `skills/tooluniverse-acmg-overlay-routing-core/scripts/` are thin CLI wrappers around those canonical modules, and `src/tooluniverse/data/acmg_overlay_gate/scripts/` is the packaged runtime copy checked by the same drift tool.
+
+## Runtime Boundary
+
+ToolUniverse can enforce mandatory ACMG overlay routing once an agent enters ToolUniverse tool discovery or tool execution. It cannot globally intercept a final answer if the upper-level LLM runtime chooses not to call ToolUniverse at all.
+
+Recommended deployment hooks:
+
+- Pre-answer policy: if a user message matches `ACMG_FINAL_CLASSIFICATION` from `src/tooluniverse/acmg_gate/intent_detector.py`, call `ACMG_overlay_gate_assess_variant` before answering.
+- Post-answer policy: if draft answer text contains ACMG final labels in English, shorthand, or Chinese from `src/tooluniverse/acmg_gate/final_label_detector.py`, call `ACMG_guard_final_answer` and block or downgrade unless the gate passes.
+
+Without those hooks, skills and MCP tools provide fail-closed routing inside ToolUniverse, but they do not provide full global enforcement over arbitrary LLM text.
 
 ## Routing Flow
 
@@ -43,6 +64,10 @@ Two independent validation layers gate any final ACMG classification:
    - Returns `PASS`, `FAIL`, or `NOT_APPLICABLE`.
 
 Both must pass (or the semantic combiner may return `NOT_APPLICABLE` for draft-only bundles) before `final_classification_allowed` can be true.
+
+Finalization status is computed by `src/tooluniverse/acmg_gate/finalizer.py`. It is a small gate aggregator, not an ACMG rule engine: final output is allowed only when validator status is PASS, semantic combiner status is PASS, `final_classification_allowed` is true, a final classification was requested, compatibility-resolved counted evidence is present, and online literature coverage/review is ready.
+
+Fixture categories are declared in `evals/fixture_manifest.yaml`. The validator and entrypoint-bypass checkers report per-category summaries so regressions can be tied to semantic-combiner, source-lead, context-trigger, direct-final-label, wrong-skill, direct-tool, valid-gate, or malformed-bundle coverage.
 
 ## Final Answer Guard
 
