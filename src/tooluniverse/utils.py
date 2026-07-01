@@ -1,4 +1,3 @@
-import yaml
 import json
 import re
 import hashlib
@@ -8,6 +7,25 @@ import sys
 from typing import Dict, Any, Union, List
 # Heavy optional dependencies — imported lazily inside the functions that need
 # them so that `import tooluniverse` does not pay their cost at startup.
+
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - minimal direct-python test env.
+    class _YamlFallbackError(Exception):
+        pass
+
+    class _YamlFallback:
+        YAMLError = _YamlFallbackError
+
+        @staticmethod
+        def safe_load(stream):
+            text = stream.read() if hasattr(stream, "read") else str(stream)
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise _YamlFallbackError(str(exc)) from exc
+
+    yaml = _YamlFallback()
 
 
 def download_from_hf(tool_config):

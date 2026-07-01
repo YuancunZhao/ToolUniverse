@@ -13,13 +13,12 @@ The workflow system has been optimized to eliminate redundancy while maintaining
 **Purpose:** Runs the complete test suite including dependency isolation tests
 
 **Key Features:**
-- Tests across Python 3.9, 3.10, 3.11
+- Tests on Python 3.12, matching `.github/workflows/tests.yml`
 - Includes dependency isolation tests (37 tests)
 - CLI doctor tool testing
 - System stability verification
 - Generates coverage reports
 - Uploads test artifacts
-- Automatic PR comments with comprehensive test results
 
 ### 2. Documentation Build (`docs.yml`)
 **Triggers:** Manual dispatch
@@ -99,22 +98,33 @@ The workflows are triggered when these files are modified:
 To run the same tests locally:
 
 ```bash
+# Create/sync the standard ToolUniverse development environment
+uv python install 3.12
+uv venv --python 3.12
+uv sync
+
 # Run all dependency isolation tests
-pytest tests/unit/test_dependency_isolation.py \
-       tests/integration/test_dependency_isolation_integration.py \
-       tests/unit/test_error_handling_recovery.py \
-       -v
+uv run pytest tests/unit/test_dependency_isolation.py \
+              tests/integration/test_dependency_isolation_integration.py \
+              tests/unit/test_error_handling_recovery.py \
+              -v
 
 # Test doctor CLI
-python -m src.tooluniverse.doctor
+uv run python -m src.tooluniverse.doctor
 
 # Test error tracking
-python -c "
+uv run python -c "
 from src.tooluniverse.tool_registry import mark_tool_unavailable, get_tool_errors
 mark_tool_unavailable('TestTool', ImportError('No module named \"test\"'))
 print('Errors:', get_tool_errors())
 "
 ```
+
+Use the project-supported Python version for local test runs. CPython 3.14 is not
+currently recommended for the full dependency set because pinned packages such as
+`torch==2.8.0` may not publish CPython 3.14 wheels. Do not create feature-specific
+lightweight environments for subsets of tests unless the project dependency model
+adds such a pattern.
 
 ## Benefits
 

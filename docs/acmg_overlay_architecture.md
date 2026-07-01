@@ -30,6 +30,20 @@ Recommended deployment hooks:
 
 Without those hooks, skills and MCP tools provide fail-closed routing inside ToolUniverse, but they do not provide full global enforcement over arbitrary LLM text.
 
+## Enforced Protocol Layers
+
+ACMG final-classification workflows now use protocol-level enforcement rather than advisory tool metadata alone:
+
+1. `pre_router.py` classifies raw user requests with the canonical intent detector and returns whether an ACMG assessment session, front-door tool, sandboxed source tools, and token-gated final labels are required.
+2. `session.py` stores an explicit ACMG assessment session state machine. Source tools can add only source leads; user context can add only counted=false route candidates; counted evidence can come only from overlay-validated evidence or canonical finalizer-approved adapters.
+3. `source_lead_sandbox.py` preserves medically necessary facts from GeneBe, InterVar, ClinVar, SpliceAI, CADD, AlphaMissense, REVEL, OpenCRAVAT, VEP, gnomAD, literature, ClinGen/G2P, and user context while quarantining final-like conclusions and automated criteria. Candidate routes remain counted=false.
+4. `transaction.py` records required overlay actions as transaction steps. Universal PM2 rarity, BA1/BS1 frequency, and compatibility resolution baselines are required before finalization, with additional actions triggered by predictors, source assertions, literature, splice context, and conflicts.
+5. `finalizer.py` issues an `acmg-final:v1:<hash>` token only after validator PASS, semantic combiner PASS, `final_classification_allowed=true`, required actions complete, literature ready when required, and non-empty overlay-validated counted evidence.
+6. `final_answer_guard.py` blocks any English, shorthand, or Chinese ACMG final-like label unless the session is `FINALIZED` and the finalization token verifies.
+7. `draft_policy.py` defines the only allowed blocked-output shape: variant normalization, source leads, sandbox summaries, counted=false route candidates, missing overlays/literature/coverage, why final classification is blocked, and next ToolUniverse actions.
+
+This means a disclaimer such as "draft only" does not permit final labels. Draft/provisional wording that still contains a final-like ACMG label is blocked without a valid finalization token.
+
 ## Routing Flow
 
 Germline ACMG/pathogenicity work starts at `ACMG_overlay_gate_assess_variant` or the `tooluniverse-acmg-overlay-routing-core` workflow. The variant-interpretation skill is intake-only: it normalizes requests, gathers source evidence, and identifies route candidates. It does not count ACMG evidence or emit final five-tier verdicts.
@@ -65,7 +79,7 @@ Two independent validation layers gate any final ACMG classification:
 
 Both must pass (or the semantic combiner may return `NOT_APPLICABLE` for draft-only bundles) before `final_classification_allowed` can be true.
 
-Finalization status is computed by `src/tooluniverse/acmg_gate/finalizer.py`. It is a small gate aggregator, not an ACMG rule engine: final output is allowed only when validator status is PASS, semantic combiner status is PASS, `final_classification_allowed` is true, a final classification was requested, compatibility-resolved counted evidence is present, and online literature coverage/review is ready.
+Finalization status is computed by `src/tooluniverse/acmg_gate/finalizer.py`. It is a small gate aggregator, not an ACMG rule engine: final output is allowed only when validator status is PASS, semantic combiner status is PASS, `final_classification_allowed` is true, a final classification was requested, compatibility-resolved counted evidence is present, online literature coverage/review is ready, required overlay transaction actions are complete, and a finalization token has been issued.
 
 Fixture categories are declared in `evals/fixture_manifest.yaml`. The validator and entrypoint-bypass checkers report per-category summaries so regressions can be tied to semantic-combiner, source-lead, context-trigger, direct-final-label, wrong-skill, direct-tool, valid-gate, or malformed-bundle coverage.
 
@@ -74,8 +88,17 @@ Fixture categories are declared in `evals/fixture_manifest.yaml`. The validator 
 `scripts/acmg_final_answer_guard.py` provides the final text-level check:
 
 - `contains_final_acmg_label(text)` — detects full labels, paired abbreviations, standalone abbreviations (LP, LB, VUS), and contextual single-letter labels (P, B).
-- `guard_final_answer(text, bundle_or_status)` — returns BLOCK/DOWNGRADED/PASS based on whether validator_status is PASS, semantic_combiner_status is PASS, and final_classification_allowed is true.
-- False-positive protection: "LP score", "B cell", "P value", "protein B domain", "gene B", "population frequency" are not treated as final labels.
+- `guard_final_answer(text, bundle_or_status)` — backward-compatible wrapper over the token-gated protocol guard.
+- `guard_acmg_final_answer(answer_text, session, finalization_token, intent)` — returns BLOCK/PASS based on final-label detection, validator status, semantic combiner status, `final_classification_allowed`, session state, and finalization-token verification.
+- False-positive protection: "LP score", "B cell", "P value", "pathogenic bacteria", "致病机制", "良性肿瘤", "protein B domain", "gene B", and "population frequency" are not treated as final labels.
+
+## GeneBe and Other Source Tools
+
+GeneBe is retained because its output is medically useful for audit, search, and route planning. In ACMG final-classification context it is always source-lead-only: automated labels and proposed criteria are preserved in `quarantined_conclusions`, converted to counted=false route candidates, and never used as counted evidence. The same pattern applies to InterVar and ClinVar source assertions.
+
+SpliceAI, CADD, AlphaMissense, REVEL, VEP/OpenCRAVAT, MyVariant, and gnomAD/population tools are also preserved as evidence inputs. Numeric scores, allele frequencies, consequence annotations, model versions, transcript mapping, and coverage details remain reviewable features, but any direct PP3/BP4, PM2, BA1/BS1, benign/pathogenic, or final-classification suggestions are quarantined until the relevant overlay validates them.
+
+Literature tools preserve PMID, title, abstract, methods, phenotype, variant mention, assay details, segregation/de novo claims, and quality indicators. They do not directly count PS3/BS3, PS2/PM6, PP1/PP4, PS4, or final classifications without literature review and overlay validation.
 
 ## User Context Triggers
 

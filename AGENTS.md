@@ -11,6 +11,9 @@ ACMG overlay maintenance rules:
 - Source labels from ClinVar, InterVar, GeneBe, HGMD, LOVD, VCEP/lab assertions, papers, or other automated classifiers are source leads only until primary evidence is routed.
 - Evidence can only be counted if criterion-specific overlay or VCEP validator passes; the route outcome must be `overlay_applied` or `overlay_deferred_to_vcep`.
 - Final classification requires validator_status PASS, semantic_combiner_status PASS, and final_classification_allowed true.
+- Final labels additionally require an ACMG assessment session in `FINALIZED` state and a valid `acmg-final:v1:` finalization token issued by `src/tooluniverse/acmg_gate/finalizer.py`.
+- Direct tool outputs must enter `source_lead_sandbox`: preserve factual features and quarantine automated labels/criteria; never convert GeneBe, InterVar, ClinVar, SpliceAI, CADD, AlphaMissense, REVEL, OpenCRAVAT, VEP, gnomAD, literature, or user context directly into counted evidence.
+- When gates fail, output is draft-only. Allowed sections are variant normalization, source leads, counted=false route candidates, missing overlays/literature/coverage, block reasons, and next ToolUniverse actions. Draft/provisional final labels are still forbidden without a token.
 - P/LP/VUS/LB/B abbreviations are final labels and must be guarded by the final-answer guard.
 - User clinical context (de novo, segregation, compound heterozygous, HPO, unaffected carrier, alternate diagnosis) can only trigger non-counted route candidates. It must never directly become counted evidence.
 - Do not reintroduce duplicate Skill drift. Run `python3 scripts/check_skill_duplicate_drift.py` after any Skill change. The canonical source is `skills/`; committed mirrors live under `plugin/skills/` and `plugins/tooluniverse/skills/`. `.agents/skills/` is a local-only generated mirror (gitignored).
@@ -21,5 +24,5 @@ ACMG overlay maintenance rules:
 Recommended deployment hook:
 
 - Pre-answer policy: if the user message matches `ACMG_FINAL_CLASSIFICATION` intent from `src/tooluniverse/acmg_gate/intent_detector.py`, the runtime must call ToolUniverse `ACMG_overlay_gate_assess_variant` before answering.
-- Post-answer policy: if the draft final answer contains ACMG final labels in English, shorthand, or Chinese according to `src/tooluniverse/acmg_gate/final_label_detector.py`, the runtime must call `ACMG_guard_final_answer` and block or downgrade unless all gates pass.
+- Post-answer policy: if the draft final answer contains ACMG final labels in English, shorthand, or Chinese according to `src/tooluniverse/acmg_gate/final_label_detector.py`, the runtime must call `ACMG_guard_final_answer` and block or downgrade unless all gates and the finalization token verify.
 - If no upper-level runtime hook exists, do not claim full global enforcement. ToolUniverse enforcement begins once the agent enters ToolUniverse tool discovery or execution.

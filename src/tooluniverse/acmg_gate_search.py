@@ -16,6 +16,7 @@ try:
         detect_acmg_intent,
         is_high_risk_acmg_tool as policy_is_high_risk_acmg_tool,
         looks_like_acmg_gate_query,
+        route_acmg_intent,
         source_lead_only_metadata,
     )
 except ImportError:  # pragma: no cover - used by standalone regression checker imports.
@@ -38,6 +39,21 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
     detect_acmg_intent = _policy_module.detect_acmg_intent
     policy_is_high_risk_acmg_tool = _policy_module.is_high_risk_acmg_tool
     looks_like_acmg_gate_query = _policy_module.looks_like_acmg_gate_query
+    def route_acmg_intent(query: str, tool_search_context: Any | None = None) -> dict[str, Any]:
+        intent_value = detect_acmg_intent(query)
+        requires_session = intent_value == ACMGIntent.ACMG_FINAL_CLASSIFICATION
+        return {
+            "intent": intent_value.value,
+            "requires_acmg_session": requires_session,
+            "front_door_tool": ACMG_FRONT_DOOR_TOOL_NAME if intent_value != ACMGIntent.NONE else None,
+            "allow_direct_answer": intent_value == ACMGIntent.NONE,
+            "allow_final_label_without_token": False if intent_value != ACMGIntent.NONE else True,
+            "draft_only_until_finalized": requires_session,
+            "source_tools_must_use_sandbox": requires_session,
+            "pathogenicity_tools_source_lead_only": intent_value != ACMGIntent.NONE,
+            "allowed_use": ACMG_ALLOWED_USE if intent_value != ACMGIntent.NONE else "normal_tool_use",
+            "acmg_gate_notice": ACMG_GATE_NOTICE if intent_value != ACMGIntent.NONE else None,
+        }
     source_lead_only_metadata = _policy_module.source_lead_only_metadata
 
 
@@ -68,6 +84,9 @@ def acmg_gate_tool_search_entry() -> Dict[str, Any]:
         "allowed_use": ACMG_ALLOWED_USE,
         "must_route_through": ACMG_FRONT_DOOR_TOOL_NAME,
         "source_lead_only": True,
+        "source_tools_must_use_sandbox": True,
+        "allow_final_label_without_token": False,
+        "draft_only_until_finalized": True,
     }
 
 
@@ -85,6 +104,8 @@ def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any]]:
         if name in HIGH_RISK_ACMG_GATE_TOOLS:
             if isinstance(item, dict):
                 item.update(source_lead_only_metadata())
+                item["source_tools_must_use_sandbox"] = True
+                item["may_emit_final_label"] = False
             high_risk.append(item)
         else:
             other.append(item)
@@ -155,6 +176,9 @@ def add_acmg_gate_to_search_payload(
     if intent is not None and intent_or_query is not None:
         raise TypeError("Pass either positional intent_or_query or keyword-only intent, not both.")
     intent_value = _coerce_intent(intent if intent is not None else intent_or_query)
+    routing_decision = None
+    if isinstance(intent_value, ACMGIntent):
+        routing_decision = route_acmg_intent(intent_value.value)
     final_classification_intent = intent_value == ACMGIntent.ACMG_FINAL_CLASSIFICATION
     if isinstance(payload, list):
         return prepend_acmg_gate_tool(payload, final_classification_intent=final_classification_intent)
@@ -165,6 +189,11 @@ def add_acmg_gate_to_search_payload(
         payload.setdefault("source_lead_only", True)
         payload.setdefault("acmg_countable_evidence", False)
         payload.setdefault("must_route_through", ACMG_FRONT_DOOR_TOOL_NAME)
+        if routing_decision:
+            payload["acmg_routing_decision"] = routing_decision
+            payload["allow_direct_answer"] = routing_decision["allow_direct_answer"]
+            payload["allow_final_label_without_token"] = routing_decision["allow_final_label_without_token"]
+            payload["source_tools_must_use_sandbox"] = routing_decision["source_tools_must_use_sandbox"]
         payload["acmg_intent"] = (intent_value or ACMGIntent.ACMG_RELATED).value
         limit = _payload_limit(payload)
         for key in ("tools", "results", "data"):

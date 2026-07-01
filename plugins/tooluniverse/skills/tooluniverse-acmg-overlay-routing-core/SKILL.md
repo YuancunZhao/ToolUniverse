@@ -28,7 +28,24 @@ Supporting reference artifacts are available for implementers, but external agen
 
 These files are the portable compliance source for the MCP harness and for external agents. The registry and schemas define routing and trace requirements; the validator checks whether a generated or supplied bundle has enough trace to present a final classification, and the semantic combiner conservatively verifies that the reported final label is supported by compatibility-resolved counted evidence. They do not modify evidence thresholds, VCEP precedence, or criterion-specific overlay rules.
 
-**Hard gate:** without a validator-passing ACMG assessment bundle, `semantic_combiner_status: PASS`, and final-answer guard approval, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, and not-assessed criteria.
+**Hard gate:** without an ACMG assessment session in `FINALIZED` state, a validator-passing ACMG assessment bundle, `semantic_combiner_status: PASS`, `final_classification_allowed: true`, a valid `acmg-final:v1:` finalization token, and final-answer guard approval, the agent must not present a final ACMG classification. It may only report `draft classification`, source leads, coverage gaps, counted=false route candidates, missing required overlays, and not-assessed criteria.
+
+The required protocol is:
+
+1. Route user intent through the canonical ACMG intent pre-router.
+2. Create or update an ACMG assessment session.
+3. Put raw GeneBe, InterVar, ClinVar, SpliceAI, CADD, AlphaMissense, REVEL, OpenCRAVAT, VEP, gnomAD, literature, ClinGen/G2P, and user-context outputs into `source_lead_sandbox`.
+4. Preserve reviewable factual features, but quarantine final-like conclusions and automated criteria.
+5. Record required overlay actions as transaction steps.
+6. Count only overlay-validated evidence.
+7. Issue a finalization token only after all gates pass.
+8. Run the mandatory final-answer post-guard before emitting any final-like ACMG label.
+
+GeneBe is retained, not removed. In ACMG final-classification context, GeneBe labels and proposed ACMG criteria are preserved for audit and route planning, but they remain `source_lead_only`, `counted=false`, and `final_classification_allowed=false` until primary evidence is routed through overlays. The same source-lead rule applies to InterVar, ClinVar, SpliceAI, CADD, AlphaMissense, REVEL, OpenCRAVAT/VEP, gnomAD/population tools, literature tools, and user-provided phenotype/family context.
+
+If final gates do not pass, draft-only output may include variant normalization, source leads, sandbox summaries, counted=false route candidates, missing overlays, missing literature review, missing population-frequency adequacy, missing functional evidence, why final classification is blocked, and next ToolUniverse actions. Draft/provisional final labels such as "Draft classification: Likely Pathogenic", "倾向可能致病", or "草稿分类：可能致病" remain forbidden without a valid finalization token.
+
+Global limitation: if an upper-level LLM runtime never calls ToolUniverse or never invokes the final-answer post-guard, ToolUniverse cannot globally prevent model-only answers. ToolUniverse enforcement begins when the workflow enters ToolUniverse search/execution or the runtime calls the post-guard.
 
 The compact controller output intentionally does not include full route rows, an empty bundle skeleton, or candidate evidence-strength labels such as `PM2` / `PP3_Moderate` / `PM4`. It exposes `route_triggers` with `counted=false` and `final_ready=false`. Use `mode=plan_only` for preflight-only output, `mode=validate_bundle` for bundle validation only, and `output_mode=full` when constructing fixtures or debugging bundle assembly.
 

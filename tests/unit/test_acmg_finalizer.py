@@ -39,6 +39,46 @@ def test_finalizer() -> None:
         args[key] = value
         assert finalizer.compute_finalization_gate(**args)["final_allowed"] is False, key
 
+    session = {
+        "session_id": "s1",
+        "variant": "NM_000000.0:c.1A>G",
+        "gene": "GENE",
+        "intent": "ACMG_FINAL_CLASSIFICATION",
+        "state": "READY_FOR_FINALIZER",
+        "required_next_actions": ["pm2_absence_rarity"],
+        "completed_actions": ["pm2_absence_rarity"],
+        "counted_evidence": [{"criterion": "PM2", "strength": "supporting"}],
+        "validator_status": "PASS",
+        "semantic_combiner_status": "PASS",
+        "literature_status": "reviewed",
+        "final_classification_allowed": True,
+        "classification": "VUS",
+    }
+    issued = finalizer.issue_finalization_token(session)
+    assert issued["status"] == "PASS", issued
+    assert issued["acmg_finalization_token"].startswith("acmg-final:v1:")
+    assert finalizer.verify_finalization_token(issued["acmg_finalization_token"], issued["acmg_session"])["status"] == "PASS"
+    assert (
+        finalizer.verify_finalization_token(
+            issued["acmg_finalization_token"],
+            issued["acmg_session"],
+            expected_classification="VUS",
+        )["status"]
+        == "PASS"
+    )
+    assert (
+        finalizer.verify_finalization_token(
+            issued["acmg_finalization_token"],
+            issued["acmg_session"],
+            expected_classification="Likely Pathogenic",
+        )["status"]
+        == "FAIL"
+    )
+
+    blocked = dict(session)
+    blocked["completed_actions"] = []
+    assert finalizer.issue_finalization_token(blocked)["status"] == "BLOCK"
+
 
 if __name__ == "__main__":
     test_finalizer()

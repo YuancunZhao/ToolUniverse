@@ -170,6 +170,7 @@ tooluniverse = [
     "data/packages/*",
     "data/acmg_overlay_gate/*",
     "data/acmg_overlay_gate/schemas/*",
+    "data/acmg_overlay_gate/scripts/*",
 ]
 
 [dependency-groups]

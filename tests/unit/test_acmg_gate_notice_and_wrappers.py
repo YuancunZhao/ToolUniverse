@@ -2,7 +2,23 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:  # pragma: no cover - direct-python smoke environment.
+    class _FallbackMark:
+        unit = object()
+
+        @staticmethod
+        def parametrize(*_args, **_kwargs):
+            def _decorator(func):
+                return func
+
+            return _decorator
+
+    class _FallbackPytest:
+        mark = _FallbackMark()
+
+    pytest = _FallbackPytest()
 
 pytestmark = pytest.mark.unit
 

@@ -16,7 +16,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - minimal direct-python test env.
+    yaml = None
 
 from .acmg_gate import (
     ACMG_GATE_NOTICE,
@@ -24,9 +27,17 @@ from .acmg_gate import (
     RECOMMENDED_ACMG_INTAKE_TOOLS,
     REQUIRED_ACMG_COVERAGE_CATEGORIES,
     SOURCE_LEAD_NOTICE,
+    add_required_actions_from_plan,
+    build_draft_only_response,
     compute_finalization_gate,
     contains_final_acmg_label,
+    create_acmg_session,
     discover_user_context_routes,
+    issue_finalization_token,
+    sandbox_source_output,
+    session_from_dict,
+    session_to_dict,
+    session_to_policy_envelope,
 )
 from .acmg_harness_runner import ACMGHarnessRunner
 from .base_tool import BaseTool
@@ -100,6 +111,8 @@ class ACMGOverlayGateTool(BaseTool):
 
     def _run_plan_variant_assessment(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         planned = self._runner().plan_routes(arguments)
+        session = self._protocol_session(arguments)
+        session = session_from_dict(add_required_actions_from_plan(session, planned))
         return {
             "status": "success",
             "tool_role": "ACMG workflow planner; not an ACMG classifier",
@@ -110,12 +123,20 @@ class ACMGOverlayGateTool(BaseTool):
             "final_answer_policy": "forbidden",
             "variant": self._variant_summary(arguments),
             **planned,
+            "acmg_session": session_to_dict(session),
+            "protocol_envelope": session_to_policy_envelope(session),
             "required_next_actions": ["collect_evidence", "review_literature", "apply_overlay_routes", "finalize_assessment"],
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
 
     def _run_collect_variant_evidence(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         collected = self._runner().collect_evidence(arguments)
+        session = self._protocol_session(arguments)
+        for lead in collected.get("source_assertions_or_leads", []):
+            session.source_lead_sandbox.append(
+                sandbox_source_output(tool_name=str(lead.get("source_type") or "source_output"), raw_output=lead)
+            )
+        session = session_from_dict(add_required_actions_from_plan(session, collected))
         return {
             "status": "success",
             "tool_role": "ACMG evidence collector; not an ACMG classifier",
@@ -131,6 +152,9 @@ class ACMGOverlayGateTool(BaseTool):
             "source_assertions_or_leads": collected["source_assertions_or_leads"],
             "coverage_audit": collected["coverage_audit"],
             "tool_calls": collected["tool_calls"],
+            "source_lead_sandbox": session.source_lead_sandbox,
+            "acmg_session": session_to_dict(session),
+            "protocol_envelope": session_to_policy_envelope(session),
             "required_next_actions": ["review_literature", "apply_overlay_routes", "finalize_assessment"],
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
@@ -140,6 +164,8 @@ class ACMGOverlayGateTool(BaseTool):
         if not isinstance(candidate_evidence, list):
             candidate_evidence = self._candidate_evidence_from_route_triggers(arguments.get("route_triggers"))
         applied = self._runner().apply_overlay_routes(candidate_evidence)
+        session = self._protocol_session(arguments)
+        session = session_from_dict(add_required_actions_from_plan(session, {"required_next_actions": ["assemble_bundle", "validate_bundle", "finalize_assessment"]}))
         return {
             "status": "success",
             "tool_role": "ACMG overlay route dispatcher; not an ACMG classifier",
@@ -149,6 +175,8 @@ class ACMGOverlayGateTool(BaseTool):
             "final_classification_allowed": False,
             "final_answer_policy": "forbidden",
             **applied,
+            "acmg_session": session_to_dict(session),
+            "protocol_envelope": session_to_policy_envelope(session),
             "required_next_actions": ["assemble_bundle", "validate_bundle", "finalize_assessment"],
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
@@ -186,6 +214,24 @@ class ACMGOverlayGateTool(BaseTool):
 
         blocked = self._missing_for_final_from_validation(validation, bundle_final_requested)
         blocked.extend(reason for reason in gate["blocking_reasons"] if reason not in blocked)
+        session = self._session_from_finalization_inputs(
+            arguments,
+            bundle=bundle,
+            validator_status=validator_status,
+            semantic_status=semantic_status,
+            final_allowed=final_allowed,
+            counted=counted,
+            literature_ready=literature_ready,
+            blocked=blocked,
+        )
+        token_result = issue_finalization_token(session, classification=self._bundle_payload(bundle).get("classification")) if final_allowed else {
+            "status": "BLOCK",
+            "finalization_token_issued": False,
+            "blocking_reasons": blocked,
+        }
+        if token_result.get("finalization_token_issued"):
+            session = session_from_dict(token_result["acmg_session"])
+        draft_policy = None if token_result.get("finalization_token_issued") else build_draft_only_response(session)
 
         return {
             "status": "success",
@@ -200,6 +246,10 @@ class ACMGOverlayGateTool(BaseTool):
             "allowed_response": "final classification" if final_allowed else "draft classification only",
             "counted_evidence": counted,
             "blocked_reasons": blocked,
+            "acmg_session": session_to_dict(session),
+            "finalization_token": token_result.get("acmg_finalization_token"),
+            "finalization_token_result": token_result,
+            "draft_only_policy": draft_policy,
             "finalization_gate": gate,
             "validator_result": validator_result,
             "violations": validation.get("violations", []),
@@ -207,31 +257,21 @@ class ACMGOverlayGateTool(BaseTool):
         }
 
     def _run_guard_final_answer(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        from .acmg_gate import guard_acmg_final_answer
+
         text = str(arguments.get("final_answer_text") or arguments.get("answer") or "")
         harness_result = arguments.get("harness_result") or arguments.get("workflow_result") or {}
-        has_final_label = contains_final_acmg_label(text)
-        gate = compute_finalization_gate(
-            validator_status=harness_result.get("validator_status") if isinstance(harness_result, dict) else None,
-            semantic_combiner_status=harness_result.get("semantic_combiner_status") if isinstance(harness_result, dict) else None,
-            final_classification_allowed=(
-                isinstance(harness_result, dict)
-                and harness_result.get("final_classification_allowed") is True
-            ),
-            bundle_final_requested=True,
-            counted_evidence=[True],
-            literature_ready=True,
+        guarded = guard_acmg_final_answer(
+            answer_text=text,
+            session=harness_result if isinstance(harness_result, dict) else None,
+            finalization_token=arguments.get("finalization_token") or (harness_result.get("finalization_token") if isinstance(harness_result, dict) else None),
+            intent=arguments.get("intent") or (harness_result.get("intent") if isinstance(harness_result, dict) else None),
         )
-        allowed = bool(gate["final_allowed"])
-        validator_pass = isinstance(harness_result, dict) and harness_result.get("validator_status") == "PASS"
-        semantic_pass = isinstance(harness_result, dict) and harness_result.get("semantic_combiner_status") == "PASS"
+        has_final_label = contains_final_acmg_label(text)
         evidence_without_overlay = self._contains_counted_evidence_without_overlay(text, harness_result)
         violations = []
-        if has_final_label and not allowed:
-            violations.append("final_acmg_label_without_final_classification_allowed_true")
-        if has_final_label and not validator_pass:
-            violations.append("final_acmg_label_without_validator_pass")
-        if has_final_label and not semantic_pass:
-            violations.append("final_acmg_label_without_semantic_combiner_pass")
+        if guarded.get("status") == "BLOCK":
+            violations.append("final_acmg_label_without_verified_finalization_token")
         if evidence_without_overlay:
             violations.append("counted_evidence_without_overlay_applied_or_vcep")
         status = "FAIL" if violations else "PASS"
@@ -240,10 +280,11 @@ class ACMGOverlayGateTool(BaseTool):
             "ordinary_entrypoint": ACMG_ORDINARY_ENTRYPOINT,
             "not_final_entrypoint": True,
             "has_final_acmg_label": has_final_label,
-            "final_classification_allowed": allowed,
+            "final_classification_allowed": guarded.get("final_answer_allowed") is True,
             "validator_status": harness_result.get("validator_status") if isinstance(harness_result, dict) else None,
             "violations": violations,
-            "allowed_response": "final classification" if status == "PASS" and allowed else "draft classification only",
+            "allowed_response": "final classification" if status == "PASS" and guarded.get("final_answer_allowed") else "draft classification only",
+            "final_answer_guard": guarded,
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
 
@@ -252,6 +293,10 @@ class ACMGOverlayGateTool(BaseTool):
         baseline_routes = self._select_baseline_routes(registry_entries, arguments)
         discovery_routes = self._select_discovery_routes(registry_entries, arguments)
         source_leads = self._normalize_source_leads(arguments.get("source_outputs_or_leads"))
+        session = self._protocol_session(arguments)
+        for lead in source_leads:
+            if isinstance(lead.get("sandbox"), dict):
+                session.source_lead_sandbox.append(lead["sandbox"])
         bundle = self._extract_bundle(arguments)
         validation = self._validate_bundle(bundle) if bundle else self._missing_bundle_result()
 
@@ -265,6 +310,12 @@ class ACMGOverlayGateTool(BaseTool):
         )
         final_allowed = bool(gate["final_allowed"])
         classification_status = CLASSIFICATION_FINAL if final_allowed else CLASSIFICATION_DRAFT
+        session.validator_status = validator_status
+        session.semantic_combiner_status = validator_result.get("semantic_combiner_status") or "NOT_RUN"
+        session.final_classification_allowed = final_allowed
+        session.counted_evidence = self._bundle_counted_evidence(bundle)
+        session.literature_status = "reviewed" if self._bundle_literature_final_ready(bundle) else "not_reviewed"
+        session = session_from_dict(add_required_actions_from_plan(session, {"required_baseline_routes": baseline_routes, "triggered_discovery_routes": discovery_routes}))
 
         response = {
             "status": "success",
@@ -282,6 +333,10 @@ class ACMGOverlayGateTool(BaseTool):
             "required_coverage_categories": self._required_coverage_categories(arguments, source_leads),
             "required_coverage_tasks": self._required_coverage_tasks(arguments, source_leads),
             "source_assertions_or_leads": source_leads,
+            "source_lead_sandbox": session.source_lead_sandbox,
+            "acmg_session": session_to_dict(session),
+            "protocol_envelope": session_to_policy_envelope(session),
+            "draft_only_policy": None if final_allowed else build_draft_only_response(session),
             "acmg_assessment_bundle": bundle or self._bundle_skeleton(arguments, baseline_routes, discovery_routes, source_leads),
             "validator_result": validation.get("validator_result"),
             "semantic_combiner_status": validator_result.get("semantic_combiner_status"),
@@ -330,6 +385,19 @@ class ACMGOverlayGateTool(BaseTool):
             "finalization_gate": gate,
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
+        response["acmg_session"] = session_to_dict(
+            self._session_from_finalization_inputs(
+                arguments,
+                bundle=bundle,
+                validator_status=validator_status,
+                semantic_status=validator_result.get("semantic_combiner_status"),
+                final_allowed=final_allowed,
+                counted=self._bundle_counted_evidence(bundle),
+                literature_ready=self._bundle_literature_final_ready(bundle),
+                blocked=response["missing_for_final"],
+            )
+        )
+        response["draft_only_policy"] = None if final_allowed else build_draft_only_response(response["acmg_session"])
         if output_mode == "full":
             response["acmg_assessment_bundle"] = bundle
         return response
@@ -354,6 +422,16 @@ class ACMGOverlayGateTool(BaseTool):
             policy_allows_final=not missing_for_final,
         )
         final_allowed = bool(gate["final_allowed"])
+        session = self._session_from_finalization_inputs(
+            arguments,
+            bundle=harness.get("acmg_assessment_bundle"),
+            validator_status=validator_status,
+            semantic_status=validator_result.get("semantic_combiner_status"),
+            final_allowed=final_allowed,
+            counted=counted,
+            literature_ready=self._bundle_literature_final_ready(harness.get("acmg_assessment_bundle")),
+            blocked=missing_for_final,
+        )
         response = {
             "status": "success",
             "tool_role": "ACMG executable overlay harness; not an independent ACMG classifier",
@@ -377,6 +455,10 @@ class ACMGOverlayGateTool(BaseTool):
             "validator_result": validation.get("validator_result"),
             "violations": validation.get("violations", []),
             "source_assertions_or_leads": harness.get("source_assertions_or_leads", []),
+            "source_lead_sandbox": session.source_lead_sandbox,
+            "acmg_session": session_to_dict(session),
+            "protocol_envelope": session_to_policy_envelope(session),
+            "draft_only_policy": None if final_allowed else build_draft_only_response(session),
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
         if output_mode == "full":
@@ -390,6 +472,57 @@ class ACMGOverlayGateTool(BaseTool):
                 "acmg_assessment_bundle": harness.get("acmg_assessment_bundle"),
             })
         return response
+
+    def _protocol_session(self, arguments: Dict[str, Any]):
+        existing = arguments.get("acmg_session") or arguments.get("session")
+        if isinstance(existing, dict):
+            return session_from_dict(existing)
+        return create_acmg_session(
+            variant=arguments.get("variant"),
+            gene=arguments.get("gene"),
+            transcript=arguments.get("transcript"),
+        )
+
+    def _session_from_finalization_inputs(
+        self,
+        arguments: Dict[str, Any],
+        *,
+        bundle: Dict[str, Any] | None,
+        validator_status: str | None,
+        semantic_status: str | None,
+        final_allowed: bool,
+        counted: List[Any],
+        literature_ready: bool,
+        blocked: List[str],
+    ):
+        session = self._protocol_session(arguments)
+        payload = self._bundle_payload(bundle)
+        session.variant = payload.get("variant", session.variant)
+        if isinstance(session.variant, dict):
+            variant_payload = session.variant
+            session.variant = variant_payload.get("variant")
+            session.gene = variant_payload.get("gene", session.gene)
+            session.transcript = variant_payload.get("transcript", session.transcript)
+        session.validator_status = validator_status or "NOT_RUN"
+        session.semantic_combiner_status = semantic_status or "NOT_RUN"
+        session.final_classification_allowed = bool(final_allowed)
+        session.counted_evidence = [row for row in counted if isinstance(row, dict)]
+        session.overlay_validated_evidence = [dict(row, overlay_validated=True) for row in session.counted_evidence]
+        session.literature_status = "reviewed" if literature_ready else "not_reviewed"
+        session.classification = payload.get("classification")
+        for lead in self._normalize_source_leads(payload.get("source_assertions_or_leads")):
+            if isinstance(lead.get("sandbox"), dict):
+                session.source_lead_sandbox.append(lead["sandbox"])
+        session = session_from_dict(add_required_actions_from_plan(session, payload))
+        if blocked:
+            session.policy_warnings.extend(str(item) for item in blocked)
+        if final_allowed:
+            session.state = "READY_FOR_FINALIZER"
+        elif session.required_next_actions:
+            session.state = "OVERLAYS_REQUIRED"
+        else:
+            session.state = "DRAFT_ONLY"
+        return session
 
     def _run_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
         from .tools._shared_client import get_shared_client
@@ -551,6 +684,8 @@ class ACMGOverlayGateTool(BaseTool):
         if not skills_root:
             return []
         registry_path = skills_root / "overlay_registry.yaml"
+        if yaml is None:
+            return []
         try:
             payload = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
         except Exception:
@@ -594,6 +729,10 @@ class ACMGOverlayGateTool(BaseTool):
             "recommended_tool_calls": response["recommended_tool_calls"],
             "required_coverage_categories": response["required_coverage_categories"],
             "source_assertions_or_leads": response["source_assertions_or_leads"],
+            "source_lead_sandbox": response.get("source_lead_sandbox", []),
+            "acmg_session": response.get("acmg_session"),
+            "protocol_envelope": response.get("protocol_envelope"),
+            "draft_only_policy": response.get("draft_only_policy"),
             "validated_bundle_present": bundle_present,
             "acmg_assessment_bundle_status": (
                 "validated_input_bundle_not_echoed" if bundle_present else "skeleton_available_with_output_mode_full"
@@ -758,10 +897,20 @@ class ACMGOverlayGateTool(BaseTool):
                 if keyword in lowered:
                     source_type = keyword.replace(" ", "_")
                     break
+            tool_name = source_type
+            if isinstance(item, dict):
+                tool_name = str(item.get("tool_name") or item.get("name") or item.get("source") or source_type)
+            sandbox = sandbox_source_output(tool_name=tool_name, raw_output=item)
             leads.append({
                 "source_type": source_type,
                 "raw_source": item,
                 "countable": False,
+                "counted": False,
+                "source_lead_only": True,
+                "acmg_countable_evidence": False,
+                "final_classification_allowed": False,
+                "sandbox": sandbox,
+                "route_candidates": sandbox.get("candidate_routes", []),
                 "reason": SOURCE_LEAD_NOTICE,
             })
         return leads

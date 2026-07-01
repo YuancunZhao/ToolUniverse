@@ -105,9 +105,18 @@ def test_no_criterion_helpers_in_harness_runner() -> None:
     assert "_criterion_overlay" not in text, "harness_runner defines _criterion_overlay"
 
 
+def test_packaged_acmg_wrapper_scripts_are_in_package_data() -> None:
+    """pyproject.toml must package ACMG wrapper scripts used at runtime."""
+    pyproject_path = ROOT / "pyproject.toml"
+    assert pyproject_path.exists(), f"Missing: {pyproject_path}"
+    text = pyproject_path.read_text(encoding="utf-8", errors="replace")
+    assert '"data/acmg_overlay_gate/scripts/*"' in text
+
+
 if __name__ == "__main__":
     test_no_duplicate_policy_regex()
     test_no_wrong_skill_final_route()
     test_no_context_trigger_regex_in_gate_tool()
     test_no_criterion_helpers_in_harness_runner()
+    test_packaged_acmg_wrapper_scripts_are_in_package_data()
     print("PASS test_acmg_no_duplicate_policy")

@@ -17,18 +17,27 @@ Development Setup
    git clone https://github.com/yourusername/ToolUniverse.git
    cd ToolUniverse
 
-3. Create a virtual environment:
+3. Create the standard project virtual environment with ``uv`` and the CI
+   Python version:
 
 .. code-block:: bash
 
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   uv python install 3.12
+   uv venv --python 3.12
 
-4. Install in development mode:
+4. Sync the normal ToolUniverse development dependencies:
 
 .. code-block:: bash
 
-   python -m pip install -e ".[dev]"
+   uv sync
+
+ToolUniverse CI currently runs on Python 3.12. Run local tests under the same
+project-supported interpreter instead of the system Python when possible. CPython
+3.14 is not currently recommended for the full project dependency stack because
+some pinned packages, including ``torch==2.8.0`` from the standard development
+environment, do not provide CPython 3.14 wheels. Feature-specific tests, including
+ACMG tests, should use this standard ToolUniverse dev/test environment rather
+than a separate lightweight dependency set.
 
 5. Install pre-commit hooks:
 
@@ -114,16 +123,16 @@ Run the test suite:
 .. code-block:: bash
 
    # Run the default fast test suite
-   pytest
+   uv run pytest
 
    # Run with coverage
-   pytest --cov=tooluniverse
+   uv run pytest --cov=tooluniverse
 
    # Run specific test file
-   pytest tests/unit/test_tooluniverse_core_methods.py
+   uv run pytest tests/unit/test_tooluniverse_core_methods.py
 
    # Run integration tests when needed
-   pytest tests/integration
+   uv run pytest tests/integration
 
 Writing Tests
 ~~~~~~~~~~~~~
@@ -170,7 +179,7 @@ Aim for >90% test coverage:
 
 .. code-block:: bash
 
-   pytest --cov=tooluniverse --cov-report=html
+   uv run pytest --cov=tooluniverse --cov-report=html
    open htmlcov/index.html
 
 Documentation

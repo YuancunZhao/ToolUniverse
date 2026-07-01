@@ -22,6 +22,9 @@ def test_fail_closed_search() -> None:
         "tools": [
             {"name": "GeneBe_classify_variant"},
             {"name": "ClinVar_get_clinical_significance"},
+            {"name": "CADD_get_variant_score"},
+            {"name": "AlphaMissense_get_variant_score"},
+            {"name": "OpenCRAVAT_annotate_variant"},
             {"name": "SomeGenericVariantTool"},
         ],
         "limit": 10,
@@ -35,12 +38,17 @@ def test_fail_closed_search() -> None:
         "ACMG_overlay_gate_assess_variant",
         "GeneBe_classify_variant",
         "ClinVar_get_clinical_significance",
+        "CADD_get_variant_score",
+        "AlphaMissense_get_variant_score",
+        "OpenCRAVAT_annotate_variant",
     ]
     for row in updated["tools"][1:]:
         assert row["source_lead_only"] is True
         assert row["final_classification_allowed"] is False
         assert row["acmg_countable_evidence"] is False
         assert row["must_route_through"] == "ACMG_overlay_gate_assess_variant"
+        assert row["source_tools_must_use_sandbox"] is True
+        assert row["may_emit_final_label"] is False
 
 
 def test_query_string_positional_argument_is_safe() -> None:

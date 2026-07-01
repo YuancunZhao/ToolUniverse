@@ -6,7 +6,16 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:  # pragma: no cover - direct-python smoke environment.
+    class _FallbackMark:
+        unit = object()
+
+    class _FallbackPytest:
+        mark = _FallbackMark()
+
+    pytest = _FallbackPytest()
 
 from tooluniverse.acmg_gate_search import add_acmg_gate_to_search_payload
 from tooluniverse.acmg_gate import SOURCE_LEAD_NOTICE
