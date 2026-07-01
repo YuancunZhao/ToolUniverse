@@ -1,4 +1,11 @@
-"""Agent-runtime integration guard for ACMG final-classification workflows."""
+"""Agent-runtime integration guard for ACMG final-classification workflows.
+
+This module is the host-runtime contract: it is effective only when a caller
+wires these hooks around user messages, tool calls, tool outputs, and final
+answers. It must stay thin and delegate label detection, source quarantine,
+finalization gates, token verification, and answer binding to canonical
+``acmg_gate`` modules.
+"""
 
 from __future__ import annotations
 

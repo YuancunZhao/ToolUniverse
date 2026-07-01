@@ -287,6 +287,8 @@ class ACMGHarnessRunner:
 
     def _category_status(self, calls: List[ToolCallResult], category: str) -> str:
         if not calls:
+            if category in {"functional_database", "clinical_context"}:
+                return "not_applicable"
             return "unavailable"
         if any(row.status == "success" for row in calls):
             return "success"

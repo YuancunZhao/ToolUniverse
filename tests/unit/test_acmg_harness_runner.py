@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 import json
 from pathlib import Path
 from typing import Any
@@ -269,7 +274,7 @@ def test_route_plan_deduplicates_baseline_and_maps_candidate_groups():
     assert "pm2_absence_rarity" in groups
     assert "pp3_bp4_missense_prediction" in groups
     assert "reputable_source_review" in groups
-    assert runner._criterion_to_group("unknown") == ""
+    assert runner._registry_criterion_group("unknown") == ""
 
 
 def test_overlay_adapters_and_missing_for_final_contract():
@@ -286,7 +291,7 @@ def test_overlay_adapters_and_missing_for_final_contract():
     assert overlay_results[0]["overlay_skill"] == "tooluniverse-acmg-ps3-bs3-functional-assay-refinement"
     assert overlay_results[1]["status"] == "not_used"
     assert all(row["counted"] is False for row in route_audit)
-    assert runner._criterion_overlay("unknown") == "tooluniverse-acmg-overlay-routing-core"
+    assert runner._registry_overlay_for_criterion("unknown") == "tooluniverse-acmg-overlay-routing-core"
 
     missing = runner._missing_for_final(
         [{"source_category": "literature", "query_status": "failed"}],
@@ -430,7 +435,7 @@ def test_workflow_step_operations_and_final_answer_guard(monkeypatch):
         }
     )
     assert guarded["status"] == "FAIL"
-    assert "final_acmg_label_without_final_classification_allowed_true" in guarded["violations"]
+    assert "final_acmg_label_without_verified_finalization_token" in guarded["violations"]
 
 
 def test_finalize_blocks_unreviewed_literature_even_with_validator_pass(monkeypatch):

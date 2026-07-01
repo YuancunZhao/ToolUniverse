@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Small registry adapter for ACMG overlay routing metadata."""
+"""Small registry adapter for ACMG overlay routing metadata.
+
+The YAML registry is retained as the canonical packaging-friendly route table:
+Skill overlays and packaged ToolUniverse data both mirror this file, so keeping
+it external avoids baking drift-prone overlay metadata into Python constants.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,11 @@ try:
 except Exception:  # pragma: no cover - optional in minimal script environments.
     yaml = None
 
-def _default_registry_path() -> Path:
+def resolve_overlay_registry_path(path: str | Path | None = None) -> Path:
+    """Resolve the ACMG overlay registry path from an explicit or packaged location."""
+
+    if path:
+        return Path(path)
     for parent in Path(__file__).resolve().parents:
         for candidate in (
             parent / "skills" / "tooluniverse-acmg-overlay-routing-core" / "overlay_registry.yaml",
@@ -23,13 +32,13 @@ def _default_registry_path() -> Path:
     return Path(__file__).resolve().parents[1] / "overlay_registry.yaml"
 
 
-REGISTRY_PATH = _default_registry_path()
+REGISTRY_PATH = resolve_overlay_registry_path()
 
 
 def load_overlay_registry(path: str | Path | None = None) -> dict[str, Any]:
     if yaml is None:
         raise RuntimeError("PyYAML is required to load overlay_registry.yaml")
-    registry_path = Path(path) if path else REGISTRY_PATH
+    registry_path = resolve_overlay_registry_path(path) if path else REGISTRY_PATH
     payload = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
     return payload if isinstance(payload, dict) else {}
 

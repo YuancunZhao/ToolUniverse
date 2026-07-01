@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Regression for observed FGFR3 agent-level manual ACMG bypass."""
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from tooluniverse.acmg_gate.draft_policy import build_draft_only_response
 from tooluniverse.acmg_gate.final_answer_guard import guard_acmg_final_answer
 from tooluniverse.acmg_gate.session import create_acmg_session

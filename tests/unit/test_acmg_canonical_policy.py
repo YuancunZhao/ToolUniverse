@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 import importlib.util
 from pathlib import Path
+import warnings
 
 
 def _load_module(path: str, name: str):
@@ -58,7 +64,12 @@ def test_canonical_acmg_intent_detector():
         ("致病机制", "NONE"),
     ]
     for query, expected in cases:
-        assert module.classify_acmg_intent(query).value == expected, f"{query!r} -> {expected}"
+        assert module.detect_acmg_intent(query).value == expected, f"{query!r} -> {expected}"
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert module.classify_acmg_intent("variant pathogenicity").value == "ACMG_FINAL_CLASSIFICATION"
+    assert any(item.category is DeprecationWarning for item in caught)
 
 
 def test_final_label_detector_blocks_guarded_labels():

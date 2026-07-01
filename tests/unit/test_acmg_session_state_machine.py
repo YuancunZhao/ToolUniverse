@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Direct tests for the ACMG assessment session state machine."""
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from tooluniverse.acmg_gate.finalizer import issue_finalization_token
 from tooluniverse.acmg_gate.session import (
     add_overlay_validated_evidence,

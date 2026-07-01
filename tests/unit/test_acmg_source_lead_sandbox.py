@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Direct tests for source-lead sandbox preservation and quarantine."""
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from tooluniverse.acmg_gate.source_lead_sandbox import sandbox_source_output
 
 

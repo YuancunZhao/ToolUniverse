@@ -2,34 +2,8 @@
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
+import warnings
 from typing import Any, Dict, List
-
-try:
-    from .final_label_detector import contains_final_acmg_label, final_acmg_label_matches
-    from .intent_detector import ACMGIntent, detect_acmg_intent, looks_like_acmg_gate_query
-except ImportError:  # pragma: no cover - file-path imports from standalone checks.
-    _here = Path(__file__).resolve().parent
-    _final_spec = importlib.util.spec_from_file_location(
-        "acmg_final_label_detector",
-        _here / "final_label_detector.py",
-    )
-    _intent_spec = importlib.util.spec_from_file_location(
-        "acmg_intent_detector",
-        _here / "intent_detector.py",
-    )
-    if _final_spec is None or _final_spec.loader is None or _intent_spec is None or _intent_spec.loader is None:
-        raise
-    _final_module = importlib.util.module_from_spec(_final_spec)
-    _intent_module = importlib.util.module_from_spec(_intent_spec)
-    _final_spec.loader.exec_module(_final_module)
-    _intent_spec.loader.exec_module(_intent_module)
-    contains_final_acmg_label = _final_module.contains_final_acmg_label
-    final_acmg_label_matches = _final_module.final_acmg_label_matches
-    ACMGIntent = _intent_module.ACMGIntent
-    detect_acmg_intent = _intent_module.detect_acmg_intent
-    looks_like_acmg_gate_query = _intent_module.looks_like_acmg_gate_query
 
 ACMG_FRONT_DOOR_TOOL_NAME = "ACMG_overlay_gate_assess_variant"
 ACMG_ALLOWED_USE = "source_lead_or_route_input"
@@ -227,6 +201,11 @@ def acmg_source_lead_metadata() -> dict[str, Any]:
 def source_lead_only_metadata() -> dict[str, Any]:
     """Public alias for high-risk source-lead-only metadata."""
 
+    warnings.warn(
+        "source_lead_only_metadata is deprecated; use acmg_source_lead_metadata.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return acmg_source_lead_metadata()
 
 
@@ -257,7 +236,6 @@ __all__ = [
     "ACMG_ALLOWED_USE",
     "ACMG_FRONT_DOOR_TOOL_NAME",
     "ACMG_GATE_NOTICE",
-    "ACMGIntent",
     "ACMG_ORDINARY_INTERNAL_STEPS",
     "DISCOVERY_NO_HIT_ROUTES",
     "HIGH_RISK_ACMG_GATE_TOOLS",
@@ -267,10 +245,6 @@ __all__ = [
     "SOURCE_LEAD_NOTICE",
     "acmg_source_lead_metadata",
     "attach_acmg_gate_notice",
-    "contains_final_acmg_label",
-    "detect_acmg_intent",
-    "final_acmg_label_matches",
-    "looks_like_acmg_gate_query",
     "is_high_risk_acmg_tool",
     "source_lead_only_metadata",
 ]

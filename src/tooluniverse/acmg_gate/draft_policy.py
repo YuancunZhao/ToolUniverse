@@ -5,27 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from .final_label_detector import final_acmg_label_matches
-from .session import LITERATURE_READY_STATES, missing_required_actions, session_from_dict, session_to_dict
+from .session import evaluate_finalization_gate, missing_required_actions, session_from_dict, session_to_dict
 
 
 def explain_why_final_blocked(session: Any) -> list[str]:
-    obj = session_from_dict(session)
-    reasons: list[str] = []
-    if obj.validator_status != "PASS":
-        reasons.append("validator_status is not PASS")
-    if obj.semantic_combiner_status != "PASS":
-        reasons.append("semantic_combiner_status is not PASS")
-    if obj.final_classification_allowed is not True:
-        reasons.append("final_classification_allowed is not true")
-    if not obj.counted_evidence:
-        reasons.append("no overlay-validated counted evidence")
-    if obj.literature_status not in LITERATURE_READY_STATES:
-        reasons.append("literature review is not complete")
-    for action in missing_required_actions(obj):
-        reasons.append(f"required overlay action incomplete: {action}")
-    if not obj.finalization_token:
-        reasons.append("missing ACMG finalization token")
-    return list(dict.fromkeys(reasons))
+    gate = evaluate_finalization_gate(session)
+    return list(gate.blocking_reasons)
 
 
 def build_draft_only_response(session: Any) -> dict[str, Any]:

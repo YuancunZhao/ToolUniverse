@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 import re
+import warnings
 
 
 class ACMGIntent(str, Enum):
@@ -232,6 +233,11 @@ def detect_acmg_intent(query: str) -> ACMGIntent:
 def classify_acmg_intent(query: str) -> ACMGIntent:
     """Public alias for canonical ACMG intent classification."""
 
+    warnings.warn(
+        "classify_acmg_intent is deprecated; use detect_acmg_intent.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return detect_acmg_intent(query)
 
 

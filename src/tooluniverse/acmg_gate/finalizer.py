@@ -9,17 +9,13 @@ from typing import Any
 
 try:
     from .session import (
-        LITERATURE_READY_STATES,
-        missing_required_actions,
-        session_can_finalize,
+        evaluate_finalization_gate,
         session_from_dict,
         session_to_dict,
     )
 except ImportError:  # pragma: no cover - direct file execution in tests.
     from tooluniverse.acmg_gate.session import (
-        LITERATURE_READY_STATES,
-        missing_required_actions,
-        session_can_finalize,
+        evaluate_finalization_gate,
         session_from_dict,
         session_to_dict,
     )
@@ -35,32 +31,30 @@ def compute_finalization_gate(
 ) -> dict[str, Any]:
     """Compute whether final ACMG classification wording is allowed."""
 
-    has_counted_evidence = bool(counted_evidence)
-    gates = {
-        "validator_status": validator_status,
-        "semantic_combiner_status": semantic_combiner_status,
-        "final_classification_allowed": final_classification_allowed,
-        "bundle_final_requested": bundle_final_requested,
-        "has_counted_evidence": has_counted_evidence,
-        "literature_ready": literature_ready,
-    }
-    blocking_reasons: list[str] = []
-    if validator_status != "PASS":
-        blocking_reasons.append("validator_status is not PASS")
-    if semantic_combiner_status != "PASS":
-        blocking_reasons.append("semantic_combiner_status is not PASS")
-    if final_classification_allowed is not True:
-        blocking_reasons.append("final_classification_allowed is not true")
+    gate = evaluate_finalization_gate(
+        {
+            "validator_status": validator_status or "NOT_RUN",
+            "semantic_combiner_status": semantic_combiner_status or "NOT_RUN",
+            "final_classification_allowed": final_classification_allowed,
+            "counted_evidence": counted_evidence or [],
+            "literature_status": "ready" if literature_ready else "not_reviewed",
+        }
+    )
+    blocking_reasons = list(gate.blocking_reasons)
     if not bundle_final_requested:
         blocking_reasons.append("bundle classification_status is not final classification")
-    if not has_counted_evidence:
-        blocking_reasons.append("no compatibility-resolved counted evidence")
-    if not literature_ready:
-        blocking_reasons.append("literature hits are not fully reviewed or no literature coverage is documented")
     return {
         "final_allowed": not blocking_reasons,
-        "gates": gates,
-        "blocking_reasons": blocking_reasons,
+        "gates": {
+            "validator_status": gate.validator_status,
+            "semantic_combiner_status": gate.semantic_combiner_status,
+            "final_classification_allowed": gate.final_classification_allowed,
+            "bundle_final_requested": bundle_final_requested,
+            "has_counted_evidence": gate.counted_evidence_count > 0,
+            "literature_ready": literature_ready,
+        },
+        "blocking_reasons": list(dict.fromkeys(blocking_reasons)),
+        "finalization_gate": gate.to_dict(),
     }
 
 
@@ -71,7 +65,13 @@ def _stable_hash(payload: Any) -> str:
 
 def _token_basis(obj: Any, classification: str) -> dict[str, Any]:
     counted_hash = _stable_hash(obj.counted_evidence)
-    required_hash = _stable_hash({"required": obj.required_next_actions, "completed": obj.completed_actions})
+    required_hash = _stable_hash(
+        {
+            "required": obj.required_next_actions,
+            "completed": obj.completed_actions,
+            "route_requirements": obj.route_requirements,
+        }
+    )
     return {
         "session_id": obj.session_id,
         "variant": obj.variant,
@@ -95,20 +95,12 @@ def issue_finalization_token(
 
     obj = session_from_dict(session)
     final_classification = classification or obj.classification
-    blocking_reasons: list[str] = []
-    if not session_can_finalize(obj):
-        if obj.validator_status != "PASS":
-            blocking_reasons.append("validator_status is not PASS")
-        if obj.semantic_combiner_status != "PASS":
-            blocking_reasons.append("semantic_combiner_status is not PASS")
-        if obj.final_classification_allowed is not True:
-            blocking_reasons.append("final_classification_allowed is not true")
-        if missing_required_actions(obj):
-            blocking_reasons.append("required overlay actions are incomplete")
-        if obj.literature_status not in LITERATURE_READY_STATES:
-            blocking_reasons.append("literature is not ready")
-        if not obj.counted_evidence:
-            blocking_reasons.append("counted evidence is empty")
+    gate = evaluate_finalization_gate(obj)
+    independence = gate.evidence_independence or {}
+    if independence:
+        obj.counted_evidence = independence.get("counted_evidence", obj.counted_evidence)
+        obj.independence_warnings = independence.get("warnings", [])
+    blocking_reasons: list[str] = list(gate.blocking_reasons)
     if not final_classification:
         blocking_reasons.append("classification is missing")
     if blocking_reasons:
@@ -116,6 +108,9 @@ def issue_finalization_token(
             "status": "BLOCK",
             "finalization_token_issued": False,
             "blocking_reasons": list(dict.fromkeys(blocking_reasons)),
+            "finalization_gate": gate.to_dict(),
+            "evidence_independence": independence,
+            "blocking_route_requirements": gate.blocking_route_requirements,
         }
 
     basis = _token_basis(obj, final_classification)
@@ -138,6 +133,7 @@ def issue_finalization_token(
         "counted_evidence_hash": counted_hash,
         "required_actions_hash": required_hash,
         "classification_basis": obj.counted_evidence,
+        "evidence_independence": independence,
         "acmg_session": session_to_dict(obj),
     }
     return {
@@ -187,7 +183,8 @@ def verify_finalization_token(
             "token_classification": token_classification,
             "expected_classification": expected_classification,
         }
-    if not session_can_finalize(obj):
+    gate = evaluate_finalization_gate(obj)
+    if not gate.can_finalize:
         return {
             "status": "FAIL",
             "valid": False,
@@ -195,6 +192,8 @@ def verify_finalization_token(
             "classification": token_classification,
             "token_classification": token_classification,
             "expected_classification": expected_classification,
+            "finalization_gate": gate.to_dict(),
+            "blocking_route_requirements": gate.blocking_route_requirements,
         }
     if not classification:
         return {

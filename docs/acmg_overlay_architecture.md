@@ -88,8 +88,8 @@ Fixture categories are declared in `evals/fixture_manifest.yaml`. The validator 
 `scripts/acmg_final_answer_guard.py` provides the final text-level check:
 
 - `contains_final_acmg_label(text)` — detects full labels, paired abbreviations, standalone abbreviations (LP, LB, VUS), and contextual single-letter labels (P, B).
-- `guard_final_answer(text, bundle_or_status)` — backward-compatible wrapper over the token-gated protocol guard.
-- `guard_acmg_final_answer(answer_text, session, finalization_token, intent)` — returns BLOCK/PASS based on final-label detection, validator status, semantic combiner status, `final_classification_allowed`, session state, and finalization-token verification.
+- `guard_acmg_final_answer(answer_text, session, finalization_token, intent)` — canonical text guard; returns BLOCK/PASS based on final-label detection, the canonical finalization gate, session state, finalization-token verification, and classification binding.
+- `guard_final_answer(text, bundle_or_status)` — deprecated backward-compatible wrapper over `guard_acmg_final_answer`.
 - False-positive protection: "LP score", "B cell", "P value", "pathogenic bacteria", "致病机制", "良性肿瘤", "protein B domain", "gene B", and "population frequency" are not treated as final labels.
 
 ## GeneBe and Other Source Tools

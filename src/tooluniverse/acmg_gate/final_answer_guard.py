@@ -3,64 +3,34 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
-from pathlib import Path
+import warnings
 from typing import Any
 
 
-def _canonical_detector_path() -> Path | None:
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "src" / "tooluniverse" / "acmg_gate" / "final_label_detector.py"
-        if candidate.exists():
-            return candidate
-    return None
-
-
 try:
-    from . import contains_final_acmg_label as _canonical_contains_final_acmg_label
-    from . import final_acmg_label_matches
     from .draft_policy import build_draft_only_response, explain_why_final_blocked
-    from .final_label_detector import normalize_final_acmg_classification, normalized_final_acmg_classifications
+    from .final_label_detector import (
+        contains_final_acmg_label as _canonical_contains_final_acmg_label,
+        final_acmg_label_matches,
+        normalize_final_acmg_classification,
+        normalized_final_acmg_classifications,
+    )
     from .finalizer import verify_finalization_token
     from .pre_router import route_acmg_intent
-    from .session import session_from_dict
+    from .session import evaluate_finalization_gate, session_from_dict
 except ImportError:
-    try:
-        from tooluniverse.acmg_gate import (
-            contains_final_acmg_label as _canonical_contains_final_acmg_label,
-        )
-        from tooluniverse.acmg_gate import final_acmg_label_matches
-        from tooluniverse.acmg_gate.draft_policy import build_draft_only_response, explain_why_final_blocked
-        from tooluniverse.acmg_gate.final_label_detector import normalize_final_acmg_classification, normalized_final_acmg_classifications
-        from tooluniverse.acmg_gate.finalizer import verify_finalization_token
-        from tooluniverse.acmg_gate.pre_router import route_acmg_intent
-        from tooluniverse.acmg_gate.session import session_from_dict
-    except Exception:  # pragma: no cover - standalone script from canonical repo.
-        detector_path = _canonical_detector_path()
-        if detector_path is None:
-            raise
-        package_dir = detector_path.parent
-        tooluniverse_pkg = type(sys)("tooluniverse")
-        tooluniverse_pkg.__path__ = [str(package_dir.parent)]
-        acmg_pkg = type(sys)("tooluniverse.acmg_gate")
-        acmg_pkg.__path__ = [str(package_dir)]
-        sys.modules.setdefault("tooluniverse", tooluniverse_pkg)
-        sys.modules.setdefault("tooluniverse.acmg_gate", acmg_pkg)
-        spec = importlib.util.spec_from_file_location("acmg_final_label_detector", detector_path)
-        if spec is None or spec.loader is None:
-            raise
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _canonical_contains_final_acmg_label = module.contains_final_acmg_label
-        final_acmg_label_matches = module.final_acmg_label_matches
-        normalize_final_acmg_classification = module.normalize_final_acmg_classification
-        normalized_final_acmg_classifications = module.normalized_final_acmg_classifications
-        from tooluniverse.acmg_gate.draft_policy import build_draft_only_response, explain_why_final_blocked
-        from tooluniverse.acmg_gate.finalizer import verify_finalization_token
-        from tooluniverse.acmg_gate.pre_router import route_acmg_intent
-        from tooluniverse.acmg_gate.session import session_from_dict
+    from tooluniverse.acmg_gate.draft_policy import build_draft_only_response, explain_why_final_blocked
+    from tooluniverse.acmg_gate.final_label_detector import (
+        contains_final_acmg_label as _canonical_contains_final_acmg_label,
+        final_acmg_label_matches,
+        normalize_final_acmg_classification,
+        normalized_final_acmg_classifications,
+    )
+    from tooluniverse.acmg_gate.finalizer import verify_finalization_token
+    from tooluniverse.acmg_gate.pre_router import route_acmg_intent
+    from tooluniverse.acmg_gate.session import evaluate_finalization_gate, session_from_dict
 
 
 def _matches(text: str) -> list[str]:
@@ -76,6 +46,11 @@ def contains_final_acmg_label(text: str) -> bool:
 def has_final_acmg_label(text: str) -> bool:
     """Backward-compatible alias for older callers."""
 
+    warnings.warn(
+        "has_final_acmg_label is deprecated; use contains_final_acmg_label.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return contains_final_acmg_label(text)
 
 
@@ -111,6 +86,11 @@ def _session_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def guard_final_answer(text: str, bundle_or_status: dict[str, Any]) -> dict[str, Any]:
     """Backward-compatible wrapper around the stricter protocol guard."""
 
+    warnings.warn(
+        "guard_final_answer is deprecated; use guard_acmg_final_answer.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     payload = _status_payload(bundle_or_status)
     return guard_acmg_final_answer(
         answer_text=text,
@@ -137,16 +117,13 @@ def guard_acmg_final_answer(
     normalized_answer_classifications = normalized_final_acmg_classifications(text)
     session_classification = session_payload.get("classification") if isinstance(session_payload, dict) else None
     normalized_session_classification = normalize_final_acmg_classification(session_classification)
+    gate = evaluate_finalization_gate(session_payload) if session_payload else None
     required_gates = {
-        "validator_status": session_payload.get("validator_status"),
-        "semantic_combiner_status": session_payload.get("semantic_combiner_status"),
-        "final_classification_allowed": session_payload.get("final_classification_allowed"),
+        "validator_status": gate.validator_status if gate else session_payload.get("validator_status"),
+        "semantic_combiner_status": gate.semantic_combiner_status if gate else session_payload.get("semantic_combiner_status"),
+        "final_classification_allowed": gate.final_classification_allowed if gate else session_payload.get("final_classification_allowed"),
     }
-    gates_pass = (
-        required_gates["validator_status"] == "PASS"
-        and required_gates["semantic_combiner_status"] == "PASS"
-        and required_gates["final_classification_allowed"] is True
-    )
+    gates_pass = bool(gate and gate.can_finalize)
     token_check = verify_finalization_token(
         finalization_token,
         session_payload if session_payload else None,
@@ -172,7 +149,7 @@ def guard_acmg_final_answer(
     if matched and (not gates_pass or not token_pass or not finalized or not classification_binding_ok):
         reasons: list[str] = []
         if not gates_pass:
-            reasons.append("Final ACMG labels require validator_status PASS, semantic_combiner_status PASS, and final_classification_allowed true.")
+            reasons.extend(gate.blocking_reasons if gate else ["session finalization gates do not pass"])
         if not token_pass:
             reasons.append("Final ACMG labels require a valid ACMG finalization token.")
         if not finalized:
@@ -204,6 +181,7 @@ def guard_acmg_final_answer(
             "session_classification": session_classification,
             "classification_binding_ok": False,
             "required_gates": required_gates,
+            "finalization_gate": gate.to_dict() if gate else None,
             "token_verification": token_check,
             "session_state": session_state,
             "acmg_intent": routed_intent,
@@ -227,6 +205,7 @@ def guard_acmg_final_answer(
         "session_classification": session_classification,
         "classification_binding_ok": classification_binding_ok,
         "required_gates": required_gates,
+        "finalization_gate": gate.to_dict() if gate else None,
         "token_verification": token_check,
         "session_state": session_state,
         "acmg_intent": routed_intent,

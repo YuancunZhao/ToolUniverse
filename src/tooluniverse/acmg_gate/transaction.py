@@ -1,10 +1,20 @@
-"""Required overlay transaction helpers for ACMG protocol enforcement."""
+"""Required overlay transaction helpers for ACMG protocol enforcement.
+
+Boundary:
+- session.py owns the state dataclass, primitive state transitions, and the
+  canonical finalization gate.
+- provenance.py owns tool-call receipts and evidence provenance matching.
+- this module applies route plans and overlay results to a session.
+
+It intentionally does not decide finalization eligibility.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
+from .provenance import complete_step
 from .session import missing_required_actions, session_from_dict, session_to_dict
 
 UNIVERSAL_REQUIRED_ACTIONS = (
@@ -111,6 +121,7 @@ __all__ = [
     "UNIVERSAL_REQUIRED_ACTIONS",
     "add_required_actions_from_plan",
     "apply_overlay_result",
+    "complete_step",
     "compute_required_overlay_actions",
     "explain_missing_actions",
     "validate_required_actions_completed",

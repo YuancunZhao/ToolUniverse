@@ -28,8 +28,14 @@ from .final_label_detector import (
     normalized_final_acmg_classifications,
 )
 from .finalizer import compute_finalization_gate, issue_finalization_token, verify_finalization_token
+from .evidence_independence import evaluate_evidence_independence
 from .intent_detector import ACMGIntent, classify_acmg_intent, detect_acmg_intent, looks_like_acmg_gate_query
 from .pre_router import route_acmg_intent
+from .provenance import (
+    complete_step,
+    make_evidence_provenance,
+    make_tool_call_receipt,
+)
 from .policy import (
     ACMG_ALLOWED_USE,
     ACMG_FRONT_DOOR_TOOL_NAME,
@@ -53,6 +59,7 @@ from .registry import (
     discovery_routes,
     load_overlay_registry,
     required_coverage_for_criterion,
+    resolve_overlay_registry_path,
     source_lead_routes,
 )
 from .runtime_integration import (
@@ -63,12 +70,15 @@ from .runtime_integration import (
     route_user_message_before_agent,
     run_agent_with_acmg_runtime_guard,
 )
+from .route_policy import blocking_route_requirements, determine_required_routes
 from .session import (
     ACMGAssessmentSession,
+    FinalizationGateResult,
     add_overlay_validated_evidence,
     add_route_candidate,
     add_source_lead,
     create_acmg_session,
+    evaluate_finalization_gate,
     mark_completed_action,
     mark_required_action,
     session_can_emit_final_label,
@@ -116,24 +126,35 @@ __all__ = [
     "run_agent_with_acmg_runtime_guard",
     # Intent detection
     "ACMGIntent",
-    "classify_acmg_intent",
     "detect_acmg_intent",
     "looks_like_acmg_gate_query",
+    # Deprecated intent alias
+    "classify_acmg_intent",
     # Final label detection
     "contains_final_acmg_label",
-    "detect_final_acmg_labels",
     "final_acmg_label_matches",
     "normalize_final_acmg_classification",
     "normalized_final_acmg_classifications",
+    # Deprecated label alias
+    "detect_final_acmg_labels",
     # Final answer guard
     "guard_acmg_final_answer",
     "guard_final_answer",
     # Finalization gate
     "compute_finalization_gate",
+    "evaluate_finalization_gate",
+    "FinalizationGateResult",
     "issue_finalization_token",
     "verify_finalization_token",
+    "evaluate_evidence_independence",
     # Pre-router
     "route_acmg_intent",
+    # Route policy / provenance
+    "blocking_route_requirements",
+    "complete_step",
+    "determine_required_routes",
+    "make_evidence_provenance",
+    "make_tool_call_receipt",
     # Session
     "ACMGAssessmentSession",
     "add_overlay_validated_evidence",
@@ -168,6 +189,7 @@ __all__ = [
     "discovery_routes",
     "load_overlay_registry",
     "required_coverage_for_criterion",
+    "resolve_overlay_registry_path",
     "source_lead_routes",
     # Semantic combiner
     "SEMANTIC_PASS",

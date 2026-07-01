@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Integration-level protocol checks preventing manual source-lead assignment."""
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from tooluniverse.acmg_gate.final_answer_guard import guard_acmg_final_answer
 from tooluniverse.acmg_gate.finalizer import issue_finalization_token
 from tooluniverse.acmg_gate.session import create_acmg_session

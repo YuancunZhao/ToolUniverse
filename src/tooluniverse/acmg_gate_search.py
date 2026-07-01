@@ -12,12 +12,12 @@ try:
         ACMG_GATE_NOTICE,
         ACMGIntent,
         HIGH_RISK_ACMG_GATE_TOOLS,
+        acmg_source_lead_metadata,
         attach_acmg_gate_notice as attach_source_lead_policy,
         detect_acmg_intent,
         is_high_risk_acmg_tool as policy_is_high_risk_acmg_tool,
         looks_like_acmg_gate_query,
         route_acmg_intent,
-        source_lead_only_metadata,
     )
 except ImportError:  # pragma: no cover - used by standalone regression checker imports.
     import importlib.util
@@ -25,20 +25,24 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
 
     _here = Path(__file__).resolve().parent / "acmg_gate"
     _policy_path = _here / "policy.py"
+    _intent_path = _here / "intent_detector.py"
     _policy_spec = importlib.util.spec_from_file_location("acmg_gate_policy", _policy_path)
-    if _policy_spec is None or _policy_spec.loader is None:
+    _intent_spec = importlib.util.spec_from_file_location("acmg_intent_detector", _intent_path)
+    if _policy_spec is None or _policy_spec.loader is None or _intent_spec is None or _intent_spec.loader is None:
         raise
     _policy_module = importlib.util.module_from_spec(_policy_spec)
+    _intent_module = importlib.util.module_from_spec(_intent_spec)
     _policy_spec.loader.exec_module(_policy_module)
+    _intent_spec.loader.exec_module(_intent_module)
     ACMG_FRONT_DOOR_TOOL_NAME = _policy_module.ACMG_FRONT_DOOR_TOOL_NAME
     ACMG_ALLOWED_USE = _policy_module.ACMG_ALLOWED_USE
     ACMG_GATE_NOTICE = _policy_module.ACMG_GATE_NOTICE
     HIGH_RISK_ACMG_GATE_TOOLS = _policy_module.HIGH_RISK_ACMG_GATE_TOOLS
-    ACMGIntent = _policy_module.ACMGIntent
+    ACMGIntent = _intent_module.ACMGIntent
     attach_source_lead_policy = _policy_module.attach_acmg_gate_notice
-    detect_acmg_intent = _policy_module.detect_acmg_intent
+    detect_acmg_intent = _intent_module.detect_acmg_intent
     policy_is_high_risk_acmg_tool = _policy_module.is_high_risk_acmg_tool
-    looks_like_acmg_gate_query = _policy_module.looks_like_acmg_gate_query
+    looks_like_acmg_gate_query = _intent_module.looks_like_acmg_gate_query
     def route_acmg_intent(query: str, tool_search_context: Any | None = None) -> dict[str, Any]:
         intent_value = detect_acmg_intent(query)
         requires_session = intent_value == ACMGIntent.ACMG_FINAL_CLASSIFICATION
@@ -54,7 +58,7 @@ except ImportError:  # pragma: no cover - used by standalone regression checker 
             "allowed_use": ACMG_ALLOWED_USE if intent_value != ACMGIntent.NONE else "normal_tool_use",
             "acmg_gate_notice": ACMG_GATE_NOTICE if intent_value != ACMGIntent.NONE else None,
         }
-    source_lead_only_metadata = _policy_module.source_lead_only_metadata
+    acmg_source_lead_metadata = _policy_module.acmg_source_lead_metadata
 
 
 def acmg_gate_tool_search_entry() -> Dict[str, Any]:
@@ -103,7 +107,7 @@ def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any]]:
         name = _search_item_name(item)
         if name in HIGH_RISK_ACMG_GATE_TOOLS:
             if isinstance(item, dict):
-                item.update(source_lead_only_metadata())
+                item.update(acmg_source_lead_metadata())
                 item["source_tools_must_use_sandbox"] = True
                 item["may_emit_final_label"] = False
             high_risk.append(item)

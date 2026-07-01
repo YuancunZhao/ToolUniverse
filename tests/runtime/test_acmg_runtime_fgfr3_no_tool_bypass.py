@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Runtime regression for FGFR3 no-tool and GeneBe-first bypass attempts."""
 
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
 from tooluniverse.acmg_gate.runtime_integration import (
     after_tool_call,
     before_final_answer,

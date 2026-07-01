@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 
 
 _FULL_FINAL_LABEL_RE = re.compile(
@@ -134,6 +135,11 @@ def final_acmg_label_matches(text: str) -> list[str]:
 def detect_final_acmg_labels(text: str) -> list[str]:
     """Public alias for canonical final ACMG label detection."""
 
+    warnings.warn(
+        "detect_final_acmg_labels is deprecated; use final_acmg_label_matches.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return final_acmg_label_matches(text)
 
 
@@ -159,4 +165,9 @@ def contains_final_acmg_label(text: str) -> bool:
 def has_final_acmg_label(text: str) -> bool:
     """Backward-compatible alias for skill-side scripts."""
 
+    warnings.warn(
+        "has_final_acmg_label is deprecated; use contains_final_acmg_label.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return contains_final_acmg_label(text)
