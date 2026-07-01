@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
-import json
 from typing import Any
+
+from .route_policy import text_blob
 
 try:
     from .session import session_from_dict
@@ -27,10 +28,6 @@ def _source_key(row: dict[str, Any]) -> str:
 
 def _criterion(row: dict[str, Any]) -> str:
     return str(row.get("criterion") or row.get("suggested_criterion") or "").split("_", 1)[0]
-
-
-def _blob(*values: Any) -> str:
-    return json.dumps(values, ensure_ascii=False, sort_keys=True, default=str).lower()
 
 
 def evaluate_evidence_independence(session: dict[str, Any] | Any) -> dict[str, Any]:
@@ -118,7 +115,7 @@ def evaluate_evidence_independence(session: dict[str, Any] | Any) -> dict[str, A
                     }
                 )
 
-    source_blob = _blob(source_leads, route_candidates)
+    source_blob = text_blob(source_leads, route_candidates)
     if "genebe" in source_blob and any(term in source_blob for term in ("ps3", "pm2", "pp3", "pp5", "likely_pathogenic")):
         warnings.append({"code": "genebe_criteria_source_lead_only", "counted": False})
 

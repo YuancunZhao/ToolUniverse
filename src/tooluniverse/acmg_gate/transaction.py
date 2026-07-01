@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .provenance import complete_step
 from .session import missing_required_actions, session_from_dict, session_to_dict
 
 UNIVERSAL_REQUIRED_ACTIONS = (
@@ -34,7 +33,7 @@ def _append_unique(items: list[Any], action: Any) -> None:
         items.append(action)
 
 
-def compute_required_overlay_actions(session: Any, evidence_context: Any = None) -> list[str]:
+def _compute_required_overlay_actions(session: Any, evidence_context: Any = None) -> list[str]:
     """Compute protocol-required overlay actions from session and source context."""
 
     obj = session_from_dict(session)
@@ -62,7 +61,7 @@ def compute_required_overlay_actions(session: Any, evidence_context: Any = None)
 
 def add_required_actions_from_plan(session: Any, plan_or_gate_result: Any) -> dict[str, Any]:
     obj = session_from_dict(session)
-    for action in compute_required_overlay_actions(obj, plan_or_gate_result):
+    for action in _compute_required_overlay_actions(obj, plan_or_gate_result):
         _append_unique(obj.required_next_actions, action)
     if isinstance(plan_or_gate_result, dict):
         for key in ("required_next_actions", "route_triggers", "required_baseline_routes", "triggered_discovery_routes"):
@@ -120,9 +119,4 @@ def explain_missing_actions(session: Any) -> list[str]:
 __all__ = [
     "UNIVERSAL_REQUIRED_ACTIONS",
     "add_required_actions_from_plan",
-    "apply_overlay_result",
-    "complete_step",
-    "compute_required_overlay_actions",
-    "explain_missing_actions",
-    "validate_required_actions_completed",
 ]

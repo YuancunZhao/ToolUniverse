@@ -39,6 +39,18 @@ _CHINESE_FINAL_CONTEXT_RE = re.compile(
     r"该突变为|这个突变为|评级为|分级为|判定为)"
 )
 _CHINESE_FINAL_LABEL_RE = re.compile(r"(可能致病|临床意义不明|不确定意义|意义不明|可能良性|致病|良性)")
+_CHINESE_VUS_EXTRA_RE = re.compile(r"意义不明确")
+
+_ACMG_CRITERION_RE = re.compile(r"\b(BA1|BS[1-4]|BP[1-7]|PVS1|PS[1-4]|PM[1-6]|PP[1-5])(?:_[A-Za-z]+)?\b")
+_MANUAL_COUNTING_CONTEXT_RE = re.compile(
+    r"(ACMG\s*(?:criteria|evidence|combination|count|classification)|"
+    r"criterion\s*(?:combination|count)|counted\s+evidence|"
+    r"current\s+counted\s+evidence|"
+    r"Bayesian|OddsPath|"
+    r"\d+\s*(?:Very\s+Strong|Strong|Moderate|Supporting)\s*\+|"
+    r"计数证据|当前计数证据|证据组合|ACMG组合|判定为|满足|因此|所以|结论)",
+    re.IGNORECASE,
+)
 
 _FALSE_POSITIVE_PHRASES = (
     "pathogenic bacteria",
@@ -77,6 +89,7 @@ _FINAL_LABEL_ALIASES = {
     "临床意义不明": "VUS",
     "不确定意义": "VUS",
     "意义不明": "VUS",
+    "意义不明确": "VUS",
     "likely benign": "Likely Benign",
     "lb": "Likely Benign",
     "可能良性": "Likely Benign",
@@ -121,6 +134,7 @@ def final_acmg_label_matches(text: str) -> list[str]:
     labels.extend(match.group(1) for match in _CONTEXTUAL_SINGLE_LETTER_RE.finditer(payload))
     if _CHINESE_FINAL_CONTEXT_RE.search(payload):
         labels.extend(match.group(1) for match in _CHINESE_FINAL_LABEL_RE.finditer(payload))
+        labels.extend(match.group(0) for match in _CHINESE_VUS_EXTRA_RE.finditer(payload))
 
     unique: list[str] = []
     seen: set[str] = set()
@@ -160,6 +174,34 @@ def contains_final_acmg_label(text: str) -> bool:
     """Return true when text contains a guarded five-tier ACMG final label."""
 
     return bool(final_acmg_label_matches(text))
+
+
+def manual_acmg_counting_matches(text: str) -> list[str]:
+    """Return snippets that look like manual ACMG criterion counting/classification logic."""
+
+    payload = text or ""
+    lowered = payload.lower()
+    if any(phrase in lowered for phrase in _FALSE_POSITIVE_PHRASES):
+        return []
+    criteria = [match.group(0) for match in _ACMG_CRITERION_RE.finditer(payload)]
+    if len(criteria) < 2:
+        return []
+    if not _MANUAL_COUNTING_CONTEXT_RE.search(payload) and "+" not in payload:
+        return []
+    unique: list[str] = []
+    seen: set[str] = set()
+    for criterion in criteria:
+        key = criterion.upper()
+        if key not in seen:
+            seen.add(key)
+            unique.append(criterion)
+    return unique
+
+
+def contains_manual_acmg_counting(text: str) -> bool:
+    """Return true when text appears to manually combine ACMG criteria."""
+
+    return bool(manual_acmg_counting_matches(text))
 
 
 def has_final_acmg_label(text: str) -> bool:

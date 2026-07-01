@@ -18,24 +18,19 @@ stable public API.
 """
 
 from .context_triggers import discover_user_context_routes
-from .draft_policy import build_draft_only_response, explain_why_final_blocked, sanitize_draft_output
-from .final_answer_guard import guard_acmg_final_answer, guard_final_answer
+from .final_answer_guard import build_draft_only_response, explain_why_final_blocked, guard_acmg_final_answer
 from .final_label_detector import (
     contains_final_acmg_label,
-    detect_final_acmg_labels,
+    contains_manual_acmg_counting,
     final_acmg_label_matches,
+    manual_acmg_counting_matches,
     normalize_final_acmg_classification,
     normalized_final_acmg_classifications,
 )
 from .finalizer import compute_finalization_gate, issue_finalization_token, verify_finalization_token
 from .evidence_independence import evaluate_evidence_independence
-from .intent_detector import ACMGIntent, classify_acmg_intent, detect_acmg_intent, looks_like_acmg_gate_query
+from .intent_detector import ACMGIntent, detect_acmg_intent, looks_like_acmg_gate_query
 from .pre_router import route_acmg_intent
-from .provenance import (
-    complete_step,
-    make_evidence_provenance,
-    make_tool_call_receipt,
-)
 from .policy import (
     ACMG_ALLOWED_USE,
     ACMG_FRONT_DOOR_TOOL_NAME,
@@ -50,7 +45,6 @@ from .policy import (
     acmg_source_lead_metadata,
     attach_acmg_gate_notice,
     is_high_risk_acmg_tool,
-    source_lead_only_metadata,
 )
 from .registry import (
     baseline_routes_for_variant_type,
@@ -62,15 +56,9 @@ from .registry import (
     resolve_overlay_registry_path,
     source_lead_routes,
 )
-from .runtime_integration import (
-    ACMGRuntimeState,
-    after_tool_call,
-    before_final_answer,
-    before_tool_call,
-    route_user_message_before_agent,
-    run_agent_with_acmg_runtime_guard,
+from .route_policy import (
+    blocking_route_requirements,
 )
-from .route_policy import blocking_route_requirements, determine_required_routes
 from .session import (
     ACMGAssessmentSession,
     FinalizationGateResult,
@@ -79,6 +67,7 @@ from .session import (
     add_source_lead,
     create_acmg_session,
     evaluate_finalization_gate,
+    is_acmg_finalization_blocked,
     mark_completed_action,
     mark_required_action,
     session_can_emit_final_label,
@@ -98,10 +87,6 @@ from .semantic_combiner import (
 from .source_lead_sandbox import sandbox_source_output, source_category_for_tool
 from .transaction import (
     add_required_actions_from_plan,
-    apply_overlay_result,
-    compute_required_overlay_actions,
-    explain_missing_actions,
-    validate_required_actions_completed,
 )
 from .validate_acmg_overlay_bundle import validate as validate_bundle
 
@@ -117,13 +102,6 @@ __all__ = [
     "RECOMMENDED_ACMG_INTAKE_TOOL_NAMES",
     "REQUIRED_ACMG_COVERAGE_CATEGORIES",
     "SOURCE_LEAD_NOTICE",
-    # Runtime integration
-    "ACMGRuntimeState",
-    "after_tool_call",
-    "before_final_answer",
-    "before_tool_call",
-    "route_user_message_before_agent",
-    "run_agent_with_acmg_runtime_guard",
     # Intent detection
     "ACMGIntent",
     "detect_acmg_intent",
@@ -132,14 +110,15 @@ __all__ = [
     "classify_acmg_intent",
     # Final label detection
     "contains_final_acmg_label",
+    "contains_manual_acmg_counting",
     "final_acmg_label_matches",
+    "manual_acmg_counting_matches",
     "normalize_final_acmg_classification",
     "normalized_final_acmg_classifications",
-    # Deprecated label alias
-    "detect_final_acmg_labels",
     # Final answer guard
+    "build_draft_only_response",
+    "explain_why_final_blocked",
     "guard_acmg_final_answer",
-    "guard_final_answer",
     # Finalization gate
     "compute_finalization_gate",
     "evaluate_finalization_gate",
@@ -151,16 +130,13 @@ __all__ = [
     "route_acmg_intent",
     # Route policy / provenance
     "blocking_route_requirements",
-    "complete_step",
-    "determine_required_routes",
-    "make_evidence_provenance",
-    "make_tool_call_receipt",
     # Session
     "ACMGAssessmentSession",
     "add_overlay_validated_evidence",
     "add_route_candidate",
     "add_source_lead",
     "create_acmg_session",
+    "is_acmg_finalization_blocked",
     "mark_completed_action",
     "mark_required_action",
     "session_can_emit_final_label",
@@ -169,18 +145,11 @@ __all__ = [
     "session_to_dict",
     "session_to_policy_envelope",
     "update_session_state",
-    # Sandbox / transaction / draft policy
+    # Transaction helpers
     "add_required_actions_from_plan",
-    "apply_overlay_result",
-    "build_draft_only_response",
-    "compute_required_overlay_actions",
-    "explain_missing_actions",
-    "explain_why_final_blocked",
+    # Sandbox
     "sandbox_source_output",
-    "sanitize_draft_output",
     "source_category_for_tool",
-    "validate_required_actions_completed",
-    # Context triggers
     "discover_user_context_routes",
     # Registry
     "baseline_routes_for_variant_type",
@@ -201,7 +170,6 @@ __all__ = [
     "acmg_source_lead_metadata",
     "attach_acmg_gate_notice",
     "is_high_risk_acmg_tool",
-    "source_lead_only_metadata",
     # Validation
     "validate_bundle",
 ]

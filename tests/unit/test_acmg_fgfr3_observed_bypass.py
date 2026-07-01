@@ -6,8 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from tooluniverse.acmg_gate.draft_policy import build_draft_only_response
-from tooluniverse.acmg_gate.final_answer_guard import guard_acmg_final_answer
+from tooluniverse.acmg_gate.final_answer_guard import build_draft_only_response, guard_acmg_final_answer
 from tooluniverse.acmg_gate.session import create_acmg_session
 from tooluniverse.acmg_gate.source_lead_sandbox import sandbox_source_output
 from tooluniverse.acmg_gate.transaction import add_required_actions_from_plan

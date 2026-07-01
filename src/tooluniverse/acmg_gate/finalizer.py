@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import hashlib
 import json
 from typing import Any
+
+import hashlib
+import json
+
+
+def _stable_hash(payload: Any) -> str:
+    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 try:
     from .session import (
@@ -29,10 +36,23 @@ def compute_finalization_gate(
     counted_evidence: list[Any] | None,
     literature_ready: bool,
 ) -> dict[str, Any]:
-    """Compute whether final ACMG classification wording is allowed."""
+    """Compute whether final ACMG classification wording is allowed.
+
+    Deprecated: prefer evaluate_finalization_gate() which accepts a session object.
+    This wrapper remains for backward compatibility with acmg_overlay_gate_tool.py.
+    """
+    import warnings
+
+    warnings.warn(
+        "compute_finalization_gate is deprecated; use evaluate_finalization_gate",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     gate = evaluate_finalization_gate(
         {
+            "state": "READY_FOR_FINALIZER" if bundle_final_requested else "DRAFT_ONLY",
+            "classification_status": "final classification" if bundle_final_requested else "draft classification",
             "validator_status": validator_status or "NOT_RUN",
             "semantic_combiner_status": semantic_combiner_status or "NOT_RUN",
             "final_classification_allowed": final_classification_allowed,
@@ -56,11 +76,6 @@ def compute_finalization_gate(
         "blocking_reasons": list(dict.fromkeys(blocking_reasons)),
         "finalization_gate": gate.to_dict(),
     }
-
-
-def _stable_hash(payload: Any) -> str:
-    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def _token_basis(obj: Any, classification: str) -> dict[str, Any]:
@@ -143,6 +158,17 @@ def issue_finalization_token(
     }
 
 
+def _fail_response(reason: str, **extra: Any) -> dict[str, Any]:
+    """Build a uniform FAIL dict with default-fill for common token-verification keys."""
+    extra.setdefault("status", "FAIL")
+    extra.setdefault("valid", False)
+    extra.setdefault("classification", None)
+    extra.setdefault("token_classification", None)
+    extra.setdefault("expected_classification", None)
+    extra["reason"] = reason
+    return extra
+
+
 def verify_finalization_token(
     finalization_token: str | None,
     session: dict[str, Any] | Any | None = None,
@@ -152,71 +178,59 @@ def verify_finalization_token(
     """Verify token shape and, when supplied, session/classification binding."""
 
     if not finalization_token or not str(finalization_token).startswith("acmg-final:v1:"):
-        return {"status": "FAIL", "valid": False, "reason": "missing or invalid ACMG finalization token"}
+        return _fail_response("missing or invalid ACMG finalization token")
     if session is None:
         if expected_classification:
-            return {
-                "status": "FAIL",
-                "valid": False,
-                "reason": "session is required to verify classification binding",
-                "expected_classification": expected_classification,
-            }
+            return _fail_response(
+                "session is required to verify classification binding",
+                expected_classification=expected_classification,
+            )
         return {"status": "PASS", "valid": True, "reason": "token shape valid"}
     obj = session_from_dict(session)
     token_classification = obj.classification
     classification = expected_classification or token_classification
     if obj.finalization_token and obj.finalization_token != finalization_token:
-        return {
-            "status": "FAIL",
-            "valid": False,
-            "reason": "token does not match session",
-            "classification": token_classification,
-            "token_classification": token_classification,
-            "expected_classification": expected_classification,
-        }
+        return _fail_response(
+            "token does not match session",
+            classification=token_classification,
+            token_classification=token_classification,
+            expected_classification=expected_classification,
+        )
     if obj.state != "FINALIZED":
-        return {
-            "status": "FAIL",
-            "valid": False,
-            "reason": "session is not FINALIZED",
-            "classification": token_classification,
-            "token_classification": token_classification,
-            "expected_classification": expected_classification,
-        }
+        return _fail_response(
+            "session is not FINALIZED",
+            classification=token_classification,
+            token_classification=token_classification,
+            expected_classification=expected_classification,
+        )
     gate = evaluate_finalization_gate(obj)
     if not gate.can_finalize:
-        return {
-            "status": "FAIL",
-            "valid": False,
-            "reason": "session finalization gates do not pass",
-            "classification": token_classification,
-            "token_classification": token_classification,
-            "expected_classification": expected_classification,
-            "finalization_gate": gate.to_dict(),
-            "blocking_route_requirements": gate.blocking_route_requirements,
-        }
+        return _fail_response(
+            "session finalization gates do not pass",
+            classification=token_classification,
+            token_classification=token_classification,
+            expected_classification=expected_classification,
+            finalization_gate=gate.to_dict(),
+            blocking_route_requirements=gate.blocking_route_requirements,
+        )
     if not classification:
-        return {
-            "status": "FAIL",
-            "valid": False,
-            "reason": "classification is missing",
-            "classification": token_classification,
-            "token_classification": token_classification,
-            "expected_classification": expected_classification,
-        }
+        return _fail_response(
+            "classification is missing",
+            classification=token_classification,
+            token_classification=token_classification,
+            expected_classification=expected_classification,
+        )
     basis = _token_basis(obj, classification)
     expected_token = _token_from_basis(basis)
     if expected_token != finalization_token:
-        return {
-            "status": "FAIL",
-            "valid": False,
-            "reason": "token does not match session classification basis",
-            "classification": token_classification,
-            "token_classification": token_classification,
-            "expected_classification": expected_classification,
-            "counted_evidence_hash": basis["counted_evidence_hash"],
-            "required_actions_hash": basis["required_actions_hash"],
-        }
+        return _fail_response(
+            "token does not match session classification basis",
+            classification=token_classification,
+            token_classification=token_classification,
+            expected_classification=expected_classification,
+            counted_evidence_hash=basis["counted_evidence_hash"],
+            required_actions_hash=basis["required_actions_hash"],
+        )
     return {
         "status": "PASS",
         "valid": True,

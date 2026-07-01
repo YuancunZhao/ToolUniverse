@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from tooluniverse.acmg_gate import evaluate_finalization_gate
-from tooluniverse.acmg_gate.draft_policy import explain_why_final_blocked
+from tooluniverse.acmg_gate.final_answer_guard import explain_why_final_blocked
 from tooluniverse.acmg_gate.final_answer_guard import guard_acmg_final_answer
 from tooluniverse.acmg_gate.finalizer import issue_finalization_token
 from tooluniverse.acmg_gate.session import session_can_finalize
@@ -65,7 +65,10 @@ def test_invalid_session_has_consistent_gate_reasons() -> None:
 
     gate_reasons, token_reasons, guard_reasons = _blocking_reasons_from_surfaces(invalid_session)
     assert gate_reasons == token_reasons == guard_reasons
-    assert explain_why_final_blocked(invalid_session) == gate_reasons
+    blocked = explain_why_final_blocked(invalid_session)
+    # explain_why_final_blocked may additionally flag missing finalization_token
+    assert all(r in blocked for r in gate_reasons)
+    assert "missing ACMG finalization token" in blocked
 
 
 def test_route_requirement_block_is_consistent() -> None:

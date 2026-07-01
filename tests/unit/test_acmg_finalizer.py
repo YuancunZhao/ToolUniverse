@@ -27,7 +27,7 @@ def test_finalizer() -> None:
         "semantic_combiner_status": "PASS",
         "final_classification_allowed": True,
         "bundle_final_requested": True,
-        "counted_evidence": [{"criterion": "PM2"}],
+        "counted_evidence": [{"criterion": "PM2", "overlay_validated": True}],
         "literature_ready": True,
     }
     assert finalizer.compute_finalization_gate(**base)["final_allowed"] is True
@@ -51,7 +51,7 @@ def test_finalizer() -> None:
         "state": "READY_FOR_FINALIZER",
         "required_next_actions": ["pm2_absence_rarity"],
         "completed_actions": ["pm2_absence_rarity"],
-        "counted_evidence": [{"criterion": "PM2", "strength": "supporting"}],
+        "counted_evidence": [{"criterion": "PM2", "strength": "supporting", "overlay_validated": True}],
         "validator_status": "PASS",
         "semantic_combiner_status": "PASS",
         "literature_status": "reviewed",

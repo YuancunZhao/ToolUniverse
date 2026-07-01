@@ -10,27 +10,27 @@ from typing import Any
 
 
 try:
-    from .draft_policy import build_draft_only_response, explain_why_final_blocked
     from .final_label_detector import (
         contains_final_acmg_label as _canonical_contains_final_acmg_label,
         final_acmg_label_matches,
+        manual_acmg_counting_matches,
         normalize_final_acmg_classification,
         normalized_final_acmg_classifications,
     )
     from .finalizer import verify_finalization_token
     from .pre_router import route_acmg_intent
-    from .session import evaluate_finalization_gate, session_from_dict
+    from .session import evaluate_finalization_gate, session_from_dict, session_to_dict
 except ImportError:
-    from tooluniverse.acmg_gate.draft_policy import build_draft_only_response, explain_why_final_blocked
     from tooluniverse.acmg_gate.final_label_detector import (
         contains_final_acmg_label as _canonical_contains_final_acmg_label,
         final_acmg_label_matches,
+        manual_acmg_counting_matches,
         normalize_final_acmg_classification,
         normalized_final_acmg_classifications,
     )
     from tooluniverse.acmg_gate.finalizer import verify_finalization_token
     from tooluniverse.acmg_gate.pre_router import route_acmg_intent
-    from tooluniverse.acmg_gate.session import evaluate_finalization_gate, session_from_dict
+    from tooluniverse.acmg_gate.session import evaluate_finalization_gate, session_from_dict, session_to_dict
 
 
 def _matches(text: str) -> list[str]:
@@ -114,6 +114,8 @@ def guard_acmg_final_answer(
     if finalization_token and not session_payload.get("finalization_token"):
         session_payload["finalization_token"] = finalization_token
     matched = _matches(text)
+    manual_matches = manual_acmg_counting_matches(text)
+    guarded_content_present = bool(matched or manual_matches)
     normalized_answer_classifications = normalized_final_acmg_classifications(text)
     session_classification = session_payload.get("classification") if isinstance(session_payload, dict) else None
     normalized_session_classification = normalize_final_acmg_classification(session_classification)
@@ -146,14 +148,16 @@ def guard_acmg_final_answer(
             and all(value == normalized_session_classification for value in normalized_answer_classifications)
         )
 
-    if matched and (not gates_pass or not token_pass or not finalized or not classification_binding_ok):
+    if guarded_content_present and (not gates_pass or not token_pass or not finalized or not classification_binding_ok):
         reasons: list[str] = []
         if not gates_pass:
             reasons.extend(gate.blocking_reasons if gate else ["session finalization gates do not pass"])
         if not token_pass:
-            reasons.append("Final ACMG labels require a valid ACMG finalization token.")
+            reasons.append("Final ACMG labels or manual ACMG evidence counting require a valid ACMG finalization token.")
         if not finalized:
-            reasons.append("Final ACMG labels require session.state FINALIZED.")
+            reasons.append("Final ACMG labels or manual ACMG evidence counting require session.state FINALIZED.")
+        if manual_matches:
+            reasons.append("Manual ACMG criterion counting is final-like output and must be produced only by the finalized ACMG overlay path.")
         if conflicting_answer_labels:
             reasons.append("Final ACMG answer contains conflicting final classifications.")
         if matched and not normalized_session_classification:
@@ -173,9 +177,11 @@ def guard_acmg_final_answer(
         draft_response = build_draft_only_response(session_payload) if isinstance(session_payload, dict) else None
         return {
             "status": "BLOCK",
-            "has_final_label": True,
+            "has_final_label": bool(matched),
+            "has_manual_acmg_counting": bool(manual_matches),
             "matched_labels": matched,
             "detected_final_labels": matched,
+            "manual_acmg_counting_matches": manual_matches,
             "normalized_answer_classifications": normalized_answer_classifications,
             "token_classification": token_classification,
             "session_classification": session_classification,
@@ -198,8 +204,10 @@ def guard_acmg_final_answer(
     return {
         "status": "PASS",
         "has_final_label": bool(matched),
+        "has_manual_acmg_counting": bool(manual_matches),
         "matched_labels": matched,
         "detected_final_labels": matched,
+        "manual_acmg_counting_matches": manual_matches,
         "normalized_answer_classifications": normalized_answer_classifications,
         "token_classification": token_classification,
         "session_classification": session_classification,
@@ -225,6 +233,64 @@ def main() -> int:
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["status"] == "PASS" else 1
+
+
+def explain_why_final_blocked(session: Any) -> list[str]:
+    """Explain why final classification is blocked for this session."""
+    gate = evaluate_finalization_gate(session)
+    reasons = list(gate.blocking_reasons)
+    obj = session_from_dict(session)
+    if not (isinstance(obj, dict) and obj.get("finalization_token")) and not (hasattr(obj, "finalization_token") and obj.finalization_token):
+        reasons.append("missing ACMG finalization token")
+    return reasons
+
+
+def build_draft_only_response(session: Any) -> dict[str, Any]:
+    """Build a draft-only response envelope for a blocked session."""
+    obj = session_from_dict(session)
+    missing = []
+    try:
+        from .session import missing_required_actions
+        missing = missing_required_actions(obj)
+    except Exception:
+        pass
+    return {
+        "status": "DRAFT_ONLY",
+        "allowed_sections": [
+            "variant_normalization", "source_leads", "source_lead_sandbox_summary",
+            "counted_false_route_candidates", "missing_required_overlays",
+            "missing_literature_review", "missing_population_frequency_adequacy",
+            "missing_functional_evidence", "why_final_classification_is_blocked",
+            "next_recommended_tooluniverse_actions",
+        ],
+        "forbidden_without_finalization_token": [
+            "final ACMG labels", "draft or provisional final-like labels",
+            "manual ACMG criteria assignment", "counted evidence table unless overlay-validated",
+        ],
+        "variant": {"variant": obj.get("variant"), "gene": obj.get("gene"), "transcript": obj.get("transcript")} if isinstance(obj, dict) else {},
+        "source_lead_sandbox": obj.get("source_lead_sandbox", []) if isinstance(obj, dict) else [],
+        "route_candidates": obj.get("route_candidates", []) if isinstance(obj, dict) else [],
+        "missing_required_overlays": missing,
+        "why_final_classification_is_blocked": explain_why_final_blocked(obj),
+        "next_recommended_tooluniverse_actions": [
+            "complete required overlay routes",
+            "complete or document literature review",
+            "validate acmg_assessment_bundle",
+            "run ACMG finalizer and final-answer guard",
+        ],
+        "acmg_session": session_to_dict(obj),
+        "final_classification_allowed": False,
+        "may_emit_final_label": False,
+    }
+
+
+def _sanitize_draft_output(answer_text: str, session: Any) -> dict[str, Any]:
+    """Sanitize draft output by detecting and flagging final-like labels."""
+    labels = final_acmg_label_matches(answer_text or "")
+    response = build_draft_only_response(session)
+    response["removed_final_like_labels"] = labels
+    response["original_text_had_final_like_label"] = bool(labels)
+    return response
 
 
 if __name__ == "__main__":
