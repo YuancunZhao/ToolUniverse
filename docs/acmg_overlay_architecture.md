@@ -145,3 +145,21 @@ Every new overlay must include:
 - At least one validator fixture showing FAIL when the overlay is bypassed
 - Entrypoint bypass fixtures covering direct final classification without the overlay
 - The drift check must continue to pass after mirror sync
+
+## ACMG Overlay MCP Tools (branch `acmg-overlay-mcp-tools`)
+
+In addition to the 7-layer gate enforcement system on `codex/skills-overlay`, a new architecture is under development on branch `acmg-overlay-mcp-tools` that exposes each ACMG criterion as an independent deterministic MCP tool.
+
+**Motivation:** The gate system requires the LLM to voluntarily enter `ACMG_overlay_gate_assess_variant`. If the LLM bypasses the gate, all 7 enforcement layers are skipped. The overlay MCP tools mitigate this by making individual criterion judgment tools independently callable — the LLM can call `ACMG_overlay_pm2` directly with gnomAD data and get a deterministic PM2_Supporting/not_met judgment without going through the Gate.
+
+**Architecture:**
+- `src/tooluniverse/acmg_overlay_tools/` — 10 modules (1183 lines)
+  - `router.py`: variant type inference + overlay applicability routing
+  - `pm2.py`, `pp3_bp4.py`, `ps1_pm5.py`, etc.: deterministic criterion judgment
+  - `combine.py`: ACMG/AMP 2015 classification rules + ClinGen SVI PVS1+PM2→LP rule
+  - `base.py`: shared output_template + hardcoded registry tables
+- `src/tooluniverse/tools/ACMG_route_overlays.py` — MCP wrapper
+- `src/tooluniverse/tools/ACMG_overlay_pm2.py` — MCP wrapper
+- `src/tooluniverse/tools/ACMG_combine_criteria.py` — MCP wrapper
+
+**Design principle:** LLM collects evidence from external data sources (gnomAD, ClinVar, MyVariant, SpliceAI, PubMed). LLM passes structured data to overlay tools. Overlay tools apply ClinGen/SVI rules deterministically. Same input → same output. LLM never does ACMG judgment — only evidence collection and literature extraction.

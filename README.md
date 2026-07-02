@@ -13,8 +13,10 @@
 
 [//]: # (mcp-name: io.github.mims-harvard/tooluniverse)
 
-> ⚠️ **This is the ACMG Enhanced fork** ([YuancunZhao/ToolUniverse](https://github.com/YuancunZhao/ToolUniverse), branch `codex/skills-overlay`).
-> Adds ACMG/AMP variant pathogenicity classification with triple-gate validation, 22 criterion overlays, and Chinese+English intent detection.
+> ⚠️ **This is the ACMG Enhanced fork** ([YuancunZhao/ToolUniverse](https://github.com/YuancunZhao/ToolUniverse)).
+> Adds ACMG/AMP variant pathogenicity classification with:
+> - **Stable branch** (`codex/skills-overlay`): 7-layer gate enforcement, 22 criterion overlay skills, Chinese+English intent detection
+> - **Preview branch** (`acmg-overlay-mcp-tools`): independent ACMG criterion judgment MCP tools — LLM collects evidence, tools do deterministic ACMG rating (Router + 16 overlays + ACMG 2015 combiner)
 >
 > **One-line install:**
 > ```
