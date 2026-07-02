@@ -66,7 +66,7 @@ Read the current MCP config file (create it if it doesn't exist). Then merge in 
   "command": "uvx",
   "args": [
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@codex/skills-overlay",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@acmg-overlay-mcp-tools",
     "tooluniverse"
   ],
   "env": {
@@ -84,7 +84,7 @@ If the config file already has a `tooluniverse` entry, replace it. If the file d
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/YuancunZhao/ToolUniverse.git@codex/skills-overlay",
+        "git+https://github.com/YuancunZhao/ToolUniverse.git@acmg-overlay-mcp-tools",
         "tooluniverse"
       ],
       "env": {
@@ -162,7 +162,7 @@ SKILLS_DIR=~/.cursor/skills
 mkdir -p "$SKILLS_DIR"
 
 # Clone the repo to a temp location and copy skills
-git clone --depth 1 --branch codex/skills-overlay https://github.com/YuancunZhao/ToolUniverse.git /tmp/tu-acmg-setup
+git clone --depth 1 --branch acmg-overlay-mcp-tools https://github.com/YuancunZhao/ToolUniverse.git /tmp/tu-acmg-setup
 
 cp -r /tmp/tu-acmg-setup/skills/tooluniverse-acmg-* "$SKILLS_DIR/"
 cp -r /tmp/tu-acmg-setup/skills/tooluniverse-variant-interpretation "$SKILLS_DIR/"
@@ -181,7 +181,7 @@ echo "Installed $(ls -d $SKILLS_DIR/tooluniverse-acmg-* | wc -l) ACMG skills"
 Run this smoke test to confirm the MCP server starts:
 
 ```bash
-uvx --from git+https://github.com/YuancunZhao/ToolUniverse.git@codex/skills-overlay tooluniverse --help 2>&1 | head -5
+uvx --from git+https://github.com/YuancunZhao/ToolUniverse.git@acmg-overlay-mcp-tools tooluniverse --help 2>&1 | head -5
 ```
 
 If it prints usage or help text, the server is ready. If it fails with an error, tell the user:
