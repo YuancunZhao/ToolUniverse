@@ -52,21 +52,29 @@ def _infer_variant_type(hgvs_c: str) -> str:
             return "null"
         return "indel_inframe"
     if "dup" in notation:
+        # Check duplication size — frameshift if not multiple of 3
+        letters = re.findall(r"dup([ACGT]+)", notation)
+        if letters:
+            if len(letters[0]) % 3 != 0:
+                return "null"
+        # c.2972_2975dup → size = 2975 - 2972 + 1 = 4
+        range_match = re.search(r"(\d+)_(\d+)dup", notation)
+        if range_match:
+            length = int(range_match.group(2)) - int(range_match.group(1)) + 1
+            if length % 3 != 0:
+                return "null"
         return "indel_inframe"
     if "delins" in notation:
         return "indel_inframe"
 
+    # Resolve consequence from notation or explicit consequence argument
+    if any(kw in notation.lower() for kw in ("nonsense", "stop_gained", "frameshift", "stop", "ter")):
+        return "null"
+
     # Substitution: c.742C>T
     sub_match = re.search(r"c\.(\d+)([ACGT])>([ACGT])", notation)
     if sub_match:
-        pos = int(sub_match.group(1))
-        if pos < 0:
-            return "unknown"
-        # Check if near splice site (±2)
-        if "±" in notation or any(k in notation for k in ("+", "-")):
-            if "splice" in notation.lower():
-                return "splice"
-        return "missense"  # default for coding substitution
+        return "missense"  # substitution — LLM should provide consequence from VEP
 
     if ">" in notation or "→" in notation:
         return "missense"
@@ -88,14 +96,17 @@ def route_overlays(
     gene: str = "",
     hgvs_c: str = "",
     variant_type: str = "",
+    consequence: str = "",
 ) -> dict[str, Any]:
     """Determine which ACMG overlay tools apply to a variant.
 
     Args:
-        variant: HGVS notation or variant description (e.g. "NM_000142.4:c.742C>T")
-        gene: Gene symbol (e.g. "FGFR3")
-        hgvs_c: Explicit HGVS coding notation, if variant is not HGVS
-        variant_type: Pre-determined variant type, overrides inference
+        variant: HGVS notation or variant description
+        gene: Gene symbol
+        hgvs_c: Explicit HGVS coding notation
+        variant_type: Pre-determined variant type, highest priority
+        consequence: VEP consequence ("stop_gained", "frameshift_variant",
+            "missense_variant", "splice_donor_variant", etc.). Overrides HGVS inference.
 
     Returns:
         Dict with baseline_overlays, literature_overlays, evidence_sources,
@@ -103,9 +114,33 @@ def route_overlays(
     """
     from .base import literature_dependent_overlays, variant_type_overlays
 
+    CONSEQUENCE_MAP: dict[str, str] = {
+        "stop_gained": "null",
+        "frameshift_variant": "null",
+        "nonsense": "null",
+        "splice_donor_variant": "splice",
+        "splice_acceptor_variant": "splice",
+        "missense_variant": "missense",
+        "synonymous_variant": "synonymous",
+        "inframe_deletion": "indel_inframe",
+        "inframe_insertion": "indel_inframe",
+    }
+
     # Determine variant type
     input_hgvs = hgvs_c or variant or ""
-    inferred_type = variant_type or _infer_variant_type(input_hgvs)
+    if variant_type:
+        inferred_type = variant_type.lower()
+    elif consequence:
+        inferred_type = CONSEQUENCE_MAP.get(consequence.lower(), "unknown")
+        if inferred_type == "unknown":
+            for key, val in CONSEQUENCE_MAP.items():
+                if key in consequence.lower():
+                    inferred_type = val
+                    break
+        if inferred_type == "unknown":
+            inferred_type = _infer_variant_type(input_hgvs)
+    else:
+        inferred_type = _infer_variant_type(input_hgvs)
 
     # Get applicable overlays from registry
     baseline = variant_type_overlays(inferred_type)
