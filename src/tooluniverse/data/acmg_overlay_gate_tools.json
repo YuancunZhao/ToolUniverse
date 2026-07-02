@@ -643,4 +643,1386 @@
       "ordinary_entrypoint": "ACMG_overlay_gate_assess_variant"
     }
   }
+,
+{
+  "name": "ACMG_combine_criteria",
+  "description": "Apply ACMG/AMP qualitative combining rules to criterion-level overlay outputs. Computes the five-tier classification from counted evidence and strength levels. This is a candidate combiner \u2014 final classification requires validator_status PASS, semantic_combiner_status PASS, and final_classification_allowed true.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "criteria": {
+        "type": "array",
+        "description": "List of criterion overlay outputs with criterion, strength, and counted fields."
+      }
+    }
+  },
+  "fields": {
+    "operation": "combine_criteria"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_route_overlays",
+  "description": "Plan overlay routes for a germline variant. Determines which criterion-specific overlays should be applied based on variant type, gene, and consequence. Returns a route plan with criterion groups and required overlays.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "variant": {
+        "type": "string",
+        "description": "Variant identifier, HGVS, or coordinates."
+      },
+      "gene": {
+        "type": "string",
+        "description": "Gene symbol."
+      },
+      "hgvs_c": {
+        "type": "string",
+        "description": "HGVS coding notation."
+      },
+      "variant_type": {
+        "type": "string",
+        "description": "Variant type: missense, nonsense, frameshift, splice, etc."
+      }
+    }
+  },
+  "fields": {
+    "operation": "route_overlays"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": false,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_ba1_exception",
+  "description": "Apply BA1 exception-list overlay. Determines if a variant qualifies under the BA1 stand-alone benign criterion (allele frequency above disease prevalence threshold). Returns criterion strength, counted flag, and evidence summary.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "gnomad_af_popmax": {
+        "type": "number",
+        "description": "Maximum population allele frequency from gnomAD.",
+        "default": 0
+      },
+      "gnomad_af_global": {
+        "type": "number",
+        "description": "Global allele frequency from gnomAD.",
+        "default": 0
+      },
+      "gene_disease_prevalence": {
+        "type": "string",
+        "description": "Gene disease prevalence category: rare, common, or unknown.",
+        "default": "rare"
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": "Optional VCEP-specific override value."
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_ba1_exception"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_benign_context",
+  "description": "Apply BS2/BP5 benign-context overlay. Evaluates whether high population frequency in unaffected individuals or alternate molecular diagnosis supports benign classification.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "gnomad_af_popmax": {
+        "type": "number",
+        "description": "Maximum population allele frequency.",
+        "default": 0
+      },
+      "unaffected_carrier": {
+        "type": "boolean",
+        "description": "Variant observed in unaffected adult carriers.",
+        "default": false
+      },
+      "alternate_diagnosis": {
+        "type": "boolean",
+        "description": "Alternate molecular diagnosis explains phenotype.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_benign_context"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_case_enrichment",
+  "description": "Apply PS4 case-enrichment overlay. Evaluates whether the variant is significantly enriched in affected individuals versus controls.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "case_count": {
+        "type": "integer",
+        "description": "Number of affected individuals with the variant.",
+        "default": 0
+      },
+      "control_count": {
+        "type": "integer",
+        "description": "Number of unaffected controls without the variant.",
+        "default": 0
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_case_enrichment"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_de_novo",
+  "description": "Apply PS2/PM6 de-novo overlay. Evaluates whether de novo occurrence (with confirmed maternity/paternity) supports pathogenic classification.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "de_novo_confirmed": {
+        "type": "boolean",
+        "description": "De novo status confirmed by parental testing.",
+        "default": false
+      },
+      "paternity_confirmed": {
+        "type": "boolean",
+        "description": "Maternity and paternity confirmed.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_de_novo"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_functional_assay",
+  "description": "Apply PS3/BS3 functional-assay overlay. Evaluates functional evidence (well-established assays showing damaging or benign effect), assay type, and effect magnitude.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "functional_evidence": {
+        "type": "string",
+        "description": "Functional evidence description or category.",
+        "default": ""
+      },
+      "assay_type": {
+        "type": "string",
+        "description": "Type of functional assay performed.",
+        "default": ""
+      },
+      "effect_magnitude": {
+        "type": "string",
+        "description": "Magnitude of functional effect.",
+        "default": ""
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_functional_assay"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pm1_bp1",
+  "description": "Apply PM1/BP1 regional constraint overlay. Evaluates whether the variant lies in a functional domain with pathogenic enrichment or lacks functional constraint.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "in_functional_domain": {
+        "type": "boolean",
+        "description": "Variant located in a known functional domain.",
+        "default": false
+      },
+      "domain_has_pathogenic_enrichment": {
+        "type": "boolean",
+        "description": "Functional domain shows enrichment of pathogenic variants.",
+        "default": false
+      },
+      "gene_missense_mechanism": {
+        "type": "boolean",
+        "description": "Gene causes disease through missense mechanism.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pm1_bp1"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pm2",
+  "description": "Apply PM2 absence/rarity overlay. Evaluates population frequency evidence \u2014 whether the variant is absent or very rare in population databases, supporting pathogenic classification.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "gnomad_af_global": {
+        "type": "number",
+        "description": "Global allele frequency from gnomAD.",
+        "default": 0
+      },
+      "gnomad_af_popmax": {
+        "type": "number",
+        "description": "Maximum population allele frequency.",
+        "default": 0
+      },
+      "gnomad_ac": {
+        "type": "integer",
+        "description": "Allele count in gnomAD.",
+        "default": 0
+      },
+      "gnomad_an": {
+        "type": "integer",
+        "description": "Allele number in gnomAD.",
+        "default": 0
+      },
+      "coverage_adequate": {
+        "type": "boolean",
+        "description": "Sequencing coverage adequate at variant position.",
+        "default": true
+      },
+      "disease_prevalence": {
+        "type": "string",
+        "description": "Disease prevalence: rare, common.",
+        "default": "rare"
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pm2"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pm3_in_trans",
+  "description": "Apply PM3 in-trans overlay. Evaluates whether a second pathogenic variant is detected in trans (for recessive disorders) supporting pathogenic classification.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "second_variant_pathogenic": {
+        "type": "boolean",
+        "description": "Second variant in trans is pathogenic or likely pathogenic.",
+        "default": false
+      },
+      "phase_confirmed": {
+        "type": "boolean",
+        "description": "Phase (cis/trans) confirmed by segregation or molecular testing.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pm3_in_trans"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pp3_bp4",
+  "description": "Apply PP3/BP4 missense-prediction overlay. Evaluates computational prediction evidence from REVEL, CADD, SpliceAI, SIFT, and PolyPhen to support or refute pathogenicity.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "revel_score": {
+        "type": "number",
+        "description": "REVEL ensemble score (0-1)."
+      },
+      "cadd_phred": {
+        "type": "number",
+        "description": "CADD Phred-scaled score."
+      },
+      "spliceai_ds_dg": {
+        "type": "number",
+        "description": "SpliceAI delta score (acceptor or donor gain)."
+      },
+      "sift_score": {
+        "type": "number",
+        "description": "SIFT score."
+      },
+      "polyphen_score": {
+        "type": "number",
+        "description": "PolyPhen-2 score."
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pp3_bp4"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_protein_length",
+  "description": "Apply PM4/BP3 protein-length overlay. Evaluates whether in-frame insertions/deletions or stop-loss variants in non-repeat regions support pathogenic classification.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "variant_type": {
+        "type": "string",
+        "description": "Variant type: in-frame insertion, in-frame deletion, stop-loss, etc.",
+        "default": ""
+      },
+      "in_repeat_region": {
+        "type": "boolean",
+        "description": "Variant located in a repeat region.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_protein_length"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_ps1_pm5",
+  "description": "Apply PS1/PM5 amino-acid equivalence overlay. Evaluates whether the same amino acid change is known pathogenic (PS1) or a different pathogenic change exists at the same residue (PM5).",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "clinvar_same_aa_pathogenic": {
+        "type": "boolean",
+        "description": "Same amino acid change reported as pathogenic in ClinVar.",
+        "default": false
+      },
+      "clinvar_same_aa_pathogenic_count": {
+        "type": "integer",
+        "description": "Number of pathogenic submissions for same AA change.",
+        "default": 0
+      },
+      "clinvar_same_residue_pathogenic": {
+        "type": "boolean",
+        "description": "Different pathogenic variant at same residue.",
+        "default": false
+      },
+      "clinvar_same_residue_pathogenic_count": {
+        "type": "integer",
+        "description": "Number of pathogenic submissions at same residue.",
+        "default": 0
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_ps1_pm5"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_ps1_splicing",
+  "description": "Apply PS1 splicing overlay. Evaluates whether the same splice-site alteration is known pathogenic, supporting pathogenicity by PS1 equivalence.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "same_splice_event_pathogenic": {
+        "type": "boolean",
+        "description": "Same splice event reported as pathogenic.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_ps1_splicing"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pvs1_lof",
+  "description": "Apply PVS1 loss-of-function decision tree overlay. Evaluates null variants (nonsense, frameshift, canonical splice) through the PVS1 decision tree: gene mechanism, NMD prediction, exon position, and transcript rescue.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "variant_type": {
+        "type": "string",
+        "description": "Variant type.",
+        "default": ""
+      },
+      "gene_lof_mechanism": {
+        "type": "boolean",
+        "description": "Gene causes disease through LOF mechanism.",
+        "default": false
+      },
+      "lof_intolerant": {
+        "type": "boolean",
+        "description": "Gene is LOF-intolerant (e.g., pLI > 0.9).",
+        "default": false
+      },
+      "nmd_predicted": {
+        "type": "boolean",
+        "description": "Nonsense-mediated decay predicted."
+      },
+      "exon_position": {
+        "type": "string",
+        "description": "Exon position relative to biologically relevant transcript.",
+        "default": ""
+      },
+      "truncated_region_percent": {
+        "type": "number",
+        "description": "Percent of protein truncated.",
+        "default": 100
+      },
+      "region_criticality": {
+        "type": "string",
+        "description": "Criticality of truncated region.",
+        "default": "unknown"
+      },
+      "rescue_transcript": {
+        "type": "boolean",
+        "description": "Rescue transcript present.",
+        "default": false
+      },
+      "spliceai_dl": {
+        "type": "number",
+        "description": "SpliceAI delta score (donor loss)."
+      },
+      "ar_disease": {
+        "type": "boolean",
+        "description": "Autosomal recessive disease.",
+        "default": false
+      },
+      "second_allele_found": {
+        "type": "boolean",
+        "description": "Second pathogenic allele found.",
+        "default": false
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pvs1_lof"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_pvs1_splicing",
+  "description": "Apply PVS1 splicing overlay. Evaluates splice-site variants through the PVS1 splicing sub-tree: prediction scores, canonical dinucleotide involvement, and exon skipping evidence.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "splice_prediction": {
+        "type": "string",
+        "description": "Splice prediction summary or SpliceAI score category.",
+        "default": ""
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_pvs1_splicing"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_segregation",
+  "description": "Apply PP1/BS4 segregation overlay. Evaluates segregation evidence \u2014 whether the variant co-segregates with disease in multiple affected family members.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "segregation_present": {
+        "type": "boolean",
+        "description": "Variant co-segregates with disease in family.",
+        "default": false
+      },
+      "affected_relatives": {
+        "type": "integer",
+        "description": "Number of affected relatives with the variant.",
+        "default": 0
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_segregation"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+},
+{
+  "name": "ACMG_overlay_source_review",
+  "description": "Apply PP5/BP6 reputable-source overlay. Evaluates whether ClinVar review status and submitter consensus support or refute pathogenicity.",
+  "type": "ACMGOverlayTool",
+  "parameter": {
+    "type": "object",
+    "properties": {
+      "clinvar_review_stars": {
+        "type": "integer",
+        "description": "ClinVar review status (0-4 stars).",
+        "default": 0
+      },
+      "clinvar_pathogenic_submitters": {
+        "type": "integer",
+        "description": "Number of submitters reporting pathogenic.",
+        "default": 0
+      },
+      "vcep_override": {
+        "type": "string",
+        "description": ""
+      }
+    }
+  },
+  "fields": {
+    "operation": "overlay_source_review"
+  },
+  "return_schema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string"
+      },
+      "criterion": {
+        "type": "string"
+      },
+      "strength": {
+        "type": "string"
+      },
+      "counted": {
+        "type": "boolean"
+      },
+      "evidence_summary": {
+        "type": "string"
+      },
+      "overlay_version": {
+        "type": "string"
+      }
+    }
+  },
+  "source_lead_only": false,
+  "acmg_countable_evidence": true,
+  "final_classification_allowed": false,
+  "label": [
+    "ACMG",
+    "overlay",
+    "variant",
+    "pathogenicity",
+    "germline"
+  ],
+  "metadata": {
+    "tags": [
+      "ACMG_overlay",
+      "criterion_specific",
+      "variant_interpretation"
+    ],
+    "estimated_execution_time": "< 5 seconds"
+  },
+  "_acmg_gate_managed": true,
+  "created_by": "ToolUniverse ACMG Gate",
+  "updated_at": "2026-07-02",
+  "version": "1.0.0"
+}
 ]
