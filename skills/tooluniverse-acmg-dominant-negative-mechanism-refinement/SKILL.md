@@ -4,6 +4,12 @@ description: Mechanism-layer overlay for ACMG/AMP variant classification when do
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ToolUniverse ACMG Dominant-Negative Mechanism Refinement
 
 Use this overlay when a gene-disease relationship, variant class, functional assay, or literature source suggests a dominant-negative mechanism. This is a mechanism-routing layer for ACMG/AMP interpretation. It does not create a new ACMG evidence code and does not replace evidence-specific overlays.

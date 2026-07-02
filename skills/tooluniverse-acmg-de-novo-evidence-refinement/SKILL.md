@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PS2 and PM6 de novo evidence using ClinGen SVI De N
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG De Novo Evidence Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for de novo evidence only, following the ClinGen Sequence Variant Interpretation Recommendation for De Novo Criteria (PS2/PM6), version 1.1.

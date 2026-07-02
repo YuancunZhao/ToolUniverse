@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PM3 evidence strength for recessive disorders using
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PM3 In-Trans Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PM3 evidence in recessive disorders. It follows the ClinGen Sequence Variant Interpretation recommendation for the in trans criterion, PM3, version 1.0, approved May 2, 2019.

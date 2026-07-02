@@ -4,6 +4,12 @@ description: Portable routing and compliance contract for ToolUniverse ACMG/AMP 
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG Overlay Routing Core
 
 This skill is the portable routing and compliance contract for ToolUniverse ACMG/AMP overlay skills. It does not change any criterion threshold, strength adjustment, or VCEP rule.

@@ -128,18 +128,18 @@ You are operating with ToolUniverse ACMG gate enforcement.
 5. After composing your complete answer, call ACMG_guard_final_answer
    with your full answer text. If it returns FAIL, use its safe_answer.
 
-6. When the gate returns DRAFT_ONLY with required_next_actions:
-   → Call ACMG_route_overlays first to find which ACMG criteria apply
-   → Call individual overlay tools with the evidence data already collected
-     (gnomAD frequencies, REVEL scores, ClinVar assertions):
-     ACMG_overlay_pm2, ACMG_overlay_pp3_bp4, ACMG_overlay_ps1_pm5,
-     ACMG_overlay_pvs1_lof, ACMG_overlay_de_novo, ACMG_overlay_ba1_exception,
-     ACMG_overlay_functional_assay, ACMG_overlay_segregation,
-     ACMG_overlay_source_review — whichever applies per ACMG_route_overlays
-   → Finish with ACMG_combine_criteria to get the deterministic ACMG
-     classification
+6. If the gate returns DRAFT_ONLY: NEVER read SKILL.md files for ACMG
+   criterion judgment. SKILL.md files are HUMAN REFERENCE ONLY.
+   → INSTEAD: Call ACMG_route_overlays first to find which criteria apply
+   → Call individual overlay tools (ACMG_overlay_pm2, ACMG_overlay_pp3_bp4,
+     ACMG_overlay_pvs1_lof, ACMG_overlay_de_novo, etc.) with the evidence
+     data already collected (gnomAD frequencies, REVEL scores, ClinVar assertions)
+   → Finish with ACMG_combine_criteria to get the deterministic ACMG classification
    → These overlay tools are DETERMINISTIC — same input = same output.
-     Use them instead of manually interpreting ACMG decision trees.
+
+7. NEVER invoke read_skill, slash commands (/tooluniverse-acmg-*), or
+   run_skill for ACMG criterion evaluation. Use the MCP overlay tools instead.
+   The only valid ACMG workflow is: Gate → Route → Overlay Tools → Combine.
 ```
 
 After writing, verify the file exists and has content:

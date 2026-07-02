@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PP5 and BP6 reputable-source evidence using the Cli
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PP5/BP6 Reputable-Source Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence pair: `PP5` and `BP6`, the original ACMG/AMP reputable-source criteria.

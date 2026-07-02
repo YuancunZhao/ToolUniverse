@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PVS1 strength assignment using the ClinGen SVI loss
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PVS1 LoF Decision Tree Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule: PVS1 strength assignment under the ClinGen SVI loss-of-function decision tree described by Abou Tayoun et al. 2018, PMID:30192042.

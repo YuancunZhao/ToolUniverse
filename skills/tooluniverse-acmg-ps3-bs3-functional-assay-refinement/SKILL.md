@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PS3 and BS3 functional assay evidence using Brnich 
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PS3/BS3 Functional Assay Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence area only: PS3 and BS3 functional evidence. It follows the ClinGen Sequence Variant Interpretation recommendations from Brnich et al. 2019 for evaluating functional assay validity and assigning evidence strength.

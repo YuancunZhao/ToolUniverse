@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PS1 and PM5 evidence for missense variants at the s
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PS1/PM5 Amino-Acid Equivalence Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for two closely related evidence rules:

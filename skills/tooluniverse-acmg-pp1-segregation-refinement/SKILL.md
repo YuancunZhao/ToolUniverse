@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PP1 co-segregation and BS4 non-segregation evidence
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PP1 Segregation Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for PP1 co-segregation evidence, BS4 non-segregation evidence, and their boundary with PP4 phenotype-specificity evidence.

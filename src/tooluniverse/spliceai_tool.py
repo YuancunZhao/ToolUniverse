@@ -156,7 +156,11 @@ class SpliceAITool(BaseTool):
                 if isinstance(score_entry, dict):
                     for key in ["DS_AG", "DS_AL", "DS_DG", "DS_DL"]:
                         val = score_entry.get(key)
-                        if val is not None and isinstance(val, (int, float)):
+                        if val is not None:
+                            try:
+                                val = float(val)
+                            except (ValueError, TypeError):
+                                continue
                             max_delta = max(max_delta, val)
 
             return {

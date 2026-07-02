@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PVS1/BP7 assignment for RNA splicing evidence using
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PVS1 Splicing Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for PVS1/BP7 assignment when RNA-splicing evidence is relevant. It uses the Walker et al. 2023 ClinGen SVI Splicing Subgroup recommendations to interpret RNA-splicing assay evidence, rescue transcript models, in-frame transcript effects, and double-counting boundaries with PS3/BS3 and PP3/BP4.

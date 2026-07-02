@@ -4,6 +4,12 @@ description: Convert already-routed and validator-passing ACMG/AMP evidence stre
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG Bayesian Classification Framework
 
 This skill is the final evidence-combination layer for ToolUniverse ACMG/AMP variant classification. It follows Tavtigian et al. 2018, "Modeling the ACMG/AMP Variant Classification Guidelines as a Bayesian Classification Framework", PMID: 29300386, PMCID: PMC6336098, DOI: 10.1038/gim.2017.210.

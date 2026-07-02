@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PM2 absence/rarity evidence using ClinGen SVI PM2 R
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PM2 Absence/Rarity Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PM2 evidence for absence or extreme rarity in population databases. It follows the ClinGen Sequence Variant Interpretation recommendation for PM2, version 1.0, approved September 4, 2020.

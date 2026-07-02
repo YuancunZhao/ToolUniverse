@@ -82,27 +82,45 @@ def overlay_segregation(
 def overlay_de_novo(
     de_novo_confirmed: bool = False,
     paternity_confirmed: bool = False,
+    phenotype_highly_specific: bool = False,
+    phenotype_consistent: bool = False,
+    genetic_heterogeneity_low: bool = False,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PS2/PM6 per SVI De Novo Criteria v1.1 (PMID:38103545).
+    LLM input: from clinical report / published case literature.
+    2pt=PS2, 1pt=PS2_Moderate, 0pt=PM6, not de novo=not_assessed.
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PS2/PM6", vcep_override, reason=f"VCEP: {vcep_override}")
     if not de_novo_confirmed:
         return output_template("PS2/PM6", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason="No de novo evidence provided.",
-            next_action="Trio testing required for de novo assessment.")
-    if de_novo_confirmed and paternity_confirmed:
+            reason="No de novo evidence or variant is inherited.",
+            next_action="Trio testing required.")
+    if not paternity_confirmed:
+        return output_template("PM6", "PM6",
+            reason="De novo observed without confirmed parentage → PM6.",
+            source_of_truth="Trio testing")
+    pts = 2 if phenotype_highly_specific else (1 if phenotype_consistent else 0)
+    if genetic_heterogeneity_low and pts > 0:
+        pts = min(pts + 1, 2)
+    if pts >= 2:
         return output_template("PS2", "PS2",
-            reason="Confirmed de novo with paternity/maternity confirmed.",
+            reason=f"De novo + parentage confirmed, phenotype score {pts}/2 → PS2.",
+            source_of_truth="Trio testing")
+    if pts == 1:
+        return output_template("PS2", "PS2_Moderate",
+            reason=f"De novo + parentage confirmed, phenotype score {pts}/2 → PS2_Moderate.",
             source_of_truth="Trio testing")
     return output_template("PM6", "PM6",
-        reason="De novo observed. Paternity not confirmed → PM6 per ACMG.",
+        reason="De novo + parentage confirmed but phenotype insufficient → PM6.",
         source_of_truth="Trio testing")
-
-
 def overlay_pm3_in_trans(
     second_variant_pathogenic: bool = False,
     phase_confirmed: bool = False,
+
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     if vcep_override:
@@ -158,27 +176,142 @@ def overlay_pvs1_lof(
     variant_type: str = "",
     gene_lof_mechanism: bool = False,
     lof_intolerant: bool = False,
+    nmd_predicted: bool | None = None,
+    exon_position: str = "",
+    truncated_region_percent: float = 100.0,
+    region_criticality: str = "unknown",
+    rescue_transcript: bool = False,
+    spliceai_dl: float | None = None,
+    ar_disease: bool = False,
+    second_allele_found: bool = False,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PVS1 strength per ClinGen SVI decision tree (Abou Tayoun 2018, PMID:30192042).
+
+    Args:
+        variant_type: null/frameshift/nonsense/splice/canonical_splice
+        gene_lof_mechanism: LOF established as disease mechanism
+        lof_intolerant: gnomAD pLI >= 0.9 or LOEUF < 0.35
+        nmd_predicted: NMD predicted (None = unknown, use defaults)
+        exon_position: last/penultimate/middle/first (for NMD prediction)
+        truncated_region_percent: % of protein removed by truncation
+        region_criticality: critical/important/unknown (for biologically relevant regions)
+        rescue_transcript: rescue transcript or alternative initiation exists
+        spliceai_dl: SpliceAI donor loss delta score (for splice variants)
+        ar_disease: autosomal recessive disease
+        second_allele_found: second pathogenic allele confirmed (for AR)
+        vcep_override: VCEP-specific rule name
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PVS1", vcep_override, reason=f"VCEP: {vcep_override}")
-    if variant_type not in ("null", "frameshift", "nonsense"):
+
+    vt = variant_type.lower().strip()
+
+    # === Table 1: Applicability Gate ===
+    if vt not in ("null", "frameshift", "nonsense", "splice", "canonical_splice"):
         return output_template("PVS1", "not_met", status="not_applicable",
             route_outcome="overlay_not_applicable",
-            reason=f"PVS1 only applies to null variants (nonsense, frameshift, "
-                   f"canonical splice). Variant type: {variant_type}.")
+            reason=f"PVS1 requires null variant (nonsense/frameshift/canonical splice). Got: {vt}.")
+
     if not gene_lof_mechanism:
         return output_template("PVS1", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason="Gene LOF mechanism not confirmed. PVS1 requires established "
-                   "LOF as disease mechanism.",
-            next_action="Check ClinGen gene-disease validity and gnomAD constraint.")
-    if "nonsense" in variant_type or "frameshift" in variant_type:
+            reason="Gene LOF mechanism not confirmed.",
+            next_action="Check ClinGen gene-disease validity.")
+
+    # === AR disease: single heterozygous null variant ===
+    if ar_disease and not second_allele_found:
+        return output_template("PVS1", "not_applicable_ar_heterozygous",
+            status="not_assessed", route_outcome="overlay_not_assessed",
+            reason="Autosomal recessive disease with single heterozygous null variant. "
+                   "PVS1 requires biallelic status. Search for second pathogenic allele.",
+            next_action="Sequence full gene for second allele; check CNV for deletion/duplication.")
+
+    # === Splice variants: check SpliceAI before proceeding ===
+    if vt in ("splice", "canonical_splice"):
+        if spliceai_dl is not None and spliceai_dl < 0.2:
+            return output_template("PVS1", "not_met", status="not_applicable",
+                route_outcome="overlay_not_applicable",
+                reason=f"SpliceAI donor loss={spliceai_dl:.2f} (<0.2). "
+                       "Computational prediction does not support splice disruption. "
+                       "RNA evidence recommended.",
+                next_action="Perform RT-PCR/minigene assay to confirm splicing impact.")
+        if nmd_predicted is False:
+            return output_template("PVS1", "PVS1_Supporting",
+                reason="Canonical splice variant but NMD not predicted. "
+                       "Protein may retain partial function. "
+                       "Per PVS1 decision tree: PTC not predicted to undergo NMD → downgrade.",
+                source_of_truth="SpliceAI, VEP")
+        if nmd_predicted is True:
+            return output_template("PVS1", "PVS1",
+                reason="Canonical splice variant predicted to cause NMD. "
+                       "Full PVS1 strength applies.",
+                source_of_truth="SpliceAI, VEP, NMD prediction")
+        # NMD unknown — default to full strength for canonical splice
+        return output_template("PVS1", "PVS1",
+            reason="Canonical splice variant. NMD prediction unavailable — "
+                   "defaulting to full PVS1 for canonical ±1,2 positions.",
+            source_of_truth="VEP, SpliceAI")
+
+    # === NMD Decision Branch ===
+    if nmd_predicted is True:
+        # NMD predicted → check exon location
+        if exon_position == "last" or truncated_region_percent < 10:
+            return output_template("PVS1", "PVS1_Moderate",
+                reason=f"NMD predicted but PTC in last exon or truncation <10% ({truncated_region_percent:.1f}%). "
+                       "Per PVS1 decision tree: downgrade to PVS1_Moderate.",
+                source_of_truth="VEP, NMD prediction")
+
+        if region_criticality == "critical" and truncated_region_percent >= 10:
+            return output_template("PVS1", "PVS1",
+                reason=f"NMD predicted. Truncation removes {truncated_region_percent:.0f}% "
+                       "including a critical functional domain. PVS1 at full strength.",
+                source_of_truth="VEP, InterPro")
+
+        if rescue_transcript:
+            return output_template("PVS1", "PVS1_Supporting",
+                reason="NMD predicted but rescue transcript or alternative "
+                       "initiation exists. Downgrade to PVS1_Supporting.",
+                source_of_truth="literature, VEP")
+
+        # NMD predicted, standard case
+        return output_template("PVS1", "PVS1",
+            reason="NMD predicted for null variant in LOF-mechanism gene. PVS1 applies.",
+            source_of_truth="VEP, NMD prediction, ClinGen")
+
+    elif nmd_predicted is False:
+        # NMD not predicted → truncated/altered region assessment
+        if truncated_region_percent >= 10:
+            if region_criticality == "critical":
+                return output_template("PVS1", "PVS1_Strong",
+                    reason=f"NMD not predicted but truncation removes {truncated_region_percent:.0f}% "
+                           "including critical domain. PVS1_Strong per decision tree.",
+                    source_of_truth="VEP, InterPro")
+            else:
+                return output_template("PVS1", "PVS1_Moderate",
+                    reason=f"NMD not predicted. Truncation removes {truncated_region_percent:.0f}% "
+                           "but region criticality unknown. PVS1_Moderate per decision tree.",
+                    source_of_truth="VEP")
+        else:
+            return output_template("PVS1", "PVS1_Supporting",
+                reason=f"NMD not predicted and truncation <10% ({truncated_region_percent:.1f}%). "
+                       "PVS1_Supporting per decision tree.",
+                source_of_truth="VEP")
+
+    # NMD unknown — use defaults
+    if "nonsense" in vt or "frameshift" in vt:
         strength = "PVS1" if lof_intolerant else "PVS1_Strong"
         return output_template("PVS1", strength,
-            reason=f"Null variant ({variant_type}) in LOF-mechanism gene. "
-                   f"LOF intolerance: {lof_intolerant}.",
+            reason=f"Null variant ({vt}) in LOF-mechanism gene. "
+                   f"LOF intolerance: {lof_intolerant}. "
+                   "NMD prediction unavailable — assuming standard PVS1.",
             source_of_truth="ClinGen, gnomAD constraint")
+
+    return output_template("PVS1", "not_assessed", status="not_assessed",
+        route_outcome="overlay_not_assessed",
+        reason=f"Insufficient data to complete PVS1 decision tree for {vt}.",
+        next_action="Provide NMD prediction, exon position, and region information.")
 
 
 def overlay_pvs1_splicing(

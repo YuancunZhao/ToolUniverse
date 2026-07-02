@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PP3 and BP4 computational evidence for missense var
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ToolUniverse ACMG PP3/BP4 Missense Prediction Refinement
 
 Use this overlay when ACMG/AMP classification depends on computational missense prediction evidence for `PP3` or `BP4`. It refines the base `tooluniverse-acmg-variant-classification` workflow using Pejaver et al. 2022 ClinGen SVI recommendations.

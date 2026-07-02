@@ -4,6 +4,12 @@ description: Refine ACMG/AMP PS1 evidence for variants with the same predicted R
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG PS1 Splicing Similarity Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` for one evidence rule only: PS1 when the evidence is similarity of predicted RNA-splicing impact to a known pathogenic or likely pathogenic variant. It follows Walker et al. 2023 ClinGen SVI Splicing Subgroup guidance, especially the PS1 splicing adaptation in Table 2.

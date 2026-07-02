@@ -4,6 +4,12 @@ description: Refine ACMG/AMP evidence criteria that require patient phenotype, d
 disable-model-invocation: true
 ---
 
+> ⚠️ **DEPRECATED for direct LLM use.** This SKILL.md is reference documentation only.
+> **ALWAYS call the corresponding MCP tool instead** — it is deterministic (same input = same output).
+> Do NOT manually interpret ACMG decision trees from this document.
+> If you cannot find the MCP tool, call  first to get the list.
+
+
 # ACMG Phenotype-Dependent Evidence Refinement
 
 This skill extends `tooluniverse-acmg-variant-classification` by defining a lightweight intake and routing layer for ACMG evidence criteria that require phenotype, affected status, or disease-match context.
