@@ -239,8 +239,10 @@ Keys are free:
 | Issue | Fix |
 |---|---|
 | `uvx: command not found` | Re-run Step 1, restart terminal |
-| MCP server won't start | `uv cache clean tooluniverse` then restart client |
+| MCP server won't start | `uv cache clean tooluniverse` then restart client; wait 30 seconds for uvx to rebuild |
+| Overlay tools (ACMG_overlay_pm2, etc.) not found | **`uv cache clean tooluniverse` is MANDATORY when switching from the stable branch.** If grep_tools only shows gate-level tools (ACMG_overlay_gate_assess_variant, ACMG_finalize_assessment, etc.), the cache is stale. Run `uv cache clean tooluniverse`, restart client. |
 | LLM calls GeneBe/ClinVar directly | Guard prompt not active — re-check Step 4 |
+| LLM reads SKILL.md instead of overlay tools | Verify Step 4 guard file exists. Verify MCP server is from `acmg-overlay-mcp-tools` branch (not `codex/skills-overlay`). Run `uv cache clean tooluniverse`. |
 | Gate returns DRAFT_ONLY for all queries | Expected when evidence is incomplete. Check `missing_for_final` in gate output |
 | Skills not loading | Check `$SKILLS_DIR`, restart client |
 

@@ -18,10 +18,20 @@
 > - **Stable branch** (`codex/skills-overlay`): 7-layer gate enforcement, 22 criterion overlay skills, Chinese+English intent detection
 > - **Preview branch** (`acmg-overlay-mcp-tools`): independent ACMG criterion judgment MCP tools — LLM collects evidence, tools do deterministic ACMG rating (Router + 16 overlays + ACMG 2015 combiner)
 >
-> **One-line install:**
+> **One-line install (stable):**
 > ```
 > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
 > ```
+>
+> **One-line install (preview — with deterministic overlay MCP tools):**
+> ```
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/acmg-overlay-mcp-tools/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
+> ```
+>
+> ⚠️ **Use the preview branch if you want the LLM to use deterministic ACMG overlay tools**
+> (ACMG_overlay_pm2, ACMG_overlay_pvs1_lof, ACMG_overlay_de_novo, etc.)
+> instead of reading SKILL.md files for ACMG criterion judgment. The stable branch
+> only has the 7-layer gate enforcement system.
 
 ## Install
 
