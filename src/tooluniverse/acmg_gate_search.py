@@ -5,6 +5,14 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List
 
+# ACMG overlay MCP tools — exposed in search so LLM can discover them
+# independently of the Gate
+ACMG_OVERLAY_TOOLS = {
+    "ACMG_route_overlays",
+    "ACMG_overlay_pm2",
+    "ACMG_combine_criteria",
+}
+
 try:
     from .acmg_gate import (
         ACMG_ALLOWED_USE,
@@ -100,8 +108,9 @@ def _search_item_name(item: Any) -> str:
     return str(item or "")
 
 
-def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any]]:
+def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any], List[Any]]:
     high_risk: List[Any] = []
+    overlay: List[Any] = []
     other: List[Any] = []
     for item in tools:
         name = _search_item_name(item)
@@ -111,9 +120,43 @@ def _split_high_risk_tools(tools: List[Any]) -> tuple[List[Any], List[Any]]:
                 item["source_tools_must_use_sandbox"] = True
                 item["may_emit_final_label"] = False
             high_risk.append(item)
+        elif name in ACMG_OVERLAY_TOOLS:
+            if isinstance(item, dict):
+                _inject_overlay_description(item, name)
+            overlay.append(item)
         else:
             other.append(item)
-    return high_risk, other
+    return high_risk, overlay, other
+
+
+def _inject_overlay_description(item: dict, name: str) -> None:
+    descriptions = {
+        "ACMG_route_overlays": (
+            "Determine which ACMG criteria overlays apply to a variant. "
+            "Call this FIRST after identifying variant type (missense/nonsense/splice). "
+            "Input: variant HGVS + gene symbol. "
+            "Output: list of applicable baseline overlays + literature-dependent overlays "
+            "with recommended evidence sources for each."
+        ),
+        "ACMG_overlay_pm2": (
+            "Judge PM2 evidence (population absence/rarity) per ClinGen SVI PM2 v1.0. "
+            "Input: gnomAD allele frequency, coverage adequacy, disease prevalence. "
+            "Output: PM2_Supporting / not_met / not_assessed with ClinGen reasoning. "
+            "Use this instead of manually interpreting gnomAD frequencies."
+        ),
+        "ACMG_combine_criteria": (
+            "Combine ACMG overlay results into a 5-tier ACMG/AMP 2015 classification. "
+            "Input: list of overlay outputs (criterion + strength from each overlay tool). "
+            "Output: Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign "
+            "with counted criteria, explanation, and recommended next steps. "
+            "Includes ClinGen SVI special rules (PVS1+PM2_Supporting→LP)."
+        ),
+    }
+    if name in descriptions:
+        item["description"] = descriptions[name]
+        item["category"] = "acmg_overlay_tool"
+        item["deterministic"] = True
+        item["overlay_validated"] = True
 
 
 def prepend_acmg_gate_tool(tools: List[Any], *, final_classification_intent: bool = False) -> List[Any]:
@@ -127,10 +170,10 @@ def prepend_acmg_gate_tool(tools: List[Any], *, final_classification_intent: boo
     if gate_entry is None:
         gate_entry = acmg_gate_tool_search_entry()
 
-    high_risk, other = _split_high_risk_tools(remaining)
+    high_risk, overlay, other = _split_high_risk_tools(remaining)
     if final_classification_intent:
-        return [gate_entry, *high_risk]
-    return [gate_entry, *high_risk, *other]
+        return [gate_entry, *overlay, *high_risk]
+    return [gate_entry, *overlay, *high_risk, *other]
 
 
 def add_acmg_gate_notice_to_search(serialized: str, query: str) -> str:

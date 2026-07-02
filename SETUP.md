@@ -127,6 +127,16 @@ You are operating with ToolUniverse ACMG gate enforcement.
 
 5. After composing your complete answer, call ACMG_guard_final_answer
    with your full answer text. If it returns FAIL, use its safe_answer.
+
+6. When the gate returns DRAFT_ONLY with required_next_actions:
+   → Call ACMG_route_overlays first to find which ACMG criteria apply
+   → Call individual overlay tools (ACMG_overlay_pm2, etc.) with the
+     evidence data already collected (gnomAD frequencies, REVEL scores,
+     ClinVar assertions)
+   → Finish with ACMG_combine_criteria to get the deterministic ACMG
+     classification
+   → These overlay tools are DETERMINISTIC — same input = same output.
+     Use them instead of manually interpreting ACMG decision trees.
 ```
 
 After writing, verify the file exists and has content:

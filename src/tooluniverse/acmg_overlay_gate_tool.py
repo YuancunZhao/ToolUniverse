@@ -461,6 +461,11 @@ class ACMGOverlayGateTool(BaseTool):
             "draft_only_policy": None if final_allowed else build_draft_only_response(session),
             "acmg_gate_notice": ACMG_GATE_NOTICE,
         }
+        # When DRAFT_ONLY, provide overlay tool guidance so LLM knows next steps
+        if not final_allowed and arguments.get("variant") and arguments.get("gene"):
+            overlay_guidance = self._overlay_guidance(arguments, harness)
+            if overlay_guidance:
+                response["overlay_guidance"] = overlay_guidance
         if output_mode == "full":
             response.update({
                 "tool_calls": harness.get("tool_calls", []),
@@ -967,6 +972,41 @@ class ACMGOverlayGateTool(BaseTool):
             "validator_status": VALIDATOR_DRAFT_ONLY,
             "violations": [{"code": "missing_acmg_assessment_bundle", "message": "No machine-checkable ACMG assessment bundle was provided."}],
             "validator_result": {"status": VALIDATOR_NOT_RUN, "reason": "No bundle provided."},
+        }
+
+    def _overlay_guidance(self, arguments: Dict[str, Any], harness: Dict[str, Any]) -> Dict[str, Any] | None:
+        """Provide overlay tool guidance when gate returns DRAFT_ONLY.
+
+        Uses ACMG_route_overlays to determine which overlays apply.
+        Does NOT auto-execute overlays — LLM must call them.
+        """
+        try:
+            from .acmg_overlay_tools.router import route_overlays
+        except ImportError:
+            return None
+        variant = str(arguments.get("variant", ""))
+        gene = str(arguments.get("gene", ""))
+        if not variant or not gene:
+            return None
+        try:
+            route = route_overlays(variant=variant, gene=gene)
+        except Exception:
+            return None
+        return {
+            "message": (
+                "Gate returned DRAFT_ONLY. Use the ACMG overlay tools below to "
+                "get deterministic criterion judgments. Collect evidence first "
+                "(gnomAD, ClinVar, MyVariant, PubMed), then pass structured data "
+                "to each tool. Finish with ACMG_combine_criteria."
+            ),
+            "variant_type": route.get("variant_type"),
+            "baseline_overlays": route.get("baseline_overlays", []),
+            "literature_overlays": route.get("literature_overlays", []),
+            "next_overlay_tools": [
+                "ACMG_route_overlays",
+                *(route.get("baseline_overlays", [])[:3]),
+                "ACMG_combine_criteria",
+            ],
         }
 
     def _bundle_skeleton(self, arguments: Dict[str, Any], baseline_routes: List[Dict[str, Any]], discovery_routes: List[Dict[str, Any]], source_leads: List[Dict[str, Any]]) -> Dict[str, Any]:
