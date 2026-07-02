@@ -1005,10 +1005,11 @@ class ACMGOverlayGateTool(BaseTool):
             return None
         variant = str(arguments.get("variant", ""))
         gene = str(arguments.get("gene", ""))
+        consequence = str(arguments.get("consequence", ""))
         if not variant or not gene:
             return None
         try:
-            route = route_overlays(variant=variant, gene=gene)
+            route = route_overlays(variant=variant, gene=gene, consequence=consequence)
         except Exception:
             return None
 
