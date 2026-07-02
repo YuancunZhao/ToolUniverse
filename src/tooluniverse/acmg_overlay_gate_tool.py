@@ -974,6 +974,25 @@ class ACMGOverlayGateTool(BaseTool):
             "validator_result": {"status": VALIDATOR_NOT_RUN, "reason": "No bundle provided."},
         }
 
+    _CRITERION_TO_MCP_TOOL = {
+        "pm2_absence_rarity": "ACMG_overlay_pm2",
+        "pp3_bp4_missense_prediction": "ACMG_overlay_pp3_bp4",
+        "ps1_pm5_amino_acid_equivalence": "ACMG_overlay_ps1_pm5",
+        "ba1_exception_list": "ACMG_overlay_ba1_exception",
+        "benign_context": "ACMG_overlay_benign_context",
+        "pvs1_lof_decision_tree": "ACMG_overlay_pvs1_lof",
+        "pvs1_splicing": "ACMG_overlay_pvs1_splicing",
+        "ps1_splicing_similarity": "ACMG_overlay_ps1_splicing",
+        "pm1_regional_missense_constraint": "ACMG_overlay_pm1_bp1",
+        "ps3_bs3_functional_assay": "ACMG_overlay_functional_assay",
+        "ps4_case_enrichment": "ACMG_overlay_case_enrichment",
+        "pp1_bs4_pp4_segregation": "ACMG_overlay_segregation",
+        "pm3_in_trans": "ACMG_overlay_pm3_in_trans",
+        "de_novo_ps2_pm6": "ACMG_overlay_de_novo",
+        "pm4_bp3_protein_length": "ACMG_overlay_protein_length",
+        "reputable_source_review": "ACMG_overlay_source_review",
+    }
+
     def _overlay_guidance(self, arguments: Dict[str, Any], harness: Dict[str, Any]) -> Dict[str, Any] | None:
         """Provide overlay tool guidance when gate returns DRAFT_ONLY.
 
@@ -992,6 +1011,13 @@ class ACMGOverlayGateTool(BaseTool):
             route = route_overlays(variant=variant, gene=gene)
         except Exception:
             return None
+
+        def _to_mcp(name: str) -> str:
+            return self._CRITERION_TO_MCP_TOOL.get(name)
+
+        baseline_mcp = [n for n in (_to_mcp(g) for g in route.get("baseline_overlays", [])) if n]
+        lit_mcp = [n for n in (_to_mcp(g) for g in route.get("literature_overlays", [])) if n]
+
         return {
             "message": (
                 "Gate returned DRAFT_ONLY. Use the ACMG overlay tools below to "
@@ -1000,11 +1026,12 @@ class ACMGOverlayGateTool(BaseTool):
                 "to each tool. Finish with ACMG_combine_criteria."
             ),
             "variant_type": route.get("variant_type"),
-            "baseline_overlays": route.get("baseline_overlays", []),
-            "literature_overlays": route.get("literature_overlays", []),
+            "baseline_overlays": baseline_mcp,
+            "literature_overlays": lit_mcp,
             "next_overlay_tools": [
                 "ACMG_route_overlays",
-                *(route.get("baseline_overlays", [])[:3]),
+                *baseline_mcp[:4],
+                *lit_mcp[:2],
                 "ACMG_combine_criteria",
             ],
         }

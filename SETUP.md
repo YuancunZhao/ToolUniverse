@@ -130,9 +130,12 @@ You are operating with ToolUniverse ACMG gate enforcement.
 
 6. When the gate returns DRAFT_ONLY with required_next_actions:
    → Call ACMG_route_overlays first to find which ACMG criteria apply
-   → Call individual overlay tools (ACMG_overlay_pm2, etc.) with the
-     evidence data already collected (gnomAD frequencies, REVEL scores,
-     ClinVar assertions)
+   → Call individual overlay tools with the evidence data already collected
+     (gnomAD frequencies, REVEL scores, ClinVar assertions):
+     ACMG_overlay_pm2, ACMG_overlay_pp3_bp4, ACMG_overlay_ps1_pm5,
+     ACMG_overlay_pvs1_lof, ACMG_overlay_de_novo, ACMG_overlay_ba1_exception,
+     ACMG_overlay_functional_assay, ACMG_overlay_segregation,
+     ACMG_overlay_source_review — whichever applies per ACMG_route_overlays
    → Finish with ACMG_combine_criteria to get the deterministic ACMG
      classification
    → These overlay tools are DETERMINISTIC — same input = same output.

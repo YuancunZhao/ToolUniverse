@@ -8,9 +8,24 @@ from typing import Any, Dict, List
 # ACMG overlay MCP tools — exposed in search so LLM can discover them
 # independently of the Gate
 ACMG_OVERLAY_TOOLS = {
-    "ACMG_route_overlays",
-    "ACMG_overlay_pm2",
     "ACMG_combine_criteria",
+    "ACMG_overlay_ba1_exception",
+    "ACMG_overlay_benign_context",
+    "ACMG_overlay_case_enrichment",
+    "ACMG_overlay_de_novo",
+    "ACMG_overlay_functional_assay",
+    "ACMG_overlay_pm1_bp1",
+    "ACMG_overlay_pm2",
+    "ACMG_overlay_pm3_in_trans",
+    "ACMG_overlay_pp3_bp4",
+    "ACMG_overlay_protein_length",
+    "ACMG_overlay_ps1_pm5",
+    "ACMG_overlay_ps1_splicing",
+    "ACMG_overlay_pvs1_lof",
+    "ACMG_overlay_pvs1_splicing",
+    "ACMG_overlay_segregation",
+    "ACMG_overlay_source_review",
+    "ACMG_route_overlays",
 }
 
 try:

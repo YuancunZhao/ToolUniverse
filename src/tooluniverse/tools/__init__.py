@@ -31,7 +31,22 @@ from .ACMG_collect_variant_evidence import ACMG_collect_variant_evidence
 from .ACMG_combine_criteria import ACMG_combine_criteria
 from .ACMG_finalize_assessment import ACMG_finalize_assessment
 from .ACMG_guard_final_answer import ACMG_guard_final_answer
+from .ACMG_overlay_ba1_exception import ACMG_overlay_ba1_exception
+from .ACMG_overlay_benign_context import ACMG_overlay_benign_context
+from .ACMG_overlay_case_enrichment import ACMG_overlay_case_enrichment
+from .ACMG_overlay_de_novo import ACMG_overlay_de_novo
+from .ACMG_overlay_functional_assay import ACMG_overlay_functional_assay
+from .ACMG_overlay_pm1_bp1 import ACMG_overlay_pm1_bp1
 from .ACMG_overlay_pm2 import ACMG_overlay_pm2
+from .ACMG_overlay_pm3_in_trans import ACMG_overlay_pm3_in_trans
+from .ACMG_overlay_pp3_bp4 import ACMG_overlay_pp3_bp4
+from .ACMG_overlay_protein_length import ACMG_overlay_protein_length
+from .ACMG_overlay_ps1_pm5 import ACMG_overlay_ps1_pm5
+from .ACMG_overlay_ps1_splicing import ACMG_overlay_ps1_splicing
+from .ACMG_overlay_pvs1_lof import ACMG_overlay_pvs1_lof
+from .ACMG_overlay_pvs1_splicing import ACMG_overlay_pvs1_splicing
+from .ACMG_overlay_segregation import ACMG_overlay_segregation
+from .ACMG_overlay_source_review import ACMG_overlay_source_review
 from .ACMG_plan_variant_assessment import ACMG_plan_variant_assessment
 from .ACMG_route_overlays import ACMG_route_overlays
 from .ACC_list_guidelines import ACC_list_guidelines
@@ -2794,7 +2809,22 @@ __all__ = [
     "ACMG_collect_variant_evidence",
     "ACMG_apply_overlay_routes",
     "ACMG_combine_criteria",
+    "ACMG_overlay_ba1_exception",
+    "ACMG_overlay_benign_context",
+    "ACMG_overlay_case_enrichment",
+    "ACMG_overlay_de_novo",
+    "ACMG_overlay_functional_assay",
+    "ACMG_overlay_pm1_bp1",
     "ACMG_overlay_pm2",
+    "ACMG_overlay_pm3_in_trans",
+    "ACMG_overlay_pp3_bp4",
+    "ACMG_overlay_protein_length",
+    "ACMG_overlay_ps1_pm5",
+    "ACMG_overlay_ps1_splicing",
+    "ACMG_overlay_pvs1_lof",
+    "ACMG_overlay_pvs1_splicing",
+    "ACMG_overlay_segregation",
+    "ACMG_overlay_source_review",
     "ACMG_route_overlays",
     "get_shared_client",
     "reset_shared_client",
