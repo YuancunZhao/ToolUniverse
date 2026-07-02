@@ -61,6 +61,56 @@ SOURCE_LEAD_KEYWORDS = (
 )
 
 
+@register_tool("ACMGOverlayTool")
+class ACMGOverlayTool(BaseTool):
+    """Execute deterministic ACMG criterion overlay judgments.
+
+    Dispatches to acmg_overlay_tools package functions based on operation name.
+    Each operation is a pure computation — no API calls, no shared client needed.
+    """
+    _OVERLAY_DISPATCH: dict[str, str] = {
+        "overlay_pm2": "pm2.overlay_pm2",
+        "overlay_pp3_bp4": "pp3_bp4.overlay_pp3_bp4",
+        "overlay_ps1_pm5": "ps1_pm5.overlay_ps1_pm5",
+        "overlay_ba1_exception": "ba1_exception.overlay_ba1_exception",
+        "overlay_benign_context": "benign_context.overlay_benign_context",
+        "overlay_pvs1_lof": "overlays.overlay_pvs1_lof",
+        "overlay_pvs1_splicing": "overlays.overlay_pvs1_splicing",
+        "overlay_ps1_splicing": "overlays.overlay_ps1_splicing",
+        "overlay_pm1_bp1": "overlays.overlay_pm1_bp1",
+        "overlay_functional_assay": "overlays.overlay_functional_assay",
+        "overlay_case_enrichment": "overlays.overlay_case_enrichment",
+        "overlay_segregation": "overlays.overlay_segregation",
+        "overlay_pm3_in_trans": "overlays.overlay_pm3_in_trans",
+        "overlay_de_novo": "overlays.overlay_de_novo",
+        "overlay_protein_length": "overlays.overlay_protein_length",
+        "overlay_source_review": "overlays.overlay_source_review",
+        "route_overlays": "router.route_overlays",
+        "combine_criteria": "combine.combine_criteria",
+    }
+
+    def __init__(self, tool_config: Dict[str, Any]):
+        super().__init__(tool_config)
+        self.operation = str(tool_config.get("fields", {}).get("operation", ""))
+        self._func = None
+
+    def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(arguments, dict):
+            return {"status": "error", "error": "arguments must be an object"}
+        func_path = self._OVERLAY_DISPATCH.get(self.operation)
+        if not func_path:
+            return {"status": "error", "error": f"Unknown overlay operation: {self.operation}"}
+        try:
+            if self._func is None:
+                module_path, func_name = func_path.rsplit(".", 1)
+                mod = __import__(f"tooluniverse.acmg_overlay_tools.{module_path}", fromlist=[func_name])
+                self._func = getattr(mod, func_name)
+            # Overlay functions use keyword-only arguments; pass arguments dict as kwargs
+            return self._func(**arguments)
+        except Exception as e:
+            return {"status": "error", "error": str(e), "operation": self.operation}
+
+
 @register_tool("ACMGOverlayGateTool")
 class ACMGOverlayGateTool(BaseTool):
     """Plan and validate ACMG overlay-gated assessments."""
