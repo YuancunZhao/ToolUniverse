@@ -1,0 +1,26 @@
+diff --git a/README.md b/README.md
+index e6689296..f10a2fea 100644
+--- a/README.md
++++ b/README.md
+@@ -22,21 +22,20 @@
+ >
+ > This fork is **not a standalone clinical classifier**. Its near-term purpose is to
+ > make ACMG-related agent workflows harder to bypass and easier to audit. The long-term
+ > direction is a higher-automation ACMG intelligent rating tool, built incrementally
+ > from validated overlay routes and evidence provenance.
+ >
+ > **One-line install:**
+ > ```
+ > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
+ > ```
+-> only has the 7-layer gate enforcement system.
+ 
+ ## Install
+ 
+ **AI agent (recommended)** — open your AI agent and run:
+ ```
+ Read https://aiscientist.tools/setup.md and set up ToolUniverse for me.
+ ```
+ The agent will walk you through MCP configuration, API keys, skill installation, and validation.
+ 
+ <details>

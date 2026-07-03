@@ -23,6 +23,7 @@ def ACMG_overlay_pp3_bp4(
     phylop_score=None,
     primateai_score=None,
     selected_tool=None,
+    selection_policy=None,
     vcep_override=None,
     *,
     stream_callback: Callable[[str], None] | None = None,
@@ -45,6 +46,7 @@ def ACMG_overlay_pp3_bp4(
         phylop_score=phylop_score,
         primateai_score=primateai_score,
         selected_tool=selected_tool,
+        selection_policy=selection_policy,
         vcep_override=vcep_override,
     )
 

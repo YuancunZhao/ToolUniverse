@@ -397,12 +397,25 @@ def _normalized_evidence_strength(value: Any, criterion: str = "") -> str:
     raw = str(value or "").strip()
     if not raw:
         return ""
+    if criterion and re.fullmatch(re.escape(criterion), raw, flags=re.IGNORECASE):
+        if criterion == "BA1":
+            return "standalone"
+    negated_strength = re.compile(
+        r"\b(not|non|without|no)\s+"
+        r"(?:(?:BA1|BS[1-4]|BP[1-7]|PVS1|PS[1-4]|PM[1-6]|PP[1-5])\s+)?"
+        r"(very\s+strong|strong|moderate|supporting|stand\s+alone|standalone)\b",
+        flags=re.IGNORECASE,
+    )
+    raw_normalized = re.sub(r"[_-]+", " ", raw).lower()
+    raw_normalized = re.sub(r"\s+", " ", raw_normalized).strip()
+    if negated_strength.search(raw_normalized):
+        return ""
     criterion_match = ACMG_CRITERION_RE.search(raw)
     if criterion_match:
         raw = raw[criterion_match.end():]
     normalized = re.sub(r"[_-]+", " ", raw).lower()
     normalized = re.sub(r"\s+", " ", normalized).strip()
-    if re.search(r"\b(not|non|without|no)\s+(very\s+strong|strong|moderate|supporting|stand\s+alone|standalone)\b", normalized):
+    if negated_strength.search(normalized):
         return ""
     strength_patterns = (
         ("very_strong", re.compile(r"\bvery\s*strong\b")),
@@ -414,9 +427,7 @@ def _normalized_evidence_strength(value: Any, criterion: str = "") -> str:
     for strength, pattern in strength_patterns:
         if pattern.search(normalized):
             return strength
-    lowered = re.sub(r"[\s-]+", "_", raw).lower()
-    lowered = re.sub(r"_+", "_", lowered).strip("_")
-    return lowered
+    return ""
 
 
 def resolved_strength(item: Any) -> str:
@@ -465,7 +476,7 @@ def resolved_item_matches_counted_row(item: Any, row: dict[str, Any]) -> bool:
         return False
     row_source = _row_source(row)
     item_source = _resolved_source(item)
-    return not (row_source and item_source and row_source != item_source)
+    return row_source == item_source
 
 
 def resolved_item_binding_violation_code(item: Any, valid_counted_rows: list[dict[str, Any]]) -> str:
@@ -478,14 +489,16 @@ def resolved_item_binding_violation_code(item: Any, valid_counted_rows: list[dic
     if any(resolved_item_matches_counted_row(item, row) for row in criterion_rows):
         return ""
     item_strength = _normalized_evidence_strength(resolved_strength(item), criterion)
-    strength_rows = [
-        row
-        for row in criterion_rows
-        if _normalized_evidence_strength(
-            row.get("strength") or row.get("applied_evidence") or row.get("proposed_evidence"),
-            criterion,
-        ) == item_strength
-    ]
+    strength_rows = []
+    if item_strength:
+        strength_rows = [
+            row
+            for row in criterion_rows
+            if _normalized_evidence_strength(
+                row.get("strength") or row.get("applied_evidence") or row.get("proposed_evidence"),
+                criterion,
+            ) == item_strength
+        ]
     if strength_rows:
         return "resolved_evidence_source_mismatch"
     if criterion_rows:

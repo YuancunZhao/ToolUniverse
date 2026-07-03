@@ -145,11 +145,26 @@ def test_minimal_validation_rejects_extra_unbound_resolved_evidence_item() -> No
     assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
 
 
-def test_resolved_source_must_match_when_both_route_and_resolved_provide_source() -> None:
+def test_resolved_source_must_match_counted_audit_source() -> None:
     bundle = _bundle()
     bundle["compatibility_resolution"] = {
         "current_counted_evidence_resolved": [
             {"criterion": "PP3", "strength": "PP3_Supporting", "source": "manual"},
+        ],
+    }
+
+    result = validate(bundle, _registry())
+
+    assert result["status"] != "PASS", result
+    assert "resolved_evidence_source_mismatch" in _violation_codes(result)
+    assert "resolved_evidence_strength_mismatch" not in _violation_codes(result)
+
+
+def test_resolved_source_must_not_be_omitted_when_counted_audit_has_source() -> None:
+    bundle = _bundle()
+    bundle["compatibility_resolution"] = {
+        "current_counted_evidence_resolved": [
+            {"criterion": "PP3", "strength": "PP3_Supporting"},
         ],
     }
 
@@ -212,8 +227,14 @@ def test_strength_normalization_handles_multiword_pvs1_suffixes() -> None:
     assert _normalized_evidence_strength("PVS1-Very-Strong", "PVS1") == "very_strong"
     assert _normalized_evidence_strength("PVS1 Very Strong", "PVS1") == "very_strong"
     assert _normalized_evidence_strength("PP3 Supporting evidence", "PP3") == "supporting"
+    assert _normalized_evidence_strength("BA1", "BA1") == "standalone"
+    assert _normalized_evidence_strength("PVS1", "PVS1") == ""
+    assert _normalized_evidence_strength("PM2", "PM2") == ""
+    assert _normalized_evidence_strength("manual_note", "PP3") == ""
     assert _normalized_evidence_strength("PS1 not strong", "PS1") == ""
     assert _normalized_evidence_strength("PP3 non-supporting", "PP3") == ""
+    assert _normalized_evidence_strength("not PP3 supporting", "PP3") == ""
+    assert _normalized_evidence_strength("without PVS1 very strong", "PVS1") == ""
 
 
 def test_criterion_code_recognizes_full_acmg_set_and_strength_suffixes() -> None:
@@ -306,6 +327,85 @@ def test_ba1_resolved_item_requires_matching_counted_audit_row() -> None:
     assert "resolved_evidence_without_counted_audit_match" in _violation_codes(result)
 
 
+def test_bare_ba1_resolved_item_binds_to_matching_counted_audit_row() -> None:
+    bundle = _bundle()
+    bundle["route_audit"] = [
+        {
+            "criterion": "BA1",
+            "proposed_evidence": "BA1",
+            "counted": True,
+            "route_outcome": "overlay_applied",
+            "guidance_authority": "ClinGen/SVI primary",
+            "overlay_or_vcep_source": "tooluniverse-acmg-ba1-frequency-exception",
+        },
+    ]
+    bundle["compatibility_resolution"] = {
+        "current_counted_evidence_resolved": [
+            {
+                "criterion": "BA1",
+                "strength": "BA1",
+                "source": "tooluniverse-acmg-ba1-frequency-exception",
+            },
+        ],
+    }
+    bundle["classification"] = "Benign"
+
+    result = validate(bundle, _registry())
+
+    assert "resolved_evidence_without_counted_audit_match" not in _violation_codes(result)
+    assert "resolved_evidence_strength_mismatch" not in _violation_codes(result)
+    assert "resolved_evidence_source_mismatch" not in _violation_codes(result)
+
+
+def test_bare_non_ba1_resolved_item_does_not_bind_without_explicit_strength() -> None:
+    bundle = _bundle()
+    bundle["route_audit"] = [
+        {
+            "criterion": "PVS1",
+            "proposed_evidence": "PVS1",
+            "counted": True,
+            "route_outcome": "overlay_applied",
+            "guidance_authority": "ClinGen/SVI primary",
+            "overlay_or_vcep_source": "tooluniverse-acmg-pvs1-lof-decision-tree-refinement",
+        },
+    ]
+    bundle["compatibility_resolution"] = {
+        "current_counted_evidence_resolved": [
+            {
+                "criterion": "PVS1",
+                "strength": "PVS1",
+                "source": "tooluniverse-acmg-pvs1-lof-decision-tree-refinement",
+            },
+        ],
+    }
+
+    result = validate_minimal(bundle, _registry())
+
+    assert result["status"] != "PASS", result
+    assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
+    assert "resolved_evidence_source_mismatch" not in _violation_codes(result)
+
+
+def test_unparsed_matching_strength_tokens_do_not_bind() -> None:
+    bundle = _bundle()
+    bundle["route_audit"][0]["proposed_evidence"] = "manual_note"
+    bundle["compatibility_resolution"] = {
+        "current_counted_evidence_resolved": [
+            {
+                "criterion": "PP3",
+                "strength": "manual_note",
+                "source": "tooluniverse-acmg-pp3-bp4-missense-prediction-refinement",
+            },
+        ],
+    }
+
+    result = validate_minimal(bundle, _registry())
+
+    assert result["status"] != "PASS", result
+    assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
+    assert "resolved_evidence_source_mismatch" not in _violation_codes(result)
+
+
 def test_negated_free_text_strength_does_not_bind_to_counted_route() -> None:
     bundle = _bundle()
     bundle["route_audit"][0]["criterion"] = "PS1"
@@ -318,3 +418,22 @@ def test_negated_free_text_strength_does_not_bind_to_counted_route() -> None:
 
     assert result["status"] != "PASS", result
     assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
+
+
+def test_precriterion_negated_free_text_strength_does_not_bind_to_counted_route() -> None:
+    bundle = _bundle()
+    bundle["compatibility_resolution"] = {
+        "current_counted_evidence_resolved": [
+            {
+                "criterion": "PP3",
+                "strength": "not PP3 supporting",
+                "source": "tooluniverse-acmg-pp3-bp4-missense-prediction-refinement",
+            },
+        ],
+    }
+
+    result = validate_minimal(bundle, _registry())
+
+    assert result["status"] != "PASS", result
+    assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
+    assert "resolved_evidence_source_mismatch" not in _violation_codes(result)

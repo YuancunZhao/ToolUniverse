@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from tooluniverse.acmg_overlay_tools.overlays import (
@@ -14,9 +16,11 @@ from tooluniverse.acmg_overlay_tools.overlays import (
     overlay_pvs1_splicing,
     overlay_segregation,
 )
+from tooluniverse.acmg_overlay_tools.pp3_bp4 import overlay_pp3_bp4
 from tooluniverse.tools.ACMG_overlay_case_enrichment import ACMG_overlay_case_enrichment
 from tooluniverse.tools.ACMG_overlay_de_novo import ACMG_overlay_de_novo
 from tooluniverse.tools.ACMG_overlay_functional_assay import ACMG_overlay_functional_assay
+from tooluniverse.tools.ACMG_overlay_pp3_bp4 import ACMG_overlay_pp3_bp4
 from tooluniverse.tools.ACMG_overlay_pvs1_splicing import ACMG_overlay_pvs1_splicing
 from tooluniverse.tools.ACMG_overlay_segregation import ACMG_overlay_segregation
 
@@ -25,6 +29,7 @@ pytestmark = pytest.mark.unit
 WRAPPER_ONLY_PARAMETERS = {"stream_callback", "use_cache", "validate"}
 
 OVERLAY_TOOL_MAPPINGS = [
+    ("ACMG_overlay_pp3_bp4", ACMG_overlay_pp3_bp4, overlay_pp3_bp4),
     ("ACMG_overlay_functional_assay", ACMG_overlay_functional_assay, overlay_functional_assay),
     ("ACMG_overlay_segregation", ACMG_overlay_segregation, overlay_segregation),
     ("ACMG_overlay_pvs1_splicing", ACMG_overlay_pvs1_splicing, overlay_pvs1_splicing),

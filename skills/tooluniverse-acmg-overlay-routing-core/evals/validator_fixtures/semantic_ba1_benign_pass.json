@@ -19,7 +19,7 @@
       {"source_category": "literature", "queried_sources": ["PubMed"], "query_terms": ["GENE c.100A>G"], "query_tool": "fixture PubMed search", "query_time": "fixture", "query_status": "no_hit", "hits": [], "triggered_routes": [], "not_triggered_routes": ["pp1_bs4_pp4_segregation", "ps4_case_enrichment", "de_novo_ps2_pm6", "pm3_in_trans", "ps3_bs3_functional_assay"], "reason": "No discovery triggers."}
     ],
     "overlay_results": [{"overlay_skill": "tooluniverse-acmg-ba1-exception-list-refinement", "criterion": "BA1", "applied_evidence": "BA1", "status": "applied", "guidance_authority": "ClinGen/SVI primary", "reason": "Fixture BA1.", "consumed_evidence": ["gnomAD"]}],
-    "route_audit": [{"criterion": "BA1", "proposed_evidence": "BA1", "route_outcome": "overlay_applied", "guidance_authority": "ClinGen/SVI primary", "overlay_or_vcep_source": "tooluniverse-acmg-ba1-exception-list-refinement", "counted": true, "reason": "Fixture BA1."}],
-    "compatibility_resolution": {"current_counted_evidence_resolved": ["BA1"], "not_used_due_to_overlap": [], "caps_applied": [], "context_splits": [], "unresolved_conflicts": []}
+    "route_audit": [{"criterion": "BA1", "strength": "standalone", "proposed_evidence": "BA1", "route_outcome": "overlay_applied", "guidance_authority": "ClinGen/SVI primary", "overlay_or_vcep_source": "tooluniverse-acmg-ba1-exception-list-refinement", "counted": true, "reason": "Fixture BA1."}],
+    "compatibility_resolution": {"current_counted_evidence_resolved": [{"criterion": "BA1", "strength": "standalone", "source": "tooluniverse-acmg-ba1-exception-list-refinement"}], "not_used_due_to_overlap": [], "caps_applied": [], "context_splits": [], "unresolved_conflicts": []}
   }
 }

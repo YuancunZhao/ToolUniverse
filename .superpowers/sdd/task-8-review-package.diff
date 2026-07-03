@@ -1,0 +1,53 @@
+diff --git a/README.md b/README.md
+index e6689296..f10a2fea 100644
+--- a/README.md
++++ b/README.md
+@@ -22,21 +22,20 @@
+ >
+ > This fork is **not a standalone clinical classifier**. Its near-term purpose is to
+ > make ACMG-related agent workflows harder to bypass and easier to audit. The long-term
+ > direction is a higher-automation ACMG intelligent rating tool, built incrementally
+ > from validated overlay routes and evidence provenance.
+ >
+ > **One-line install:**
+ > ```
+ > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
+ > ```
+-> only has the 7-layer gate enforcement system.
+ 
+ ## Install
+ 
+ **AI agent (recommended)** — open your AI agent and run:
+ ```
+ Read https://aiscientist.tools/setup.md and set up ToolUniverse for me.
+ ```
+ The agent will walk you through MCP configuration, API keys, skill installation, and validation.
+ 
+ <details>
+diff --git a/TOOLUNIVERSE_OVERLAY_DIFF.md b/TOOLUNIVERSE_OVERLAY_DIFF.md
+index 9ba5b531..28556099 100644
+--- a/TOOLUNIVERSE_OVERLAY_DIFF.md
++++ b/TOOLUNIVERSE_OVERLAY_DIFF.md
+@@ -14,21 +14,21 @@ final-answer gating.
+ ## Summary
+ 
+ - **Added skills:** 22 ACMG overlay + refinement skills
+ - **Modified upstream skills:** 4 (variant-interpretation, acmg-variant-classification, structural-variant-analysis, protein-sae-variant-interpretation)
+ - **Canonical runtime:** `src/tooluniverse/acmg_gate/` — single import surface (`__init__.py`) exporting protocol, guard, validator, and semantic-combiner symbols
+ - **Key modules:** `intent_detector.py`, `pre_router.py`, `session.py`, `source_lead_sandbox.py`, `transaction.py`, `draft_policy.py`, `final_label_detector.py`, `policy.py`, `finalizer.py`, `final_answer_guard.py`, `semantic_combiner.py`, `context_triggers.py`, `registry.py`, `validate_acmg_overlay_bundle.py`, `check_entrypoint_bypass_fixtures.py`
+ - **Skill-side bridges:** `skills/tooluniverse-acmg-overlay-routing-core/scripts/` → thin wrappers delegating to canonical runtime
+ - **Mirrors:** `plugin/skills/`, `plugins/tooluniverse/skills/` — drift-checked by `scripts/check_skill_duplicate_drift.py`. `.agents/skills/` is a local-only generated mirror (gitignored).
+ - **Tests:** 14 ACMG test files (12 unit + 2 integration), 33 validator fixtures, 22 bypass fixtures
+ 
+-- `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`: reference-only skill documenting Pejaver 2022 PP3/BP4 calibrated intervals; runtime judgment belongs to `ACMG_overlay_pp3_bp4`.
++- `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`: reference-only skill documenting Pejaver 2022 PP3/BP4 calibrated intervals; runtime judgment belongs to `ACMG_overlay_pp3_bp4`. Predictor selection is explicit: `pre_specified` uses `ClinGen/SVI primary` interval authority, `vcep_specific` remains `VCEP-specific`, and `local_default_hierarchy` is reported as `practice/local refinement`.
+ 
+ ## Architecture Rules
+ 
+ - ACMG final classification requires `validator_status=PASS`, `semantic_combiner_status=PASS`, `final_classification_allowed=true`, an ACMG assessment session in `FINALIZED` state, and a verified `acmg-final:v1:` finalization token
+ - Direct high-risk tools are marked `source_lead_only=true`, `final_classification_allowed=false`
+ - Source labels and automated criteria (ClinVar, InterVar, GeneBe, etc.) are sandboxed leads only — not counted evidence
+ - SpliceAI/CADD/AlphaMissense/REVEL/VEP/OpenCRAVAT/MyVariant/gnomAD/literature/user context preserve reviewable facts but quarantine final-like conclusions until overlays validate them
+ - User clinical context triggers non-counted route candidates only
+ - `tooluniverse-variant-interpretation` is intake/handoff only
+ 
