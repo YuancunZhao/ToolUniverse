@@ -9,9 +9,13 @@ def overlay_benign_context(
     alternate_diagnosis: bool = False,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
-    from .base import output_template
+    from .base import output_template, vcep_deferred_template
     if vcep_override:
-        return output_template("BS1/BS2/BP2/BP5", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "BS1/BS2/BP2/BP5",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     results = []
     if 0.01 < gnomad_af_popmax <= 0.05:
         results.append("BS1 criteria may apply")

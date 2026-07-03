@@ -4,6 +4,13 @@ Last updated: 2026-07-01
 
 Baseline: `mims-harvard/ToolUniverse` upstream/main vs `YuancunZhao/ToolUniverse` codex/skills-overlay.
 
+## Current Scope: Guarded Overlay Extension
+
+This branch narrows the ACMG work to a ToolUniverse-compatible guarded overlay layer.
+Canonical ToolUniverse tools continue to retrieve evidence. ACMG additions provide
+deterministic overlay judgment, source-lead quarantine, route audit validation, and
+final-answer gating.
+
 ## Summary
 
 - **Added skills:** 22 ACMG overlay + refinement skills
@@ -13,6 +20,8 @@ Baseline: `mims-harvard/ToolUniverse` upstream/main vs `YuancunZhao/ToolUniverse
 - **Skill-side bridges:** `skills/tooluniverse-acmg-overlay-routing-core/scripts/` → thin wrappers delegating to canonical runtime
 - **Mirrors:** `plugin/skills/`, `plugins/tooluniverse/skills/` — drift-checked by `scripts/check_skill_duplicate_drift.py`. `.agents/skills/` is a local-only generated mirror (gitignored).
 - **Tests:** 14 ACMG test files (12 unit + 2 integration), 33 validator fixtures, 22 bypass fixtures
+
+- `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`: reference-only skill documenting Pejaver 2022 PP3/BP4 calibrated intervals; runtime judgment belongs to `ACMG_overlay_pp3_bp4`.
 
 ## Architecture Rules
 

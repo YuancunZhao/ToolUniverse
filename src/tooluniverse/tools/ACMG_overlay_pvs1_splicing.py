@@ -8,14 +8,24 @@ from ..acmg_overlay_tools.overlays import overlay_pvs1_splicing
 
 
 def ACMG_overlay_pvs1_splicing(
-    splice_prediction='', vcep_override=None,
+    spliceai_dl=None,
+    spliceai_da=None,
+    is_canonical_gt_ag=False,
+    rna_evidence=False,
+    nmd_predicted=None,
+    vcep_override=None,
     *,
     stream_callback: Callable[[str], None] | None = None,
     use_cache: bool = False,
     validate: bool = True,
 ) -> dict[str, Any]:
     return overlay_pvs1_splicing(
-        splice_prediction=splice_prediction, vcep_override=vcep_override
+        spliceai_dl=spliceai_dl,
+        spliceai_da=spliceai_da,
+        is_canonical_gt_ag=is_canonical_gt_ag,
+        rna_evidence=rna_evidence,
+        nmd_predicted=nmd_predicted,
+        vcep_override=vcep_override,
     )
 
 

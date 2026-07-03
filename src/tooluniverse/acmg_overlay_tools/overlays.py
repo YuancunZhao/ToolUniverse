@@ -6,7 +6,7 @@ Each stub returns not_assessed with a recommendation to collect evidence.
 
 from __future__ import annotations
 from typing import Any
-from .base import output_template
+from .base import output_template, vcep_deferred_template
 
 
 def overlay_functional_assay(
@@ -34,7 +34,11 @@ def overlay_functional_assay(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PS3/BS3", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PS3/BS3",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if not functional_evidence:
         return output_template("PS3/BS3", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
@@ -116,7 +120,11 @@ def overlay_case_enrichment(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PS4", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PS4",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if case_count == 0:
         return output_template("PS4", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
@@ -168,7 +176,11 @@ def overlay_segregation(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PP1/BS4", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PP1/BS4",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if not segregation_present:
         return output_template("PP1/BS4", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
@@ -209,7 +221,11 @@ def overlay_de_novo(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PS2/PM6", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PS2/PM6",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if not de_novo_confirmed:
         return output_template("PS2/PM6", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
@@ -240,7 +256,11 @@ def overlay_pm3_in_trans(
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     if vcep_override:
-        return output_template("PM3", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PM3",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if not second_variant_pathogenic:
         return output_template("PM3", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
@@ -261,7 +281,11 @@ def overlay_protein_length(
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     if vcep_override:
-        return output_template("PM4/BP3", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PM4/BP3",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if variant_type in ("indel_inframe", "null"):
         return output_template("PM4", "PM4",
             reason=f"Protein length change due to {variant_type}.",
@@ -277,7 +301,11 @@ def overlay_source_review(
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     if vcep_override:
-        return output_template("PP5/BP6", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PP5/BP6",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     # ClinGen SVI: PP5/BP6 are deprecated — use as leads to primary evidence
     return output_template("PP5/BP6", "not_counted",
         status="not_applicable",
@@ -320,7 +348,11 @@ def overlay_pvs1_lof(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PVS1", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PVS1",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
 
     vt = variant_type.lower().strip()
 
@@ -449,7 +481,11 @@ def overlay_pvs1_splicing(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PVS1/BP7", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PVS1/BP7",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if not is_canonical_gt_ag:
         return output_template("PVS1/BP7", "not_met", status="not_applicable",
             route_outcome="overlay_not_applicable",
@@ -489,7 +525,11 @@ def overlay_ps1_splicing(
     """
     from .base import output_template
     if vcep_override:
-        return output_template("PS1_splice", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PS1_splice",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if same_splice_event_pathogenic and same_donor_acceptor:
         return output_template("PS1", "PS1",
             reason="Same predicted splicing event + same donor/acceptor as known pathogenic. PS1.",
@@ -515,7 +555,11 @@ def overlay_pm1_bp1(
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     if vcep_override:
-        return output_template("PM1/BP1", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "PM1/BP1",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if in_functional_domain and domain_has_pathogenic_enrichment:
         return output_template("PM1", "PM1_Moderate",
             reason="Variant in functional domain with pathogenic missense enrichment.",

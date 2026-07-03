@@ -27,10 +27,14 @@ def overlay_ps1_pm5(
         clinvar_same_residue_pathogenic_count: Number of pathogenic submissions at same residue
         vcep_override: VCEP-specific rule name
     """
-    from .base import output_template
+    from .base import output_template, vcep_deferred_template
 
     if vcep_override:
-        return output_template("PS1/PM5", vcep_override, reason=f"VCEP override: {vcep_override}")
+        return vcep_deferred_template(
+            "PS1/PM5",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
 
     # PS1: Same amino acid change as established pathogenic
     if clinvar_same_aa_pathogenic:

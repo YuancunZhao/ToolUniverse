@@ -951,6 +951,29 @@
         "description": "Number of unaffected controls without the variant.",
         "default": 0
       },
+      "case_af": {
+        "type": "number",
+        "description": "Allele frequency in affected cases.",
+        "default": 0
+      },
+      "control_af": {
+        "type": "number",
+        "description": "Allele frequency in controls.",
+        "default": 0
+      },
+      "odds_ratio": {
+        "type": "number",
+        "description": "Case-control odds ratio."
+      },
+      "confidence_interval_lower": {
+        "type": "number",
+        "description": "Lower bound of the odds ratio confidence interval."
+      },
+      "phenotype_consistent": {
+        "type": "boolean",
+        "description": "Reported case phenotype is consistent with the assessed phenotype.",
+        "default": false
+      },
       "vcep_override": {
         "type": "string",
         "description": ""
@@ -1021,6 +1044,21 @@
       "paternity_confirmed": {
         "type": "boolean",
         "description": "Maternity and paternity confirmed.",
+        "default": false
+      },
+      "phenotype_highly_specific": {
+        "type": "boolean",
+        "description": "Phenotype is highly specific for the gene-disease relationship.",
+        "default": false
+      },
+      "phenotype_consistent": {
+        "type": "boolean",
+        "description": "Phenotype is consistent with the gene-disease relationship.",
+        "default": false
+      },
+      "genetic_heterogeneity_low": {
+        "type": "boolean",
+        "description": "Genetic heterogeneity is low for the phenotype.",
         "default": false
       },
       "vcep_override": {
@@ -1095,9 +1133,39 @@
         "description": "Type of functional assay performed.",
         "default": ""
       },
-      "effect_magnitude": {
+      "assay_category": {
         "type": "string",
-        "description": "Magnitude of functional effect.",
+        "description": "Functional assay category.",
+        "default": ""
+      },
+      "assay_applicable_to_disease_mechanism": {
+        "type": "boolean",
+        "description": "Assay is applicable to the established disease mechanism.",
+        "default": false
+      },
+      "variant_specific": {
+        "type": "boolean",
+        "description": "Assay directly tests the assessed variant.",
+        "default": false
+      },
+      "replicated": {
+        "type": "boolean",
+        "description": "Functional effect was replicated.",
+        "default": false
+      },
+      "has_controls": {
+        "type": "boolean",
+        "description": "Assay included appropriate controls.",
+        "default": false
+      },
+      "statistically_significant": {
+        "type": "boolean",
+        "description": "Assay result was statistically significant.",
+        "default": false
+      },
+      "effect_direction": {
+        "type": "string",
+        "description": "Direction of observed functional effect.",
         "default": ""
       },
       "vcep_override": {
@@ -1398,7 +1466,7 @@
 },
 {
   "name": "ACMG_overlay_pp3_bp4",
-  "description": "Apply PP3/BP4 missense-prediction overlay. Evaluates computational prediction evidence from REVEL, CADD, SpliceAI, SIFT, and PolyPhen to support or refute pathogenicity.",
+  "description": "Apply PP3/BP4 missense-prediction overlay using Pejaver et al. 2022 ClinGen SVI calibrated intervals. Select one calibrated predictor by VCEP/local policy or the fixed default hierarchy, then map the raw score to PP3/BP4 strength. This tool does not perform predictor majority voting and does not use SpliceAI for missense PP3/BP4.",
   "type": "ACMGOverlayTool",
   "parameter": {
     "type": "object",
@@ -1409,19 +1477,59 @@
       },
       "cadd_phred": {
         "type": "number",
-        "description": "CADD Phred-scaled score."
+        "description": "CADD Phred-scaled score, interpreted only by Pejaver calibrated CADD intervals."
       },
-      "spliceai_ds_dg": {
+      "bayesdel_noaf_score": {
         "type": "number",
-        "description": "SpliceAI delta score (acceptor or donor gain)."
+        "description": "BayesDel noAF score."
+      },
+      "mutpred2_score": {
+        "type": "number",
+        "description": "MutPred2 score."
+      },
+      "vest4_score": {
+        "type": "number",
+        "description": "VEST4 score."
+      },
+      "evolutionary_action_score": {
+        "type": "number",
+        "description": "Evolutionary Action score."
+      },
+      "fathmm_score": {
+        "type": "number",
+        "description": "FATHMM score."
+      },
+      "gerp_score": {
+        "type": "number",
+        "description": "GERP++ score."
+      },
+      "mpc_score": {
+        "type": "number",
+        "description": "MPC score."
+      },
+      "phylop_score": {
+        "type": "number",
+        "description": "PhyloP score."
+      },
+      "primateai_score": {
+        "type": "number",
+        "description": "PrimateAI score."
       },
       "sift_score": {
         "type": "number",
-        "description": "SIFT score."
+        "description": "SIFT score, interpreted only by Pejaver calibrated SIFT intervals."
       },
       "polyphen_score": {
         "type": "number",
-        "description": "PolyPhen-2 score."
+        "description": "PolyPhen-2 HumVar score, interpreted only by Pejaver calibrated PolyPhen-2 HumVar intervals."
+      },
+      "spliceai_ds_dg": {
+        "type": "number",
+        "description": "Backward-compatible field only. SpliceAI is not used for missense PP3/BP4; route splicing effects to splicing overlays."
+      },
+      "selected_tool": {
+        "type": "string",
+        "description": "Pre-specified calibrated predictor to use, e.g. REVEL, CADD, BayesDel noAF, MutPred2, VEST4, SIFT, PolyPhen-2 HumVar, PrimateAI, PhyloP, GERP++, MPC, FATHMM, or Evolutionary Action. If omitted, the fixed default hierarchy is used before score interpretation."
       },
       "vcep_override": {
         "type": "string",
@@ -1821,10 +1929,27 @@
   "parameter": {
     "type": "object",
     "properties": {
-      "splice_prediction": {
-        "type": "string",
-        "description": "Splice prediction summary or SpliceAI score category.",
-        "default": ""
+      "spliceai_dl": {
+        "type": "number",
+        "description": "SpliceAI donor loss delta score."
+      },
+      "spliceai_da": {
+        "type": "number",
+        "description": "SpliceAI donor gain delta score."
+      },
+      "is_canonical_gt_ag": {
+        "type": "boolean",
+        "description": "Variant affects a canonical GT-AG splice site.",
+        "default": false
+      },
+      "rna_evidence": {
+        "type": "boolean",
+        "description": "RNA evidence supports splice disruption.",
+        "default": false
+      },
+      "nmd_predicted": {
+        "type": "boolean",
+        "description": "Nonsense-mediated decay is predicted."
       },
       "vcep_override": {
         "type": "string",
@@ -1893,10 +2018,20 @@
         "description": "Variant co-segregates with disease in family.",
         "default": false
       },
-      "affected_relatives": {
+      "affected_meioses": {
         "type": "integer",
-        "description": "Number of affected relatives with the variant.",
+        "description": "Number of informative affected meioses.",
         "default": 0
+      },
+      "total_meioses": {
+        "type": "integer",
+        "description": "Total number of informative meioses.",
+        "default": 0
+      },
+      "phenotype_highly_specific": {
+        "type": "boolean",
+        "description": "Phenotype is highly specific for the gene-disease relationship.",
+        "default": false
       },
       "vcep_override": {
         "type": "string",

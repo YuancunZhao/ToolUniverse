@@ -1,5 +1,22 @@
 # ACMG Overlay Architecture
 
+## Project Scope
+
+The project is temporarily scoped as an upstream ToolUniverse-compatible ClinGen/SVI
+guarded overlay extension. The extension does three things:
+
+1. Converts direct ToolUniverse variant evidence outputs into source leads or route inputs.
+2. Applies ClinGen/SVI criterion-specific recommendations through deterministic overlay tools.
+3. Blocks final ACMG wording unless bundle validation, semantic combination, finalization token,
+   and final-answer guard all pass.
+
+The extension intentionally does not replace upstream ToolUniverse evidence retrieval,
+does not trust automated source labels as counted evidence, and does not claim complete
+clinical-grade ACMG automation until every criterion path has validated route contracts.
+
+For the staged path from guarded overlay extension to a higher-automation ACMG intelligent
+rating assistant, see `docs/acmg_automation_roadmap.md`.
+
 ## Canonical Skill Source
 
 In this workspace, `skills/` is the canonical Skill source. `.agents/skills/`, `plugin/skills/`, and `plugins/tooluniverse/skills/` are treated as generated/deployment mirrors. Run `python3 scripts/check_skill_duplicate_drift.py` to ensure the protected ACMG and variant-interpretation Skill mirrors are byte-for-byte synchronized with canonical `skills/`.

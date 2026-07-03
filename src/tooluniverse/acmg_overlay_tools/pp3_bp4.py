@@ -1,19 +1,230 @@
-"""PP3/BP4 Missense Prediction overlay tool.
+"""PP3/BP4 missense-prediction overlay tool.
 
-MCP tool: acmg_overlay_pp3_bp4
+MCP tool: ACMG_overlay_pp3_bp4
 
-Per ClinGen SVI guidance and Pejaver 2022 (PMID:36413997) calibration:
-REVEL >= 0.932 → PP3_Strong (specificity > 95%)
-REVEL >= 0.7   → PP3 (recommended threshold, specificity 90%)
-REVEL in (0.290, 0.644) → No PP3/BP4 evidence
-REVEL < 0.15 AND CADD < 15 → BP4
-REVEL < 0.016 → BP4_Supporting
-Discordant predictors → neither PP3 nor BP4 applies.
+Implements the Pejaver et al. 2022 ClinGen SVI calibrated score intervals
+(PMID:36413997). This is not a predictor-voting tool: pick one calibrated
+tool by VCEP/local policy or the fixed default hierarchy, then map that raw
+score to the corresponding interval.
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+
+def _interval(
+    criterion: str,
+    strength: str,
+    lower: float | None = None,
+    upper: float | None = None,
+    *,
+    lower_inclusive: bool = False,
+    upper_inclusive: bool = False,
+) -> dict[str, Any]:
+    return {
+        "criterion": criterion,
+        "strength": strength,
+        "lower": lower,
+        "upper": upper,
+        "lower_inclusive": lower_inclusive,
+        "upper_inclusive": upper_inclusive,
+    }
+
+
+CALIBRATED_INTERVALS: dict[str, list[dict[str, Any]]] = {
+    "bayesdel_noaf": [
+        _interval("BP4", "BP4_Moderate", upper=-0.36, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=-0.36, upper=-0.18, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.13, upper=0.27, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.27, upper=0.50, lower_inclusive=True),
+        _interval("PP3", "PP3_Strong", lower=0.50, lower_inclusive=True),
+    ],
+    "cadd": [
+        _interval("BP4", "BP4_Strong", upper=0.15, upper_inclusive=True),
+        _interval("BP4", "BP4_Moderate", lower=0.15, upper=17.3, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=17.3, upper=22.7, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=25.3, upper=28.1, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=28.1, lower_inclusive=True),
+    ],
+    "evolutionary_action": [
+        _interval("BP4", "BP4_Moderate", upper=0.069, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.069, upper=0.262, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.685, upper=0.821, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.821, lower_inclusive=True),
+    ],
+    "fathmm": [
+        _interval("BP4", "BP4_Moderate", lower=4.69, lower_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=3.32, upper=4.69, lower_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=-5.04, upper=-4.14, lower_inclusive=False, upper_inclusive=True),
+        _interval("PP3", "PP3_Moderate", upper=-5.04, upper_inclusive=True),
+    ],
+    "gerp": [
+        _interval("BP4", "BP4_Moderate", upper=-4.54, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=-4.54, upper=2.70, upper_inclusive=True),
+    ],
+    "mpc": [
+        _interval("PP3", "PP3_Supporting", lower=1.360, upper=1.828, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=1.828, lower_inclusive=True),
+    ],
+    "mutpred2": [
+        _interval("BP4", "BP4_Strong", upper=0.010, upper_inclusive=True),
+        _interval("BP4", "BP4_Moderate", lower=0.010, upper=0.197, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.197, upper=0.391, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.737, upper=0.829, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.829, upper=0.932, lower_inclusive=True),
+        _interval("PP3", "PP3_Strong", lower=0.932, lower_inclusive=True),
+    ],
+    "phylop": [
+        _interval("BP4", "BP4_Moderate", upper=0.021, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.021, upper=1.879, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=7.367, upper=9.741, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=9.741, lower_inclusive=True),
+    ],
+    "polyphen2_humvar": [
+        _interval("BP4", "BP4_Moderate", upper=0.009, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.009, upper=0.113, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.978, upper=0.999, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.999, lower_inclusive=True),
+    ],
+    "primateai": [
+        _interval("BP4", "BP4_Moderate", upper=0.362, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.362, upper=0.483, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.790, upper=0.867, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.867, lower_inclusive=True),
+    ],
+    "revel": [
+        _interval("BP4", "BP4_VeryStrong", upper=0.003, upper_inclusive=True),
+        _interval("BP4", "BP4_Strong", lower=0.003, upper=0.016, upper_inclusive=True),
+        _interval("BP4", "BP4_Moderate", lower=0.016, upper=0.183, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.183, upper=0.290, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.644, upper=0.773, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.773, upper=0.932, lower_inclusive=True),
+        _interval("PP3", "PP3_Strong", lower=0.932, lower_inclusive=True),
+    ],
+    "sift": [
+        _interval("BP4", "BP4_Moderate", lower=0.327, lower_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.080, upper=0.327, lower_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.0, upper=0.001, upper_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.0, upper=0.0, lower_inclusive=True, upper_inclusive=True),
+    ],
+    "vest4": [
+        _interval("BP4", "BP4_Moderate", upper=0.302, upper_inclusive=True),
+        _interval("BP4", "BP4_Supporting", lower=0.302, upper=0.449, upper_inclusive=True),
+        _interval("PP3", "PP3_Supporting", lower=0.764, upper=0.861, lower_inclusive=True),
+        _interval("PP3", "PP3_Moderate", lower=0.861, upper=0.965, lower_inclusive=True),
+        _interval("PP3", "PP3_Strong", lower=0.965, lower_inclusive=True),
+    ],
+}
+
+TOOL_ALIASES = {
+    "bayesdel": "bayesdel_noaf",
+    "bayesdel_noaf": "bayesdel_noaf",
+    "bayesdel noaf": "bayesdel_noaf",
+    "cadd": "cadd",
+    "evolutionary_action": "evolutionary_action",
+    "evolutionary action": "evolutionary_action",
+    "fathmm": "fathmm",
+    "gerp": "gerp",
+    "gerp++": "gerp",
+    "mpc": "mpc",
+    "mutpred2": "mutpred2",
+    "phylop": "phylop",
+    "polyphen": "polyphen2_humvar",
+    "polyphen2": "polyphen2_humvar",
+    "polyphen2_humvar": "polyphen2_humvar",
+    "polyphen-2 humvar": "polyphen2_humvar",
+    "primateai": "primateai",
+    "revel": "revel",
+    "sift": "sift",
+    "vest4": "vest4",
+}
+
+DEFAULT_TOOL_HIERARCHY = [
+    "revel",
+    "bayesdel_noaf",
+    "mutpred2",
+    "vest4",
+    "cadd",
+    "evolutionary_action",
+    "fathmm",
+    "gerp",
+    "mpc",
+    "phylop",
+    "polyphen2_humvar",
+    "primateai",
+    "sift",
+]
+
+
+def _canonical_tool_name(value: str | None) -> str | None:
+    if not value:
+        return None
+    return TOOL_ALIASES.get(value.strip().lower().replace("-", "_").replace(" ", "_")) or TOOL_ALIASES.get(value.strip().lower())
+
+
+def _score_by_tool(
+    *,
+    revel_score: float | None,
+    cadd_phred: float | None,
+    sift_score: float | None,
+    polyphen_score: float | None,
+    bayesdel_noaf_score: float | None,
+    mutpred2_score: float | None,
+    vest4_score: float | None,
+    evolutionary_action_score: float | None,
+    fathmm_score: float | None,
+    gerp_score: float | None,
+    mpc_score: float | None,
+    phylop_score: float | None,
+    primateai_score: float | None,
+) -> dict[str, float]:
+    raw = {
+        "revel": revel_score,
+        "cadd": cadd_phred,
+        "sift": sift_score,
+        "polyphen2_humvar": polyphen_score,
+        "bayesdel_noaf": bayesdel_noaf_score,
+        "mutpred2": mutpred2_score,
+        "vest4": vest4_score,
+        "evolutionary_action": evolutionary_action_score,
+        "fathmm": fathmm_score,
+        "gerp": gerp_score,
+        "mpc": mpc_score,
+        "phylop": phylop_score,
+        "primateai": primateai_score,
+    }
+    return {tool: float(score) for tool, score in raw.items() if score is not None}
+
+
+def _in_interval(score: float, interval: dict[str, Any]) -> bool:
+    lower = interval["lower"]
+    upper = interval["upper"]
+    if lower is not None:
+        if interval["lower_inclusive"]:
+            if score < lower:
+                return False
+        elif score <= lower:
+            return False
+    if upper is not None:
+        if interval["upper_inclusive"]:
+            if score > upper:
+                return False
+        elif score >= upper:
+            return False
+    return True
+
+
+def _format_interval(interval: dict[str, Any]) -> str:
+    lower = interval["lower"]
+    upper = interval["upper"]
+    if lower is None:
+        return f"<= {upper}"
+    if upper is None:
+        return f">= {lower}"
+    left = "[" if interval["lower_inclusive"] else "("
+    right = "]" if interval["upper_inclusive"] else ")"
+    return f"{left}{lower}, {upper}{right}"
 
 
 def overlay_pp3_bp4(
@@ -22,86 +233,121 @@ def overlay_pp3_bp4(
     spliceai_ds_dg: float | None = None,
     sift_score: float | None = None,
     polyphen_score: float | None = None,
+    bayesdel_noaf_score: float | None = None,
+    mutpred2_score: float | None = None,
+    vest4_score: float | None = None,
+    evolutionary_action_score: float | None = None,
+    fathmm_score: float | None = None,
+    gerp_score: float | None = None,
+    mpc_score: float | None = None,
+    phylop_score: float | None = None,
+    primateai_score: float | None = None,
+    selected_tool: str | None = None,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     """Determine PP3 or BP4 evidence from computational predictors.
 
     Args:
-        revel_score: REVEL score (0-1). Recommended by ClinGen for missense.
-        cadd_phred: CADD Phred-scaled score.
-        spliceai_ds_dg: SpliceAI donor gain delta score (for splice impact context)
-        sift_score: SIFT score (0-1, <0.05 = damaging)
-        polyphen_score: PolyPhen-2 score (0-1, >0.9 = probably damaging)
+        selected_tool: Calibrated tool chosen by VCEP/local policy. If absent,
+            a fixed Pejaver-based hierarchy is used before score interpretation.
+        *_score: Raw score for the selected calibrated predictor.
+        spliceai_ds_dg: Accepted for backward compatibility but not used for
+            missense PP3/BP4; route splicing prediction to splicing overlays.
         vcep_override: VCEP-specific rule name
     """
-    from .base import output_template
+    from .base import output_template, vcep_deferred_template
 
     if vcep_override:
-        return output_template("PP3/BP4", vcep_override, reason=f"VCEP override: {vcep_override}")
+        return vcep_deferred_template(
+            "PP3/BP4",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
 
-    # No predictor data
-    if revel_score is None and cadd_phred is None and sift_score is None:
+    scores = _score_by_tool(
+        revel_score=revel_score,
+        cadd_phred=cadd_phred,
+        sift_score=sift_score,
+        polyphen_score=polyphen_score,
+        bayesdel_noaf_score=bayesdel_noaf_score,
+        mutpred2_score=mutpred2_score,
+        vest4_score=vest4_score,
+        evolutionary_action_score=evolutionary_action_score,
+        fathmm_score=fathmm_score,
+        gerp_score=gerp_score,
+        mpc_score=mpc_score,
+        phylop_score=phylop_score,
+        primateai_score=primateai_score,
+    )
+
+    if not scores:
+        next_action = "Retrieve a Pejaver-calibrated missense predictor score, preferably REVEL, BayesDel noAF, MutPred2, or VEST4."
+        if spliceai_ds_dg is not None:
+            next_action += " SpliceAI is not used for missense PP3/BP4; route splicing effects to the splicing overlays."
         return output_template(
             "PP3/BP4", "not_assessed",
             status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason="No computational predictor data available.",
-            next_action="Retrieve REVEL/CADD/SIFT/PolyPhen scores from MyVariant or Ensembl VEP.",
+            reason="No Pejaver 2022 calibrated missense predictor score was provided.",
+            source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+            next_action=next_action,
         )
 
-    # REVEL is the preferred ClinGen predictor
-    if revel_score is not None:
-        if revel_score >= 0.7:
-            return output_template(
-                "PP3", "PP3",
-                reason=f"REVEL={revel_score:.2f} (>=0.7). "
-                       "Per ClinGen SVI: REVEL >= 0.7 alone is sufficient for PP3.",
-                source_of_truth="REVEL",
-            )
-        if revel_score < 0.15 and (cadd_phred is None or cadd_phred < 15):
-            return output_template(
-                "BP4", "BP4",
-                reason=f"REVEL={revel_score:.2f} (<0.15). "
-                       "Per ClinGen SVI: REVEL < 0.15 indicates benign prediction.",
-                source_of_truth="REVEL",
-            )
-        # Intermediate REVEL — check concordance
-        if cadd_phred is not None and cadd_phred >= 25:
-            return output_template(
-                "PP3", "PP3",
-                reason=f"REVEL={revel_score:.2f} (moderate), CADD={cadd_phred:.0f} (>=25). "
-                       "Concordant damaging predictions. PP3 met per ClinGen guidance.",
-                source_of_truth="REVEL, CADD",
-            )
-        if cadd_phred is not None and cadd_phred < 15 and revel_score < 0.5:
-            return output_template(
-                "BP4", "BP4",
-                reason=f"REVEL={revel_score:.2f} (low), CADD={cadd_phred:.0f} (<15). "
-                       "Concordant benign predictions. BP4 met.",
-                source_of_truth="REVEL, CADD",
-            )
-        # Discordant
+    selected = _canonical_tool_name(selected_tool)
+    if selected_tool and not selected:
         return output_template(
-            "PP3/BP4", "not_met",
+            "PP3/BP4", "not_assessed",
             status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason=f"REVEL={revel_score:.2f} intermediate. "
-                   "Predictors discordant or uncertain. Neither PP3 nor BP4 applied.",
-            source_of_truth="REVEL, CADD",
+            reason=f"Selected predictor `{selected_tool}` is not in the Pejaver 2022 calibrated tool table.",
+            source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+            next_action=f"Use one of: {', '.join(DEFAULT_TOOL_HIERARCHY)}.",
         )
 
-    # Fallback: no REVEL — return not_assessed per ClinGen SVI guidance
-    # ClinGen explicitly prohibits majority-vote consensus of multiple predictors
-    # (Pejaver 2022, PMID:36413997, Table 5). REVEL is the required calibrated predictor.
+    if selected:
+        if selected not in scores:
+            return output_template(
+                "PP3/BP4", "not_assessed",
+                status="not_assessed",
+                route_outcome="overlay_not_assessed",
+                reason=f"Selected predictor `{selected}` was specified, but no raw score for that predictor was provided.",
+                source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+                next_action=f"Provide `{selected}` score or choose another pre-specified calibrated predictor.",
+            )
+        chosen = selected
+    else:
+        chosen = next((tool for tool in DEFAULT_TOOL_HIERARCHY if tool in scores), None)
+
+    if not chosen:
+        return output_template(
+            "PP3/BP4", "not_assessed",
+            status="not_assessed",
+            route_outcome="overlay_not_assessed",
+            reason="No supported Pejaver 2022 calibrated predictor score was provided.",
+            source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+            next_action=f"Provide one of: {', '.join(DEFAULT_TOOL_HIERARCHY)}.",
+        )
+
+    score = scores[chosen]
+    for interval in CALIBRATED_INTERVALS[chosen]:
+        if _in_interval(score, interval):
+            interval_text = _format_interval(interval)
+            return output_template(
+                interval["criterion"],
+                interval["strength"],
+                reason=f"{chosen} score={score:g} falls in Pejaver 2022 calibrated interval {interval_text}; "
+                       f"applies {interval['strength']}. Other predictors, if present, were not counted by majority vote.",
+                source_of_truth=f"{chosen}; Pejaver 2022 ClinGen SVI calibrated thresholds",
+            )
+
     return output_template(
         "PP3/BP4", "not_assessed",
         status="not_assessed",
         route_outcome="overlay_not_assessed",
-        reason="No REVEL score available. REVEL is the required ClinGen-calibrated "
-               "predictor for PP3/BP4. CADD/SIFT/PolyPhen majority-vote fallback is "
-               "explicitly prohibited by Pejaver 2022 (PMID:36413997).",
-        source_of_truth="REVEL (required), Pejaver 2022",
-        next_action="Retrieve REVEL score: use MyVariant_get_pathogenicity_scores to get REVEL.",
+        reason=f"{chosen} score={score:g} does not fall in a Pejaver 2022 PP3/BP4 evidence interval. "
+               "No computational evidence is counted.",
+        source_of_truth=f"{chosen}; Pejaver 2022 ClinGen SVI calibrated thresholds",
+        next_action="Do not substitute predictor voting. Use VCEP-specific rules if available.",
     )
 
 

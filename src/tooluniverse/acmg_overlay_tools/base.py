@@ -183,10 +183,31 @@ def output_template(
     }
 
 
+def vcep_deferred_template(
+    criterion: str,
+    strength: str,
+    *,
+    reason: str = "",
+    source_of_truth: str = "VCEP specification",
+    next_action: str = "Validate VCEP disease, gene, transcript, variant type, and scope in acmg_assessment_bundle.vcep_context.",
+) -> dict[str, Any]:
+    return output_template(
+        criterion,
+        strength,
+        status="applied",
+        route_outcome="overlay_deferred_to_vcep",
+        guidance_authority="VCEP-specific",
+        reason=reason or f"VCEP-specific rule proposed {strength}; validator must confirm scope before final classification.",
+        source_of_truth=source_of_truth,
+        next_action=next_action,
+    )
+
+
 __all__ = [
     "criterion_ownership",
     "literature_dependent_overlays",
     "output_template",
     "overlays_for_criterion",
+    "vcep_deferred_template",
     "variant_type_overlays",
 ]

@@ -12,9 +12,13 @@ def overlay_ba1_exception(
     gene_disease_prevalence: str = "rare",
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
-    from .base import output_template
+    from .base import output_template, vcep_deferred_template
     if vcep_override:
-        return output_template("BA1", vcep_override, reason=f"VCEP: {vcep_override}")
+        return vcep_deferred_template(
+            "BA1",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
     if gnomad_af_popmax > 0.05 or gnomad_af_global > 0.05:
         return output_template("BA1", "BA1",
             reason=f"gnomAD AF={gnomad_af_global:.4f}, popmax={gnomad_af_popmax:.4f}. "

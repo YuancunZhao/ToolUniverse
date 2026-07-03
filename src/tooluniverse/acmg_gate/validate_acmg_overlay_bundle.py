@@ -49,7 +49,7 @@ SOURCE_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 PRIMARY_EVIDENCE_RE = re.compile(r"\b(primary|assay|pedigree|segregation|trio|de novo|case-control|cohort|functional)\b", re.IGNORECASE)
-STANDALONE_BENIGN_RE = re.compile(r"\bBA1\b", re.IGNORECASE)
+ACMG_CRITERION_RE = re.compile(r"\b(BA1|BS[1-4]|BP[1-7]|PVS1|PS[1-4]|PM[1-6]|PP[1-5])(?=\b|[_\-\s])")
 LITERATURE_EVIDENCE_RE = re.compile(
     r"\b(PMID|PMCID|DOI|PubMed|EuropePMC|PMC|paper|article|publication|"
     r"literature|abstract|supplement|figure|table|case report|case series|"
@@ -393,20 +393,125 @@ def resolved_item_text(item: Any) -> str:
     return text_of(item)
 
 
-def counted_row_matches_resolved(row: dict[str, Any], resolved: list[Any]) -> bool:
-    criterion = str(row.get("criterion", ""))
-    proposed = str(row.get("proposed_evidence", ""))
+def _normalized_evidence_strength(value: Any, criterion: str = "") -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    criterion_match = ACMG_CRITERION_RE.search(raw)
+    if criterion_match:
+        raw = raw[criterion_match.end():]
+    normalized = re.sub(r"[_-]+", " ", raw).lower()
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if re.search(r"\b(not|non|without|no)\s+(very\s+strong|strong|moderate|supporting|stand\s+alone|standalone)\b", normalized):
+        return ""
+    strength_patterns = (
+        ("very_strong", re.compile(r"\bvery\s*strong\b")),
+        ("strong", re.compile(r"\bstrong\b")),
+        ("moderate", re.compile(r"\bmoderate\b")),
+        ("supporting", re.compile(r"\bsupporting\b")),
+        ("standalone", re.compile(r"\bstand\s*alone\b|\bstandalone\b")),
+    )
+    for strength, pattern in strength_patterns:
+        if pattern.search(normalized):
+            return strength
+    lowered = re.sub(r"[\s-]+", "_", raw).lower()
+    lowered = re.sub(r"_+", "_", lowered).strip("_")
+    return lowered
+
+
+def resolved_strength(item: Any) -> str:
+    if isinstance(item, dict):
+        for key in ("strength", "applied_evidence", "proposed_evidence"):
+            if key in item:
+                return text_of(item.get(key))
+        return ""
+    if isinstance(item, str):
+        return item
+    return text_of(item)
+
+
+def _resolved_criterion(item: Any) -> str:
+    if isinstance(item, dict) and item.get("criterion"):
+        raw = str(item.get("criterion"))
+        return criterion_code(raw) or raw
+    return criterion_code(resolved_item_text(item))
+
+
+def _resolved_source(item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+    return text_of(item.get("source") or item.get("overlay_or_vcep_source"))
+
+
+def _row_source(row: dict[str, Any]) -> str:
+    return text_of(row.get("source") or row.get("overlay_or_vcep_source"))
+
+
+def _row_criterion(row: dict[str, Any]) -> str:
+    raw = str(row.get("criterion", ""))
+    return criterion_code(raw) or raw
+
+
+def resolved_item_matches_counted_row(item: Any, row: dict[str, Any]) -> bool:
+    criterion = _row_criterion(row)
+    row_strength = _normalized_evidence_strength(
+        row.get("strength") or row.get("applied_evidence") or row.get("proposed_evidence"),
+        criterion,
+    )
+    if not criterion or _resolved_criterion(item) != criterion or not row_strength:
+        return False
+    item_strength = _normalized_evidence_strength(resolved_strength(item), criterion)
+    if not item_strength or item_strength != row_strength:
+        return False
+    row_source = _row_source(row)
+    item_source = _resolved_source(item)
+    return not (row_source and item_source and row_source != item_source)
+
+
+def resolved_item_binding_violation_code(item: Any, valid_counted_rows: list[dict[str, Any]]) -> str:
+    criterion = _resolved_criterion(item)
+    criterion_rows = [
+        row
+        for row in valid_counted_rows
+        if _row_criterion(row) == criterion
+    ]
+    if any(resolved_item_matches_counted_row(item, row) for row in criterion_rows):
+        return ""
+    item_strength = _normalized_evidence_strength(resolved_strength(item), criterion)
+    strength_rows = [
+        row
+        for row in criterion_rows
+        if _normalized_evidence_strength(
+            row.get("strength") or row.get("applied_evidence") or row.get("proposed_evidence"),
+            criterion,
+        ) == item_strength
+    ]
+    if strength_rows:
+        return "resolved_evidence_source_mismatch"
+    if criterion_rows:
+        return "resolved_evidence_strength_mismatch"
+    return "resolved_evidence_without_counted_audit_match"
+
+
+def resolved_evidence_binding_violation_codes(resolved: list[Any], valid_counted_rows: list[dict[str, Any]]) -> list[str]:
+    codes: list[str] = []
     for item in resolved:
-        text = resolved_item_text(item)
-        if criterion and criterion in text:
-            return True
-        if proposed and proposed in text:
-            return True
-    return False
+        code = resolved_item_binding_violation_code(item, valid_counted_rows)
+        if code:
+            codes.append(code)
+    return codes
+
+
+def resolved_evidence_binding_violation_message(code: str) -> str:
+    if code == "resolved_evidence_strength_mismatch":
+        return "Resolved counted evidence must match route_audit by criterion and strength, not criterion alone."
+    if code == "resolved_evidence_source_mismatch":
+        return "Resolved counted evidence must match route_audit by criterion, strength, and source when sources are provided."
+    return "Resolved counted evidence must match at least one counted route_audit row."
 
 
 def criterion_code(value: str) -> str:
-    match = re.search(r"\b(BA1|BS1|BS3|BS4|BP4|PM2|PM4|PP1|PP3|PP4|PS3|PS4|PVS1)\b", value)
+    match = ACMG_CRITERION_RE.search(value)
     return match.group(1) if match else ""
 
 
@@ -635,9 +740,9 @@ def validate(payload: Any, registry: list[dict[str, Any]]) -> dict[str, Any]:
         ]
         if final_requested and not valid_counted_rows:
             add(DRAFT_ONLY, "missing_counted_route_audit", "Final classification requires at least one counted route_audit row with a countable overlay/VCEP outcome.")
-        if final_requested and resolved and not any(STANDALONE_BENIGN_RE.search(resolved_item_text(item)) for item in resolved):
-            if not any(counted_row_matches_resolved(row, resolved) for row in valid_counted_rows):
-                add(DRAFT_ONLY, "resolved_evidence_without_counted_audit_match", "Resolved counted evidence must match at least one counted route_audit row.")
+        if final_requested and resolved:
+            for code in sorted(set(resolved_evidence_binding_violation_codes(resolved, valid_counted_rows))):
+                add(DRAFT_ONLY, code, resolved_evidence_binding_violation_message(code))
 
     semantic = SEMANTIC_COMBINER.validate_bundle_semantics(bundle)
     if final_requested and semantic["semantic_combiner_status"] == FAIL:
@@ -742,9 +847,9 @@ def validate_minimal(payload: Any, registry: list[dict[str, Any]]) -> dict[str, 
         ]
         if final_requested and not valid_counted_rows:
             add(DRAFT_ONLY, "missing_counted_route_audit", "Final classification requires at least one counted route_audit row with a countable overlay/VCEP outcome.")
-        if final_requested and resolved and not any(STANDALONE_BENIGN_RE.search(resolved_item_text(item)) for item in resolved):
-            if not any(counted_row_matches_resolved(row, resolved) for row in valid_counted_rows):
-                add(DRAFT_ONLY, "resolved_evidence_without_counted_audit_match", "Resolved counted evidence must match at least one counted route_audit row.")
+        if final_requested and resolved:
+            for code in sorted(set(resolved_evidence_binding_violation_codes(resolved, valid_counted_rows))):
+                add(DRAFT_ONLY, code, resolved_evidence_binding_violation_message(code))
 
     semantic = SEMANTIC_COMBINER.validate_bundle_semantics(bundle)
     if final_requested and semantic["semantic_combiner_status"] == FAIL:

@@ -13,24 +13,22 @@
 
 [//]: # (mcp-name: io.github.mims-harvard/tooluniverse)
 
-> ⚠️ **This is the ACMG Enhanced fork** ([YuancunZhao/ToolUniverse](https://github.com/YuancunZhao/ToolUniverse)).
-> Adds ACMG/AMP variant pathogenicity classification with:
-> - **Stable branch** (`codex/skills-overlay`): 7-layer gate enforcement, 22 criterion overlay skills, Chinese+English intent detection
-> - **Preview branch** (`acmg-overlay-mcp-tools`): independent ACMG criterion judgment MCP tools — LLM collects evidence, tools do deterministic ACMG rating (Router + 16 overlays + ACMG 2015 combiner)
+> This fork is a **ClinGen/SVI guarded overlay extension** for upstream ToolUniverse.
+> Upstream ToolUniverse remains the evidence retrieval and tool-execution platform.
+> This extension adds deterministic ACMG/ClinGen overlay tools, source-lead sandboxing,
+> route-audit validation, and final-answer guards so agents cannot directly convert
+> GeneBe, InterVar, ClinVar, SpliceAI, MyVariant, VEP, gnomAD, literature, or user
+> context into counted ACMG evidence.
 >
-> **One-line install (stable):**
+> This fork is **not a standalone clinical classifier**. Its near-term purpose is to
+> make ACMG-related agent workflows harder to bypass and easier to audit. The long-term
+> direction is a higher-automation ACMG intelligent rating tool, built incrementally
+> from validated overlay routes and evidence provenance.
+>
+> **One-line install:**
 > ```
 > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
 > ```
->
-> **One-line install (preview — with deterministic overlay MCP tools):**
-> ```
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/acmg-overlay-mcp-tools/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
-> ```
->
-> ⚠️ **Use the preview branch if you want the LLM to use deterministic ACMG overlay tools**
-> (ACMG_overlay_pm2, ACMG_overlay_pvs1_lof, ACMG_overlay_de_novo, etc.)
-> instead of reading SKILL.md files for ACMG criterion judgment. The stable branch
 > only has the 7-layer gate enforcement system.
 
 ## Install

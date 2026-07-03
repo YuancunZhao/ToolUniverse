@@ -31,11 +31,15 @@ def overlay_pm2(
         disease_prevalence: "rare" or "common" — affects BA1 threshold
         vcep_override: VCEP-specific rule name if applicable
     """
-    from .base import output_template
+    from .base import output_template, vcep_deferred_template
 
     # VCEP override takes precedence
     if vcep_override:
-        return output_template("PM2", vcep_override, reason=f"VCEP override: {vcep_override}")
+        return vcep_deferred_template(
+            "PM2",
+            vcep_override,
+            reason=f"VCEP-specific override requested: {vcep_override}. Scope must be validated before final counting.",
+        )
 
     # No data available
     if gnomad_an == 0:
