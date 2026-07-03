@@ -12,6 +12,7 @@ def ACMG_route_overlays(
     gene: str = "",
     hgvs_c: str = "",
     variant_type: str = "",
+    consequence: str = "",
     *,
     stream_callback: Callable[[str], None] | None = None,
     use_cache: bool = False,
@@ -22,6 +23,7 @@ def ACMG_route_overlays(
         gene=gene,
         hgvs_c=hgvs_c,
         variant_type=variant_type,
+        consequence=consequence,
     )
 
 
