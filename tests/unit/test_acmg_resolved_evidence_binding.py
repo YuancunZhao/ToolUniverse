@@ -437,3 +437,10 @@ def test_precriterion_negated_free_text_strength_does_not_bind_to_counted_route(
     assert result["status"] != "PASS", result
     assert "resolved_evidence_strength_mismatch" in _violation_codes(result)
     assert "resolved_evidence_source_mismatch" not in _violation_codes(result)
+
+
+if __name__ == "__main__":
+    test_resolved_counted_evidence_requires_exact_strength_binding()
+    test_each_resolved_counted_evidence_item_must_bind_to_counted_audit_row()
+    test_no_counted_evidence_yields_counting_violation()
+    print("PASS test_acmg_resolved_evidence_binding (smoke 3/18)")
