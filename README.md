@@ -29,7 +29,6 @@
 > ```
 > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/skills-overlay/SETUP.md and set up ToolUniverse ACMG enhanced version for me.
 > ```
-> only has the 7-layer gate enforcement system.
 
 ## Install
 

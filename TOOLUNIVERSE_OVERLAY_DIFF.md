@@ -21,7 +21,7 @@ final-answer gating.
 - **Mirrors:** `plugin/skills/`, `plugins/tooluniverse/skills/` — drift-checked by `scripts/check_skill_duplicate_drift.py`. `.agents/skills/` is a local-only generated mirror (gitignored).
 - **Tests:** 14 ACMG test files (12 unit + 2 integration), 33 validator fixtures, 22 bypass fixtures
 
-- `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`: reference-only skill documenting Pejaver 2022 PP3/BP4 calibrated intervals; runtime judgment belongs to `ACMG_overlay_pp3_bp4`.
+- `tooluniverse-acmg-pp3-bp4-missense-prediction-refinement`: reference-only skill documenting Pejaver 2022 PP3/BP4 calibrated intervals; runtime judgment belongs to `ACMG_overlay_pp3_bp4`. Predictor selection is explicit: `pre_specified` uses `ClinGen/SVI primary` interval authority, `vcep_specific` remains `VCEP-specific`, and `local_default_hierarchy` is reported as `practice/local refinement`.
 
 ## Architecture Rules
 
