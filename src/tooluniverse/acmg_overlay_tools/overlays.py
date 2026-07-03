@@ -48,22 +48,17 @@ def overlay_functional_assay(
             next_action="Search for functional studies specifically testing this variant "
                          "(not general gene function).")
 
-    # Determine assay level
+    # Determine assay level per Brnich 2019 Table 1
     if replicated and has_controls and statistically_significant:
-        level = 1
-        level_name = "validated"
-    elif has_controls and replicated:
-        level = 2
-        level_name = "well-established"
-    elif has_controls and (replicated or not replicated):
-        level = 3
-        level_name = "emerging"
+        level = 1  # Validated
+    elif has_controls and statistically_significant:
+        level = 2  # Well-established (controls + stats, may not be independently replicated)
+    elif has_controls:
+        level = 3  # Emerging (has controls, no statistical validation or not replicated)
     elif variant_specific:
-        level = 4
-        level_name = "supportive"
+        level = 4  # Supportive (variant-specific but minimal validation)
     else:
-        level = 5
-        level_name = "non-validated"
+        level = 5  # Non-validated
 
     # Determine strength based on level and effect direction
     is_lof = "loss" in effect_direction.lower() or "lof" in effect_direction.lower()
