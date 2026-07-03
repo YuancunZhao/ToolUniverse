@@ -2,8 +2,13 @@
 
 MCP tool: acmg_overlay_pp3_bp4
 
-Per ClinGen SVI guidance: REVEL >= 0.7 is sufficient for PP3.
-REVEL < 0.15 AND CADD < 15 → BP4. Discordant predictors → neither.
+Per ClinGen SVI guidance and Pejaver 2022 (PMID:36413997) calibration:
+REVEL >= 0.932 → PP3_Strong (specificity > 95%)
+REVEL >= 0.7   → PP3 (recommended threshold, specificity 90%)
+REVEL in (0.290, 0.644) → No PP3/BP4 evidence
+REVEL < 0.15 AND CADD < 15 → BP4
+REVEL < 0.016 → BP4_Supporting
+Discordant predictors → neither PP3 nor BP4 applies.
 """
 
 from __future__ import annotations

@@ -12,71 +12,191 @@ from .base import output_template
 def overlay_functional_assay(
     functional_evidence: str = "",
     assay_type: str = "",
-    effect_magnitude: str = "",
+    assay_category: str = "",
+    variant_specific: bool = False,
+    replicated: bool = False,
+    has_controls: bool = False,
+    statistically_significant: bool = False,
+    effect_direction: str = "",
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PS3/BS3 per ClinGen SVI functional assay classification (Brnich 2019, PMID:31892348).
+
+    ClinGen defines 5 levels of functional assay validation:
+        Level 1: Validated - gene/variant-specific, replicated, controlled, statistically significant
+        Level 2: Well-established - gene-specific, replicated, controlled
+        Level 3: Emerging - gene-specific, has controls, may not be replicated
+        Level 4: Supportive - variant-specific but not gene-level validated
+        Level 5: Non-validated - not meeting above criteria
+
+    LLM input: from full text of published functional studies (Methods/Results sections).
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PS3/BS3", vcep_override, reason=f"VCEP: {vcep_override}")
     if not functional_evidence:
         return output_template("PS3/BS3", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
             reason="No functional assay evidence provided.",
-            next_action="Search PubMed for functional studies of this variant.")
-    # Simple heuristic: minigene or in vitro assay with loss-of-function
-    if assay_type in ("minigene", "in_vitro", "enzymatic", "reporter") and "loss" in functional_evidence.lower():
+            next_action="Search PubMed (full text) for functional studies of this variant using "
+                         "the variant HGVS, rsID, or protein change as query terms.")
+    if not variant_specific:
+        return output_template("PS3/BS3", "not_applicable",
+            status="not_assessed", route_outcome="overlay_not_assessed",
+            reason="Functional evidence is gene-level, not variant-specific. PS3/BS3 requires "
+                   "variant-specific functional data.",
+            next_action="Search for functional studies specifically testing this variant "
+                         "(not general gene function).")
+
+    # Determine assay level
+    if replicated and has_controls and statistically_significant:
+        level = 1
+        level_name = "validated"
+    elif has_controls and replicated:
+        level = 2
+        level_name = "well-established"
+    elif has_controls and (replicated or not replicated):
+        level = 3
+        level_name = "emerging"
+    elif variant_specific:
+        level = 4
+        level_name = "supportive"
+    else:
+        level = 5
+        level_name = "non-validated"
+
+    # Determine strength based on level and effect direction
+    is_lof = "loss" in effect_direction.lower() or "lof" in effect_direction.lower()
+    is_gof = "gain" in effect_direction.lower() or "gof" in effect_direction.lower()
+    is_no_effect = "no" in effect_direction.lower() or "normal" in effect_direction.lower() or "wt" in effect_direction.lower()
+
+    if level == 1:
+        if is_no_effect:
+            return output_template("BS3", "BS3",
+                reason=f"Level 1 validated assay ({assay_type}) shows no functional effect. BS3 applies.",
+                source_of_truth="PubMed functional study")
+        return output_template("PS3", "PS3",
+            reason=f"Level 1 validated assay ({assay_type}) shows {effect_direction}. PS3 applies.",
+            source_of_truth="PubMed functional study")
+    elif level == 2:
+        if is_no_effect:
+            return output_template("BS3", "BS3_Supporting",
+                reason=f"Level 2 well-established assay ({assay_type}) shows no effect. BS3_Supporting.",
+                source_of_truth="PubMed functional study")
+        return output_template("PS3", "PS3_Moderate",
+            reason=f"Level 2 well-established assay ({assay_type}) shows {effect_direction}. PS3_Moderate.",
+            source_of_truth="PubMed functional study")
+    elif level == 3:
         return output_template("PS3", "PS3_Supporting",
-            reason=f"{assay_type}: {functional_evidence[:100]}. PS3_Supporting per ClinGen.",
-            source_of_truth="PubMed literature")
-    return output_template("PS3/BS3", "not_assessed", status="not_assessed",
-        route_outcome="overlay_not_assessed",
-        reason=f"Evidence type '{assay_type}' requires expert review.",
-        source_of_truth="PubMed literature")
+            reason=f"Level 3 emerging assay ({assay_type}) shows {effect_direction}. PS3_Supporting.",
+            source_of_truth="PubMed functional study")
+    elif level == 4:
+        return output_template("PS3", "PS3_Supporting",
+            reason=f"Level 4 supportive assay ({assay_type}) shows {effect_direction}. "
+                   "PS3_Supporting. Not replicated — consider independent verification.",
+            source_of_truth="PubMed functional study")
+    else:
+        return output_template("PS3/BS3", "not_assessed", status="not_assessed",
+            route_outcome="overlay_not_assessed",
+            reason=f"Level 5 non-validated assay ({assay_type}). Cannot assign PS3/BS3. "
+                   "Needs: replication, controls, or statistical validation.",
+            source_of_truth="PubMed functional study")
 
 
 def overlay_case_enrichment(
-    case_count: int = 0, control_count: int = 0,
+    case_count: int = 0,
+    control_count: int = 0,
+    case_af: float = 0.0,
+    control_af: float = 0.0,
+    odds_ratio: float | None = None,
+    confidence_interval_lower: float | None = None,
+    phenotype_consistent: bool = False,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PS4 per ClinGen SVI case enrichment recommendation.
+
+    LLM input: from full text of case-control/cohort studies (Results/Tables).
+    OR > 5 + CI excluding 1.0 → PS4_Strong, OR > 2 → PS4, OR > 1.5 → PS4_Supporting.
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PS4", vcep_override, reason=f"VCEP: {vcep_override}")
     if case_count == 0:
         return output_template("PS4", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
             reason="No case enrichment data provided.",
-            next_action="Search literature for case-control studies.")
-    if case_count >= 5 and control_count >= 100:
+            next_action="Search PubMed full text for case-control studies.")
+    if not phenotype_consistent:
+        return output_template("PS4", "not_met", status="not_applicable",
+            route_outcome="overlay_not_applicable",
+            reason="Reported case phenotypes not consistent with patient.")
+    if odds_ratio is not None and control_count > 0:
+        ci_excludes_1 = confidence_interval_lower is not None and confidence_interval_lower > 1.0
+        if odds_ratio >= 5.0 and ci_excludes_1:
+            return output_template("PS4", "PS4_Strong",
+                reason=f"OR={odds_ratio:.1f} (CI>{confidence_interval_lower:.1f}), {case_count}c/{control_count}ctrl. PS4_Strong.",
+                source_of_truth="PubMed case-control")
+        if odds_ratio >= 2.0 and ci_excludes_1:
+            return output_template("PS4", "PS4",
+                reason=f"OR={odds_ratio:.1f} (CI>{confidence_interval_lower:.1f}), {case_count}c/{control_count}ctrl. PS4.",
+                source_of_truth="PubMed case-control")
+        if odds_ratio >= 1.5:
+            return output_template("PS4", "PS4_Supporting",
+                reason=f"OR={odds_ratio:.1f}, {case_count}c/{control_count}ctrl. PS4_Supporting.",
+                source_of_truth="PubMed case-control")
+    if case_count >= 5:
         return output_template("PS4", "PS4_Supporting",
-            reason=f"{case_count} cases vs {control_count} controls. PS4_Supporting.",
-            source_of_truth="PubMed literature")
+            reason=f"{case_count} unrelated cases without controls. PS4_Supporting (≥5 per ClinGen).",
+            source_of_truth="PubMed case series")
     return output_template("PS4", "not_assessed", status="not_assessed",
         route_outcome="overlay_not_assessed",
-        reason=f"Insufficient case data: {case_count} cases.",
-        source_of_truth="PubMed literature")
+        reason=f"Only {case_count} case(s), insufficient for PS4.")
 
 
 def overlay_segregation(
     segregation_present: bool = False,
-    affected_relatives: int = 0,
+    affected_meioses: int = 0,
+    total_meioses: int = 0,
+    phenotype_highly_specific: bool = False,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PP1/BS4/PP4 per ClinGen SVI segregation recommendation (Jarvik 2015, PMID:25631863).
+
+    Scoring is based on meioses (meiotic events), not raw affected count:
+        PP1_Strong: ≥7 meioses observed + phenotype specific
+        PP1_Moderate: 5-6 meioses
+        PP1: 3-4 meioses
+        PP1_Supporting: 1-2 meioses
+
+    LLM input: from full text of family/segregation studies (pedigree/methods).
+    """
+    from .base import output_template
     if vcep_override:
-        return output_template("PP1/BS4/PP4", vcep_override, reason=f"VCEP: {vcep_override}")
+        return output_template("PP1/BS4", vcep_override, reason=f"VCEP: {vcep_override}")
     if not segregation_present:
-        return output_template("PP1/BS4/PP4", "not_assessed", status="not_assessed",
+        return output_template("PP1/BS4", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
             reason="No segregation data provided.",
-            next_action="Obtain family segregation data if available.")
-    if affected_relatives >= 5:
+            next_action="Obtain family segregation data (meioses count from pedigree).")
+    if affected_meioses >= 7 and phenotype_highly_specific:
+        return output_template("PP1", "PP1_Strong",
+            reason=f"{affected_meioses} meioses observed + highly specific phenotype. PP1_Strong.",
+            source_of_truth="Family study")
+    if affected_meioses >= 5:
         return output_template("PP1", "PP1_Moderate",
-            reason=f"Segregation in {affected_relatives} affected relatives.",
+            reason=f"{affected_meioses} meioses observed. PP1_Moderate.",
             source_of_truth="Family study")
-    if affected_relatives >= 3:
+    if affected_meioses >= 3:
         return output_template("PP1", "PP1",
-            reason=f"Segregation in {affected_relatives} affected relatives.",
+            reason=f"{affected_meioses} meioses observed. PP1.",
             source_of_truth="Family study")
-    return output_template("PP1", "PP1_Supporting",
-        reason=f"Segregation in {affected_relatives} affected relatives.",
-        source_of_truth="Family study")
+    if affected_meioses >= 1:
+        return output_template("PP1", "PP1_Supporting",
+            reason=f"{affected_meioses} meioses observed. PP1_Supporting.",
+            source_of_truth="Family study")
+    return output_template("PP1/BS4", "not_assessed", status="not_assessed",
+        route_outcome="overlay_not_assessed",
+        reason=f"{affected_meioses} meioses insufficient for PP1.")
 
 
 def overlay_de_novo(
@@ -315,33 +435,77 @@ def overlay_pvs1_lof(
 
 
 def overlay_pvs1_splicing(
-    splice_prediction: str = "",
+    spliceai_dl: float | None = None,
+    spliceai_da: float | None = None,
+    is_canonical_gt_ag: bool = False,
+    rna_evidence: bool = False,
+    nmd_predicted: bool | None = None,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PVS1 Splicing per Walker 2023 RNA/splicing refinement (PMID:36652601).
+
+    Canonical ±1/2 splice sites with SpliceAI support can activate PVS1.
+    Requires orthogonal validation (RNA evidence preferred).
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PVS1/BP7", vcep_override, reason=f"VCEP: {vcep_override}")
-    if not splice_prediction:
+    if not is_canonical_gt_ag:
+        return output_template("PVS1/BP7", "not_met", status="not_applicable",
+            route_outcome="overlay_not_applicable",
+            reason="Not a canonical GT-AG splice site (±1/2). PVS1 splicing not applicable.")
+    if spliceai_dl is not None and spliceai_dl >= 0.5:
+        if rna_evidence:
+            return output_template("PVS1", "PVS1",
+                reason=f"Canonical splice, SpliceAI DL={spliceai_dl:.2f}(≥0.5) + RNA evidence. PVS1.",
+                source_of_truth="SpliceAI, RNA study")
+        return output_template("PVS1", "PVS1_Moderate",
+            reason=f"Canonical splice, SpliceAI DL={spliceai_dl:.2f}(≥0.5). PVS1_Moderate (RNA evidence recommended).",
+            source_of_truth="SpliceAI",
+            next_action="Perform RT-PCR/minigene for RNA confirmation.")
+    if spliceai_dl is not None and spliceai_dl < 0.2:
+        return output_template("PVS1/BP7", "not_met", status="not_applicable",
+            route_outcome="overlay_not_applicable",
+            reason=f"SpliceAI DL={spliceai_dl:.2f} (<0.2). No splicing impact predicted.")
+    if not spliceai_dl and not rna_evidence:
         return output_template("PVS1/BP7", "not_assessed", status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason="No splice prediction data.")
+            reason="No SpliceAI or RNA evidence for splice assessment.")
     return output_template("BP7", "BP7",
-        reason=f"Splice prediction: {splice_prediction}. May support BP7 for synonymous.",
+        reason=f"Splice prediction available. May support BP7 for synonymous variants.",
         source_of_truth="SpliceAI")
 
 
 def overlay_ps1_splicing(
     same_splice_event_pathogenic: bool = False,
+    same_donor_acceptor: bool = False,
+    predicted_skipped_exon: bool = False,
+    in_frame: bool | None = None,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
+    """PS1 splicing similarity. Assesses whether predicted splicing event matches known pathogenic.
+
+    Key elements: same donor/acceptor, same predicted skipped exon, reading frame concordance.
+    """
+    from .base import output_template
     if vcep_override:
         return output_template("PS1_splice", vcep_override, reason=f"VCEP: {vcep_override}")
+    if same_splice_event_pathogenic and same_donor_acceptor:
+        return output_template("PS1", "PS1",
+            reason="Same predicted splicing event + same donor/acceptor as known pathogenic. PS1.",
+            source_of_truth="SpliceAI, literature")
+    if same_splice_event_pathogenic:
+        return output_template("PS1", "PS1_Supporting",
+            reason="Same predicted splicing event as known pathogenic but donor/acceptor differs. PS1_Supporting.",
+            source_of_truth="SpliceAI, literature")
     if not same_splice_event_pathogenic:
         return output_template("PS1_splice", "not_met", status="not_assessed",
             route_outcome="overlay_not_assessed",
-            reason="No evidence of same predicted splicing event as known pathogenic.")
-    return output_template("PS1", "PS1",
-        reason="Same predicted splicing event as established pathogenic variant.",
-        source_of_truth="SpliceAI, literature")
+            reason="No evidence of same predicted splicing event as known pathogenic.",
+            next_action="Compare SpliceAI predictions with known pathogenic splice variants in this gene.")
+    return output_template("PS1_splice", "not_assessed", status="not_assessed",
+        route_outcome="overlay_not_assessed",
+        reason="Insufficient splicing comparison data.")
 
 
 def overlay_pm1_bp1(
