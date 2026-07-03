@@ -1466,7 +1466,7 @@
 },
 {
   "name": "ACMG_overlay_pp3_bp4",
-  "description": "Apply PP3/BP4 missense-prediction overlay using Pejaver et al. 2022 ClinGen SVI calibrated intervals. Select one calibrated predictor by VCEP/local policy or the fixed default hierarchy, then map the raw score to PP3/BP4 strength. This tool does not perform predictor majority voting and does not use SpliceAI for missense PP3/BP4.",
+  "description": "Apply PP3/BP4 missense-prediction overlay using Pejaver et al. 2022 ClinGen SVI calibrated intervals. Select one calibrated predictor by an explicit pre-specified or VCEP-specific policy, then map the raw score to PP3/BP4 strength. The built-in hierarchy is available only when explicitly requested as local_default_hierarchy and is marked practice/local refinement, not ClinGen/SVI primary predictor-selection guidance. This tool does not perform predictor majority voting and does not use SpliceAI for missense PP3/BP4.",
   "type": "ACMGOverlayTool",
   "parameter": {
     "type": "object",
@@ -1529,7 +1529,11 @@
       },
       "selected_tool": {
         "type": "string",
-        "description": "Pre-specified calibrated predictor to use, e.g. REVEL, CADD, BayesDel noAF, MutPred2, VEST4, SIFT, PolyPhen-2 HumVar, PrimateAI, PhyloP, GERP++, MPC, FATHMM, or Evolutionary Action. If omitted, the fixed default hierarchy is used before score interpretation."
+        "description": "Pre-specified calibrated predictor to use, e.g. REVEL, CADD, BayesDel noAF, MutPred2, VEST4, SIFT, PolyPhen-2 HumVar, PrimateAI, PhyloP, GERP++, MPC, FATHMM, or Evolutionary Action."
+      },
+      "selection_policy": {
+        "type": "string",
+        "description": "How the selected predictor was chosen. Use pre_specified for a pre-score local/lab selection, vcep_specific for an in-scope VCEP rule, or local_default_hierarchy for this tool's documented fallback hierarchy."
       },
       "vcep_override": {
         "type": "string",
@@ -1751,6 +1755,21 @@
         "type": "boolean",
         "description": "Same splice event reported as pathogenic.",
         "default": false
+      },
+      "same_donor_acceptor": {
+        "type": "boolean",
+        "description": "Same donor/acceptor sites as known pathogenic variant.",
+        "default": false
+      },
+      "predicted_skipped_exon": {
+        "type": "boolean",
+        "description": "Predicted exon skipping consistent with known pathogenic.",
+        "default": false
+      },
+      "in_frame": {
+        "type": "boolean",
+        "description": "Predicted in-frame splicing alteration. null = unknown.",
+        "default": null
       },
       "vcep_override": {
         "type": "string",

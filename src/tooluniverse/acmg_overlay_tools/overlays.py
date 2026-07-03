@@ -32,7 +32,6 @@ def overlay_functional_assay(
 
     LLM input: from full text of published functional studies (Methods/Results sections).
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PS3/BS3",
@@ -118,7 +117,6 @@ def overlay_case_enrichment(
     LLM input: from full text of case-control/cohort studies (Results/Tables).
     OR > 5 + CI excluding 1.0 → PS4_Strong, OR > 2 → PS4, OR > 1.5 → PS4_Supporting.
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PS4",
@@ -174,7 +172,6 @@ def overlay_segregation(
 
     LLM input: from full text of family/segregation studies (pedigree/methods).
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PP1/BS4",
@@ -219,7 +216,6 @@ def overlay_de_novo(
     LLM input: from clinical report / published case literature.
     2pt=PS2, 1pt=PS2_Moderate, 0pt=PM6, not de novo=not_assessed.
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PS2/PM6",
@@ -346,7 +342,6 @@ def overlay_pvs1_lof(
         second_allele_found: second pathogenic allele confirmed (for AR)
         vcep_override: VCEP-specific rule name
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PVS1",
@@ -479,7 +474,6 @@ def overlay_pvs1_splicing(
     Canonical ±1/2 splice sites with SpliceAI support can activate PVS1.
     Requires orthogonal validation (RNA evidence preferred).
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PVS1/BP7",
@@ -523,7 +517,6 @@ def overlay_ps1_splicing(
 
     Key elements: same donor/acceptor, same predicted skipped exon, reading frame concordance.
     """
-    from .base import output_template
     if vcep_override:
         return vcep_deferred_template(
             "PS1_splice",
