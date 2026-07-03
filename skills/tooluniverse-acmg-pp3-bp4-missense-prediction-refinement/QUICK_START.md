@@ -100,7 +100,8 @@ Expected: use the VCEP rule first and cite it. Use the Pejaver genome-wide calib
 
 ```text
 Computational evidence: [applied code or none].
-Selected tool: [tool], selected because [VCEP/local hierarchy/default hierarchy].
+Selected tool: [tool], selected because [VCEP-specific rule/pre-specified policy/local_default_hierarchy].
+Selection policy: [vcep_specific/pre_specified/local_default_hierarchy]; local_default_hierarchy is practice/local refinement.
 Score: [score] from [ToolUniverse source].
 Calibration: Pejaver et al. 2022 interval [interval].
 Reasoning: [why PP3/BP4 applies or does not apply].

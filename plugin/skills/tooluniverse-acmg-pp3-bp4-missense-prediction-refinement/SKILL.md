@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 Use this overlay when ACMG/AMP classification depends on computational missense prediction evidence for `PP3` or `BP4`. It refines the base `tooluniverse-acmg-variant-classification` workflow using Pejaver et al. 2022 ClinGen SVI recommendations.
 
-This skill does not create a new MCP tool. It uses ToolUniverse evidence-retrieval tools first, then applies calibrated rule interpretation inside the ACMG evidence assignment workflow.
+This skill is reference and routing documentation for the deterministic `ACMG_overlay_pp3_bp4` MCP tool. Use ToolUniverse evidence-retrieval tools to collect raw predictor scores, then call `ACMG_overlay_pp3_bp4` with `selected_tool` and `selection_policy`; do not apply calibrated PP3/BP4 interpretation directly from this SKILL.md.
 
 Use `tooluniverse-acmg-overlay-routing-core` for shared disease-context, mechanism, clinical-context, source-review, double-counting, and output-status conventions before applying this PP3/BP4-specific logic.
 
@@ -75,7 +75,9 @@ Check whether a VCEP rule supersedes the genome-wide calibration:
 
 Use the current disease-specific VCEP rule first if it gives a PP3/BP4 tool and threshold.
 
-If no VCEP rule exists and a local policy has not already selected a tool, use a fixed default hierarchy before reading scores:
+If no VCEP rule exists, PP3/BP4 can be counted as `ClinGen/SVI primary` only when a calibrated predictor was selected before reading the score and the tool call passes both `selected_tool` and `selection_policy="pre_specified"`.
+
+The built-in hierarchy is a local fallback, not a ClinGen/SVI predictor-selection rule. Use it only when the caller explicitly passes `selection_policy="local_default_hierarchy"` to `ACMG_overlay_pp3_bp4`; report the result as `practice/local refinement`.
 
 1. REVEL, because it reaches `PP3_Strong` and `BP4_VeryStrong/Strong/Moderate/Supporting` in the Pejaver calibration and is commonly available.
 2. BayesDel without allele frequency, MutPred2, or VEST4 when REVEL is unavailable and the score source/version is clear.
