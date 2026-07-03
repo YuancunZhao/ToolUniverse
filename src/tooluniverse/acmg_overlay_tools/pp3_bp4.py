@@ -3,9 +3,10 @@
 MCP tool: ACMG_overlay_pp3_bp4
 
 Implements the Pejaver et al. 2022 ClinGen SVI calibrated score intervals
-(PMID:36413997). This is not a predictor-voting tool: pick one calibrated
-tool by VCEP/local policy or the fixed default hierarchy, then map that raw
-score to the corresponding interval.
+(PMID:36413997). This is not a predictor-voting tool: callers must provide an
+explicit selection_policy. Pre-specified predictors use ClinGen/SVI interval
+authority, VCEP-specific selections remain VCEP-specific, and the built-in
+hierarchy is available only as practice/local refinement.
 """
 
 from __future__ import annotations
@@ -156,6 +157,9 @@ DEFAULT_TOOL_HIERARCHY = [
     "sift",
 ]
 
+EXPLICIT_SELECTION_POLICIES = {"pre_specified", "vcep_specific"}
+LOCAL_SELECTION_POLICIES = {"local_default_hierarchy"}
+
 
 def _canonical_tool_name(value: str | None) -> str | None:
     if not value:
@@ -243,13 +247,17 @@ def overlay_pp3_bp4(
     phylop_score: float | None = None,
     primateai_score: float | None = None,
     selected_tool: str | None = None,
+    selection_policy: str | None = None,
     vcep_override: str | None = None,
 ) -> dict[str, Any]:
     """Determine PP3 or BP4 evidence from computational predictors.
 
     Args:
-        selected_tool: Calibrated tool chosen by VCEP/local policy. If absent,
-            a fixed Pejaver-based hierarchy is used before score interpretation.
+        selected_tool: Calibrated tool chosen by a pre-score selection policy.
+        selection_policy: How the selected predictor was chosen. Use
+            "pre_specified" or "vcep_specific" with selected_tool, or explicitly
+            request "local_default_hierarchy" for this tool's documented local
+            fallback hierarchy.
         *_score: Raw score for the selected calibrated predictor.
         spliceai_ds_dg: Accepted for backward compatibility but not used for
             missense PP3/BP4; route splicing prediction to splicing overlays.
@@ -293,6 +301,7 @@ def overlay_pp3_bp4(
             next_action=next_action,
         )
 
+    policy = str(selection_policy or "").strip().lower()
     selected = _canonical_tool_name(selected_tool)
     if selected_tool and not selected:
         return output_template(
@@ -305,6 +314,15 @@ def overlay_pp3_bp4(
         )
 
     if selected:
+        if policy not in EXPLICIT_SELECTION_POLICIES:
+            return output_template(
+                "PP3/BP4", "not_assessed",
+                status="not_assessed",
+                route_outcome="overlay_not_assessed",
+                reason="A selected predictor was provided, but selection_policy was not pre_specified or vcep_specific.",
+                source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+                next_action="Provide selected_tool with selection_policy='pre_specified' or selection_policy='vcep_specific'.",
+            )
         if selected not in scores:
             return output_template(
                 "PP3/BP4", "not_assessed",
@@ -315,8 +333,19 @@ def overlay_pp3_bp4(
                 next_action=f"Provide `{selected}` score or choose another pre-specified calibrated predictor.",
             )
         chosen = selected
+        guidance_authority = "VCEP-specific" if policy == "vcep_specific" else "ClinGen/SVI primary"
     else:
+        if policy != "local_default_hierarchy":
+            return output_template(
+                "PP3/BP4", "not_assessed",
+                status="not_assessed",
+                route_outcome="overlay_not_assessed",
+                reason="Predictor scores were provided without an explicit selected_tool or local_default_hierarchy policy.",
+                source_of_truth="Pejaver 2022 ClinGen SVI calibration",
+                next_action="Provide selected_tool with selection_policy='pre_specified' or explicitly use selection_policy='local_default_hierarchy'.",
+            )
         chosen = next((tool for tool in DEFAULT_TOOL_HIERARCHY if tool in scores), None)
+        guidance_authority = "practice/local refinement"
 
     if not chosen:
         return output_template(
@@ -335,6 +364,7 @@ def overlay_pp3_bp4(
             return output_template(
                 interval["criterion"],
                 interval["strength"],
+                guidance_authority=guidance_authority,
                 reason=f"{chosen} score={score:g} falls in Pejaver 2022 calibrated interval {interval_text}; "
                        f"applies {interval['strength']}. Other predictors, if present, were not counted by majority vote.",
                 source_of_truth=f"{chosen}; Pejaver 2022 ClinGen SVI calibrated thresholds",

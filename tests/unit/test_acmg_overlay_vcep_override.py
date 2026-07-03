@@ -30,3 +30,10 @@ def test_vcep_override_does_not_mask_wrapper_runtime_errors():
     assert result["criterion"] == "PS3/BS3"
     assert result["route_outcome"] == "overlay_deferred_to_vcep"
     assert result["guidance_authority"] == "VCEP-specific"
+
+
+if __name__ == "__main__":
+    test_vcep_override_is_deferred_not_overlay_applied()
+    test_vcep_override_requires_validator_scope_before_final()
+    test_vcep_override_does_not_mask_wrapper_runtime_errors()
+    print("PASS test_acmg_overlay_vcep_override")

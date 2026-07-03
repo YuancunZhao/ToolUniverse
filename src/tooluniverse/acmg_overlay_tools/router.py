@@ -74,10 +74,10 @@ def _infer_variant_type(hgvs_c: str) -> str:
     # Substitution: c.742C>T
     sub_match = re.search(r"c\.(\d+)([ACGT])>([ACGT])", notation)
     if sub_match:
-        return "missense"  # substitution — LLM should provide consequence from VEP
+        return "unknown"
 
     if ">" in notation or "→" in notation:
-        return "missense"
+        return "unknown"
 
     if any(kw in notation.lower() for kw in ("nonsense", "frameshift", "stop", "ter")):
         return "null"
@@ -182,6 +182,11 @@ def route_overlays(
         "6. Call each literature overlay tool with extracted literature evidence",
         "7. Call acmg_combine_criteria with all overlay results",
     ]
+    if inferred_type == "unknown":
+        workflow_steps.insert(
+            0,
+            "Resolve molecular consequence with EnsemblVEP_annotate_hgvs or VariantValidator before selecting missense, splicing, LoF, or protein-length overlays.",
+        )
 
     return {
         "variant": input_hgvs,
