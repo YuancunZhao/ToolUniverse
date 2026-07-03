@@ -13,6 +13,7 @@ def overlay_functional_assay(
     functional_evidence: str = "",
     assay_type: str = "",
     assay_category: str = "",
+    assay_applicable_to_disease_mechanism: bool = False,
     variant_specific: bool = False,
     replicated: bool = False,
     has_controls: bool = False,
@@ -363,11 +364,15 @@ def overlay_pvs1_lof(
                 reason="Canonical splice variant predicted to cause NMD. "
                        "Full PVS1 strength applies.",
                 source_of_truth="SpliceAI, VEP, NMD prediction")
-        # NMD unknown — default to full strength for canonical splice
-        return output_template("PVS1", "PVS1",
-            reason="Canonical splice variant. NMD prediction unavailable — "
-                   "defaulting to full PVS1 for canonical ±1,2 positions.",
-            source_of_truth="VEP, SpliceAI")
+        # NMD unknown — require explicit prediction, do not default to PVS1
+        return output_template("PVS1", "not_assessed", status="not_assessed",
+            route_outcome="overlay_not_assessed",
+            reason="Canonical splice variant but NMD prediction unavailable. "
+                   "PVS1 strength assignment requires NMD prediction. "
+                   "Do NOT default to full PVS1 for canonical ±1,2 positions "
+                   "without NMD confirmation.",
+            source_of_truth="VEP, SpliceAI",
+            next_action="Provide NMD prediction or RNA evidence before PVS1 assessment.")
 
     # === NMD Decision Branch ===
     if nmd_predicted is True:
@@ -414,14 +419,14 @@ def overlay_pvs1_lof(
                        "PVS1_Supporting per decision tree.",
                 source_of_truth="VEP")
 
-    # NMD unknown — use defaults
-    if "nonsense" in vt or "frameshift" in vt:
-        strength = "PVS1" if lof_intolerant else "PVS1_Strong"
-        return output_template("PVS1", strength,
-            reason=f"Null variant ({vt}) in LOF-mechanism gene. "
-                   f"LOF intolerance: {lof_intolerant}. "
-                   "NMD prediction unavailable — assuming standard PVS1.",
-            source_of_truth="ClinGen, gnomAD constraint")
+    # NMD unknown — require explicit prediction
+    return output_template("PVS1", "not_assessed", status="not_assessed",
+        route_outcome="overlay_not_assessed",
+        reason=f"Null variant ({vt}) in LOF-mechanism gene but NMD prediction unavailable. "
+               "PVS1 strength assignment requires NMD prediction. "
+               "Do NOT default to PVS1 without confirming NMD.",
+        source_of_truth="ClinGen, gnomAD constraint",
+        next_action="Provide NMD prediction (from VEP or manual assessment) before PVS1 assessment.")
 
     return output_template("PVS1", "not_assessed", status="not_assessed",
         route_outcome="overlay_not_assessed",

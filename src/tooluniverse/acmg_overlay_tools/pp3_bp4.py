@@ -90,48 +90,18 @@ def overlay_pp3_bp4(
             source_of_truth="REVEL, CADD",
         )
 
-    # Fallback: no REVEL, use CADD + SIFT + PolyPhen consensus
-    damaging = 0
-    benign = 0
-    if cadd_phred is not None:
-        if cadd_phred >= 25:
-            damaging += 1
-        elif cadd_phred < 15:
-            benign += 1
-    if sift_score is not None:
-        if sift_score <= 0.05:
-            damaging += 1
-        elif sift_score > 0.5:
-            benign += 1
-    if polyphen_score is not None:
-        if polyphen_score >= 0.9:
-            damaging += 1
-        elif polyphen_score < 0.5:
-            benign += 1
-
-    if damaging >= 2 and benign == 0:
-        return output_template(
-            "PP3", "PP3",
-            reason=f"Multiple predictors agree damaging: "
-                   f"damaging={damaging}, benign={benign}. PP3 met.",
-            source_of_truth="CADD, SIFT, PolyPhen-2",
-        )
-    if benign >= 2 and damaging == 0:
-        return output_template(
-            "BP4", "BP4",
-            reason=f"Multiple predictors agree benign: "
-                   f"damaging={damaging}, benign={benign}. BP4 met.",
-            source_of_truth="CADD, SIFT, PolyPhen-2",
-        )
-
+    # Fallback: no REVEL — return not_assessed per ClinGen SVI guidance
+    # ClinGen explicitly prohibits majority-vote consensus of multiple predictors
+    # (Pejaver 2022, PMID:36413997, Table 5). REVEL is the required calibrated predictor.
     return output_template(
-        "PP3/BP4", "not_met",
+        "PP3/BP4", "not_assessed",
         status="not_assessed",
         route_outcome="overlay_not_assessed",
-        reason=f"Predictors discordant or insufficient. "
-               f"damaging={damaging}, benign={benign}. Neither PP3 nor BP4 applied.",
-        source_of_truth="CADD, SIFT, PolyPhen-2",
-        next_action="REVEL score preferred per ClinGen. Use MyVariant to retrieve REVEL.",
+        reason="No REVEL score available. REVEL is the required ClinGen-calibrated "
+               "predictor for PP3/BP4. CADD/SIFT/PolyPhen majority-vote fallback is "
+               "explicitly prohibited by Pejaver 2022 (PMID:36413997).",
+        source_of_truth="REVEL (required), Pejaver 2022",
+        next_action="Retrieve REVEL score: use MyVariant_get_pathogenicity_scores to get REVEL.",
     )
 
 

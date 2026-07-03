@@ -1074,7 +1074,8 @@ class ACMGOverlayGateTool(BaseTool):
                 "Gate returned DRAFT_ONLY. Use the ACMG overlay tools below to "
                 "get deterministic criterion judgments. Collect evidence first "
                 "(gnomAD, ClinVar, MyVariant, PubMed), then pass structured data "
-                "to each tool. Finish with ACMG_combine_criteria."
+                "to each tool. Use ACMG_combine_criteria to summarize strengths "
+                "(draft-only — final classification requires validator + token + guard)."
             ),
             "variant_type": route.get("variant_type"),
             "baseline_overlays": baseline_mcp,
