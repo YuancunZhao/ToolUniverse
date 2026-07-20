@@ -6,16 +6,29 @@
       "type": "object",
       "properties": {
         "symbol": {
-          "type": "string",
+          "type": ["string", "null"],
           "description": "Gene symbol (e.g., 'CYP2D6', 'CYP2C19', 'SLCO1B1', 'TPMT', 'DPYD')"
+        },
+        "gene": {
+          "type": ["string", "null"],
+          "description": "Gene symbol alias -- alternative to symbol."
+        },
+        "gene_symbol": {
+          "type": ["string", "null"],
+          "description": "Gene symbol alias -- alternative to symbol."
         }
       },
-      "required": [
-        "symbol"
+      "required": [],
+      "anyOf": [
+        {"required": ["symbol"]},
+        {"required": ["gene"]},
+        {"required": ["gene_symbol"]}
       ]
     },
     "fields": {
-      "endpoint": "https://api.cpicpgx.org/v1/gene?symbol=eq.{symbol}"
+      "endpoint": "https://api.cpicpgx.org/v1/gene?symbol=eq.{symbol}",
+      "path_aliases": {"gene": "symbol", "gene_symbol": "symbol"},
+      "uppercase_params": ["symbol", "gene", "gene_symbol"]
     },
     "type": "BaseRESTTool",
     "test_examples": [
@@ -291,7 +304,8 @@
     },
     "fields": {
       "endpoint": "https://api.cpicpgx.org/v1/drug?name=eq.{name}",
-      "lowercase_params": ["name"]
+      "lowercase_params": ["name"],
+      "empty_result_note": "No exact match for this name in CPIC. CPIC indexes one canonical spelling/name per drug (e.g. 'cyclosporine' not 'cyclosporin', 'tacrolimus' not the alternate name 'FK506') -- try CPIC_list_drugs or CPIC_search_gene_drug_pairs to browse indexed names."
     },
     "type": "BaseRESTTool",
     "test_examples": [
@@ -1078,7 +1092,8 @@
             "integer",
             "null"
           ],
-          "description": "Maximum number of alleles to return (default 50)"
+          "description": "Maximum number of alleles to return (default 50)",
+          "default": 50
         }
       },
       "required": [
@@ -1086,7 +1101,8 @@
       ]
     },
     "fields": {
-      "endpoint": "https://api.cpicpgx.org/v1/allele?genesymbol=eq.{genesymbol}&select=name,functionalstatus,activityvalue,clinicalfunctionalstatus&limit={limit}"
+      "endpoint": "https://api.cpicpgx.org/v1/allele?genesymbol=eq.{genesymbol}&select=name,functionalstatus,activityvalue,clinicalfunctionalstatus&limit={limit}",
+      "uppercase_params": ["genesymbol"]
     },
     "type": "BaseRESTTool",
     "test_examples": [

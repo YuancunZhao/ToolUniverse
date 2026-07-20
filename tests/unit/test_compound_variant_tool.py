@@ -5,6 +5,8 @@ Regression guard for Feature-KRAS-001: the parsers read the WRONG nested paths
 back empty, and sources_with_data falsely listed sources that returned nothing.
 """
 
+from unittest.mock import patch
+
 from tooluniverse.compound_variant_tool import (
     CompoundVariantAnnotationTool,
     _variant_match_forms,
@@ -64,6 +66,126 @@ def test_parse_clinvar_falls_back_to_gene_context_when_no_exact_match():
     assert len(out["variants"]) == 2  # gene-level context, not empty
 
 
+def test_parse_clinvar_rows_have_no_condition_key():
+    """Fix-R31A-3: ClinVar_search_variants rows never carry a "condition"
+    field (confirmed live) -- condition is a search filter on that tool,
+    not something it returns. The old code silently emitted "condition": ""
+    for every row."""
+    t = _tool()
+    real = {"data": {"total_count": 1, "variants": [
+        {"title": "NM_004004.6(GJB2):c.283G>C (p.Val95Leu)", "clinical_significance": "VUS"}]}}
+    out = t._parse_clinvar(real)
+    assert "condition" not in out["variants"][0]
+
+
+def test_parse_uniprot_reads_results_list_not_bare_list():
+    """Fix-R31A-4: UniProt_search's "data" is a dict with a "results" list
+    ({"total_results": N, "results": [...]}), not itself a list -- confirmed
+    live this always fell through to the raw-repr-string escape hatch,
+    truncating mid-object. Field is "gene_names" (a list), not "gene_name"."""
+    t = _tool()
+    real = {
+        "status": "success",
+        "data": {
+            "total_results": 1,
+            "returned": 1,
+            "results": [
+                {
+                    "accession": "P05091",
+                    "protein_name": "Aldehyde dehydrogenase, mitochondrial",
+                    "gene_names": ["ALDH2"],
+                    "function": "Mitochondrial aldehyde dehydrogenase",
+                }
+            ],
+        },
+    }
+    out = t._parse_uniprot(real)
+    assert out["accession"] == "P05091"
+    assert out["gene_name"] == "ALDH2"
+    assert "raw" not in out
+
+
+def test_parse_uniprot_falls_back_to_raw_for_unexpected_shape():
+    t = _tool()
+    out = t._parse_uniprot({"status": "success", "data": {"unexpected": "shape"}})
+    assert "raw" in out
+
+
+def test_summary_does_not_misattribute_unmatched_clinvar_context():
+    """Fix-T2A-001: when clinvar has no exact match, `variants` holds unrelated
+    gene-level fallback context (see test_parse_clinvar_falls_back_...). The
+    summary must not report classifications[0] as if it were the queried
+    variant's classification."""
+    t = _tool()
+    annotations = {
+        "clinvar": {
+            "total_gene_variants": 73,
+            "matched": 0,
+            "exact_match": False,
+            "variants": [
+                {"name": "NM_004333.6(BRAF):c.2209G>A (p.Gly737Ser)",
+                 "classification": "Uncertain significance"},
+            ],
+        }
+    }
+    s = t._build_summary(annotations, variant="BRAF V600E")
+    assert s["clinvar_classification"] is None
+    assert "clinvar_note" in s
+
+
+def test_summary_reports_classification_for_exact_clinvar_match():
+    t = _tool()
+    annotations = {
+        "clinvar": {
+            "total_gene_variants": 5,
+            "matched": 1,
+            "exact_match": True,
+            "variants": [
+                {"name": "NM_004333.6(BRAF):c.1799T>A (p.Val600Glu)",
+                 "classification": "Pathogenic"},
+            ],
+        }
+    }
+    s = t._build_summary(annotations, variant="BRAF V600E")
+    assert s["clinvar_classification"] == "Pathogenic"
+    assert "clinvar_note" not in s
+
+
+def test_sub_call_error_detects_error_status_dict():
+    """Fix-R2B-003: sub-tools signal failure by returning
+    {"status": "error", ...}, not by raising."""
+    t = _tool()
+    assert t._sub_call_error({"status": "error", "error": "boom"}) == "boom"
+    assert t._sub_call_error({"status": "success", "data": {}}) is None
+    assert t._sub_call_error(None) is None
+
+
+def test_run_records_sub_call_failures_instead_of_empty_success():
+    """Fix-R2B-003: when every underlying source call fails (returns an
+    error dict, e.g. a network outage), the aggregator must report those
+    failures in sources_failed rather than silently treating them as
+    "gene has zero known variants" (a dangerous false negative for a
+    clinically significant gene like BRCA1)."""
+    t = _tool()
+
+    def fake_run_one_function(call):
+        return {"status": "error", "error": "Could not find a suitable TLS CA certificate bundle"}
+
+    with patch(
+        "tooluniverse.execute_function.ToolUniverse.run_one_function",
+        side_effect=fake_run_one_function,
+    ), patch(
+        "tooluniverse.execute_function.ToolUniverse.load_tools", return_value=None
+    ):
+        result = t.run({"gene": "BRCA1", "rsid": "rs80357906"})
+
+    data = result["data"]
+    assert data["annotations"] == {}
+    assert len(data["sources_failed"]) == 4
+    assert all("TLS" in msg for msg in data["sources_failed"])
+    assert data["sources_queried"] == []
+
+
 def test_sources_with_data_is_honest():
     t = _tool()
     # gnomAD has a gene, CIViC matched one, ClinVar empty, UniProt empty
@@ -77,3 +199,136 @@ def test_sources_with_data_is_honest():
     assert set(s["sources_with_data"]) == {"gnomad", "civic"}  # NOT clinvar/uniprot
     assert s["gnomad_gene_id"] == "ENSG00000157764"
     assert s["civic_variants_matched"] == 1
+
+
+def test_clinvar_classification_not_derived_from_unmatched_fallback():
+    # Fix-R27A-1/T2A-001: confirmed live for EGFR L858R -- _parse_clinvar's
+    # fallback context list (returned when exact_match is False) was
+    # being blindly summarized as clinvar_classification, e.g. reporting
+    # "Uncertain significance" (an unrelated p.Leu828Ser record) for a
+    # variant that is actually ClinVar Oncogenic/Tier I-Strong. When
+    # exact_match is False, clinvar_classification must be explicitly None
+    # (not derived from the unrelated fallback record) and a clinvar_note
+    # must explain why, rather than silently omitting the field.
+    t = _tool()
+    annotations = {
+        "clinvar": {
+            "total_gene_variants": 3167,
+            "matched": 0,
+            "exact_match": False,
+            "variants": [
+                {"name": "p.Leu828Ser", "classification": "Uncertain significance"},
+            ],
+        },
+    }
+    s = t._build_summary(annotations, variant="L858R", gene="EGFR")
+    assert s["clinvar_classification"] is None
+    assert "clinvar_note" in s
+
+
+def test_clinvar_classification_set_when_exact_match_true():
+    t = _tool()
+    annotations = {
+        "clinvar": {
+            "total_gene_variants": 3167,
+            "matched": 1,
+            "exact_match": True,
+            "variants": [
+                {"name": "p.Leu858Arg", "classification": "Pathogenic"},
+            ],
+        },
+    }
+    s = t._build_summary(annotations, variant="L858R", gene="EGFR")
+    assert s["clinvar_classification"] == "Pathogenic"
+
+
+def test_clinvar_sub_call_uses_gene_param_not_query_alias():
+    """Fix-R31D-4/R31B-1: ClinVar_search_variants' "query" param is
+    documented as an alias for "condition" (a disease/phenotype search),
+    not a gene lookup -- confirmed live that querying gene names through
+    it only coincidentally matched conditions whose name happens to
+    contain the gene symbol (e.g. 40 rows for HOXB13 vs the real 1943 via
+    the dedicated "gene" param). The aggregator must use "gene" directly."""
+    t = _tool()
+    calls = []
+
+    def fake_run_one_function(call):
+        calls.append(call)
+        if call["name"] == "ClinVar_search_variants":
+            return {"status": "success", "data": {"total_count": 1943, "variants": []}}
+        return {"status": "error", "error": "not used in this test"}
+
+    with patch(
+        "tooluniverse.execute_function.ToolUniverse.run_one_function",
+        side_effect=fake_run_one_function,
+    ), patch("tooluniverse.execute_function.ToolUniverse.load_tools", return_value=None):
+        result = t.run({"gene": "HOXB13"})
+
+    clinvar_call = next(c for c in calls if c["name"] == "ClinVar_search_variants")
+    assert clinvar_call["arguments"] == {"gene": "HOXB13", "limit": 20}
+    assert result["data"]["annotations"]["clinvar"]["total_gene_variants"] == 1943
+
+
+def test_rsid_only_query_resolves_gene_via_dbsnp_before_other_sources():
+    """Fix-R31B-1: ClinVar/CIViC/gnomAD/UniProt are all gene-keyed, none
+    rsid-keyed (confirmed live: both ClinVar's "query" and "variant_id"
+    params return 0 rows for a bare rsid like "rs671" -- variant_id is
+    ClinVar's own internal numeric id, not a dbSNP rsid). An rsid-only
+    request must resolve to a gene via dbSNP first so the other sources
+    can still be queried, instead of silently skipping all of them."""
+    t = _tool()
+    calls = []
+
+    def fake_run_one_function(call):
+        calls.append(call)
+        if call["name"] == "dbsnp_get_variant_by_rsid":
+            return {
+                "status": "success",
+                "data": {"hgvs_notation": "...|GENE=ALDH2:217"},
+            }
+        if call["name"] == "gnomad_get_gene":
+            return {"status": "success", "data": {"gene": {"gene_id": "ENSG00000111275"}}}
+        return {"status": "success", "data": {}}
+
+    with patch(
+        "tooluniverse.execute_function.ToolUniverse.run_one_function",
+        side_effect=fake_run_one_function,
+    ), patch("tooluniverse.execute_function.ToolUniverse.load_tools", return_value=None):
+        result = t.run({"rsid": "rs671"})
+
+    called_names = [c["name"] for c in calls]
+    assert "dbsnp_get_variant_by_rsid" in called_names
+    assert "gnomad_get_gene" in called_names
+    gnomad_call = next(c for c in calls if c["name"] == "gnomad_get_gene")
+    assert gnomad_call["arguments"] == {"gene_symbol": "ALDH2"}
+    assert result["data"]["annotations"]["gnomad"]["gene_id"] == "ENSG00000111275"
+
+
+def test_resolve_gene_from_rsid_extracts_symbol_from_hgvs_notation():
+    t = _tool()
+    tu_mock_result = {
+        "status": "success",
+        "data": {"hgvs_notation": "HGVS=...|SEQ=[G/A]|LEN=1|GENE=ALDH2:217"},
+    }
+
+    class _FakeTU:
+        def run_one_function(self, call):
+            return tu_mock_result
+
+    sources_failed = []
+    gene = t._resolve_gene_from_rsid(_FakeTU(), "rs671", sources_failed)
+    assert gene == "ALDH2"
+    assert sources_failed == []
+
+
+def test_resolve_gene_from_rsid_records_failure_when_gene_not_found():
+    t = _tool()
+
+    class _FakeTU:
+        def run_one_function(self, call):
+            return {"status": "success", "data": {"hgvs_notation": "no gene marker here"}}
+
+    sources_failed = []
+    gene = t._resolve_gene_from_rsid(_FakeTU(), "rs9999999", sources_failed)
+    assert gene is None
+    assert len(sources_failed) == 1

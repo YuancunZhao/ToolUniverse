@@ -35,8 +35,25 @@ def _resolve_drug_to_guideline_id(
         )
         r.raise_for_status()
         rows = r.json()
-        if rows and rows[0].get("guidelineid"):
-            return rows[0]["guidelineid"], rows[0].get("rxnormid")
+        if not rows:
+            return None
+        # Fix-R35C-1: substring `ilike` matching picks a false first hit
+        # whenever one drug name is a substring of another -- confirmed
+        # live for "citalopram" (a substring of "escitalopram") and
+        # "phenytoin" (a substring of "fosphenytoin"): querying the shorter
+        # name silently returned the OTHER drug's guideline/rxnorm id
+        # because it happened to sort first in CPIC's unordered response,
+        # so CPIC_get_recommendations returned a different drug's dosing
+        # guidance with no indication of the substitution. Prefer an exact
+        # case-insensitive match; only fall back to the first fuzzy hit
+        # when no exact match exists (genuine partial/typo queries).
+        exact = next(
+            (row for row in rows if row.get("name", "").lower() == drug_name.lower()),
+            None,
+        )
+        row = exact or rows[0]
+        if row.get("guidelineid"):
+            return row["guidelineid"], row.get("rxnormid")
     except Exception:
         pass
     return None
@@ -67,11 +84,19 @@ class CPICGetRecommendationsTool(BaseTool):
                 }
             result = _resolve_drug_to_guideline_id(drug)
             if result is None:
+                # Fix-R5C-2: CPIC's /drug table only has generic names (no
+                # brand-name field), so a brand name like "zoloft" never
+                # matches. The old message sent callers to browse guideline
+                # IDs, which doesn't actually solve "I don't know the
+                # generic name" -- name the real constraint instead.
                 return {
                     "status": "error",
                     "error": (
                         f"No CPIC guideline found for drug '{drug}'. "
-                        "Use CPIC_list_guidelines to find valid guideline IDs."
+                        "CPIC only indexes generic drug names (e.g. "
+                        "'sertraline', not 'Zoloft') -- try the generic "
+                        "name, or use CPIC_list_guidelines to browse "
+                        "available guidelines."
                     ),
                 }
             guideline_id, rxnorm_id = result
@@ -99,15 +124,43 @@ class CPICGetRecommendationsTool(BaseTool):
                 "recommendations": data,
                 "count": len(data),
             }
-            # Some guidelines use dosing algorithms rather than discrete recommendations.
-            # Guideline 100425 (warfarin) is the main example — it returns 0 rows here.
+            # Fix-R31C-3: this note used to fire whenever `data` was empty and
+            # always blame it on "guideline uses a dosing algorithm" -- but
+            # confirmed live that's wrong for a multi-drug guideline filtered
+            # to a specific drug (e.g. guideline 100416/CYP2D6-opioids has 66
+            # real recommendation rows, just none for methadone/buprenorphine/
+            # naltrexone specifically -- only codeine/tramadol/hydrocodone).
+            # Distinguish "no table at all" (the real dosing-algorithm case,
+            # e.g. warfarin/100425) from "table exists, not for this drug" by
+            # checking whether the guideline has any rows once the drug
+            # filter is dropped.
             if not data:
-                result["note"] = (
-                    f"No discrete recommendations found for guideline {guideline_id}. "
-                    "Some guidelines (e.g. warfarin, guideline 100425) use a dosing "
-                    "algorithm rather than a recommendation table. "
-                    "See https://cpicpgx.org/guidelines/ for the full guideline document."
-                )
+                guideline_has_other_rows = False
+                if rxnorm_id:
+                    try:
+                        check = requests.get(
+                            url,
+                            params={"guidelineid": f"eq.{guideline_id}", "limit": 1},
+                            timeout=30,
+                        )
+                        check.raise_for_status()
+                        guideline_has_other_rows = bool(check.json())
+                    except requests.exceptions.RequestException:
+                        pass
+                if guideline_has_other_rows:
+                    result["note"] = (
+                        f"Guideline {guideline_id} has recommendation rows for "
+                        f"other drugs it covers, but none specifically for "
+                        f"'{drug}'. See https://cpicpgx.org/guidelines/ for the "
+                        "full guideline document."
+                    )
+                else:
+                    result["note"] = (
+                        f"No discrete recommendations found for guideline {guideline_id}. "
+                        "Some guidelines (e.g. warfarin, guideline 100425) use a dosing "
+                        "algorithm rather than a recommendation table. "
+                        "See https://cpicpgx.org/guidelines/ for the full guideline document."
+                    )
             return {"status": "success", "data": result}
         except requests.exceptions.RequestException as e:
             return {"status": "error", "error": f"CPIC API error: {e}"}

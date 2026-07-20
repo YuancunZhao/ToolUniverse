@@ -83,14 +83,15 @@
     },
     {
         "name": "OpenTargets_get_diseases_phenotypes_by_target_ensembl",
-        "description": "Find diseases or phenotypes associated with a specific target using ensemblId.",
+        "description": "Find diseases or phenotypes associated with a specific target using ensemblId. `associatedDiseases.count` is the total number of associations; `rows` returns only one page of them (25 by default) -- pass `page` to retrieve more (e.g. page 2 of a target with thousands of associations like SIRT1's 3432).",
         "label": [
             "Target",
             "Disease",
             "Phenotype",
             "Association",
             "OpenTarget",
-            "GraphQL"
+            "GraphQL",
+            "Pagination"
         ],
         "parameter": {
             "type": "object",
@@ -98,17 +99,38 @@
                 "ensemblId": {
                     "type": "string",
                     "description": "The ensemblId of a target."
+                },
+                "page": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "description": "The index of the page to retrieve (0-based)."
+                        },
+                        "size": {
+                            "type": "integer",
+                            "description": "The number of associations per page."
+                        }
+                    },
+                    "description": "Pagination parameters. `count` in the response is the total across all pages; omit this to get the first page only."
                 }
             },
             "required": [
                 "ensemblId"
             ]
         },
-        "query_schema": "\nquery associatedDiseases($ensemblId: String!) {\n  target(ensemblId: $ensemblId) {\n    id\n    approvedSymbol\n    associatedDiseases {\n      count\n      rows {\n        disease {\n          id\n          name\n        }\n        datasourceScores {\n          id\n          score\n        }\n      }\n    }\n  }\n}\n",
+        "query_schema": "\nquery associatedDiseases($ensemblId: String!, $page: Pagination) {\n  target(ensemblId: $ensemblId) {\n    id\n    approvedSymbol\n    associatedDiseases(page: $page) {\n      count\n      rows {\n        disease {\n          id\n          name\n        }\n        datasourceScores {\n          id\n          score\n        }\n      }\n    }\n  }\n}\n",
         "type": "OpenTarget",
         "test_examples": [
             {
                 "ensemblId": "ENSG00000141510"
+            },
+            {
+                "ensemblId": "ENSG00000141510",
+                "page": {
+                    "index": 1,
+                    "size": 25
+                }
             }
         ],
         "return_schema": {
@@ -247,7 +269,7 @@
     },
     {
         "name": "OpenTargets_get_evidence_by_datasource",
-        "description": "Get target-disease evidence from Open Targets filtered by configurable data sources. Unlike OpenTargets_target_disease_evidence (intogen-only), this tool accepts any datasourceIds. Valid sources include: ot_genetics_portal, eva, eva_somatic, gene_burden, genomics_england, intogen, cancer_gene_census, chembl, crispr, europepmc, expression_atlas, gene2phenotype, orphanet, uniprot_literature, uniprot_variants, clingen, phewas_catalog, reactome, progeny, slapenrich, sysbio. Returns evidence rows with scores, literature references, and source attribution.",
+        "description": "Get target-disease evidence from Open Targets filtered by configurable data sources. Unlike OpenTargets_target_disease_evidence (intogen-only), this tool accepts any datasourceIds. Valid sources include: ot_genetics_portal, eva, eva_somatic, gene_burden, genomics_england, intogen, cancer_gene_census, clinical_precedence, crispr, europepmc, expression_atlas, gene2phenotype, orphanet, uniprot_literature, uniprot_variants, clingen, phewas_catalog, reactome, progeny, slapenrich, sysbio. Note: 'chembl' was renamed to 'clinical_precedence' upstream (confirmed live: 'chembl' now returns 0 rows even for well-documented drug-target-disease evidence). Returns evidence rows with scores, literature references, and source attribution.",
         "label": [
             "Target",
             "Disease",
@@ -5151,7 +5173,7 @@
     },
     {
         "name": "OpenTargets_get_target_expression_by_ensemblID",
-        "description": "Retrieve baseline RNA and protein expression for a target across ~119 tissues and cell types (Human Protein Atlas / GTEx / FANTOM5 consensus) by Ensembl gene ID. Each record gives the tissue (label + parent organs), RNA value/zscore/level, and protein level. Levels of -1 mean no data. Use to profile where a target is normally expressed.",
+        "description": "Retrieve baseline expression summary statistics for a target across tissues and cell types (GTEx, Tabula Sapiens, and other bulk/single-cell sources) by Ensembl gene ID. Each row gives the data source, tissue (and cell type for single-cell data), value unit, and min/q1/median/q3/max distribution stats plus specificity/distribution scores. Well-studied targets can return hundreds to thousands of rows across sources; filter client-side by datasourceId if needed. Use to profile where a target is normally expressed.",
         "parameter": {
             "type": "object",
             "properties": {
@@ -5164,7 +5186,7 @@
                 "ensemblId"
             ]
         },
-        "query_schema": "\n      query targetExpression($ensemblId: String!) {\n        target(ensemblId: $ensemblId) {\n          id\n          approvedSymbol\n          expressions {\n            tissue { label organs anatomicalSystems }\n            rna { value zscore level unit }\n            protein { level reliability }\n          }\n        }\n      }\n    ",
+        "query_schema": "\n      query targetExpression($ensemblId: String!) {\n        target(ensemblId: $ensemblId) {\n          id\n          approvedSymbol\n          baselineExpression {\n            count\n            rows {\n              datasourceId\n              datatypeId\n              unit\n              min\n              q1\n              median\n              q3\n              max\n              specificity_score\n              distribution_score\n              tissueBiosample { biosampleId biosampleName }\n              celltypeBiosample { biosampleId biosampleName }\n            }\n          }\n        }\n      }\n    ",
         "label": [
             "Target",
             "Expression",
@@ -5202,19 +5224,60 @@
                                         "approvedSymbol": {
                                             "type": "string"
                                         },
-                                        "expressions": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "tissue": {
-                                                        "type": "object"
-                                                    },
-                                                    "rna": {
-                                                        "type": "object"
-                                                    },
-                                                    "protein": {
-                                                        "type": "object"
+                                        "baselineExpression": {
+                                            "type": "object",
+                                            "properties": {
+                                                "count": {
+                                                    "type": "integer"
+                                                },
+                                                "rows": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "datasourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "datatypeId": {
+                                                                "type": "string"
+                                                            },
+                                                            "unit": {
+                                                                "type": "string"
+                                                            },
+                                                            "min": {
+                                                                "type": "number"
+                                                            },
+                                                            "q1": {
+                                                                "type": "number"
+                                                            },
+                                                            "median": {
+                                                                "type": "number"
+                                                            },
+                                                            "q3": {
+                                                                "type": "number"
+                                                            },
+                                                            "max": {
+                                                                "type": "number"
+                                                            },
+                                                            "specificity_score": {
+                                                                "type": "number"
+                                                            },
+                                                            "distribution_score": {
+                                                                "type": "number"
+                                                            },
+                                                            "tissueBiosample": {
+                                                                "type": [
+                                                                    "object",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "celltypeBiosample": {
+                                                                "type": [
+                                                                    "object",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }

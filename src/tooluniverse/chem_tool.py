@@ -51,6 +51,25 @@ class ChEMBLRESTTool(BaseTool):
             # Replace placeholders in URL
             for k, v in args.items():
                 url = url.replace(f"{{{k}}}", str(v))
+            # Fix-R40A-1: ChEMBL_search_similarity's endpoint template
+            # (/similarity/{smiles}/{threshold}.json) has a path placeholder
+            # that this loop never fills unless the caller explicitly
+            # supplies it -- confirmed live a caller omitting "threshold"
+            # (relying on its own schema "default": 80) got a literal
+            # "{threshold}" left in the URL and a 404, unlike BaseRESTTool's
+            # _build_url which already falls back to schema defaults for
+            # unfilled placeholders. Mirror that behavior here.
+            for key, prop in (
+                self.tool_config.get("parameter", {}).get("properties", {}).items()
+            ):
+                placeholder = f"{{{key}}}"
+                if (
+                    placeholder in url
+                    and isinstance(prop, dict)
+                    and "default" in prop
+                    and prop["default"] is not None
+                ):
+                    url = url.replace(placeholder, str(prop["default"]))
             # Feature-31A-03 fix: /drug.json does not support pref_name__icontains filtering
             # (ChEMBL server silently ignores it). When a name query is given, route to
             # /molecule.json which supports full text filtering.
@@ -171,12 +190,12 @@ class ChEMBLRESTTool(BaseTool):
         # Map target_chembl_id and assay_chembl_id to __exact API params
         # when used as query filters (not as URL path components)
         target_id = args.get("target_chembl_id")
-        # Feature-120B-001: only exclude ChEMBL_get_target (single lookup), not
-        # ChEMBL_get_target_activities or ChEMBL_get_target_assays which need the filter
-        if target_id is not None and tool_name_local not in (
-            "ChEMBL_get_target",
-            "ChEMBL_search_targets",
-        ):
+        # Feature-120B-001: only exclude ChEMBL_get_target (single lookup via URL path
+        # template {target_chembl_id}, substituted in _build_url). Every other tool,
+        # including ChEMBL_search_targets, queries /target.json with no path template,
+        # so target_chembl_id must be mapped to the __exact query filter or it is
+        # silently dropped entirely (Fix-T2A-004).
+        if target_id is not None and tool_name_local != "ChEMBL_get_target":
             params["target_chembl_id__exact"] = target_id
 
         assay_id = args.get("assay_chembl_id")

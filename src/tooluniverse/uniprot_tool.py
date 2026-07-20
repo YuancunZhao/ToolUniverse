@@ -5,6 +5,25 @@ from .base_tool import BaseTool, ToolError
 from .tool_registry import register_tool
 
 
+def _protein_name(protein_desc: Dict[str, Any]) -> str:
+    """Extract a display name from a UniProtKB entry's proteinDescription.
+
+    Reviewed (Swiss-Prot) entries have a single `recommendedName`, but
+    unreviewed (TrEMBL) entries -- over 99% of UniProtKB -- have no
+    `recommendedName` at all; their name lives in `submissionNames` (a
+    list) instead. Confirmed live for Q53707/MecA PBP2': recommendedName
+    is absent, and the actual name ("MecA PBP2' (penicillin binding
+    protein 2')") is submissionNames[0].fullName.value.
+    """
+    name = protein_desc.get("recommendedName", {}).get("fullName", {}).get("value", "")
+    if name:
+        return name
+    submission_names = protein_desc.get("submissionNames") or []
+    if submission_names:
+        return submission_names[0].get("fullName", {}).get("value", "")
+    return ""
+
+
 @register_tool("UniProtRESTTool")
 class UniProtRESTTool(BaseTool):
     def __init__(self, tool_config: Dict):
@@ -37,9 +56,7 @@ class UniProtRESTTool(BaseTool):
     def _compact_entry(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Return a bounded summary of a UniProtKB entry for LLM contexts."""
         protein_desc = data.get("proteinDescription", {})
-        recommended_name = (
-            protein_desc.get("recommendedName", {}).get("fullName", {}).get("value", "")
-        )
+        protein_name = _protein_name(protein_desc)
         gene_names = []
         for gene in data.get("genes", []):
             gene_name = gene.get("geneName", {}).get("value")
@@ -77,7 +94,7 @@ class UniProtRESTTool(BaseTool):
                 "entryType": data.get("entryType", ""),
                 "primaryAccession": data.get("primaryAccession", ""),
                 "uniProtkbId": data.get("uniProtkbId", ""),
-                "protein_name": recommended_name,
+                "protein_name": protein_name,
                 "gene_names": gene_names,
                 "organism": data.get("organism", {}),
                 "sequence": data.get("sequence", {}),
@@ -293,11 +310,7 @@ class UniProtRESTTool(BaseTool):
 
                 # Extract protein name
                 protein_desc = entry.get("proteinDescription", {})
-                rec_name = protein_desc.get("recommendedName", {})
-                if rec_name:
-                    full_name = rec_name.get("fullName", {})
-                    if full_name:
-                        formatted_entry["protein_name"] = full_name.get("value", "")
+                formatted_entry["protein_name"] = _protein_name(protein_desc)
 
                 # Extract gene names
                 genes = entry.get("genes", [])
@@ -591,8 +604,28 @@ class UniProtRESTTool(BaseTool):
                 "retryable": True,
             }
 
-        # If extract_path is configured, extract the corresponding subset
+        # If extract_path is configured, extract the corresponding subset.
+        # Inactive/deleted entries (confirmed live for Q9ZZZ9: entryType
+        # "Inactive") carry none of the normal fields a JSONPath extractor
+        # looks for, which previously surfaced as a confusing raw
+        # "No data found for JSONPath: ..." error instead of explaining
+        # *why* -- give the same clear reason _compact_entry already does.
         if self.extract_path:
+            if str(data.get("entryType", "")).lower().startswith("inactive"):
+                reason = data.get("inactiveReason", {}) or {}
+                detail = (
+                    reason.get("deletedReason")
+                    or reason.get("mergeDemergeTo", [None])[0]
+                )
+                reason_type = reason.get("inactiveReasonType", "unknown reason")
+                reason_text = f"{reason_type}: {detail}" if detail else reason_type
+                return {
+                    "status": "error",
+                    "error": (
+                        f"UniProt entry {arguments.get('accession', '')} is "
+                        f"inactive/deleted ({reason_text})."
+                    ),
+                }
             result = self._extract_data(data, self.extract_path)
 
             # Handle empty results

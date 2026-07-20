@@ -5,6 +5,7 @@ This tool provides access to the ClinVar database for clinical variant informati
 disease associations, and clinical significance data.
 """
 
+import re
 import requests
 import time
 from typing import Dict, Any, Optional
@@ -188,7 +189,34 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         query_parts = []
 
         if "gene" in arguments:
-            query_parts.append(f"{arguments['gene']}[gene]")
+            # Fix-R8B-1: HGNC gene symbols don't contain hyphens (modern
+            # nomenclature phased them out decades ago), but older
+            # literature/informal usage still writes them hyphenated (e.g.
+            # "BRCA-2", "HER-2") -- ClinVar's [gene] index only matches the
+            # canonical unhyphenated form, so a hyphenated query silently
+            # returned 0 results (confirmed live and via raw NCBI E-utils:
+            # "BRCA-2[gene]" -> 0 hits, "BRCA2[gene]" -> 21879 hits).
+            #
+            # Fix-R10D-1: ClinVar's [gene] index only matches a bare HGNC
+            # symbol, but a natural clinical phrasing like "NF2 gene" (used
+            # verbatim in real research questions -- e.g. "look up the NF2
+            # gene") silently returns 0 results, since the literal trailing
+            # word "gene" becomes part of the queried string (confirmed
+            # live and via raw NCBI E-utils curl: "Nf2 gene[gene]" -> 0
+            # hits, "NF2[gene]" -> 2612 hits). Strip a trailing/leading
+            # "gene"/"protein" qualifier word before querying, then strip
+            # hyphens from what remains.
+            gene = (
+                re.sub(
+                    r"^\s*(?:gene|protein)\s+|\s+(?:gene|protein)\s*$",
+                    "",
+                    arguments["gene"],
+                    flags=re.IGNORECASE,
+                )
+                .strip()
+                .replace("-", "")
+            )
+            query_parts.append(f"{gene}[gene]")
 
         if "condition" in arguments:
             # Feature-70B-005: [disease/phenotype] is not a valid ClinVar eSearch field.
@@ -208,10 +236,59 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # Feature-82A-002: NCBI silently translates [clnsig] to [All Fields],
             # returning unrelated variants. The correct syntax is the [Filter] field:
             # "clinsig pathogenic"[Filter] which properly restricts to the clinsig index.
+            #
+            # Fix-R6C-1: that [Filter] form only indexes single-word clinsig
+            # values -- confirmed live that "clinsig risk factor"[Filter] and
+            # "clinsig likely pathogenic"[Filter] both silently return 0
+            # results even though matching variants exist (e.g. HFE C282Y,
+            # whose own classification literally contains "risk factor").
+            # ClinVar separately indexes compound values via clinsig_<value
+            # with underscores>[prop] (confirmed live for risk_factor and
+            # likely_pathogenic). OR both forms so single-word values keep
+            # using the already-verified [Filter] path while compound values
+            # fall through to the [prop] path -- this can only add matches
+            # the old query missed, never drop ones it already found.
             clnsig = arguments["clinical_significance"].lower().replace("_", " ")
-            query_parts.append(f'"clinsig {clnsig}"[Filter]')
+            clnsig_prop = clnsig.replace(" ", "_")
+            query_parts.append(
+                f'("clinsig {clnsig}"[Filter] OR clinsig_{clnsig_prop}[prop])'
+            )
+
+        # Fix-R5D-1/R8C-1: a caller-supplied param that doesn't match any
+        # recognized name/alias (e.g. "gene_name" instead of "gene", or
+        # "variant_name" -- there is no such parameter, only "variant_id")
+        # was silently dropped. When it's the ONLY param supplied, this
+        # produced a generic "at least one search parameter is required"
+        # error with no hint the parameter itself was misnamed. When OTHER
+        # valid params are also supplied, the query still runs but silently
+        # ignores the unrecognized one -- confirmed live that
+        # {"gene": "GJB2", "variant_name": "35delG"} returns all 739 GJB2
+        # variants with no indication the variant_name filter had zero
+        # effect. Name unrecognized parameter(s) in both cases.
+        recognized = {
+            "gene",
+            "gene_symbol",
+            "condition",
+            "query",
+            "variant_id",
+            "clinical_significance",
+            "significance",
+            "max_results",
+            "limit",
+        }
+        unrecognized = sorted(set(arguments) - recognized)
 
         if not query_parts:
+            if unrecognized:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"Unrecognized parameter(s): {', '.join(unrecognized)}. "
+                        "Valid search parameters: gene (or gene_symbol), "
+                        "condition (or query), variant_id, "
+                        "clinical_significance (or significance)."
+                    ),
+                }
             return {
                 "status": "error",
                 "error": "At least one search parameter is required",
@@ -257,16 +334,16 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             }.items()
             if v is not None
         }
-        return {
-            "status": "success",
-            "data": {
-                "total_count": count,
-                "variant_ids": ids,
-                "variants": variants,
-                "query_translation": esearch.get("querytranslation", ""),
-                "search_params": search_params,
-            },
+        response_data = {
+            "total_count": count,
+            "variant_ids": ids,
+            "variants": variants,
+            "query_translation": esearch.get("querytranslation", ""),
+            "search_params": search_params,
         }
+        if unrecognized:
+            response_data["ignored_parameters"] = unrecognized
+        return {"status": "success", "data": response_data}
 
 
 @register_tool("ClinVarGetVariantDetails")
@@ -304,6 +381,15 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
             **self._parse_variant_summary(variant_data),
             "raw_data": variant_data,
         }
+        # Fix-R8E-1/R6C-2: `result["data"]` (the full, unprocessed esummary
+        # envelope from _make_request) duplicates the same content already
+        # exposed at formatted_data["raw_data"] -- keeping both roughly
+        # tripled payload size for no informational gain and made this
+        # tool's output nearly indistinguishable from
+        # ClinVarGetClinicalSignificance's, which has the identical
+        # duplication. Drop the redundant top-level copy; raw access is
+        # still available via formatted_data.raw_data.
+        result.pop("data", None)
 
         return result
 
@@ -359,5 +445,8 @@ class ClinVarGetClinicalSignificance(ClinVarRESTTool):
             },
             "raw_data": variant_data,
         }
+        # Fix-R8E-1/R6C-2: see the matching fix in ClinVarGetVariantDetails
+        # -- result["data"] duplicates formatted_data["raw_data"].
+        result.pop("data", None)
 
         return result
