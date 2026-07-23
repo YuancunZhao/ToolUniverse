@@ -16,13 +16,22 @@
                 "efoId": {
                     "type": "string",
                     "description": "The efoId of a disease or phenotype."
+                },
+                "size": {
+                    "type": "integer",
+                    "description": "Number of top-scored associated targets to return (default 50). A disease can have thousands of associated targets; raise this to retrieve more than the first page.",
+                    "default": 50
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Zero-based page index for paginating beyond the first `size` targets (default 0)."
                 }
             },
             "required": [
                 "efoId"
             ]
         },
-        "query_schema": "\nquery associatedTargets($efoId: String!) {\n  disease(efoId: $efoId) {\n    id\n    name\n    associatedTargets {\n      count\n      rows {\n        target {\n          id\n          approvedSymbol\n        }\n        score\n      }\n    }\n  }\n}\n",
+        "query_schema": "\nquery associatedTargets($efoId: String!, $size: Int = 50, $index: Int = 0) {\n  disease(efoId: $efoId) {\n    id\n    name\n    associatedTargets(page: {index: $index, size: $size}) {\n      count\n      rows {\n        target {\n          id\n          approvedSymbol\n        }\n        score\n      }\n    }\n  }\n}\n",
         "type": "OpenTarget",
         "test_examples": [
             {
@@ -119,7 +128,7 @@
                 "ensemblId"
             ]
         },
-        "query_schema": "\nquery associatedDiseases($ensemblId: String!, $page: Pagination) {\n  target(ensemblId: $ensemblId) {\n    id\n    approvedSymbol\n    associatedDiseases(page: $page) {\n      count\n      rows {\n        disease {\n          id\n          name\n        }\n        datasourceScores {\n          id\n          score\n        }\n      }\n    }\n  }\n}\n",
+        "query_schema": "\nquery associatedDiseases($ensemblId: String!, $page: Pagination) {\n  target(ensemblId: $ensemblId) {\n    id\n    approvedSymbol\n    associatedDiseases(page: $page) {\n      count\n      rows {\n        score\n        disease {\n          id\n          name\n        }\n        datasourceScores {\n          id\n          score\n        }\n      }\n    }\n  }\n}\n",
         "type": "OpenTarget",
         "test_examples": [
             {
@@ -2904,7 +2913,7 @@
     },
     {
         "name": "OpenTargets_get_known_drugs_by_drug_chemblId",
-        "description": "Get a list of known drugs and associated information using the specified chemblId.",
+        "description": "Get a drug's known clinical information for the specified ChEMBL ID: its approved/investigational indications (diseases, each with the maximum clinical phase reached), its mechanisms of action (with the molecular targets acted on), and any drug safety warnings.",
         "parameter": {
             "type": "object",
             "properties": {
@@ -2917,7 +2926,7 @@
                 "chemblId"
             ]
         },
-        "query_schema": "\n  query drugKnownDrugs($chemblId: String!) {\n    drug(chemblId: $chemblId) {\n      id\n      name\n      maximumClinicalStage\n      drugType\n      drugWarnings {\n        toxicityClass\n        description\n      }\n    }\n  }\n  ",
+        "query_schema": "\n  query drugKnownDrugs($chemblId: String!) {\n    drug(chemblId: $chemblId) {\n      id\n      name\n      maximumClinicalStage\n      drugType\n      indications {\n        count\n        rows {\n          maxClinicalStage\n          disease {\n            id\n            name\n          }\n        }\n      }\n      mechanismsOfAction {\n        rows {\n          mechanismOfAction\n          actionType\n          targetName\n          targets {\n            id\n            approvedSymbol\n          }\n        }\n      }\n      drugWarnings {\n        toxicityClass\n        description\n      }\n    }\n  }\n  ",
         "label": [
             "OpenTarget",
             "Drug",
@@ -3132,7 +3141,7 @@
     },
     {
         "name": "OpenTargets_get_approved_indications_by_drug_chemblId",
-        "description": "Retrieve detailed information about multiple drugs using a list of ChEMBL IDs.",
+        "description": "Retrieve the approved (APPROVAL-stage) disease indications for a single drug by its ChEMBL ID. For the full indication list including investigational (Phase 1-3) diseases with their max clinical stage, use OpenTargets_get_drug_indications_by_chemblId.",
         "parameter": {
             "type": "object",
             "properties": {
