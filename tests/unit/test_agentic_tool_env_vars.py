@@ -236,12 +236,33 @@ class TestAgenticToolEnvironmentVariables:
             # Verify the original Gemini model ID was correctly read
             assert tool._gemini_model_id == "gemini-1.5-pro"
 
+    def test_default_gemini_model_is_current_stable_release(self):
+        tool_config = {
+            "name": "test_tool",
+            "prompt": "Test prompt: {input}",
+            "input_arguments": ["input"],
+            "parameter": {
+                "type": "object",
+                "properties": {"input": {"type": "string"}},
+                "required": ["input"],
+            },
+        }
+
+        with patch.object(AgenticTool, "_try_initialize_api"):
+            tool = AgenticTool(tool_config)
+
+        assert tool._gemini_model_id == "gemini-3.6-flash"
+        assert {
+            "api_type": "GEMINI",
+            "model_id": "gemini-3.6-flash",
+        } in tool._global_fallback_chain
+
     def test_original_agentic_tool_fallback_chain_env_var(self):
         """Test that original AGENTIC_TOOL_FALLBACK_CHAIN environment variable still works."""
         # Set original environment variable
         fallback_chain = [
             {"api_type": "CHATGPT", "model_id": "gpt-4o"},
-            {"api_type": "GEMINI", "model_id": "gemini-2.0-flash"}
+            {"api_type": "GEMINI", "model_id": "gemini-3.6-flash"}
         ]
         os.environ["AGENTIC_TOOL_FALLBACK_CHAIN"] = str(fallback_chain).replace("'", '"')
         

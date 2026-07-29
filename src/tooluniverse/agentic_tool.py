@@ -15,7 +15,7 @@ from .llm_clients import AzureOpenAIClient, GeminiClient, OpenRouterClient, VLLM
 DEFAULT_FALLBACK_CHAIN = [
     {"api_type": "CHATGPT", "model_id": "gpt-4o-1120"},
     {"api_type": "OPENROUTER", "model_id": "openai/gpt-4o"},
-    {"api_type": "GEMINI", "model_id": "gemini-2.0-flash"},
+    {"api_type": "GEMINI", "model_id": "gemini-3.6-flash"},
 ]
 
 # API key environment variable mapping
@@ -137,7 +137,7 @@ class AgenticTool(BaseTool):
         # Gemini model configuration (optional; env override)
         self._gemini_model_id: str = get_config(
             "gemini_model_id",
-            __import__("os").getenv("GEMINI_MODEL_ID", "gemini-2.0-flash"),
+            __import__("os").getenv("GEMINI_MODEL_ID", "gemini-3.6-flash"),
         )
 
         # Validation

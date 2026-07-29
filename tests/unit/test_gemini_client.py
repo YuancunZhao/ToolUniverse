@@ -35,6 +35,37 @@ def test_build_config_passes_temperature_and_max_tokens(monkeypatch):
     assert cfg.max_output_tokens == 128
 
 
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "gemini-3.6-flash",
+        "models/gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-latest",
+        "gemini-4.0-flash",
+    ],
+)
+def test_build_config_omits_deprecated_sampling_parameters(monkeypatch, model_name):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = GeminiClient(model_name, logging.getLogger("test"))
+
+    cfg = client._build_config(temperature=0.7, max_tokens=128)
+
+    assert cfg.temperature is None
+    assert cfg.top_p is None
+    assert cfg.top_k is None
+    assert cfg.max_output_tokens == 128
+
+
+def test_gemini_35_flash_keeps_supported_temperature(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = GeminiClient("gemini-3.5-flash", logging.getLogger("test"))
+
+    cfg = client._build_config(temperature=0.7, max_tokens=None)
+
+    assert cfg.temperature == 0.7
+
+
 def test_build_config_enables_json_mime_type(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     client = GeminiClient("gemini-2.5-flash", logging.getLogger("test"))
