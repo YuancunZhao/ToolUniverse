@@ -425,7 +425,7 @@ class GeminiClient(BaseLLMClient):
         }
         if max_tokens is not None:
             kwargs["max_output_tokens"] = max_tokens
-        if return_json:
+        if return_json or custom_format is not None:
             kwargs["response_mime_type"] = "application/json"
             if custom_format is not None:
                 kwargs["response_schema"] = custom_format
@@ -448,6 +448,21 @@ class GeminiClient(BaseLLMClient):
         max_retries: int = 5,
         retry_delay: int = 5,
     ) -> Optional[str]:
+        """Run one Gemini completion.
+
+        Return type follows the same contract as the OpenAI-backed clients:
+
+        - ``custom_format`` set: returns the parsed object as a dict, matching
+          ``AzureOpenAIClient.infer``. google-genai populates ``response.parsed``
+          when ``response_schema`` is set, so the schema case is a structured
+          object on both backends and switching models does not change the
+          shape callers index into.
+        - ``return_json`` set without ``custom_format``: returns the raw JSON
+          text. OpenAI asks for ``{"type": "json_object"}`` and returns content;
+          this client sets ``response_mime_type`` and returns text. Both hand
+          back an unparsed JSON string.
+        - Neither set: returns the plain text response.
+        """
         contents = ""
         for m in messages:
             if m["role"] in ("user", "system"):
@@ -465,6 +480,14 @@ class GeminiClient(BaseLLMClient):
                         custom_format=custom_format,
                     ),
                 )
+                if (
+                    custom_format is not None
+                    and getattr(resp, "parsed", None) is not None
+                ):
+                    parsed = resp.parsed
+                    return (
+                        parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
+                    )
                 return getattr(resp, "text", None) or getattr(resp, "candidates", [{}])[
                     0
                 ].get("content")
@@ -523,6 +546,18 @@ class GeminiClient(BaseLLMClient):
         max_retries: int = 5,
         retry_delay: int = 5,
     ):
+        if custom_format is not None:
+            yield from super().infer_stream(
+                messages,
+                temperature,
+                max_tokens,
+                return_json,
+                custom_format,
+                max_retries,
+                retry_delay,
+            )
+            return
+
         contents = ""
         for m in messages:
             if m["role"] in ("user", "system"):

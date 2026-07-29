@@ -66,6 +66,31 @@ def test_gemini_json_mode_guard_removed():
     assert "Gemini JSON mode not supported here" not in src
 
 
+def test_infer_returns_dumped_custom_format():
+    client = GeminiClient.__new__(GeminiClient)
+    client.model_name = "gemini-2.5-flash"
+    client._build_config = mock.Mock(return_value=None)
+    parsed = mock.Mock()
+    parsed.model_dump.return_value = {"field": "value"}
+    client._client = mock.Mock()
+    client._client.models.generate_content.return_value = mock.Mock(parsed=parsed)
+
+    result = client.infer([], 0.0, None, False, custom_format={"type": "object"})
+
+    assert result == {"field": "value"}
+
+
+def test_infer_stream_buffers_custom_format():
+    client = GeminiClient.__new__(GeminiClient)
+    client._client = mock.Mock()
+    client.infer = mock.Mock(return_value={"field": "value"})
+
+    chunks = list(client.infer_stream([], 0.0, None, False, custom_format=object()))
+
+    assert chunks == [{"field": "value"}]
+    client._client.models.generate_content_stream.assert_not_called()
+
+
 def test_no_dependency_on_deprecated_google_generativeai():
     """Regression guard: the migration removes google.generativeai. If a
     future edit re-introduces it, this test should catch the import sneaking back."""
