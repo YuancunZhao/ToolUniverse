@@ -149,6 +149,48 @@ class SpliceAITool(BaseTool):
 
             # Extract and interpret scores
             scores = data.get("scores", [])
+            reported_metadata = data.get("metadata")
+            if not isinstance(reported_metadata, dict):
+                reported_metadata = {}
+
+            def reported_value(*keys: str) -> Any:
+                for key in keys:
+                    value = data.get(key)
+                    if value not in (None, ""):
+                        return value
+                    value = reported_metadata.get(key)
+                    if value not in (None, ""):
+                        return value
+                return None
+
+            fields_cfg = self.tool_config.get("fields", {}) or {}
+            model_version = reported_value("model_version", "spliceai_version")
+            annotation_version = reported_value(
+                "annotation_version", "annotation_release", "genome_annotation"
+            )
+            version_source = "provider_response"
+            if model_version in (None, "") and fields_cfg.get("model_version"):
+                model_version = str(fields_cfg["model_version"])
+                version_source = "operator_reviewed_config"
+            if annotation_version in (None, "") and fields_cfg.get(
+                "annotation_version"
+            ):
+                annotation_version = str(fields_cfg["annotation_version"])
+                version_source = "operator_reviewed_config"
+            run_metadata = {
+                "service": "SpliceAI Lookup",
+                "model_version": model_version,
+                "annotation_version": annotation_version,
+                "version_source": version_source,
+                "model_version_source": fields_cfg.get("model_version_source"),
+                "annotation_version_source": fields_cfg.get(
+                    "annotation_version_source"
+                ),
+                "version_verified_at": fields_cfg.get("version_verified_at"),
+                "score_mode": "masked" if bool(arguments.get("mask", False)) else "raw",
+                "distance": int(arguments.get("distance", 50)),
+                "mask": bool(arguments.get("mask", False)),
+            }
 
             # Find maximum delta score
             max_delta = 0.0
@@ -156,7 +198,11 @@ class SpliceAITool(BaseTool):
                 if isinstance(score_entry, dict):
                     for key in ["DS_AG", "DS_AL", "DS_DG", "DS_DL"]:
                         val = score_entry.get(key)
-                        if val is not None and isinstance(val, (int, float)):
+                        if val is not None:
+                            try:
+                                val = float(val)
+                            except (ValueError, TypeError):
+                                continue
                             max_delta = max(max_delta, val)
 
             return {
@@ -167,6 +213,7 @@ class SpliceAITool(BaseTool):
                     "scores": scores,
                     "max_delta_score": max_delta,
                     "interpretation": self._interpret_score(max_delta),
+                    "run_metadata": run_metadata,
                     "raw_response": data,
                 },
                 "source": "SpliceAI Lookup (Broad Institute)",
@@ -262,6 +309,7 @@ class SpliceAITool(BaseTool):
                 "genome": data["genome"],
                 "max_delta_score": data["max_delta_score"],
                 "interpretation": data["interpretation"],
+                "run_metadata": data.get("run_metadata", {}),
                 "pathogenicity_threshold": "≥0.2 (low), ≥0.5 (moderate), ≥0.8 (high)",
             },
             "source": "SpliceAI Lookup (Broad Institute)",

@@ -1,7 +1,7 @@
 [
   {
     "name": "SpliceAI_predict_splice",
-    "description": "Predict splice-altering effects using SpliceAI deep learning model. Returns delta scores for acceptor gain (DS_AG), acceptor loss (DS_AL), donor gain (DS_DG), donor loss (DS_DL). Scores ≥0.2 suggest splice impact, ≥0.5 moderate, ≥0.8 high pathogenicity. Critical for intronic/exonic variant interpretation.",
+    "description": "Predict splice-altering effects using SpliceAI. DS_AG, DS_AL, DS_DG, and DS_DL are already delta scores for acceptor gain/loss and donor gain/loss; do not recompute them from REF/ALT raw scores. The maximum delta is max(DS_AG, DS_AL, DS_DG, DS_DL), not donor loss. SpliceAI scores are source leads or computational/splicing route triggers only, not independently included in an ACMG system preview.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",
@@ -31,7 +31,12 @@
     },
     "fields": {
       "operation": "predict_splice",
-      "timeout": 60
+      "timeout": 60,
+      "model_version": "1.3.1",
+      "model_version_source": "Illumina SpliceAI model release (Jaganathan et al. 2019, PMID:30661751); SpliceAI has a single public model version",
+      "annotation_version": "gencode.v49",
+      "annotation_version_source": "https://github.com/broadinstitute/SpliceAI-lookup/blob/master/google_cloud_run_services/server.py (GENCODE_VERSION)",
+      "version_verified_at": "2026-07-23"
     },
     "return_schema": {
       "type": "object",
@@ -41,9 +46,32 @@
           "properties": {
             "variant": {"type": "string"},
             "genome": {"type": "string"},
-            "scores": {"type": "array"},
-            "max_delta_score": {"type": "number"},
-            "interpretation": {"type": "string"}
+            "scores": {
+              "type": "array",
+              "description": "Per-transcript score rows. DS_* are delta scores and DP_* are their relative positions.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "DS_AG": {"type": ["number", "string"], "description": "Acceptor gain delta score."},
+                  "DS_AL": {"type": ["number", "string"], "description": "Acceptor loss delta score."},
+                  "DS_DG": {"type": ["number", "string"], "description": "Donor gain delta score."},
+                  "DS_DL": {"type": ["number", "string"], "description": "Donor loss delta score."},
+                  "DP_AG": {"type": ["integer", "number", "string"], "description": "Genomic-coordinate-relative position of the acceptor gain event; do not invert the sign for minus-strand transcripts."},
+                  "DP_AL": {"type": ["integer", "number", "string"], "description": "Genomic-coordinate-relative position of the acceptor loss event; do not invert the sign for minus-strand transcripts."},
+                  "DP_DG": {"type": ["integer", "number", "string"], "description": "Genomic-coordinate-relative position of the donor gain event; do not invert the sign for minus-strand transcripts."},
+                  "DP_DL": {"type": ["integer", "number", "string"], "description": "Genomic-coordinate-relative position of the donor loss event; do not invert the sign for minus-strand transcripts."}
+                }
+              }
+            },
+            "max_delta_score": {
+              "type": "number",
+              "description": "Maximum of DS_AG, DS_AL, DS_DG, and DS_DL; this is not specifically donor loss."
+            },
+            "interpretation": {"type": "string"},
+            "run_metadata": {
+              "type": "object",
+              "description": "Actual request settings and provider-reported model/annotation versions; unavailable versions remain null."
+            }
           }
         },
         "source": {"type": "string"}
@@ -55,7 +83,7 @@
   },
   {
     "name": "SpliceAI_get_max_delta",
-    "description": "Get simplified maximum SpliceAI delta score and pathogenicity interpretation for a variant. Returns single max score across all splice effects (AG/AL/DG/DL) with interpretation: benign (<0.2), low (0.2-0.5), moderate (0.5-0.8), high (≥0.8). Best for quick variant triage.",
+    "description": "Get max(DS_AG, DS_AL, DS_DG, DS_DL) for variant triage. This value is the four-channel maximum, not donor loss DS_DL. The score is a source lead or computational/splicing route trigger only, not independently included in an ACMG system preview.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",
@@ -75,7 +103,12 @@
     },
     "fields": {
       "operation": "get_max_delta",
-      "timeout": 60
+      "timeout": 60,
+      "model_version": "1.3.1",
+      "model_version_source": "Illumina SpliceAI model release (Jaganathan et al. 2019, PMID:30661751); SpliceAI has a single public model version",
+      "annotation_version": "gencode.v49",
+      "annotation_version_source": "https://github.com/broadinstitute/SpliceAI-lookup/blob/master/google_cloud_run_services/server.py (GENCODE_VERSION)",
+      "version_verified_at": "2026-07-23"
     },
     "return_schema": {
       "type": "object",
@@ -85,8 +118,15 @@
           "properties": {
             "variant": {"type": "string"},
             "genome": {"type": "string"},
-            "max_delta_score": {"type": "number"},
+            "max_delta_score": {
+              "type": "number",
+              "description": "Maximum of DS_AG, DS_AL, DS_DG, and DS_DL; this is not specifically donor loss."
+            },
             "interpretation": {"type": "string"},
+            "run_metadata": {
+              "type": "object",
+              "description": "Actual request settings and provider-reported model/annotation versions; unavailable versions remain null."
+            },
             "pathogenicity_threshold": {"type": "string"}
           }
         },

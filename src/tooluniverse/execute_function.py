@@ -3629,6 +3629,8 @@ class ToolUniverse:
                     "GrepTools",
                     "GetToolInfo",
                     "ExecuteTool",
+                    "ACMG_evidence_collector",
+                    "ACMGOverlayGateTool",
                 ]:
                     # Tool discovery tools need tooluniverse parameter
                     new_tool = tool_class(tool_config=tool, tooluniverse=self)
