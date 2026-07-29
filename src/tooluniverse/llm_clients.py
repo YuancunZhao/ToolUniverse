@@ -413,12 +413,22 @@ class GeminiClient(BaseLLMClient):
         self.model_name = model_name
         self.logger = logger
 
-    def _build_config(self, temperature: Optional[float], max_tokens: Optional[int]):
+    def _build_config(
+        self,
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+        return_json: bool = False,
+        custom_format: Any = None,
+    ):
         kwargs: Dict[str, Any] = {
             "temperature": (temperature if temperature is not None else 0)
         }
         if max_tokens is not None:
             kwargs["max_output_tokens"] = max_tokens
+        if return_json or custom_format is not None:
+            kwargs["response_mime_type"] = "application/json"
+            if custom_format is not None:
+                kwargs["response_schema"] = custom_format
         return self._types.GenerateContentConfig(**kwargs)
 
     def test_api(self) -> None:
@@ -438,8 +448,21 @@ class GeminiClient(BaseLLMClient):
         max_retries: int = 5,
         retry_delay: int = 5,
     ) -> Optional[str]:
-        if return_json:
-            raise ValueError("Gemini JSON mode not supported here")
+        """Run one Gemini completion.
+
+        Return type follows the same contract as the OpenAI-backed clients:
+
+        - ``custom_format`` set: returns the parsed object as a dict, matching
+          ``AzureOpenAIClient.infer``. google-genai populates ``response.parsed``
+          when ``response_schema`` is set, so the schema case is a structured
+          object on both backends and switching models does not change the
+          shape callers index into.
+        - ``return_json`` set without ``custom_format``: returns the raw JSON
+          text. OpenAI asks for ``{"type": "json_object"}`` and returns content;
+          this client sets ``response_mime_type`` and returns text. Both hand
+          back an unparsed JSON string.
+        - Neither set: returns the plain text response.
+        """
         contents = ""
         for m in messages:
             if m["role"] in ("user", "system"):
@@ -450,8 +473,21 @@ class GeminiClient(BaseLLMClient):
                 resp = self._client.models.generate_content(
                     model=self.model_name,
                     contents=contents,
-                    config=self._build_config(temperature, max_tokens),
+                    config=self._build_config(
+                        temperature,
+                        max_tokens,
+                        return_json=return_json,
+                        custom_format=custom_format,
+                    ),
                 )
+                if (
+                    custom_format is not None
+                    and getattr(resp, "parsed", None) is not None
+                ):
+                    parsed = resp.parsed
+                    return (
+                        parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
+                    )
                 return getattr(resp, "text", None) or getattr(resp, "candidates", [{}])[
                     0
                 ].get("content")
@@ -510,8 +546,17 @@ class GeminiClient(BaseLLMClient):
         max_retries: int = 5,
         retry_delay: int = 5,
     ):
-        if return_json:
-            raise ValueError("Gemini JSON mode not supported here")
+        if custom_format is not None:
+            yield from super().infer_stream(
+                messages,
+                temperature,
+                max_tokens,
+                return_json,
+                custom_format,
+                max_retries,
+                retry_delay,
+            )
+            return
 
         contents = ""
         for m in messages:
@@ -524,7 +569,12 @@ class GeminiClient(BaseLLMClient):
                 stream = self._client.models.generate_content_stream(
                     model=self.model_name,
                     contents=contents,
-                    config=self._build_config(temperature, max_tokens),
+                    config=self._build_config(
+                        temperature,
+                        max_tokens,
+                        return_json=return_json,
+                        custom_format=custom_format,
+                    ),
                 )
                 for chunk in stream:
                     text = self._extract_text_from_stream_chunk(chunk)

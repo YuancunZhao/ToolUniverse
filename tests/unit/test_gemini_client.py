@@ -30,9 +30,23 @@ def test_constructs_with_api_key(monkeypatch):
 def test_build_config_passes_temperature_and_max_tokens(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     client = GeminiClient("gemini-2.5-flash", logging.getLogger("test"))
-    cfg = client._build_config(temperature=0.7, max_tokens=128)
+    cfg = client._build_config(0.7, 128)
     assert cfg.temperature == 0.7
     assert cfg.max_output_tokens == 128
+
+
+def test_build_config_enables_json_mime_type(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = GeminiClient("gemini-2.5-flash", logging.getLogger("test"))
+    cfg = client._build_config(temperature=0.0, max_tokens=None, return_json=True)
+    assert cfg.response_mime_type == "application/json"
+
+
+def test_build_config_leaves_json_mime_type_unset_by_default(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = GeminiClient("gemini-2.5-flash", logging.getLogger("test"))
+    cfg = client._build_config(temperature=0.0, max_tokens=None, return_json=False)
+    assert cfg.response_mime_type is None
 
 
 def test_build_config_omits_max_tokens_when_none(monkeypatch):
@@ -43,10 +57,45 @@ def test_build_config_omits_max_tokens_when_none(monkeypatch):
     assert cfg.max_output_tokens is None
 
 
+def test_gemini_json_mode_guard_removed():
+    """Regression guard: the old hard raise that broke return_json agentic
+    tools on Gemini must stay gone now that JSON mode is honored."""
+    import tooluniverse.llm_clients as mod
+
+    src = open(mod.__file__).read()
+    assert "Gemini JSON mode not supported here" not in src
+
+
+def test_infer_returns_dumped_custom_format():
+    client = GeminiClient.__new__(GeminiClient)
+    client.model_name = "gemini-2.5-flash"
+    client._build_config = mock.Mock(return_value=None)
+    parsed = mock.Mock()
+    parsed.model_dump.return_value = {"field": "value"}
+    client._client = mock.Mock()
+    client._client.models.generate_content.return_value = mock.Mock(parsed=parsed)
+
+    result = client.infer([], 0.0, None, False, custom_format={"type": "object"})
+
+    assert result == {"field": "value"}
+
+
+def test_infer_stream_buffers_custom_format():
+    client = GeminiClient.__new__(GeminiClient)
+    client._client = mock.Mock()
+    client.infer = mock.Mock(return_value={"field": "value"})
+
+    chunks = list(client.infer_stream([], 0.0, None, False, custom_format=object()))
+
+    assert chunks == [{"field": "value"}]
+    client._client.models.generate_content_stream.assert_not_called()
+
+
 def test_no_dependency_on_deprecated_google_generativeai():
     """Regression guard: the migration removes google.generativeai. If a
     future edit re-introduces it, this test should catch the import sneaking back."""
     import tooluniverse.llm_clients as mod
+
     src = open(mod.__file__).read()
     assert "google.generativeai" not in src, (
         "google.generativeai was reintroduced into llm_clients.py — "
