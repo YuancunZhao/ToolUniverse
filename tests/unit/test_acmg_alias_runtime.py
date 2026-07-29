@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tooluniverse.acmg_overlay_gate_tool import ACMGOverlayGateTool
+from tooluniverse.acmg_runtime_tools import ACMGOverlayGateTool
 
 
 class _FakeToolUniverse:
