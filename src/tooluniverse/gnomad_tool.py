@@ -229,6 +229,177 @@ class gnomADGetVariantPopulations(gnomADGraphQLTool):
         }
 
 
+@register_tool("gnomADGetSiteCallability")
+class gnomADGetSiteCallability(gnomADGraphQLTool):
+    """Retrieve gnomAD per-locus coverage without inferring adequacy."""
+
+    _DATASET_BUILDS = {
+        "gnomad_r4": "GRCh38",
+        "gnomad_r4_non_ukb": "GRCh38",
+        "gnomad_r3": "GRCh38",
+        "gnomad_r3_controls_and_biobanks": "GRCh38",
+        "gnomad_r3_non_cancer": "GRCh38",
+        "gnomad_r3_non_neuro": "GRCh38",
+        "gnomad_r3_non_topmed": "GRCh38",
+        "gnomad_r3_non_v2": "GRCh38",
+        "gnomad_r2_1": "GRCh37",
+        "gnomad_r2_1_controls": "GRCh37",
+        "gnomad_r2_1_non_neuro": "GRCh37",
+        "gnomad_r2_1_non_cancer": "GRCh37",
+        "gnomad_r2_1_non_topmed": "GRCh37",
+        "exac": "GRCh37",
+    }
+
+    _COVERAGE_FIELDS = (
+        "mean",
+        "median",
+        "over_1",
+        "over_5",
+        "over_10",
+        "over_15",
+        "over_20",
+        "over_25",
+        "over_30",
+        "over_50",
+        "over_100",
+    )
+
+    def __init__(self, tool_config):
+        super().__init__(tool_config)
+        if not self.query_schema:
+            self.query_schema = (
+                "query($chrom: String!, $start: Int!, $stop: Int!, "
+                "$referenceGenome: ReferenceGenomeId!, $dataset: DatasetId!) { "
+                "region(chrom: $chrom, start: $start, stop: $stop, "
+                "reference_genome: $referenceGenome) { "
+                "reference_genome chrom start stop "
+                "coverage(dataset: $dataset) { "
+                "exome { pos mean median over_1 over_5 over_10 over_15 over_20 "
+                "over_25 over_30 over_50 over_100 } "
+                "genome { pos mean median over_1 over_5 over_10 over_15 over_20 "
+                "over_25 over_30 over_50 over_100 } } } }"
+            )
+
+    @classmethod
+    def _callset_row(cls, rows, position):
+        if not isinstance(rows, list):
+            return None
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                if int(row.get("pos")) != position:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            selected = {key: row.get(key) for key in cls._COVERAGE_FIELDS}
+            if not any(value is not None for value in selected.values()):
+                return None
+            return {"position": position, **selected}
+        return None
+
+    def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        arguments = arguments or {}
+        chrom = str(arguments.get("chrom") or "").removeprefix("chr")
+        reference_genome = str(arguments.get("reference_genome") or "GRCh38")
+        dataset = str(arguments.get("dataset") or "gnomad_r4")
+        try:
+            position = int(arguments.get("position"))
+        except (TypeError, ValueError):
+            return {
+                "status": "error",
+                "error": "position must be an integer",
+                "data": None,
+            }
+        if not chrom or position <= 0:
+            return {
+                "status": "error",
+                "error": "chrom and a positive position are required",
+                "data": None,
+            }
+        expected_build = self._DATASET_BUILDS.get(dataset)
+        if expected_build and expected_build != reference_genome:
+            return {
+                "status": "error",
+                "error": (
+                    f"dataset '{dataset}' is defined on {expected_build}, not "
+                    f"{reference_genome}"
+                ),
+                "data": None,
+            }
+
+        request = {
+            "chrom": chrom,
+            "start": position,
+            "stop": position,
+            "referenceGenome": reference_genome,
+            "dataset": dataset,
+        }
+        result = super().run(request)
+        if result.get("status") != "success":
+            return result
+
+        region = (result.get("data") or {}).get("region")
+        if not isinstance(region, dict):
+            return {
+                "status": "no_hit",
+                "error": "gnomAD returned no region coverage result",
+                "url": result.get("url"),
+                "data": None,
+            }
+        returned_build = str(region.get("reference_genome") or "")
+        returned_chrom = str(region.get("chrom") or "").removeprefix("chr")
+        try:
+            returned_start = int(region.get("start"))
+            returned_stop = int(region.get("stop"))
+        except (TypeError, ValueError):
+            returned_start = returned_stop = -1
+        if (
+            returned_build != reference_genome
+            or returned_chrom != chrom
+            or returned_start != position
+            or returned_stop != position
+        ):
+            return {
+                "status": "error",
+                "error": "gnomAD region identity did not match the request",
+                "url": result.get("url"),
+                "data": None,
+            }
+        coverage = (
+            region.get("coverage") if isinstance(region.get("coverage"), dict) else {}
+        )
+        callsets = {
+            name: self._callset_row(coverage.get(name), position)
+            for name in ("exome", "genome")
+        }
+        if not any(callsets.values()):
+            return {
+                "status": "no_hit",
+                "error": "gnomAD returned no coverage row for the requested position",
+                "url": result.get("url"),
+                "data": None,
+            }
+        return {
+            "status": "success",
+            "data": {
+                "chrom": returned_chrom,
+                "position": position,
+                "reference_genome": returned_build,
+                "dataset": dataset,
+                "callsets": callsets,
+                "request_arguments": {
+                    "chrom": chrom,
+                    "position": position,
+                    "reference_genome": reference_genome,
+                    "dataset": dataset,
+                },
+                "raw_region": region,
+            },
+            "url": result.get("url"),
+        }
+
+
 @register_tool("gnomADGetGeneConstraints")
 class gnomADGetGeneConstraints(gnomADGraphQLTool):
     """Get gene constraint metrics from gnomAD."""

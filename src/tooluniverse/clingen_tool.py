@@ -14,6 +14,7 @@ gene-disease relationships for use in clinical genomics.
 import requests
 import csv
 import io
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from .base_tool import BaseTool
@@ -26,6 +27,7 @@ ACTIONABILITY_PEDIATRIC_URL = (
     "https://actionability.clinicalgenome.org/ac/Pediatric/api"
 )
 EREPO_BASE_URL = "https://erepo.clinicalgenome.org/evrepo/api"
+CSPEC_API_BASE_URL = "https://cspec.genome.network/cspec/api"
 
 
 @register_tool("ClinGenTool")
@@ -61,6 +63,7 @@ class ClinGenTool(BaseTool):
             "get_actionability_pediatric": self._get_actionability_pediatric,
             "search_actionability": self._search_actionability,
             "get_variant_classifications": self._get_variant_classifications,
+            "search_cspec": self._search_cspec,
         }
 
         handler = operation_map.get(operation)
@@ -68,6 +71,171 @@ class ClinGenTool(BaseTool):
             return {"status": "error", "error": f"Unknown operation: {operation}"}
 
         return handler(arguments)
+
+    @staticmethod
+    def _released_cspec(record: Dict[str, Any]) -> bool:
+        return str(record.get("status") or "").strip().casefold() == "released"
+
+    @staticmethod
+    def _cspec_gene_entries(record: Dict[str, Any]) -> List[Dict[str, Any]]:
+        entries: List[Dict[str, Any]] = []
+        for rule_set in record.get("ruleSets") or []:
+            if not isinstance(rule_set, dict):
+                continue
+            for gene in rule_set.get("genes") or []:
+                if isinstance(gene, dict):
+                    entries.append(gene)
+        return entries
+
+    @staticmethod
+    def _cspec_organization(record: Dict[str, Any]) -> str:
+        affiliation = record.get("affiliation")
+        if isinstance(affiliation, dict) and affiliation.get("label"):
+            return str(affiliation["label"])
+        return ""
+
+    @staticmethod
+    def _cspec_criteria(detail: Any) -> List[Dict[str, Any]]:
+        if not isinstance(detail, dict):
+            return []
+        normalized: List[Dict[str, Any]] = []
+        for rule_set in detail.get("ruleSets") or []:
+            if not isinstance(rule_set, dict):
+                continue
+            for item in rule_set.get("criteriaCodes") or []:
+                if not isinstance(item, dict):
+                    continue
+                strengths = []
+                for descriptor in item.get("evidenceStrengths") or []:
+                    if not isinstance(descriptor, dict):
+                        continue
+                    strengths.append(
+                        {
+                            "strength": descriptor.get("label"),
+                            "applicability": descriptor.get("applicability"),
+                            "specification_type": descriptor.get("specificationType"),
+                            "instructions": descriptor.get("instructionsToUse"),
+                            "text": descriptor.get("description"),
+                        }
+                    )
+                normalized.append(
+                    {
+                        "criterion": item.get("label"),
+                        "applicability": item.get("applicability"),
+                        "default_strength": item.get("defaultStrength"),
+                        "instructions": item.get("description"),
+                        "strengths": strengths,
+                        "criterion_id": item.get("@id"),
+                    }
+                )
+        return normalized
+
+    @staticmethod
+    def _cspec_version(content: Dict[str, Any]) -> str:
+        version = str(content.get("version") or "").strip()
+        if version:
+            return version
+        match = re.search(
+            r"\bversion\s+([0-9]+(?:\.[0-9]+){1,2})\b",
+            str(content.get("label") or content.get("title") or ""),
+            re.IGNORECASE,
+        )
+        return match.group(1) if match else ""
+
+    def _search_cspec(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Discover current released ClinGen CSpec documents for a gene."""
+        gene = str(arguments.get("gene") or "").strip().upper()
+        if not gene:
+            return {"status": "error", "error": "Missing required parameter: gene"}
+        index_url = f"{CSPEC_API_BASE_URL}/svis"
+        try:
+            response = requests.get(index_url, timeout=self.timeout)
+            response.raise_for_status()
+            payload = response.json()
+            records = payload.get("data") if isinstance(payload, dict) else None
+            matches: List[Dict[str, Any]] = []
+            for record in records or []:
+                if not isinstance(record, dict) or not self._released_cspec(record):
+                    continue
+                gene_entries = [
+                    item
+                    for item in self._cspec_gene_entries(record)
+                    if str(item.get("label") or "").strip().upper() == gene
+                ]
+                if not gene_entries:
+                    continue
+                specification_id = (
+                    str(record.get("@id") or "").rstrip("/").rsplit("/", 1)[-1]
+                )
+                if not specification_id:
+                    continue
+                detail_url = (
+                    f"{CSPEC_API_BASE_URL}/SequenceVariantInterpretation/id/"
+                    f"{specification_id}"
+                )
+                detail_response = requests.get(detail_url, timeout=self.timeout)
+                detail_response.raise_for_status()
+                detail = detail_response.json()
+                detail = detail if isinstance(detail, dict) else {}
+                diseases: List[Dict[str, Any]] = []
+                for entry in gene_entries:
+                    for disease in entry.get("diseases") or []:
+                        if not isinstance(disease, dict):
+                            continue
+                        inheritance = [
+                            str(item.get("@label") or "")
+                            for item in disease.get("modeOfInheritance") or []
+                            if isinstance(item, dict)
+                        ]
+                        mondo_id = str(disease.get("label") or "")
+                        diseases.append(
+                            {
+                                "name": mondo_id,
+                                "mondo_id": mondo_id,
+                                "inheritance": inheritance,
+                            }
+                        )
+                matches.append(
+                    {
+                        "specification_id": specification_id,
+                        "gene": gene,
+                        "vcep": self._cspec_organization(record),
+                        "title": str(detail.get("label") or ""),
+                        "version": self._cspec_version(record)
+                        or self._cspec_version(detail),
+                        "status": str(record.get("status") or "Released"),
+                        "diseases": diseases,
+                        "url": str(
+                            record.get("url")
+                            or (
+                                "https://cspec.genome.network/cspec/ui/svi/doc/"
+                                f"{specification_id}"
+                            )
+                        ),
+                        "criterion_modifications": self._cspec_criteria(detail),
+                        "specification": detail,
+                    }
+                )
+            provider_version = ""
+            if isinstance(payload, dict):
+                metadata = payload.get("metadata")
+                if isinstance(metadata, dict):
+                    rendered = metadata.get("rendered")
+                    if isinstance(rendered, dict):
+                        provider_version = str(rendered.get("by") or "")
+            return {
+                "status": "success" if matches else "no_hit",
+                "gene": gene,
+                "data": matches,
+                "total": len(matches),
+                "provider": "ClinGen CSpec Registry",
+                "provider_version": provider_version,
+                "request_url": response.url,
+            }
+        except requests.exceptions.Timeout:
+            return {"status": "error", "error": f"Timeout after {self.timeout}s"}
+        except requests.RequestException as exc:
+            return {"status": "error", "error": f"ClinGen CSpec request failed: {exc}"}
 
     def _get_gene_validity(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get all gene-disease validity curations from ClinGen."""

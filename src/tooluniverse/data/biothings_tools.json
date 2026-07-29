@@ -1,5 +1,32 @@
 [
   {
+    "name": "MyVariant_get_metadata",
+    "description": "Get versioned MyVariant.info source metadata. Use source=dbnsfp to bind REVEL and other dbNSFP predictor scores to the dataset version used by MyVariant.",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "MyVariant annotation source name",
+          "default": "dbnsfp"
+        }
+      },
+      "required": []
+    },
+    "fields": {
+      "operation": "get_metadata"
+    },
+    "type": "MyVariantTool",
+    "test_examples": [
+      {
+        "source": "dbnsfp"
+      }
+    ],
+    "return_schema": {
+      "type": "object"
+    }
+  },
+  {
     "name": "MyGene_query_genes",
     "description": "Search for genes by keyword, symbol, name, or other identifiers. Returns gene annotations from 30+ sources including Entrez Gene, Ensembl, UniProt, HGNC. Useful for finding gene IDs, symbols, descriptions, and basic annotations.",
     "parameter": {

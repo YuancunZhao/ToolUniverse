@@ -1,5 +1,37 @@
 [
   {
+    "name": "ClinGen_search_cspec",
+    "description": "Discover current released ClinGen Criteria Specification Registry documents for a gene. Returns VCEP, disease, inheritance, version, source URL, and the full specification for review. CSpec rules override general SVI guidance only after disease and inheritance applicability are confirmed.",
+    "type": "ClinGenTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "gene": {
+          "type": "string",
+          "description": "HGNC gene symbol"
+        }
+      },
+      "required": [
+        "gene"
+      ]
+    },
+    "fields": {
+      "operation": "search_cspec",
+      "timeout": 60
+    },
+    "return_schema": {
+      "type": "object"
+    },
+    "test_examples": [
+      {
+        "gene": "VHL"
+      },
+      {
+        "gene": "BRCA2"
+      }
+    ]
+  },
+  {
     "name": "ClinGen_search_gene_validity",
     "description": "Search ClinGen gene-disease validity curations by gene symbol. Returns classification (Definitive, Strong, Moderate, Limited, Disputed, Refuted), disease associations, and inheritance patterns. Essential for ACMG variant classification. Example: BRCA1 returns validity scores for hereditary breast/ovarian cancer.",
     "type": "ClinGenTool",

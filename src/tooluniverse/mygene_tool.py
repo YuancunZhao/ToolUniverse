@@ -176,6 +176,8 @@ class MyVariantTool(BaseTool):
             return self._query_variants(arguments)
         elif operation == "get_variant":
             return self._get_variant(arguments)
+        elif operation == "get_metadata":
+            return self._get_metadata(arguments)
         else:
             return {"status": "error", "error": f"Unknown operation: {operation}"}
 
@@ -204,6 +206,42 @@ class MyVariantTool(BaseTool):
             return {
                 "status": "error",
                 "error": f"MyVariant.info API request failed: {str(e)}",
+            }
+
+    def _get_metadata(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Return versioned metadata for one MyVariant annotation source."""
+        source_name = str(arguments.get("source") or "dbnsfp").strip().lower()
+        try:
+            response = requests.get(
+                f"{self.MYVARIANT_BASE_URL}/metadata", timeout=self.timeout
+            )
+            response.raise_for_status()
+            payload = response.json()
+            sources = payload.get("src") if isinstance(payload, dict) else None
+            source = sources.get(source_name) if isinstance(sources, dict) else None
+            if not isinstance(source, dict):
+                return {
+                    "status": "no_hit",
+                    "source": source_name,
+                    "available_sources": (
+                        sorted(sources) if isinstance(sources, dict) else []
+                    ),
+                }
+            return {
+                "status": "success",
+                "source": source_name,
+                "version": source.get("version"),
+                "download_date": source.get("download_date"),
+                "upload_date": source.get("upload_date"),
+                "url": source.get("url"),
+                "build_version": payload.get("build_version"),
+                "build_date": payload.get("build_date"),
+                "provider": "MyVariant.info",
+            }
+        except requests.RequestException as exc:
+            return {
+                "status": "error",
+                "error": f"MyVariant.info metadata request failed: {exc}",
             }
 
     def _get_variant(self, arguments: Dict[str, Any]) -> Dict[str, Any]:

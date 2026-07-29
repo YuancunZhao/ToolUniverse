@@ -1,5 +1,235 @@
 [
   {
+    "type": "gnomADGetSiteCallability",
+    "name": "gnomad_get_site_callability",
+    "description": "Retrieve gnomAD per-locus exome and genome coverage for a normalized genomic position. This returns raw coverage metrics only and does not infer ACMG coverage adequacy or PM2 eligibility.",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "chrom": {
+          "type": "string",
+          "description": "Chromosome without or with the chr prefix, e.g. '1'."
+        },
+        "position": {
+          "type": "integer",
+          "description": "One-based genomic position."
+        },
+        "reference_genome": {
+          "type": "string",
+          "enum": [
+            "GRCh37",
+            "GRCh38"
+          ],
+          "default": "GRCh38",
+          "description": "Reference genome for the normalized position."
+        },
+        "dataset": {
+          "type": "string",
+          "default": "gnomad_r4",
+          "description": "gnomAD dataset. The tool rejects known dataset/build mismatches."
+        }
+      },
+      "required": [
+        "chrom",
+        "position"
+      ]
+    },
+    "fields": {
+      "endpoint": "https://gnomad.broadinstitute.org/api",
+      "return_format": "JSON"
+    },
+    "return_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "data",
+            "url"
+          ],
+          "properties": {
+            "status": {
+              "const": "success"
+            },
+            "data": {
+              "type": "object",
+              "required": [
+                "chrom",
+                "position",
+                "reference_genome",
+                "dataset",
+                "callsets",
+                "request_arguments",
+                "raw_region"
+              ],
+              "properties": {
+                "chrom": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "reference_genome": {
+                  "type": "string"
+                },
+                "dataset": {
+                  "type": "string"
+                },
+                "callsets": {
+                  "type": "object"
+                },
+                "request_arguments": {
+                  "type": "object"
+                },
+                "raw_region": {
+                  "type": "object"
+                }
+              }
+            },
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "error"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "error",
+                "no_hit"
+              ]
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "test_examples": [
+      {
+        "chrom": "1",
+        "position": 1000000,
+        "reference_genome": "GRCh38",
+        "dataset": "gnomad_r4"
+      }
+    ],
+    "metadata": {
+      "tags": [
+        "variant",
+        "population",
+        "coverage",
+        "callability",
+        "gnomAD"
+      ],
+      "difficulty_level": "intermediate",
+      "estimated_execution_time": "< 5 seconds"
+    }
+  },
+  {
+    "type": "gnomADGraphQLQueryTool",
+    "name": "gnomad_get_region_variants",
+    "description": "Get per-variant consequence and frequency facts for a small genomic interval from gnomAD. Returns chrom/pos/ref/alt, VEP consequence, and exome/genome AF, AC, AN and homozygote_count for each variant in the region. Keep regions small (e.g. a single exon) to avoid large payloads.",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "chrom": {
+          "type": "string",
+          "description": "Chromosome (e.g., '19')."
+        },
+        "start": {
+          "type": "integer",
+          "description": "1-based start position."
+        },
+        "stop": {
+          "type": "integer",
+          "description": "1-based stop position."
+        },
+        "reference_genome": {
+          "type": "string",
+          "enum": [
+            "GRCh37",
+            "GRCh38"
+          ],
+          "default": "GRCh38",
+          "description": "Reference genome."
+        },
+        "dataset": {
+          "type": "string",
+          "default": "gnomad_r4",
+          "description": "gnomAD dataset ID used for `variants(dataset: ...)`. Allowed values: gnomad_r4, gnomad_r4_non_ukb, gnomad_r3, gnomad_r3_controls_and_biobanks, gnomad_r3_non_cancer, gnomad_r3_non_neuro, gnomad_r3_non_topmed, gnomad_r3_non_v2, gnomad_r2_1, gnomad_r2_1_controls, gnomad_r2_1_non_neuro, gnomad_r2_1_non_cancer, gnomad_r2_1_non_topmed, exac."
+        }
+      },
+      "required": [
+        "chrom",
+        "start",
+        "stop"
+      ]
+    },
+    "fields": {
+      "endpoint": "https://gnomad.broadinstitute.org/api",
+      "return_format": "JSON",
+      "query_schema": "query($chrom: String!, $start: Int!, $stop: Int!, $dataset: DatasetId!, $referenceGenome: ReferenceGenomeId!) { region(chrom: $chrom, start: $start, stop: $stop, reference_genome: $referenceGenome) { chrom start stop variants(dataset: $dataset) { variant_id chrom pos ref alt consequence filters exome { ac an af homozygote_count } genome { ac an af homozygote_count } } } }",
+      "variable_map": {
+        "reference_genome": "referenceGenome"
+      },
+      "default_variables": {
+        "dataset": "gnomad_r4",
+        "referenceGenome": "GRCh38"
+      }
+    },
+    "return_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "const": "success"
+            },
+            "data": {
+              "type": "object"
+            },
+            "metadata": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "error"
+          ],
+          "properties": {
+            "status": {
+              "const": "error"
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "test_examples": [
+      {
+        "chrom": "19",
+        "start": 44908800,
+        "stop": 44908950,
+        "reference_genome": "GRCh38",
+        "dataset": "gnomad_r4"
+      }
+    ]
+  },
+  {
     "type": "gnomADGetGeneConstraints",
     "name": "gnomad_get_gene_constraints",
     "description": "Get gene constraint metrics from gnomAD for a gene symbol (GRCh38). Returns constraint fields under `exac_constraint` and `gnomad_constraint` (e.g., pLI, oe_lof/oe_mis/oe_syn, exp/obs counts). Note: does NOT include LOEUF, missense Z-score, or synonymous Z-score -- for the full constraint panel (pLI + LOEUF + mis_z + syn_z), use gnomad_get_constraint instead.",
