@@ -2572,6 +2572,25 @@ class ToolUniverse:
 
         return results
 
+    def run_many_functions(
+        self,
+        function_calls: List[Dict[str, Any]],
+        *,
+        use_cache: bool = False,
+        max_workers: Optional[int] = None,
+    ) -> List[Any]:
+        """Execute structured tool calls and return raw results in input order.
+
+        This is the public counterpart of the internal batch executor.  It
+        intentionally applies no workflow-specific policy; callers that own a
+        policy boundary must process the returned values themselves.
+        """
+        return self._execute_function_call_list(
+            function_calls,
+            use_cache=use_cache,
+            max_workers=max_workers,
+        )
+
     def _build_batch_jobs(
         self, function_calls: List[Dict[str, Any]]
     ) -> List[_BatchJob]:
