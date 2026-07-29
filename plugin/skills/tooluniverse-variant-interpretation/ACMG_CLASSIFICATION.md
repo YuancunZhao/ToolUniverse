@@ -1,86 +1,69 @@
-# ACMG Classification Reference
+# ACMG Evidence Routing Reference
 
-## Evidence Codes
+This file is a quick index for evidence retrieval and routing. It is not an ACMG classifier. Use `ACMG_evidence_collector` for evidence collection and the five deterministic group tools for criterion assessment. The current runtime does not produce a five-tier classification.
 
-### Pathogenic Evidence
+## Evidence Route Index
 
-| Code | Strength | Description |
+Do not assign ACMG evidence strength from this quick index. Use
+`ACMG_evidence_collector` and the shared deterministic group rules; unsupported
+inputs remain review-only and no five-tier classification is emitted.
+
+### Pathogenic/Context Candidate Routes
+
+| Candidate | Evidence lead | Required route |
 |------|----------|-------------|
-| PVS1 | Very Strong | Null variant in gene where LOF is mechanism |
-| PS1 | Strong | Same amino acid change as known pathogenic |
-| PS3 | Strong | Well-established functional studies |
-| PM1 | Moderate | Mutational hot spot / functional domain |
-| PM2 | Moderate | Absent from controls |
-| PM5 | Moderate | Different missense at same residue as pathogenic |
-| PP3 | Supporting | Multiple computational predictions |
-| PP5 | Supporting | Reputable source reports pathogenic |
+| PVS1 | Null, canonical splice, start-loss, exon deletion/duplication, whole-gene deletion | `ACMG_evidence_collector` runs the deterministic ClinGen/SVI tree; complete verified facts may enter the system preview, while missing decision facts remain `not_assessed` |
+| PS1/PM5 | Same amino-acid or same-residue comparison variant | `ACMG_evidence_collector`; comparison source labels are leads only |
+| PS3/BS3 | Functional assay evidence | `ACMG_functional_evidence` |
+| PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment | `ACMG_literature_evidence` |
+| PM1 | Hotspot or critical functional-domain context | Collector maps verified genomic HGVS to UniProt and exact EBI feature ranges; generic overlap is `indeterminate`, while only an exact online-bound CSpec region contract can produce a candidate |
+| PP2/BP1 | Regional missense constraint or missense mechanism context | Collector route context only; no current automatic count |
+| PM2 | Absent/rare from controls after coverage and population checks | General SVI suggests PM2_Supporting for AC=0 with auditable callability; an applicable CSpec takes precedence |
+| PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous observations | `ACMG_clinical_evidence` |
+| PM4/BP3 | Protein length change, in-frame indel, stop-loss, repeat/low-complexity region | Collector route context only; no current automatic count |
+| PP1/BS4/PP4 | Segregation, non-segregation, phenotype-locus evidence | `ACMG_clinical_evidence` and phenotype-dependent intake when needed |
+| PP3/BP4 | Calibrated computational prediction evidence | `ACMG_computational_evidence` or VCEP; no local predictor voting |
+| PP5/BP6 | Reputable-source assertion | `ACMG_evidence_collector`; deprecated and excluded from system preview |
 
-### Benign Evidence
+### Benign/Frequency Candidate Routes
 
-| Code | Strength | Description |
+| Candidate | Evidence lead | Required route |
 |------|----------|-------------|
-| BA1 | Stand-alone | MAF >5% |
-| BS1 | Strong | MAF greater than expected |
-| BS3 | Strong | Functional studies show no effect |
-| BP4 | Supporting | Multiple computational predictions benign |
-| BP7 | Supporting | Synonymous with no splice impact |
+| BA1 | AF >0.05 candidate | `ACMG_population_evidence` before stand-alone benign classification |
+| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, phase context, alternate diagnosis | `ACMG_population_evidence` |
+| RNA no-splicing-impact candidate | Synonymous/intronic no-splicing-impact evidence | `ACMG_computational_evidence`; prediction-only low splice scores remain prediction context |
 
-## Classification Algorithm
+## Evidence Assessment Contract
 
-| Classification | Evidence Required |
-|----------------|-------------------|
-| Pathogenic | 1 Very Strong + 1 Strong; OR 2 Strong; OR 1 Strong + 3 Moderate |
-| Likely Pathogenic | 1 Very Strong + 1 Moderate; OR 1 Strong + 2 Moderate; OR 1 Strong + 2 Supporting |
-| Likely Benign | 1 Strong + 1 Supporting; OR 2 Supporting |
-| Benign | 1 Stand-alone; OR 2 Strong |
-| VUS | Criteria not met |
+Do not use this reference as an independent classifier. The current runtime ends after validated EvidenceCards, compatibility/conflict handling, and a Bayesian review estimate. A qualified human reviewer remains responsible for any final classification.
 
-## Classification Confidence
+## Source Assertions
 
-| Symbol | Classification | Evidence Level |
-|--------|----------------|----------------|
-| 3 stars | High confidence | Multiple independent lines |
-| 2 stars | Moderate confidence | Some supporting evidence |
-| 1 star | Limited confidence | Minimal evidence |
-| VUS | Uncertain | Insufficient data |
+ClinVar review status and submitted classifications are displayed as source
+assertions with their provenance. They do not establish an EvidenceCard,
+criterion strength, confidence level, or final classification.
 
-## ClinVar Classification Map
+## Population Evidence
 
-| ClinVar | Interpretation |
-|---------|----------------|
-| Pathogenic | Disease-causing |
-| Likely pathogenic | 90%+ confidence pathogenic |
-| VUS | Uncertain significance |
-| Likely benign | 90%+ confidence benign |
-| Benign | Not disease-causing |
-| Conflicting | Multiple interpretations |
+Use `ACMG_population_evidence` or the collector for PM2 and benign-frequency
+assessment. The normative SVI/CSpec rules, coverage requirements, exceptions,
+and current strengths live in the `tooluniverse-acmg-variant-classification`
+Skill and machine-readable rule catalog; this routing index does not duplicate
+them.
 
-## gnomAD Frequency Thresholds (Rare Disease)
+## COSMIC Somatic Context
 
-| Frequency | ACMG Code | Interpretation |
-|-----------|-----------|----------------|
-| Absent | PM2_Supporting | Absent from controls |
-| <0.00001 | PM2_Supporting | Extremely rare |
-| <0.0001 | - | Rare (use with caution) |
-| >0.01 | BS1/BA1 | Too common for rare disease |
+COSMIC recurrence is somatic cancer context and a literature or cancer-interpretation lead. Do not map COSMIC recurrence directly to germline functional evidence. For tumor-specific interpretation, route to the cancer variant interpretation workflow; for germline ACMG, use COSMIC only to guide literature review, mechanism review, or hotspot/domain context that is then assessed by the appropriate overlay.
 
-## COSMIC Somatic Evidence
+## DisGeNET Context
 
-| COSMIC Finding | Interpretation | ACMG Support |
-|----------------|----------------|--------------|
-| Recurrent hotspot (>100 samples) | Known oncogenic driver | PS3 (functional) |
-| Moderate frequency (10-100) | Likely oncogenic | PM1 (hotspot) |
-| Rare somatic (<10) | Unknown significance | No support |
+Preserve the returned association score and provenance as gene-disease context.
+Do not map score bands to ACMG strength or use them as patient-level PP4
+evidence.
 
-## DisGeNET Score Interpretation
+## ClinGen Validity Levels
 
-| GDA Score | Evidence Level | ACMG Support |
-|-----------|----------------|--------------|
-| >0.7 | Strong | PP4 (phenotype) |
-| 0.4-0.7 | Moderate | Supporting |
-| <0.4 | Weak | Insufficient |
-
-## ClinGen Validity Levels (for ACMG PM1/PP4)
+Gene-disease validity and disease association scores do not substitute for patient-level phenotype evidence. Use `ACMG_evidence_collector` for evidence-only intake. Disease, phenotype, segregation, and mechanism-sensitive criteria remain review rows unless their deterministic group rule produces a source-backed candidate EvidenceCard.
 
 | Classification | Meaning | ACMG Impact |
 |----------------|---------|-------------|
@@ -102,12 +85,14 @@
 
 ## Structural Impact Categories
 
-| Impact Level | Description | ACMG Support |
+| Impact Level | Description | ACMG use |
 |--------------|-------------|--------------|
-| **Critical** | Active site, catalytic residue | PM1 (strong) |
-| **High** | Buried residue, disulfide, structural core | PM1 (moderate) |
-| **Moderate** | Domain interface, binding site | PM1 (supporting) |
+| **Critical** | Active site, catalytic residue | PM1 candidate route |
+| **High** | Buried residue, disulfide, structural core | PM1/structural context lead |
+| **Moderate** | Domain interface, binding site | PM1/structural context lead |
 | **Low** | Surface, flexible region | No support |
+
+Do not assign PM1, PP2, BP1, PM4, or BP3 from this index alone. Preserve regional, domain, paralog, protein-length, and altered-product observations as collector context. Generic UniProt/InterPro overlap is insufficient for PM1 because it does not establish a critical region or depletion of benign variation. `ACMG_functional_evidence` can suggest PM1 only when the collector supplies verified protein SourceFacts and an exact online-bound CSpec PM1 contract; anchored literature facts may separately produce review-required PP2/BP1 or PM4/BP3 proposals. Direct group calls remain review-only.
 
 ## Structural Impact Confidence (AlphaFold pLDDT)
 
@@ -118,52 +103,56 @@
 | 50-70 | Moderate (often loops) |
 | <50 | Low confidence (disorder) |
 
-## Prediction Thresholds
+## Prediction Scores
 
-| Predictor | Damaging | Benign |
-|-----------|----------|--------|
-| **AlphaMissense** | >0.564 | <0.34 |
-| **CADD PHRED** | >=20 (top 1%) | <15 |
-| **EVE** | >0.5 | <=0.5 |
-| SIFT | <0.05 | >=0.05 |
-| PolyPhen2 | >0.85 (probably) | <0.15 (benign) |
+List all available prediction scores, their versions, transcripts, and input
+coordinates. Do not reproduce provider-default cutoffs as ACMG thresholds.
+Only the versioned computational rule catalog may suggest PP3/BP4.
 
 ## PP3/BP4 Application Notes
 
-- **PP3**: Multiple concordant damaging predictions (AlphaMissense + CADD + EVE agreement = strong PP3)
-- **BP4**: Multiple concordant benign predictions
-- **Note**: AlphaMissense alone achieves ~90% accuracy on ClinVar pathogenic variants
+- **PP3/BP4**: Assign only through calibrated predictor thresholds from `ACMG_computational_evidence` or a current VCEP rule.
+- **Avoid local predictor combining**: Multiple concordant uncalibrated predictors do not automatically create PP3/BP4 evidence.
+- **Tool availability**: If a required calibrated score is unavailable through ToolUniverse, record the gap and do not substitute developer-default SIFT/PolyPhen/CADD thresholds as ACMG evidence.
 
-## SpliceAI Thresholds
+## PS4 and Phenotype-Dependent Evidence
 
-| Max Delta Score | Interpretation | ACMG Support |
-|-----------------|----------------|--------------|
-| >=0.8 | High pathogenicity | PP3 (strong) for splice-altering |
-| 0.5-0.8 | Moderate | PP3 (supporting) |
-| 0.2-0.5 | Low | Weak evidence |
-| <0.2 | Likely benign | BP7 (if synonymous) |
+Use `ACMG_literature_evidence` for case-control evidence, odds ratio/confidence interval interpretation, unrelated affected case counts, ancestry matching, gnomAD control caveats, and PS4 review. An applicable online CSpec policy takes precedence; without one, verified case-control or independent case-series facts produce a general-SVI `requires_user_review` proposal. Recessive biallelic affected-proband observations route to PM3 rather than PS4.
+
+Use `ACMG_clinical_evidence` for structured review of PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 inputs. Unsupported phenotype, segregation, and biallelic contracts remain review candidates outside the system preview.
+
+## SpliceAI Prediction Context
+
+The collector preserves all four delta channels, positions, run metadata, and
+selected-transcript binding. Use the
+`tooluniverse-acmg-variant-classification` Skill as the single normative source
+for current Walker PP3/BP4/BP7 and canonical PVS1 splice interpretation. Do
+not infer a splice criterion from this index.
 
 ## Literature Evidence Weights
 
-| Evidence | ACMG Code | Weight |
+| Evidence | Route | Use |
 |----------|-----------|--------|
-| Functional study (null) | PS3 | Strong |
-| Functional study (reduced) | PS3_Moderate | Moderate |
-| Case reports with segregation | PP1 | Supporting to Moderate |
-| Co-occurrence with pathogenic | BP2 | Supporting against |
+| Functional study (null) | PS3/BS3 route | Assay strength requires the structured functional-assay contract |
+| Functional study (reduced) | PS3/BS3 route | Assay strength requires the structured functional-assay contract |
+| Case reports with segregation | PP1/PP4 route | Current runtime keeps these criteria review-only; avoid double counting during human review |
+| Co-occurrence with pathogenic | Benign-context overlay | BP2 requires inheritance and cis/trans context |
 
 ## Regulatory Impact Categories
 
-| Category | Criteria | ACMG Support |
+| Category | Criteria | ACMG use |
 |----------|----------|--------------|
-| **High impact** | Disrupts known TF binding motif | PP3 (supporting) |
+| **High impact** | Disrupts known TF binding motif | Regulatory prediction context; route to the appropriate regulatory or ACMG overlay before assigning evidence |
 | **Moderate impact** | In active regulatory region | Consider context |
 | **Low impact** | No regulatory annotation | No support |
 
 ## PVS1 Application for Truncating Variants
 
-| Scenario | PVS1 Strength |
-|----------|---------------|
-| Canonical LOF gene, NMD predicted | Very Strong |
-| LOF gene, last exon | Moderate |
-| Non-LOF gene | Not applicable |
+Call `ACMG_evidence_collector`. It runs the versioned ClinGen/SVI PVS1 decision
+tree using provider-verified mechanism, selected-transcript consequence,
+biotype, exon/frame/NMD, rescue-transcript, critical-region, population-LoF,
+protein-length, SpliceAI, RNA, and exact CSpec facts as applicable. A complete
+fact path may generate a PVS1 EvidenceCard eligible for the system-preview
+estimate. Missing or unverifiable decision points remain `not_assessed` or
+downgrade conservatively. The `tooluniverse-acmg-variant-classification` Skill
+is the normative description of this behavior.

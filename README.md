@@ -65,6 +65,21 @@ The base install covers the API and database tools. Local ML, cheminformatics, a
 **[`tu` CLI](https://zitniklab.hms.harvard.edu/ToolUniverse/guide/tu_cli.html)** — discover, inspect, run, and test tools from the terminal.
 **[Python SDK](https://zitniklab.hms.harvard.edu/ToolUniverse/guide/python_guide.html)** — programmatic access for building AI scientist systems.
 
+### Enhanced ACMG fork
+
+This branch preserves the complete ToolUniverse 1.4.0 scientific toolkit and
+adds an evidence-only workflow for germline small-variant ACMG review. It
+collects auditable provider facts and predictor scores, applies versioned
+ClinGen/SVI or uniquely matched CSpec rules, reports compatibility/conflicts,
+and calculates system-preview and user-selected Bayesian estimates. It never
+returns a five-tier final classification.
+
+The fork version is `1.4.0+acmg.1`, based on upstream commit
+`089eb8e6308fc64ae5af3de4bfbec32b5cf07b61`. Ordinary users should keep using
+the upstream installation commands above. Enhanced ACMG deployments must use
+the exact validated Git SHA and matching Skill bundle documented in
+[SETUP.md](SETUP.md).
+
 ## Building AI Scientists with ToolUniverse
 
 <p align="center">

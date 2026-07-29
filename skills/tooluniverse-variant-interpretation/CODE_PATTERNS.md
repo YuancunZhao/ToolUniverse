@@ -167,19 +167,10 @@ def get_spliceai_prediction(tu, chrom, pos, ref, alt, genome="38"):
         max_score = result['data'].get('max_delta_score', 0)
         interpretation = result['data'].get('interpretation', '')
 
-        if max_score >= 0.8:
-            acmg = 'PP3 (strong) - high splice impact'
-        elif max_score >= 0.5:
-            acmg = 'PP3 (supporting) - moderate splice impact'
-        elif max_score >= 0.2:
-            acmg = 'PP3 (weak) - possible splice impact'
-        else:
-            acmg = 'BP7 (if synonymous) - splice benign'
-
         return {
             'max_delta_score': max_score,
             'interpretation': interpretation,
-            'acmg_support': acmg,
+            'evidence_route': 'Preserve prediction context for ACMG_computational_evidence; do not assign ACMG strength here.',
             'scores': result['data'].get('scores', [])
         }
     return None
@@ -252,7 +243,8 @@ def get_cadd_score(tu, chrom, pos, ref, alt):
         return {
             'score': phred,
             'interpretation': result['data'].get('interpretation'),
-            'acmg_support': 'PP3' if phred >= 20 else ('BP4' if phred < 15 else 'neutral')
+            'provider_result': result['data'],
+            'evidence_route': 'Audit context only; the collector rule catalog decides whether any computational criterion applies.'
         }
     return None
 ```
@@ -262,10 +254,8 @@ def get_cadd_score(tu, chrom, pos, ref, alt):
 ```python
 def get_alphamissense_score(tu, uniprot_id, variant):
     """
-    Get AlphaMissense pathogenicity score.
+    Get the provider's AlphaMissense score for transparent audit.
     variant format: 'R123H' or 'p.R123H'
-
-    Thresholds: Pathogenic >0.564, Ambiguous 0.34-0.564, Benign <0.34
     """
 
     result = tu.tools.AlphaMissense_get_variant_score(
@@ -277,17 +267,11 @@ def get_alphamissense_score(tu, uniprot_id, variant):
         score = result['data'].get('pathogenicity_score')
         classification = result['data'].get('classification')
 
-        if classification == 'pathogenic':
-            acmg = 'PP3 (strong)'
-        elif classification == 'benign':
-            acmg = 'BP4 (strong)'
-        else:
-            acmg = 'neutral'
-
         return {
             'score': score,
             'classification': classification,
-            'acmg_support': acmg
+            'provider_result': result['data'],
+            'evidence_route': 'Audit context only; AlphaMissense does not substitute for the executable predictor contract.'
         }
     return None
 ```
@@ -296,7 +280,7 @@ def get_alphamissense_score(tu, uniprot_id, variant):
 
 ```python
 def get_eve_score(tu, chrom, pos, ref, alt):
-    """Get EVE evolutionary pathogenicity score. Threshold: >0.5 = likely pathogenic."""
+    """Get EVE evolutionary pathogenicity score for retrieval/orientation."""
 
     result = tu.tools.EVE_get_variant_score(
         chrom=str(chrom), pos=pos, ref=ref, alt=alt
@@ -310,7 +294,8 @@ def get_eve_score(tu, chrom, pos, ref, alt):
                 'score': best_score.get('eve_score'),
                 'classification': best_score.get('classification'),
                 'gene': best_score.get('gene_symbol'),
-                'acmg_support': 'PP3' if best_score.get('eve_score', 0) > 0.5 else 'BP4'
+                'provider_result': best_score,
+                'evidence_route': 'Audit context only; EVE does not substitute for the executable predictor contract.'
             }
     return None
 ```
@@ -318,8 +303,8 @@ def get_eve_score(tu, chrom, pos, ref, alt):
 ### 3.4 Integrated Prediction Strategy
 
 ```python
-def comprehensive_pathogenicity_assessment(tu, variant_info):
-    """Combine all prediction tools for robust classification."""
+def collect_prediction_audit_context(tu, variant_info):
+    """Collect raw prediction outputs for downstream rule review."""
     chrom = variant_info['chrom']
     pos = variant_info['pos']
     ref = variant_info['ref']
@@ -342,25 +327,9 @@ def comprehensive_pathogenicity_assessment(tu, variant_info):
     if eve:
         predictions['eve'] = eve
 
-    damaging_count = sum(1 for p in predictions.values()
-                         if 'PP3' in p.get('acmg_support', ''))
-    benign_count = sum(1 for p in predictions.values()
-                       if 'BP4' in p.get('acmg_support', ''))
-
-    if damaging_count >= 2 and benign_count == 0:
-        consensus = 'likely_damaging'
-        acmg = 'PP3 (multiple predictors concordant)'
-    elif benign_count >= 2 and damaging_count == 0:
-        consensus = 'likely_benign'
-        acmg = 'BP4 (multiple predictors concordant)'
-    else:
-        consensus = 'uncertain'
-        acmg = 'neutral (discordant predictions)'
-
     return {
         'predictions': predictions,
-        'consensus': consensus,
-        'acmg_recommendation': acmg
+        'evidence_route': 'Send the raw scores to ACMG_computational_evidence; do not combine or vote locally.'
     }
 ```
 

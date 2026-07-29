@@ -11,6 +11,11 @@ When analysis requires computation (statistics, data processing, scoring, enrich
 
 Systematic analysis of structural variants (deletions, duplications, inversions, translocations, complex rearrangements) for clinical genomics interpretation using ACMG-adapted criteria.
 
+> **Runtime boundary:** `ACMG_evidence_collector` supports germline small variants
+> only; do not submit CNV/SV events to that collector for criteria,
+> compatibility, Bayesian scoring, or a five-tier result; use this
+> structural-variant workflow and an appropriate CNV/SV-specific framework.
+
 **LOOK UP DON'T GUESS** - Always retrieve ClinGen HI/TS scores, gnomAD frequencies, and ClinVar evidence from tools. Do not infer dosage sensitivity from gene function alone.
 
 **KEY PRINCIPLES**:

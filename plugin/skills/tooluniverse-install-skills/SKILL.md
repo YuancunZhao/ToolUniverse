@@ -1,76 +1,96 @@
 ---
 name: tooluniverse-install-skills
-description: Detect and auto-install missing ToolUniverse research skills. Checks common Claude Code/Cursor/Codex skill directories for the canary file, and installs any missing skills if none found. Use when the plugin's research skills aren't loading, when migrating between clients, or when verifying a skill installation.
-disable-model-invocation: true
+description: Install, repair, or verify ToolUniverse research Skills. Use when Skills are missing, a client migration needs the correct Skill directory, a plugin installation is incomplete, or the enhanced ACMG fork must be installed from its exact validated commit.
 ---
 
-# ToolUniverse Install Skills
+# Install ToolUniverse Skills
 
-Checks whether the ToolUniverse specialized skills are installed and installs them automatically if not.
+Use the upstream installation path by default. Use the fork installer only when
+the user explicitly needs the enhanced ACMG runtime.
 
-## Detection
+## 1. Prefer plugin-managed Skills
 
-Use the Shell tool to check for the canary file across all common client locations:
+Codex and Claude Code plugins already bundle the appropriate generated Skill
+mirror. Do not install a second global copy because duplicate Skills can cause
+stale routing.
 
-```bash
-ls .cursor/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .agents/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .windsurf/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .gemini/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .claude/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .opencode/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .trae/skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || ls .skills/tooluniverse-drug-research/SKILL.md 2>/dev/null \
-  || echo "NOT_INSTALLED"
-```
-
-- **Output is a file path** → skills already installed, stop here.
-- **Output is `NOT_INSTALLED`** → proceed to installation.
-
-## Installation
+Codex:
 
 ```bash
-# 1. Download skills from GitHub (shallow, sparse — only skills/ folder)
-git clone --depth 1 --filter=blob:none --sparse \
-  https://github.com/mims-harvard/ToolUniverse.git /tmp/tu-skills
-cd /tmp/tu-skills && git sparse-checkout set skills
-
-# 2. Copy to the correct directory for the detected client:
-mkdir -p .cursor/skills  && cp -r /tmp/tu-skills/skills/* .cursor/skills/   # Cursor
-# mkdir -p .agents/skills  && cp -r /tmp/tu-skills/skills/* .agents/skills/  # Codex/OpenAI
-# mkdir -p .windsurf/skills && cp -r /tmp/tu-skills/skills/* .windsurf/skills/ # Windsurf
-# mkdir -p .gemini/skills  && cp -r /tmp/tu-skills/skills/* .gemini/skills/  # Gemini CLI
-# mkdir -p .claude/skills  && cp -r /tmp/tu-skills/skills/* .claude/skills/  # Claude Code
-# mkdir -p .opencode/skills && cp -r /tmp/tu-skills/skills/* .opencode/skills/ # OpenCode
-# mkdir -p .trae/skills    && cp -r /tmp/tu-skills/skills/* .trae/skills/    # Trae
-# mkdir -p .skills         && cp -r /tmp/tu-skills/skills/* .skills/         # Cline/VS Code
-
-# 3. Clean up
-rm -rf /tmp/tu-skills
+codex plugin marketplace add mims-harvard/ToolUniverse
+codex plugin add tooluniverse -m tooluniverse
 ```
 
-If the client cannot be detected automatically, ask the user which one they use before running step 2.
+Claude Code:
 
-## Client Detection
+```bash
+claude plugin marketplace add mims-harvard/ToolUniverse
+claude plugin install tooluniverse@tooluniverse
+```
 
-Detect the client from the presence of config files:
+Use the client's plugin update command to repair an existing plugin
+installation.
 
-| Config file present | Client |
+## 2. Standard upstream installation
+
+For clients that consume standalone Skills, use the upstream installer:
+
+```bash
+npx skills add mims-harvard/ToolUniverse --all
+```
+
+Follow the destination reported by the installer. Do not copy the repository's
+unfiltered development tree by hand.
+
+## 3. Enhanced ACMG fork
+
+When the user explicitly requests this branch's enhanced germline small-variant
+ACMG workflow, read:
+
+`https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md`
+
+Resolve the full 40-character commit under **Validated release**, fetch that
+exact checkout, and run:
+
+```bash
+bash "$CHECKOUT/scripts/install_tooluniverse_skills.sh" \
+  --client "$SKILLS_PROFILE" \
+  --dest "$SKILLS_DIR"
+```
+
+Profiles:
+
+| Client | Profile |
 |---|---|
-| `.cursor/` | Cursor |
-| `.agents/` | Codex / OpenAI |
-| `.windsurf/` | Windsurf |
-| `.gemini/` | Gemini CLI |
-| `.claude/` | Claude Code |
-| `.opencode/` | OpenCode |
-| `.trae/` | Trae |
-| None of the above | Ask the user |
+| Codex | `codex` |
+| Claude Code/Desktop | `claude` |
+| Cursor, Windsurf, and other standalone-Skill clients | `generic` |
 
-## After Installation
+This branch-only installer:
 
-Confirm success:
+- copies the same filtered client mirrors used by upstream packaging;
+- uses canonical filtered Skills for the generic profile;
+- adds the consolidated ACMG evidence-only Skill;
+- removes retired ACMG routing/refinement Skills;
+- preserves unrelated user Skills.
+
+Do not combine an upstream marketplace plugin with global fork Skill copies.
+The fork's exact-SHA MCP runtime and its Skills must be installed as one
+validated set.
+
+## 4. Verify
+
+Confirm representative general and ACMG Skills:
+
 ```bash
-ls .cursor/skills/tooluniverse-drug-research/SKILL.md
+test -f "$SKILLS_DIR/tooluniverse/SKILL.md"
+test -f "$SKILLS_DIR/tooluniverse-drug-research/SKILL.md"
+test -f "$SKILLS_DIR/tooluniverse-protein-structure-retrieval/SKILL.md"
+test -f "$SKILLS_DIR/tooluniverse-literature-deep-research/SKILL.md"
+test -f "$SKILLS_DIR/tooluniverse-acmg-variant-classification/SKILL.md"
+test ! -e "$SKILLS_DIR/tooluniverse-acmg-overlay-routing-core"
 ```
 
-Tell the user: "ToolUniverse skills installed successfully. You now have access to 50+ specialized research workflows."
+The compact MCP server exposes only its discovery/execution surface directly;
+the complete scientific tool collection remains available through
+`find_tools`, `get_tool_info`, and `execute_tool`.

@@ -2,6 +2,10 @@
 
 Reference material for structural variant pathogenicity classification using ACMG-adapted criteria.
 
+> `ACMG_evidence_collector` supports germline small variants only; never submit
+> a CNV/SV event to it for criteria, compatibility, Bayesian scoring, or a
+> five-tier result; apply an appropriate CNV/SV-specific framework.
+
 ---
 
 ## SV Types

@@ -264,6 +264,7 @@ Community & Support
    reference/environment_variables
    reference/glossary
    reference/data_sources
+   acmg_evidence_collector
    help/index
    about/index
 
