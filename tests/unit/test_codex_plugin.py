@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_DIR = REPO_ROOT / "plugins" / "tooluniverse"
 PLUGIN_JSON = PLUGIN_DIR / ".codex-plugin" / "plugin.json"
 MCP_JSON = PLUGIN_DIR / ".mcp.json"
+SETUP_MD = REPO_ROOT / "SETUP.md"
 SKILLS_DIR = PLUGIN_DIR / "skills"
 BUILD_SCRIPT = REPO_ROOT / "scripts" / "build-codex-plugin.sh"
 COMPACT_SCRIPT = REPO_ROOT / "scripts" / "compact_codex_skill_description.py"
@@ -80,11 +81,24 @@ class TestCodexPluginManifest:
 @pytest.mark.unit
 class TestCodexPluginMCP:
     def test_mcp_config(self):
-        """The MCP server is wired to `uvx tooluniverse` with UTF-8 IO."""
+        """The fork MCP server is pinned to the SETUP-validated commit."""
         data = json.loads(MCP_JSON.read_text(encoding="utf-8"))
         server = data["mcpServers"]["tooluniverse"]
+        setup_text = SETUP_MD.read_text(encoding="utf-8")
+        match = re.search(r"Commit:\s+([0-9a-f]{40})", setup_text)
+        assert match is not None
+        validated_sha = match.group(1)
+
         assert server["command"] == "uvx"
-        assert server["args"] == ["tooluniverse"]
+        assert server["args"] == [
+            "--refresh",
+            "--from",
+            (
+                "git+https://github.com/YuancunZhao/ToolUniverse.git@"
+                f"{validated_sha}"
+            ),
+            "tooluniverse",
+        ]
         assert server["env"]["PYTHONIOENCODING"] == "utf-8"
 
 

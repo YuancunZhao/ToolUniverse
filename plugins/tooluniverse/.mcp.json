@@ -2,7 +2,12 @@
   "mcpServers": {
     "tooluniverse": {
       "command": "uvx",
-      "args": ["tooluniverse"],
+      "args": [
+        "--refresh",
+        "--from",
+        "git+https://github.com/YuancunZhao/ToolUniverse.git@911200550b10600ded44b36dcb614c25ff06e0e6",
+        "tooluniverse"
+      ],
       "env": {
         "PYTHONIOENCODING": "utf-8",
         "PYTORCH_MPS_HIGH_WATERMARK_RATIO": "0.0",
