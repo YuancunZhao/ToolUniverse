@@ -1,0 +1,227 @@
+{
+  "VariantValidator_gene2transcripts": [
+    {
+      "current_symbol": "BRCA2",
+      "transcripts": [
+        {
+          "reference": "NM_000059.4",
+          "annotations": {
+            "mane_select": true,
+            "mane_plus_clinical": false
+          }
+        }
+      ]
+    }
+  ],
+  "VariantValidator_validate_variant": {
+    "status": "success",
+    "reviewable_features": {
+      "validated_hgvs_c": "NM_000059.4:c.5946delT",
+      "hgvs_c": "NM_000059.4:c.5946delT",
+      "hgvs_g": "NC_000013.11:g.32316461del",
+      "gene": "BRCA2",
+      "transcript": "NM_000059.4",
+      "build": "GRCh38",
+      "chr": "13",
+      "pos": 32316461,
+      "ref": "AT",
+      "alt": "A",
+      "consequence": "frameshift_variant",
+      "provider_version": "VariantValidator golden fixture 1"
+    }
+  },
+  "EnsemblVEP_variant_recoder": {
+    "status": "success",
+    "reviewable_features": {
+      "chr": "13",
+      "pos": 32316461,
+      "ref": "AT",
+      "alt": "A",
+      "build": "GRCh38",
+      "gene": "BRCA2",
+      "transcript": "NM_000059.4",
+      "hgvs_c": "NM_000059.4:c.5946delT",
+      "hgvs_g": "NC_000013.11:g.32316461del",
+      "hgvsc_candidates": [
+        "NM_000059.4:c.5946delT"
+      ],
+      "hgvsg_candidates": [
+        "NC_000013.11:g.32316461del"
+      ],
+      "allele_candidates": [
+        {
+          "hgvsc": [
+            "NM_000059.4:c.5946delT"
+          ],
+          "hgvsg": [
+            "NC_000013.11:g.32316461del"
+          ],
+          "hgvsp": [
+            "NP_000050.3:p.Ser1982ArgfsTer22"
+          ]
+        }
+      ],
+      "provider_version": "Ensembl Variant Recoder golden fixture 1"
+    }
+  },
+  "EnsemblVEP_annotate_hgvs": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chr": "13",
+        "pos": 32316461,
+        "ref": "AT",
+        "alt": "A",
+        "build": "GRCh38",
+        "most_severe_consequence": "frameshift_variant",
+        "vep_transcript_candidates": [
+          {
+            "gene": "BRCA2",
+            "transcript": "NM_000059.4",
+            "mane_select": "NM_000059.4",
+            "hgvsc": "NM_000059.4:c.5946delT",
+            "hgvsp": "NP_000050.3:p.Ser1982ArgfsTer22",
+            "biotype": "protein_coding",
+            "exon": "11/27",
+            "consequence": [
+              "frameshift_variant"
+            ]
+          }
+        ],
+        "provider_version": "Ensembl VEP golden fixture 1"
+      }
+    }
+  },
+  "gnomad_get_variant": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "13-32316461-AT-A",
+        "build": "GRCh38",
+        "AF": 0.0,
+        "AC": 0,
+        "AN": 152000,
+        "popmax": 0.0,
+        "dataset": "gnomad_r4",
+        "callset": "exome",
+        "provider_version": "gnomAD golden fixture 1"
+      }
+    }
+  },
+  "gnomad_get_site_callability": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chrom": "13",
+        "position": 32316461,
+        "reference_genome": "GRCh38",
+        "dataset": "gnomad_r4",
+        "callsets": {
+          "exome": {
+            "position": 32316461,
+            "median": 35,
+            "over_20": 0.96
+          },
+          "genome": {
+            "position": 32316461,
+            "median": 31,
+            "over_20": 0.93
+          }
+        },
+        "provider_version": "gnomAD callability golden fixture 1"
+      }
+    }
+  },
+  "ClinGen_search_gene_validity": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "gene": "BRCA2",
+        "validity_curations": [
+          {
+            "gene": "BRCA2",
+            "disease_label": "hereditary breast ovarian cancer syndrome",
+            "disease_id": "MONDO:0011450",
+            "moi": "AD",
+            "gene_disease_validity": "Definitive"
+          }
+        ],
+        "provider_version": "ClinGen Gene-Disease Validity golden fixture 1"
+      }
+    }
+  },
+  "gnomad_get_constraint": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "gene": "BRCA2",
+        "dataset": "gnomad_r4",
+        "reference_genome": "GRCh38",
+        "pli": 0.99,
+        "loeuf": 0.18,
+        "provider_version": "gnomAD constraint golden fixture 1"
+      }
+    }
+  },
+  "ClinGen_search_cspec": {
+    "status": "success",
+    "gene": "BRCA2",
+    "provider": "ClinGen CSpec Registry",
+    "provider_version": "golden fixture 1",
+    "request_url": "https://cspec.genome.network/cspec/ui/svi/doc/GN097",
+    "data": [
+      {
+        "specification_id": "GN097",
+        "gene": "BRCA2",
+        "vcep": "ENIGMA Variant Curation Expert Panel",
+        "version": "1.0.0",
+        "status": "Released",
+        "diseases": [
+          {
+            "name": "hereditary breast ovarian cancer syndrome",
+            "mondo_id": "MONDO:0011450",
+            "inheritance": [
+              "Autosomal dominant inheritance"
+            ]
+          }
+        ],
+        "criterion_modifications": []
+      }
+    ]
+  },
+  "EuropePMC_search_articles": {
+    "status": "success",
+    "data": {
+      "results": [
+        {
+          "pmid": "99999998",
+          "pmcid": "PMC9999998",
+          "title": "BRCA2 loss of function mechanism fixture",
+          "abstract": "BRCA2 loss of function causes hereditary breast ovarian cancer syndrome."
+        }
+      ]
+    }
+  },
+  "PubMed_search_articles": {
+    "status": "success",
+    "data": {
+      "articles": [
+        {
+          "pmid": "99999998",
+          "title": "BRCA2 loss of function mechanism fixture",
+          "abstract": "BRCA2 loss of function causes hereditary breast ovarian cancer syndrome."
+        }
+      ]
+    }
+  },
+  "EuropePMC_get_full_text": {
+    "status": "success",
+    "data": {
+      "pmid": "99999998",
+      "pmcid": "PMC9999998",
+      "sections": {
+        "mechanism": "BRCA2 NM_000059.4:c.5946delT is evaluated in a haploinsufficiency loss-of-function disease mechanism for MONDO:0011450 with autosomal dominant inheritance."
+      }
+    }
+  }
+}

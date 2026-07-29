@@ -1,0 +1,891 @@
+[
+  {
+    "name": "ACMG_evidence_collector",
+    "description": "Primary ToolUniverse ACMG evidence collector for germline variant review. Accepts transcript HGVS, gene;transcript:c. HGVS, genomic HGVS/VCF-like input, rsID, gene plus c. shorthand, or gene plus p. HGVS. Coding shorthand is resolved through VariantValidator MANE transcript tools; protein shorthand is resolved through Ensembl VEP and then MANE projection, with ambiguity failing closed. This tool collects and displays evidence from ToolUniverse data sources and deterministic ClinGen/SVI overlay logic for user judgment. It does not automatically produce final ACMG/AMP classifications, does not adopt ClinVar, GeneBe, InterVar, or other source labels as criteria, and reports conflicts and Bayesian estimates as review aids only.",
+    "type": "ACMG_evidence_collector",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "description": "Transcript HGVS, gene;transcript:c. HGVS, genomic HGVS/VCF-like variant, rsID, gene plus c. shorthand, or gene plus p. HGVS, e.g. NM_000142.5:c.1075+95C>G, BRCA2;NM_000059.4:c.5946delT, rs80359550, BRCA2 c.5946delT, or BRCA2 p.Ser1982ArgfsTer22. Coding shorthand uses VariantValidator MANE resolution; protein shorthand uses Ensembl VEP followed by MANE projection."
+        },
+        "gene": {
+          "type": "string",
+          "description": "Gene symbol, if known."
+        },
+        "transcript": {
+          "type": "string",
+          "description": "Transcript accession or transcript context, if known."
+        },
+        "disease": {
+          "type": "string",
+          "description": "Disease name or MONDO identifier used to match an applicable ClinGen CSpec."
+        },
+        "inheritance": {
+          "type": "string",
+          "description": "Inheritance mode used to match an applicable ClinGen CSpec."
+        },
+        "genome_build": {
+          "type": "string",
+          "enum": ["GRCh38", "GRCh37"],
+          "default": "GRCh38"
+        },
+        "source_outputs_or_leads": {
+          "type": "array",
+          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as source leads, not automatically included in the system preview.",
+          "items": {}
+        },
+        "literature_proposals": {
+          "type": "array",
+          "description": "Preferred host-LLM literature proposal input. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, and unresolved review questions. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {"type": "string", "minLength": 1},
+              "fact_type": {"type": "string", "enum": ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "prior_variant", "mechanism", "region_hotspot", "protein_length_repeat", "rna_splicing"]},
+              "pmid": {"type": "string"},
+              "pmcid": {"type": "string"},
+              "locator": {"type": "string", "minLength": 1},
+              "excerpt": {"type": "string", "minLength": 1},
+              "variant_identity": {"type": "string", "minLength": 1},
+              "gene": {"type": "string", "minLength": 1},
+              "values": {"type": "object"},
+              "field_excerpts": {
+                "type": "object",
+                "additionalProperties": {"type": "string", "minLength": 1}
+              },
+              "criterion": {"type": "string", "minLength": 1},
+              "suggested_strength": {"type": "string", "minLength": 1},
+              "interpretation": {"type": "string", "minLength": 1},
+              "confidence": {"type": ["number", "string"]},
+              "questions": {"type": "array", "items": {"type": "string"}},
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "version": {"type": "string", "minLength": 1}
+                },
+                "required": ["name", "version"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["fact_id", "fact_type", "locator", "excerpt", "variant_identity", "gene", "values", "field_excerpts", "interpretation", "confidence", "extractor"],
+            "anyOf": [{"required": ["pmid"]}, {"required": ["pmcid"]}],
+            "additionalProperties": false
+          }
+        },
+        "cspec_proposals": {
+          "type": "array",
+          "description": "Host-LLM interpretations of natural-language rules from the uniquely matched online ClinGen CSpec. ToolUniverse re-fetches the specification and verifies ID, version, content hash, criterion and excerpt before use.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "specification_id": {"type": "string", "minLength": 1},
+              "version": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "minLength": 1},
+              "criterion": {"type": "string", "minLength": 1},
+              "locator": {"type": "string"},
+              "excerpt": {"type": "string", "minLength": 1},
+              "structured_interpretation": {"type": "object"},
+              "suggested_strength": {"type": "string", "minLength": 1},
+              "interpretation": {"type": "string", "minLength": 1},
+              "confidence": {"type": ["number", "string"]},
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "version": {"type": "string", "minLength": 1}
+                },
+                "required": ["name", "version"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["specification_id", "version", "content_hash", "criterion", "excerpt", "structured_interpretation", "suggested_strength", "interpretation", "confidence", "extractor"],
+            "additionalProperties": false
+          }
+        },
+        "evidence_decisions": {
+          "type": "array",
+          "description": "User decisions applied only to stable card IDs regenerated in this call. Accept or reject a card; an accepted card may use a direction-consistent standard strength override when a reason is supplied.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "card_id": {"type": "string", "minLength": 1},
+              "decision": {"type": "string", "enum": ["accept", "reject"]},
+              "strength_override": {"type": "string", "minLength": 1},
+              "reason": {"type": "string"},
+              "reviewer": {"type": "string"},
+              "decided_at": {"type": "string"}
+            },
+            "required": ["card_id", "decision"],
+            "additionalProperties": false
+          }
+        },
+        "protein_accession": {
+          "type": "string"
+        },
+        "clinical_context": {
+          "type": "object",
+          "description": "Review-only clinical context. Explicit HPO terms trigger term/gene/disease lookups; all matches remain PP4 review context and never generate PP4 automatically.",
+          "properties": {
+            "zygosity": {"type": "string"},
+            "parental_origin": {"type": "string"},
+            "phase": {"type": "string"},
+            "phenotype": {"type": ["string", "array"]},
+            "second_allele_status": {"type": "string"},
+            "hpo_terms": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "HPO identifiers in HP:0001250, HP_0001250, or bare numeric form."
+            }
+          },
+          "additionalProperties": true
+        },
+        "response_detail": {
+          "type": "string",
+          "enum": ["summary", "full"],
+          "default": "summary",
+          "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
+        }
+      },
+      "required": [
+        "variant"
+      ],
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "collect_evidence"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "success",
+            "degraded",
+            "error"
+          ]
+        },
+        "execution_status": {"type": "string"},
+        "coverage_status": {"type": "string"},
+        "variant": {
+          "type": "object"
+        },
+        "variant_identity": {"type": "object"},
+        "clinical_context": {
+          "type": ["object", "null"],
+          "description": "Review-only clinical context echo; never evidence."
+        },
+        "consequence_profile": {
+          "type": "object",
+          "description": "Selected-transcript VEP consequence profile used only for criterion applicability routing.",
+          "properties": {
+            "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
+            "attempted_representations": {"type": "array", "items": {"type": "object"}},
+            "annotation_reason": {"type": "string"},
+            "hgvs_operation": {"type": "string"},
+            "splice_positions": {"type": "array", "items": {"type": "integer"}},
+            "canonical_site_type": {"type": "string", "enum": ["donor", "acceptor", "ambiguous", "none"]},
+            "canonical_motif_effect": {"type": "string", "enum": ["disrupted", "potentially_preserved", "unknown", "not_applicable"]},
+            "canonical_motif_effect_reason": {"type": "string"},
+            "canonical_motif_sequence_status": {"type": "string", "description": "REF/ALT or HGVS sequence-level motif status; functional native-site loss is reported separately in spliceai_profile."},
+            "canonical_motif_sequence_reason": {"type": "string"},
+            "genomic_position": {"type": ["integer", "null"]},
+            "genomic_ref": {"type": "string"},
+            "genomic_alt": {"type": "string"}
+          }
+        },
+        "rule_context": {"type": "object"},
+        "runtime_manifest": {
+          "type": "object",
+          "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
+        },
+        "coverage_summary": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "source_facts": {
+          "type": "array",
+          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and system-preview inclusion.",
+          "items": {"type": "object"}
+        },
+        "source_assertions": {"type": "array", "items": {"type": "object"}},
+        "literature_candidates": {
+          "type": "array",
+          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
+          "items": {"type": "object"}
+        },
+        "predictor_scores": {"type": "object"},
+        "criterion_reviews": {"type": "array", "items": {"type": "object"}},
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "conflict_report": {
+          "type": "object"
+        },
+        "compatibility_report": {"type": "object"},
+        "system_preview_bayesian": {"type": "object"},
+        "user_selected_bayesian": {"type": "object"},
+        "decision_report": {"type": "object"},
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "final_classification_allowed": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "status",
+        "execution_status",
+        "coverage_status",
+        "variant",
+        "variant_identity",
+        "consequence_profile",
+        "rule_context",
+        "runtime_manifest",
+        "coverage_summary",
+        "source_facts",
+        "source_assertions",
+        "literature_candidates",
+        "predictor_scores",
+        "criterion_reviews",
+        "evidence_cards",
+        "conflict_report",
+        "compatibility_report",
+        "system_preview_bayesian",
+        "user_selected_bayesian",
+        "decision_report",
+        "limitations",
+        "final_classification_allowed"
+      ]
+    }
+  },
+  {
+    "name": "ACMG_overlay_gate_assess_variant",
+    "description": "Thin backward-compatible alias for ACMG_evidence_collector. Parameters and return structure are identical; the alias contains no independent assessment logic.",
+    "type": "ACMGOverlayGateTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "description": "Transcript HGVS, gene;transcript:c. HGVS, genomic HGVS/VCF-like variant, rsID, gene plus c. shorthand, or gene plus p. HGVS, e.g. NM_000142.5:c.1075+95C>G, BRCA2;NM_000059.4:c.5946delT, rs80359550, BRCA2 c.5946delT, or BRCA2 p.Ser1982ArgfsTer22. Coding shorthand uses VariantValidator MANE resolution; protein shorthand uses Ensembl VEP followed by MANE projection."
+        },
+        "gene": {
+          "type": "string",
+          "description": "Gene symbol, if known."
+        },
+        "transcript": {
+          "type": "string",
+          "description": "Transcript accession or transcript context, if known."
+        },
+        "disease": {
+          "type": "string",
+          "description": "Disease name or MONDO identifier used to match an applicable ClinGen CSpec."
+        },
+        "inheritance": {
+          "type": "string",
+          "description": "Inheritance mode used to match an applicable ClinGen CSpec."
+        },
+        "genome_build": {
+          "type": "string",
+          "enum": ["GRCh38", "GRCh37"],
+          "default": "GRCh38"
+        },
+        "source_outputs_or_leads": {
+          "type": "array",
+          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as source leads, not automatically included in the system preview.",
+          "items": {}
+        },
+        "literature_proposals": {
+          "type": "array",
+          "description": "Preferred host-LLM literature proposal input. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, and unresolved review questions. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {"type": "string", "minLength": 1},
+              "fact_type": {"type": "string", "enum": ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "prior_variant", "mechanism", "region_hotspot", "protein_length_repeat", "rna_splicing"]},
+              "pmid": {"type": "string"},
+              "pmcid": {"type": "string"},
+              "locator": {"type": "string", "minLength": 1},
+              "excerpt": {"type": "string", "minLength": 1},
+              "variant_identity": {"type": "string", "minLength": 1},
+              "gene": {"type": "string", "minLength": 1},
+              "values": {"type": "object"},
+              "field_excerpts": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+              "criterion": {"type": "string", "minLength": 1},
+              "suggested_strength": {"type": "string", "minLength": 1},
+              "interpretation": {"type": "string", "minLength": 1},
+              "confidence": {"type": ["number", "string"]},
+              "questions": {"type": "array", "items": {"type": "string"}},
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "version": {"type": "string", "minLength": 1}
+                },
+                "required": ["name", "version"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["fact_id", "fact_type", "locator", "excerpt", "variant_identity", "gene", "values", "field_excerpts", "interpretation", "confidence", "extractor"],
+            "anyOf": [{"required": ["pmid"]}, {"required": ["pmcid"]}],
+            "additionalProperties": false
+          }
+        },
+        "cspec_proposals": {
+          "type": "array",
+          "description": "Host-LLM interpretations of natural-language rules from the uniquely matched online ClinGen CSpec. ToolUniverse re-fetches the specification and verifies ID, version, content hash, criterion and excerpt before use.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "specification_id": {"type": "string", "minLength": 1},
+              "version": {"type": "string", "minLength": 1},
+              "content_hash": {"type": "string", "minLength": 1},
+              "criterion": {"type": "string", "minLength": 1},
+              "locator": {"type": "string"},
+              "excerpt": {"type": "string", "minLength": 1},
+              "structured_interpretation": {"type": "object"},
+              "suggested_strength": {"type": "string", "minLength": 1},
+              "interpretation": {"type": "string", "minLength": 1},
+              "confidence": {"type": ["number", "string"]},
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "version": {"type": "string", "minLength": 1}
+                },
+                "required": ["name", "version"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["specification_id", "version", "content_hash", "criterion", "excerpt", "structured_interpretation", "suggested_strength", "interpretation", "confidence", "extractor"],
+            "additionalProperties": false
+          }
+        },
+        "evidence_decisions": {
+          "type": "array",
+          "description": "User decisions applied only to stable card IDs regenerated in this call. Accept or reject a card; an accepted card may use a direction-consistent standard strength override when a reason is supplied.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "card_id": {"type": "string", "minLength": 1},
+              "decision": {"type": "string", "enum": ["accept", "reject"]},
+              "strength_override": {"type": "string", "minLength": 1},
+              "reason": {"type": "string"},
+              "reviewer": {"type": "string"},
+              "decided_at": {"type": "string"}
+            },
+            "required": ["card_id", "decision"],
+            "additionalProperties": false
+          }
+        },
+        "protein_accession": {
+          "type": "string"
+        },
+        "clinical_context": {
+          "type": "object",
+          "description": "Review-only clinical context. Explicit HPO terms trigger term/gene/disease lookups; all matches remain PP4 review context and never generate PP4 automatically.",
+          "properties": {
+            "zygosity": {"type": "string"},
+            "parental_origin": {"type": "string"},
+            "phase": {"type": "string"},
+            "phenotype": {"type": ["string", "array"]},
+            "second_allele_status": {"type": "string"},
+            "hpo_terms": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "HPO identifiers in HP:0001250, HP_0001250, or bare numeric form."
+            }
+          },
+          "additionalProperties": true
+        },
+        "response_detail": {
+          "type": "string",
+          "enum": ["summary", "full"],
+          "default": "summary",
+          "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
+        }
+      },
+      "required": [
+        "variant"
+      ],
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "assess_variant"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {"type": "string", "enum": ["success", "degraded", "error"]},
+        "execution_status": {"type": "string"},
+        "coverage_status": {"type": "string"},
+        "variant": {"type": "object"},
+        "variant_identity": {"type": "object"},
+        "clinical_context": {
+          "type": ["object", "null"],
+          "description": "Review-only clinical context echo; never evidence."
+        },
+        "consequence_profile": {
+          "type": "object",
+          "description": "Selected-transcript VEP consequence profile used only for criterion applicability routing.",
+          "properties": {
+            "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
+            "attempted_representations": {"type": "array", "items": {"type": "object"}},
+            "annotation_reason": {"type": "string"},
+            "hgvs_operation": {"type": "string"},
+            "splice_positions": {"type": "array", "items": {"type": "integer"}},
+            "canonical_site_type": {"type": "string", "enum": ["donor", "acceptor", "ambiguous", "none"]},
+            "canonical_motif_effect": {"type": "string", "enum": ["disrupted", "potentially_preserved", "unknown", "not_applicable"]},
+            "canonical_motif_effect_reason": {"type": "string"},
+            "canonical_motif_sequence_status": {"type": "string", "description": "REF/ALT or HGVS sequence-level motif status; functional native-site loss is reported separately in spliceai_profile."},
+            "canonical_motif_sequence_reason": {"type": "string"},
+            "genomic_position": {"type": ["integer", "null"]},
+            "genomic_ref": {"type": "string"},
+            "genomic_alt": {"type": "string"}
+          }
+        },
+        "rule_context": {"type": "object"},
+        "runtime_manifest": {
+          "type": "object",
+          "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
+        },
+        "coverage_summary": {"type": "array", "items": {"type": "object"}},
+        "source_facts": {
+          "type": "array",
+          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and system-preview inclusion.",
+          "items": {"type": "object"}
+        },
+        "source_assertions": {"type": "array", "items": {"type": "object"}},
+        "literature_candidates": {
+          "type": "array",
+          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
+          "items": {"type": "object"}
+        },
+        "predictor_scores": {"type": "object"},
+        "criterion_reviews": {"type": "array", "items": {"type": "object"}},
+        "evidence_cards": {"type": "array", "items": {"type": "object"}},
+        "compatibility_report": {"type": "object"},
+        "conflict_report": {"type": "object"},
+        "system_preview_bayesian": {"type": "object"},
+        "user_selected_bayesian": {"type": "object"},
+        "decision_report": {"type": "object"},
+        "limitations": {"type": "array", "items": {"type": "string"}},
+        "final_classification_allowed": {"type": "boolean", "const": false}
+      },
+      "required": [
+        "status",
+        "execution_status",
+        "coverage_status",
+        "variant",
+        "variant_identity",
+        "consequence_profile",
+        "rule_context",
+        "runtime_manifest",
+        "coverage_summary",
+        "source_facts",
+        "source_assertions",
+        "literature_candidates",
+        "predictor_scores",
+        "criterion_reviews",
+        "evidence_cards",
+        "conflict_report",
+        "compatibility_report",
+        "system_preview_bayesian",
+        "user_selected_bayesian",
+        "decision_report",
+        "limitations",
+        "final_classification_allowed"
+      ]
+    },
+    "metadata": {
+      "tool_role": "backward-compatible evidence collector alias",
+      "ordinary_entrypoint": "ACMG_evidence_collector"
+    }
+  },
+  {
+    "name": "ACMG_population_evidence",
+    "description": "Apply deterministic ClinGen/SVI population evidence rules and return EvidenceCards only.",
+    "type": "ACMGEvidenceGroupTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "gnomad_af_global": {
+          "type": "number"
+        },
+        "gnomad_af_popmax": {
+          "type": "number"
+        },
+        "gnomad_ac": {
+          "type": "integer"
+        },
+        "gnomad_an": {
+          "type": "integer"
+        },
+        "coverage_adequate": {
+          "type": "boolean"
+        },
+        "callability_available": {
+          "type": "boolean",
+          "description": "Whether auditable site callability rows were supplied; this is not a coverage threshold assertion."
+        },
+        "population_details": {
+          "type": "object",
+          "description": "Raw dataset, callset, homozygote, and ancestry-frequency audit fields.",
+          "additionalProperties": true
+        },
+        "callability_metrics": {
+          "type": "object",
+          "description": "Raw gnomAD site coverage metrics; no adequacy threshold is inferred.",
+          "additionalProperties": true
+        },
+        "maximum_credible_af": {
+          "type": "number"
+        },
+        "ba1_exception": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "population"
+    }
+  },
+  {
+    "name": "ACMG_computational_evidence",
+    "description": "Apply the pre-specified computational predictor policy and return EvidenceCards only.",
+    "type": "ACMGEvidenceGroupTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "revel_score": {
+          "type": "number"
+        },
+        "cadd_phred": {
+          "type": "number"
+        },
+        "spliceai_max_delta": {
+          "type": "number",
+          "description": "Explicit four-channel maximum delta score. Complete DS_*/DP_* values are still required for rule assessment."
+        },
+        "spliceai_profile": {
+          "type": "object",
+          "description": "Normalized selected-transcript SpliceAI profile containing all four DS_*/DP_*, maximum triggers, native Loss score/position/threshold, exact Ensembl exon-boundary binding, genomic event coordinate, and Gain events restricted to +/-20 bp around that canonical site."
+        },
+        "spliceai_scores": {
+          "type": "object",
+          "description": "Selected-transcript SpliceAI score row. DS_AG/DS_AL/DS_DG/DS_DL are delta scores and must not be recomputed from REF/ALT raw scores."
+        },
+        "spliceai_run_metadata": {
+          "type": "object",
+          "description": "Walker 2023 run provenance. Missing or incomplete metadata keeps SpliceAI PP3/BP4 not_assessed."
+        },
+        "predictor_scores": {"type": "object"},
+        "variant_type": {
+          "type": "string"
+        },
+        "consequence_terms": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "hgvs_c": {"type": "string"},
+        "hgvs_p": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "computational"
+    }
+  },
+  {
+    "name": "ACMG_clinical_evidence",
+    "description": "Review structured de novo and PM3 observations; only the collector can validate and count them.",
+    "type": "ACMGEvidenceGroupTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "inheritance_mode": {
+          "type": "string"
+        },
+        "de_novo_probands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "case_id",
+              "parental_relationships",
+              "phenotype_consistency"
+            ],
+            "properties": {
+              "case_id": {
+                "type": "string"
+              },
+              "parental_relationships": {
+                "type": "string",
+                "enum": [
+                  "confirmed",
+                  "assumed"
+                ]
+              },
+              "phenotype_consistency": {
+                "type": "string",
+                "enum": [
+                  "highly_specific",
+                  "consistent",
+                  "consistent_high_heterogeneity",
+                  "not_consistent"
+                ]
+              },
+              "second_variant_pathogenic": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "pm3_frequency_eligible": {
+          "type": "boolean"
+        },
+        "pm3_observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "case_id",
+              "zygosity",
+              "other_variant_frequency_eligible"
+            ],
+            "properties": {
+              "case_id": {
+                "type": "string"
+              },
+              "zygosity": {
+                "type": "string",
+                "enum": [
+                  "compound_heterozygous",
+                  "homozygous"
+                ]
+              },
+              "other_variant_classification": {
+                "type": "string",
+                "enum": [
+                  "P",
+                  "PATHOGENIC",
+                  "LP",
+                  "LIKELY_PATHOGENIC",
+                  "VUS",
+                  "UNCERTAIN_SIGNIFICANCE"
+                ]
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "confirmed_in_trans",
+                  "unknown"
+                ]
+              },
+              "consanguineous": {
+                "type": "boolean"
+              },
+              "other_variant_frequency_eligible": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "clinical"
+    }
+  },
+  {
+    "name": "ACMG_functional_evidence",
+    "description": "Review structured functional assays under Brnich OddsPath; only the collector can validate and count them.",
+    "type": "ACMGEvidenceGroupTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant_type": {
+          "type": "string"
+        },
+        "functional_assays": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gene_disease_mechanism",
+              "assay_effect_consistent",
+              "assay_class",
+              "assay_instance_id",
+              "model_system",
+              "disease_relevance",
+              "readout_name",
+              "readout_unit",
+              "normal_threshold",
+              "abnormal_threshold",
+              "variant_result",
+              "positive_experimental_controls",
+              "negative_experimental_controls",
+              "technical_replicates",
+              "biological_replicates",
+              "pathogenic_validation_controls",
+              "benign_validation_controls",
+              "validation_control_provenance",
+              "dynamic_range",
+              "calibration_method",
+              "reported_odds_path",
+              "direction"
+            ],
+            "properties": {
+              "gene_disease_mechanism": {"type": "string", "minLength": 1},
+              "assay_effect_consistent": {"type": "boolean", "const": true},
+              "assay_class": {"type": "string", "minLength": 1},
+              "assay_instance_id": {"type": "string", "minLength": 1},
+              "model_system": {"type": "string", "minLength": 1},
+              "disease_relevance": {"type": "boolean", "const": true},
+              "readout_name": {"type": "string", "minLength": 1},
+              "readout_unit": {"type": "string", "minLength": 1},
+              "normal_threshold": {"type": "string", "minLength": 1},
+              "abnormal_threshold": {"type": "string", "minLength": 1},
+              "variant_result": {"type": "string", "minLength": 1},
+              "positive_experimental_controls": {"type": ["array", "object", "integer"]},
+              "negative_experimental_controls": {"type": ["array", "object", "integer"]},
+              "technical_replicates": {"type": "integer", "minimum": 1},
+              "biological_replicates": {"type": "integer", "minimum": 1},
+              "pathogenic_validation_controls": {"type": "integer", "minimum": 1},
+              "benign_validation_controls": {"type": "integer", "minimum": 1},
+              "validation_control_provenance": {"type": "string", "minLength": 1},
+              "dynamic_range": {"type": "number", "exclusiveMinimum": 0},
+              "calibration_method": {"type": "string", "const": "reported_odds_path"},
+              "reported_odds_path": {"type": "number", "exclusiveMinimum": 0},
+              "direction": {"type": "string", "enum": ["damaging", "normal"]}
+            }
+          }
+        },
+        "consequence_profile": {
+          "type": "object",
+          "description": "Review-only normalized consequence context. Caller-provided values cannot make direct group cards countable."
+        },
+        "protein_context": {
+          "type": "object",
+          "description": "Review-only protein mapping and domain/site facts. Collector-verified SourceFacts are required for system-preview inclusion."
+        },
+        "pvs1_facts": {
+          "type": "object",
+          "description": "Review-only structured facts for the deterministic ClinGen SVI PVS1 decision tree (Abou Tayoun 2018; Walker 2023 SpliceAI thresholds)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "functional"
+    }
+  },
+  {
+    "name": "ACMG_literature_evidence",
+    "description": "Review structured case-control facts. Direct group-tool cards are always review-only; the collector re-fetches full text and verifies identity, locators, and field excerpts before candidate inclusion.",
+    "type": "ACMGEvidenceGroupTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "case_control_facts": {
+          "type": "array",
+          "description": "Standalone review facts. They remain outside the system preview until collector full-text verification.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {"type": "string", "minLength": 1},
+              "source_pmid": {"type": "string"},
+              "source_pmcid": {"type": "string"},
+              "section_locator": {"type": "string", "minLength": 1},
+              "variant_identity": {},
+              "gene": {"type": "string"},
+              "case_count": {"type": "integer", "minimum": 1},
+              "control_count": {"type": "integer", "minimum": 1},
+              "odds_ratio": {"type": "number"},
+              "ci_lower": {"type": "number"},
+              "phenotype_consistent": {"type": "boolean"},
+              "cases_independent": {"type": "boolean"},
+              "extraction_method": {"type": "string"}
+            },
+            "required": [
+              "fact_id",
+              "section_locator",
+              "variant_identity",
+              "case_count",
+              "control_count",
+              "odds_ratio",
+              "ci_lower",
+              "phenotype_consistent",
+              "cases_independent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "expected_variant": {
+          "type": "string",
+          "description": "Variant identity used to bind standalone structured facts."
+        },
+        "expected_gene": {
+          "type": "string",
+          "description": "Gene symbol used to bind standalone structured facts."
+        }
+      },
+      "allOf": [
+        {
+          "if": {"required": ["case_control_facts"]},
+          "then": {"required": ["expected_variant", "expected_gene"]}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "literature"
+    }
+  },
+  {
+    "name": "ACMG_guard_final_answer",
+    "description": "Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serialized EvidenceCard, including excluded or review-required proposals; returned card_roles distinguish system-preview and user-decision state. Final five-tier ACMG labels are always blocked.",
+    "type": "ACMGGuardFinalAnswerTool",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "final_answer_text": {
+          "type": "string"
+        },
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "collector_result": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "final_answer_text"
+      ],
+      "additionalProperties": false
+    },
+    "fields": {
+      "operation": "guard"
+    }
+  }
+]

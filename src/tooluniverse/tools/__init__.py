@@ -26,6 +26,14 @@ from ._shared_client import get_shared_client, reset_shared_client
 
 # Import all tools
 from .ACC_list_guidelines import ACC_list_guidelines
+from .ACMG_clinical_evidence import ACMG_clinical_evidence
+from .ACMG_computational_evidence import ACMG_computational_evidence
+from .ACMG_evidence_collector import ACMG_evidence_collector
+from .ACMG_functional_evidence import ACMG_functional_evidence
+from .ACMG_guard_final_answer import ACMG_guard_final_answer
+from .ACMG_literature_evidence import ACMG_literature_evidence
+from .ACMG_overlay_gate_assess_variant import ACMG_overlay_gate_assess_variant
+from .ACMG_population_evidence import ACMG_population_evidence
 from .ADA_get_standards_section import ADA_get_standards_section
 from .ADA_list_standards_sections import ADA_list_standards_sections
 from .ADA_search_standards import ADA_search_standards
@@ -315,6 +323,7 @@ from .ClinGen_get_dosage_sensitivity import ClinGen_get_dosage_sensitivity
 from .ClinGen_get_gene_validity import ClinGen_get_gene_validity
 from .ClinGen_get_variant_classifications import ClinGen_get_variant_classifications
 from .ClinGen_search_actionability import ClinGen_search_actionability
+from .ClinGen_search_cspec import ClinGen_search_cspec
 from .ClinGen_search_dosage_sensitivity import ClinGen_search_dosage_sensitivity
 from .ClinGen_search_gene_validity import ClinGen_search_gene_validity
 from .ClinVar_get_clinical_significance import ClinVar_get_clinical_significance
@@ -1560,6 +1569,7 @@ from .MyDisease_search_diseases import MyDisease_search_diseases
 from .MyGene_batch_query import MyGene_batch_query
 from .MyGene_get_gene_annotation import MyGene_get_gene_annotation
 from .MyGene_query_genes import MyGene_query_genes
+from .MyVariant_get_metadata import MyVariant_get_metadata
 from .MyVariant_get_pathogenicity_scores import MyVariant_get_pathogenicity_scores
 from .MyVariant_get_variant_annotation import MyVariant_get_variant_annotation
 from .MyVariant_query_variants import MyVariant_query_variants
@@ -3121,6 +3131,8 @@ from .gnomad_get_constraint import gnomad_get_constraint
 from .gnomad_get_gene import gnomad_get_gene
 from .gnomad_get_gene_constraints import gnomad_get_gene_constraints
 from .gnomad_get_region import gnomad_get_region
+from .gnomad_get_region_variants import gnomad_get_region_variants
+from .gnomad_get_site_callability import gnomad_get_site_callability
 from .gnomad_get_sv_by_gene import gnomad_get_sv_by_gene
 from .gnomad_get_sv_by_region import gnomad_get_sv_by_region
 from .gnomad_get_sv_detail import gnomad_get_sv_detail
@@ -3304,6 +3316,14 @@ __all__ = [
     "get_shared_client",
     "reset_shared_client",
     "ACC_list_guidelines",
+    "ACMG_clinical_evidence",
+    "ACMG_computational_evidence",
+    "ACMG_evidence_collector",
+    "ACMG_functional_evidence",
+    "ACMG_guard_final_answer",
+    "ACMG_literature_evidence",
+    "ACMG_overlay_gate_assess_variant",
+    "ACMG_population_evidence",
     "ADA_get_standards_section",
     "ADA_list_standards_sections",
     "ADA_search_standards",
@@ -3577,6 +3597,7 @@ __all__ = [
     "ClinGen_get_gene_validity",
     "ClinGen_get_variant_classifications",
     "ClinGen_search_actionability",
+    "ClinGen_search_cspec",
     "ClinGen_search_dosage_sensitivity",
     "ClinGen_search_gene_validity",
     "ClinVar_get_clinical_significance",
@@ -4574,6 +4595,7 @@ __all__ = [
     "MyGene_batch_query",
     "MyGene_get_gene_annotation",
     "MyGene_query_genes",
+    "MyVariant_get_metadata",
     "MyVariant_get_pathogenicity_scores",
     "MyVariant_get_variant_annotation",
     "MyVariant_query_variants",
@@ -5869,6 +5891,8 @@ __all__ = [
     "gnomad_get_gene",
     "gnomad_get_gene_constraints",
     "gnomad_get_region",
+    "gnomad_get_region_variants",
+    "gnomad_get_site_callability",
     "gnomad_get_sv_by_gene",
     "gnomad_get_sv_by_region",
     "gnomad_get_sv_detail",
