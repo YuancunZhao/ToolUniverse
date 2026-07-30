@@ -166,6 +166,10 @@ The principal outputs are:
 - `consequence_profile`
 - `predictor_scores`
 - `literature_candidates`
+- `literature_review`
+- `recoverable_gaps`
+- `workflow_status`
+- `next_actions`
 - `rule_context`
 - `runtime_manifest`
 - `criterion_reviews`

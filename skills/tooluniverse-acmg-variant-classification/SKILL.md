@@ -42,16 +42,37 @@ point that binds provider-verified facts into compatible EvidenceCards.
 
 ## Evidence Workflow
 
+Run this state machine to completion in the same user task:
+
 1. Call the collector with the variant and all known gene, transcript, disease,
    inheritance, phenotype, and protein context.
-2. Review the selected-transcript `consequence_profile`, provider coverage,
-   SourceFacts, dynamic CSpec candidates, and literature gaps.
-3. Let the host LLM interpret requested CSpec passages and full papers, then
-   call the collector again with `cspec_proposals` and/or
-   `literature_proposals`.
-4. After the user reviews the regenerated cards, call the collector again with
-   `evidence_decisions` to calculate `user_selected_bayesian`.
-5. Call `ACMG_guard_final_answer` before returning criterion claims.
+2. Inspect `workflow_status`, `recoverable_gaps`, `next_actions`,
+   `consequence_profile`, `literature_review.review_requests`, and
+   `rule_context.cspec_review_requests`.
+3. The collector performs every applicable read-only consequence recovery
+   query itself. Do not ask the user whether to try VariantValidator, FAVOR,
+   OpenTargets, Mutalyzer, GenomeNexus, ProtVar, or another listed provider.
+4. Execute every pending `next_actions` item assigned to `host_llm`. For
+   literature, try each listed full-text tool once in order, read the complete
+   accessible article section by section, and inspect relevant tables, figure
+   captions, and supplements.
+5. Generate source-located `literature_proposals` and/or `cspec_proposals`, then
+   call the collector again automatically.
+6. If that call discovers new exact/equivalent documents, process only the new
+   request IDs and allow one incremental collector call. Never repeat a
+   completed request or unchanged document hash.
+7. End automated collection only when no mandatory request remains, or when
+   the result is stably `blocked_external_full_text`. Return EvidenceCards,
+   exclusions, conflicts, and `system_preview_bayesian`.
+8. Call `ACMG_guard_final_answer` before returning criterion claims.
+
+Read-only retrieval, consequence recovery, full-text reading, structured fact
+extraction, proposal generation, and the system preview do not require
+step-by-step user permission. Never ask “should I read the papers?” or “should
+I call an alternative tool?” when `next_actions` or applicable ToolUniverse
+providers can continue the task. The user decision round is separate and is
+needed only when the user asks to accept, reject, or change cards for
+`user_selected_bayesian`.
 
 See [QUICK_START.md](QUICK_START.md) for the three-round request shape.
 
@@ -64,8 +85,17 @@ until a host-LLM proposal is re-anchored to the current specification ID,
 version, content hash, locator, and excerpt. Local CSpec contracts are
 exact-hash caches or fixtures, never an online-rule whitelist.
 
-Literature proposals must include a PMID or PMCID, exact locator, excerpt,
-structured values with per-field excerpts, interpretation, confidence,
+For every exact/equivalent paper, follow
+`literature_review.review_requests`. A PMID, `inEPMC`, snippet, or text-mining
+hit does not prove full-text availability. Try the ordered `tool_attempts`;
+abstract-only or unavailable material remains a source lead.
+
+Read Methods, Results, tables, figure captions, and accessible supplements—not
+only the abstract. Submit a `reading_manifest` with publication identifiers,
+document hash when available, `complete|partial|abstract_only|unavailable`
+status, sections/tables/figures/supplements read, variant-match locations, and
+limitations. Literature proposals must include a PMID or PMCID, exact locator,
+excerpt, structured values with per-field excerpts, interpretation, confidence,
 extractor name/version, and unresolved questions. `criterion` and
 `suggested_strength` are optional suggestions; the collector independently
 enforces the fact-type-to-criterion matrix.
@@ -91,10 +121,23 @@ constraint, HPO matches, actionability, uncalibrated predictors, and domain
 overlap as visible source leads or review context until a versioned SVI/CSpec
 rule maps them.
 
-The collector derives one selected-transcript ConsequenceProfile from
-VariantValidator and VEP. Consequence controls criterion applicability but does
-not itself establish evidence strength. Generic UniProt/InterPro overlap is PM1
-review context only; PM1 requires an exact online-bound CSpec region contract.
+The collector resolves one selected-transcript ConsequenceProfile from all
+applicable identity-bound observations. VEP is not a required single point of
+failure: VariantValidator/VariantFormatter, FAVOR, OpenTargets transcript
+consequences, Mutalyzer, GRCh37 GenomeNexus, protein-representable ProtVar, and
+single-allele rsID sources are attempted when applicable. `vep_derived`
+aggregators are labeled and never presented as independent consensus. The
+resolver uses exact RefSeq, unique MANE mapping, then version-compatible
+transcripts; it never uses majority voting. Build, allele, gene, or transcript
+conflicts fail closed.
+
+Consequence controls criterion applicability but does not itself establish
+evidence strength. Frameshift/stop-gained, LOFTEE HC, or HIGH impact cannot
+supply exon count, PTC position, NMD, or disease mechanism. Never fill those
+facts from model memory or promote a manually called provider directly into
+PVS1; every fact must return through the collector. Generic UniProt/InterPro
+overlap is PM1 review context only; PM1 requires an exact online-bound CSpec
+region contract.
 
 Only cards with `assessment_status: met`, `system_preview_included: true`,
 `overlay_validated: true`, and trusted non-empty `source_fact_ids` support the

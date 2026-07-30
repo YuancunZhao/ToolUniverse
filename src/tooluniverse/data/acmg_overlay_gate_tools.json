@@ -38,7 +38,7 @@
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Preferred host-LLM literature proposal input. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, and unresolved review questions. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "description": "Preferred host-LLM literature proposal input generated after executing literature_review requests. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, unresolved questions, and a section/table/figure-aware reading manifest. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
           "items": {
             "type": "object",
             "properties": {
@@ -46,6 +46,9 @@
               "fact_type": {"type": "string", "enum": ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "prior_variant", "mechanism", "region_hotspot", "protein_length_repeat", "rna_splicing"]},
               "pmid": {"type": "string"},
               "pmcid": {"type": "string"},
+              "doi": {"type": "string"},
+              "review_request_id": {"type": "string"},
+              "document_hash": {"type": "string"},
               "locator": {"type": "string", "minLength": 1},
               "excerpt": {"type": "string", "minLength": 1},
               "variant_identity": {"type": "string", "minLength": 1},
@@ -60,6 +63,20 @@
               "interpretation": {"type": "string", "minLength": 1},
               "confidence": {"type": ["number", "string"]},
               "questions": {"type": "array", "items": {"type": "string"}},
+              "reading_manifest": {
+                "type": "object",
+                "properties": {
+                  "status": {"type": "string", "enum": ["complete", "partial", "abstract_only", "unavailable"]},
+                  "sections_read": {"type": "array", "items": {"type": "string"}},
+                  "tables_read": {"type": "array", "items": {"type": "string"}},
+                  "figures_read": {"type": "array", "items": {"type": "string"}},
+                  "supplements_read": {"type": "array", "items": {"type": "string"}},
+                  "variant_match_locations": {"type": "array", "items": {"type": "string"}},
+                  "limitations": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              },
               "extractor": {
                 "type": "object",
                 "properties": {
@@ -180,11 +197,21 @@
         },
         "consequence_profile": {
           "type": "object",
-          "description": "Selected-transcript VEP consequence profile used only for criterion applicability routing.",
+          "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
           "properties": {
             "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
             "attempted_representations": {"type": "array", "items": {"type": "object"}},
             "annotation_reason": {"type": "string"},
+            "observations": {"type": "array", "items": {"type": "object"}},
+            "selected_provider": {"type": "string"},
+            "selected_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+            "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+            "provider_failures": {"type": "array", "items": {"type": "object"}},
+            "provider_conflicts": {"type": "array", "items": {"type": "object"}},
+            "resolution_reason": {"type": "string"},
+            "transcript_mapping": {"type": "object"},
+            "selected_observation": {"type": ["object", "null"]},
+            "missing_requirements": {"type": "array", "items": {"type": "string"}},
             "hgvs_operation": {"type": "string"},
             "splice_positions": {"type": "array", "items": {"type": "integer"}},
             "canonical_site_type": {"type": "string", "enum": ["donor", "acceptor", "ambiguous", "none"]},
@@ -219,6 +246,16 @@
           "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
           "items": {"type": "object"}
         },
+        "literature_review": {
+          "type": "object",
+          "description": "Deduplicated candidates, verified full-text state, executable host-LLM review requests, reading manifests, and proposal validation status."
+        },
+        "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
+        "workflow_status": {
+          "type": "string",
+          "enum": ["collecting", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+        },
+        "next_actions": {"type": "array", "items": {"type": "object"}},
         "predictor_scores": {"type": "object"},
         "criterion_reviews": {"type": "array", "items": {"type": "object"}},
         "evidence_cards": {
@@ -258,6 +295,10 @@
         "source_facts",
         "source_assertions",
         "literature_candidates",
+        "literature_review",
+        "recoverable_gaps",
+        "workflow_status",
+        "next_actions",
         "predictor_scores",
         "criterion_reviews",
         "evidence_cards",
@@ -310,7 +351,7 @@
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Preferred host-LLM literature proposal input. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, and unresolved review questions. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "description": "Preferred host-LLM literature proposal input generated after executing literature_review requests. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, unresolved questions, and a section/table/figure-aware reading manifest. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
           "items": {
             "type": "object",
             "properties": {
@@ -318,6 +359,9 @@
               "fact_type": {"type": "string", "enum": ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "prior_variant", "mechanism", "region_hotspot", "protein_length_repeat", "rna_splicing"]},
               "pmid": {"type": "string"},
               "pmcid": {"type": "string"},
+              "doi": {"type": "string"},
+              "review_request_id": {"type": "string"},
+              "document_hash": {"type": "string"},
               "locator": {"type": "string", "minLength": 1},
               "excerpt": {"type": "string", "minLength": 1},
               "variant_identity": {"type": "string", "minLength": 1},
@@ -329,6 +373,20 @@
               "interpretation": {"type": "string", "minLength": 1},
               "confidence": {"type": ["number", "string"]},
               "questions": {"type": "array", "items": {"type": "string"}},
+              "reading_manifest": {
+                "type": "object",
+                "properties": {
+                  "status": {"type": "string", "enum": ["complete", "partial", "abstract_only", "unavailable"]},
+                  "sections_read": {"type": "array", "items": {"type": "string"}},
+                  "tables_read": {"type": "array", "items": {"type": "string"}},
+                  "figures_read": {"type": "array", "items": {"type": "string"}},
+                  "supplements_read": {"type": "array", "items": {"type": "string"}},
+                  "variant_match_locations": {"type": "array", "items": {"type": "string"}},
+                  "limitations": {"type": "array", "items": {"type": "string"}}
+                },
+                "required": ["status"],
+                "additionalProperties": false
+              },
               "extractor": {
                 "type": "object",
                 "properties": {
@@ -440,11 +498,21 @@
         },
         "consequence_profile": {
           "type": "object",
-          "description": "Selected-transcript VEP consequence profile used only for criterion applicability routing.",
+          "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
           "properties": {
             "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
             "attempted_representations": {"type": "array", "items": {"type": "object"}},
             "annotation_reason": {"type": "string"},
+            "observations": {"type": "array", "items": {"type": "object"}},
+            "selected_provider": {"type": "string"},
+            "selected_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+            "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+            "provider_failures": {"type": "array", "items": {"type": "object"}},
+            "provider_conflicts": {"type": "array", "items": {"type": "object"}},
+            "resolution_reason": {"type": "string"},
+            "transcript_mapping": {"type": "object"},
+            "selected_observation": {"type": ["object", "null"]},
+            "missing_requirements": {"type": "array", "items": {"type": "string"}},
             "hgvs_operation": {"type": "string"},
             "splice_positions": {"type": "array", "items": {"type": "integer"}},
             "canonical_site_type": {"type": "string", "enum": ["donor", "acceptor", "ambiguous", "none"]},
@@ -474,6 +542,16 @@
           "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
           "items": {"type": "object"}
         },
+        "literature_review": {
+          "type": "object",
+          "description": "Deduplicated candidates, verified full-text state, executable host-LLM review requests, reading manifests, and proposal validation status."
+        },
+        "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
+        "workflow_status": {
+          "type": "string",
+          "enum": ["collecting", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+        },
+        "next_actions": {"type": "array", "items": {"type": "object"}},
         "predictor_scores": {"type": "object"},
         "criterion_reviews": {"type": "array", "items": {"type": "object"}},
         "evidence_cards": {"type": "array", "items": {"type": "object"}},
@@ -498,6 +576,10 @@
         "source_facts",
         "source_assertions",
         "literature_candidates",
+        "literature_review",
+        "recoverable_gaps",
+        "workflow_status",
+        "next_actions",
         "predictor_scores",
         "criterion_reviews",
         "evidence_cards",

@@ -4,6 +4,7 @@ from tooluniverse.acmg.consequence import (
     build_consequence_profile,
     consequence_applicability,
 )
+from tooluniverse.acmg.consequence_sources import resolve_consequence_observations
 from tooluniverse.acmg.rule_catalog import ACMG_CRITERIA, CONSEQUENCE_POLICIES
 
 
@@ -207,3 +208,65 @@ def test_non_consequence_evidence_is_never_screened_out_by_profile():
         assert consequence_applicability(criterion, profile)["status"] == (
             "not_consequence_gated"
         )
+
+
+def test_multi_provider_resolver_accepts_overlapping_term_detail():
+    observations = [
+        {
+            "source_fact_id": "vep",
+            "provider": "EnsemblVEP_annotate_hgvs",
+            "assessment_ready": True,
+            "identity_status": "verified",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["frameshift_variant", "nmd_transcript_variant"],
+            "hgvs_p": "ENSP000001:p.Pro3909ArgfsTer33",
+            "_match_rank": 0,
+            "_provider_rank": 0,
+        },
+        {
+            "source_fact_id": "vv",
+            "provider": "VariantValidator_format_genomic_to_transcripts",
+            "assessment_ready": True,
+            "identity_status": "verified",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["frameshift_variant"],
+            "hgvs_p": "NP_001354730.1:p.Pro3909ArgfsTer33",
+            "_match_rank": 0,
+            "_provider_rank": 1,
+        },
+    ]
+
+    resolution = resolve_consequence_observations(IDENTITY, observations)
+
+    assert resolution["status"] == "resolved"
+    assert resolution["selected_source_fact_ids"] == ["vep", "vv"]
+
+
+def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
+    observations = [
+        {
+            "source_fact_id": "vv",
+            "provider": "VariantValidator_format_genomic_to_transcripts",
+            "assessment_ready": True,
+            "identity_status": "verified",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["frameshift_variant"],
+            "_match_rank": 0,
+            "_provider_rank": 1,
+        },
+        {
+            "source_fact_id": "other",
+            "provider": "FAVOR_annotate_variant",
+            "assessment_ready": True,
+            "identity_status": "verified",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["synonymous_variant"],
+            "_match_rank": 0,
+            "_provider_rank": 3,
+        },
+    ]
+
+    resolution = resolve_consequence_observations(IDENTITY, observations)
+
+    assert resolution["status"] == "identity_conflict"
+    assert resolution["selected_observation"] is None

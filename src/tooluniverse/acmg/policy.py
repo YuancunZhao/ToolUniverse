@@ -47,7 +47,17 @@ HIGH_RISK_ACMG_TOOLS = {
     "EnsemblVEP_annotate_hgvs",
     "EnsemblVEP_annotate_rsid",
     "EnsemblVEP_variant_recoder",
+    "ensembl_vep_region",
     "VariantValidator_validate_variant",
+    "VariantValidator_format_genomic_to_transcripts",
+    "FAVOR_annotate_variant",
+    "OpenTargets_get_variant_info",
+    "OpenTargets_get_variant_transcript_consequences",
+    "Mutalyzer_normalize_variant",
+    "GenomeNexus_annotate_variant",
+    "GenomeNexus_annotate_dbsnp",
+    "ProtVar_map_variant",
+    "gProfiler_annotate_snps",
     "EnsemblVar_get_population_frequencies",
     "OpenCRAVAT_annotate_variant",
     "OpenCRAVAT_list_annotators",
@@ -87,6 +97,9 @@ HIGH_RISK_ACMG_TOOLS = {
     "LitVar_search_variants",
     "LitVar_get_variant_publications",
     "EuropePMC_search_articles",
+    "PubTator3_LiteratureSearch",
+    "PubTator3_get_annotations",
+    "EPMC_get_text_mined_annotations",
 }
 
 

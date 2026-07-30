@@ -38,9 +38,9 @@ ToolUniverse.
 
 The supporting code is deliberately thin: `acmg/search.py` only detects ACMG
 search intent and ranks the collector, `acmg/policy.py` owns the scoped
-source-lead boundary, `acmg/source_adapters.py` owns provider field parsing, and
-`acmg/consequence.py` normalizes the selected-transcript consequence and
-criterion applicability.
+source-lead boundary, `acmg/source_adapters.py` owns provider field parsing,
+`acmg/consequence_sources.py` resolves auditable multi-provider observations,
+and `acmg/consequence.py` normalizes criterion applicability.
 The retired `acmg_gate_search.py` mixed these responsibilities and has been
 removed.
 
@@ -204,14 +204,18 @@ point of failure. GRCh38 rsIDs resolve primarily through
 forward-strand allele normalization; protein inputs fall back to VEP with the
 same normalization. VEP requests carry `mane=1` so consequence routing binds
 Ensembl transcripts to the identity-selected RefSeq MANE transcript.
-Once identity is fixed, consequence lookup is bounded independently: selected
-transcript HGVS, exact genomic HGVS, then rsID only for a provider-verified
-single allele. Only a successful empty/unusable annotation advances the chain;
-an identity conflict stops immediately. The profile exposes annotation status,
-attempted representations, and reason. Exhausted empty results emit
-`consequence_annotation_empty`, leaving PP3/BP4, PM1, and PVS1 not assessed.
-All available provider and predictor values remain visible even when excluded
-from the candidate Bayesian estimate.
+Once identity is fixed, the collector runs every applicable read-only
+consequence source rather than stopping at VEP: selected/genomic/single-allele
+rsID/region VEP, VariantValidator/VariantFormatter, FAVOR, OpenTargets,
+Mutalyzer, GRCh37 GenomeNexus, and protein-representable ProtVar. The resolver
+uses exact RefSeq, unique MANE, then version-compatible observations without
+majority voting; build, allele, gene, transcript, consequence, or protein
+conflicts fail closed. The profile exposes observations, method dependence,
+selected/corroborating SourceFacts, failures, conflicts, resolution reason, and
+missing requirements. PVS1 can consume a uniquely resolved non-VEP
+consequence, but exon structure, PTC/NMD, and disease mechanism must still come
+from provider/document facts. All available provider and predictor values
+remain visible even when excluded from the system preview.
 
 The collector exposes one source-assertion list and one criterion-review list.
 Older duplicate `source_leads`, `route_candidates`, `candidate_criteria`, and
@@ -227,6 +231,14 @@ and optional-reviewer contracts now live in
 `tooluniverse-acmg-variant-classification`. Criterion-specific rule Skills
 remain retired because scientific decisions live in shared pure rule functions
 and the machine-readable rule catalog.
+
+The consolidated Skill treats `workflow_status`, `recoverable_gaps`,
+`next_actions`, literature review requests, and CSpec requests as a mandatory
+automatic state machine. Read-only recovery and exact/equivalent full-text
+review proceed without asking the user to continue; the optional user decision
+round remains separate. Publication identifier-graph deduplication, verified
+full-text states, reading manifests, proposal/document hashes, and processed
+request IDs prevent duplicate counting and repeated review loops.
 
 The branch installs the complete upstream user-facing ToolUniverse Skill
 surface—not only ACMG Skills—and adds the consolidated ACMG workflow within

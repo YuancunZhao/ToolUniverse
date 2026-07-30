@@ -17,6 +17,12 @@ Use this skill when users:
 
 If the user asks whether a germline variant is pathogenic, asks for ACMG classification, clinical significance, or any final five-tier verdict, hand off to the evidence-only ACMG runtime through `ACMG_evidence_collector`. The current runtime may report validated criteria, conflicts, limitations, and a Bayesian review estimate, but it must explicitly decline an automated five-tier verdict.
 
+Loading the collector is not the end of that handoff. Follow the mandatory
+state machine in `tooluniverse-acmg-variant-classification`: consume
+`recoverable_gaps` and `next_actions`, automatically read exact/equivalent
+full-text papers, return structured proposals to the collector, and run the
+Guard. Do not stop to ask whether the user wants these read-only steps.
+
 ## Key Principles
 
 1. **ACMG-Guided Intake** - Gather evidence and candidate routes for ACMG/AMP 2015 criteria without final local scoring
@@ -67,7 +73,13 @@ Phase 6: ACMG EVIDENCE REVIEW     → Candidate cards, compatibility, and Bayesi
 
 ## Phase 1: Variant Identity
 
-Tools: `MyVariant_query_variants`, `EnsemblVar_get_variant_consequences`, `NCBIGene_search`, `VariantValidator_gene2transcripts`, `VariantValidator_format_genomic_to_transcripts`, `VariantValidator_validate_variant`, `EnsemblVEP_annotate_hgvs`, `EnsemblVEP_variant_recoder`
+Tools: `ACMG_evidence_collector` (preferred orchestrator),
+`VariantValidator_gene2transcripts`,
+`VariantValidator_format_genomic_to_transcripts`,
+`VariantValidator_validate_variant`, `EnsemblVEP_annotate_hgvs`,
+`EnsemblVEP_variant_recoder`, `ensembl_vep_region`, FAVOR, OpenTargets
+transcript consequences, Mutalyzer, GenomeNexus for GRCh37, and ProtVar when a
+protein representation is available.
 
 **VariantValidator_gene2transcripts**: Look up MANE Select and MANE Plus Clinical transcripts for a gene. Use this to identify the correct canonical transcript before variant annotation.
 - Parameters: `gene_symbol` (e.g. "TP53"), `transcript_set` ("mane" | "refseq" | "ensembl" | "all"), `genome_build` ("GRCh38" default)
@@ -78,7 +90,9 @@ Tools: `MyVariant_query_variants`, `EnsemblVar_get_variant_consequences`, `NCBIG
 - Complete transcript HGVS (for example `NM_000059.4:c.5946delT`) goes directly to `VariantValidator_validate_variant` and is cross-checked with `EnsemblVEP_variant_recoder`.
 - Gene plus transcript HGVS (for example `BRCA2;NM_000059.4:c.5946delT`) is parsed into its gene and transcript components, then validated directly; the embedded gene and transcript must agree with provider output.
 - Gene plus coding shorthand (for example `BRCA2 c.5946delT`) is resolved through `VariantValidator_gene2transcripts` first; use the unique MANE Select transcript, or a unique MANE Plus Clinical transcript only when no MANE Select exists, before constructing the full HGVS.
-- Gene plus protein shorthand (for example `BRCA2 p.Ser1982ArgfsTer22`) is sent to `EnsemblVEP_annotate_hgvs` to obtain genomic identity, then projected through `VariantValidator_format_genomic_to_transcripts`; continue only when the gene and MANE projection are unique and cross-validated.
+- Gene plus protein shorthand (for example `BRCA2 p.Ser1982ArgfsTer22`) is
+  normalized and projected to a unique MANE transcript by the collector's
+  identity chain. VEP is one source, not a required single point of failure.
 - Genomic HGVS or VCF-like input goes through `VariantValidator_format_genomic_to_transcripts` so the MANE Select transcript projection is selected before validation.
 - An rsID is recoded with `EnsemblVEP_variant_recoder` before transcript/HGVS validation.
 - If transcript resolution is ambiguous or provider identity cannot be cross-validated, stop identity processing and report the normalization limitation; do not infer a transcript or continue ACMG evidence collection.
@@ -87,7 +101,12 @@ Tools: `MyVariant_query_variants`, `EnsemblVar_get_variant_consequences`, `NCBIG
 - Parameters: `genome_build` ("GRCh37" | "GRCh38"), `variant_description` (HGVS, e.g. "NM_007294.4:c.5266dup"), `select_transcripts` (transcript or "all")
 - Returns: Validated HGVS, protein consequence, genomic coordinates, gene IDs
 
-Capture: HGVS notation (c. and p.), gene symbol, canonical transcript (MANE Select via VariantValidator), consequence type, amino acid change, exon/intron location. The collector builds consequence applicability only from the identity-selected transcript; VEP `most_severe_consequence` is audit context and cannot route a criterion by itself.
+Capture: HGVS notation (c. and p.), gene symbol, canonical transcript (MANE
+Select), consequence type, amino acid change, exon/intron location, provider
+version, query representation, and identity status. The collector resolves the
+identity-selected transcript across all applicable consequence observations;
+VEP `most_severe_consequence`, HIGH impact, or a majority vote cannot route a
+criterion by itself.
 
 ## Phase 2: Clinical Databases
 
@@ -183,6 +202,13 @@ Tools: `PubMed_search_articles`, `EuropePMC_search_articles`, `BioRxiv_list_rece
 
 Always flag preprints as NOT peer-reviewed.
 
+For a germline ACMG task, do not run an independent optional literature phase.
+Consume `literature_review.review_requests` from the collector. Automatically
+retrieve and read every exact/equivalent full text, submit source-located
+`literature_proposals` with a reading manifest, and call the collector again.
+An abstract, `inEPMC`, snippet, or text-mining annotation is not a verified
+full-text evidence source.
+
 ## Phase 6: ACMG Intake Only
 
 This phase is evidence collection and review only. Do not emit a five-tier classification from this skill. Use `ACMG_evidence_collector`; it delegates to the five deterministic evidence group tools and returns observed facts, criterion suggestions, exclusions, and a system-preview Bayesian estimate. Secondary source assertions remain leads, and PP5/BP6 are deprecated.
@@ -238,7 +264,11 @@ If a primary tool fails, use these alternatives:
 
 **Novel Missense Variant**: Check comparison variants and protein-region context as review leads. PP3/BP4 uses the versioned REVEL policy. PM1 protein mapping and domain/site overlap are collected through EBI Proteins and InterPro, but ordinary overlap remains `indeterminate`; only an exact online-bound CSpec PM1 region contract may become a candidate. Anchored literature facts may produce review-required PS1/PM5 and PP2/BP1 proposals through the fixed fact-type mapping.
 
-**Truncating Variant**: Collect transcript and loss-of-function context, but keep PVS1 `not_assessed` until the complete ClinGen decision-tree facts are available.
+**Truncating Variant**: The collector runs the implemented ClinGen PVS1
+decision tree. A uniquely resolved consequence is only its entry point; exon
+structure, PTC/NMD facts, disease mechanism, and downgrade factors must be
+provider- or document-backed. Missing facts keep PVS1 `not_assessed`; never
+fill exon rank or NMD from model memory.
 
 **Splice Variant**: Run SpliceAI for supported normalized small variants. The versioned Walker rule may suggest Supporting PP3/BP4 only when its strict run and selected-row contract is verified; canonical +/-1/2 variants remain PVS1 route context. Prediction, PVS1, and RNA facts remain separate. Direct RNA-splicing readouts are not PS3/BS3 evidence.
 

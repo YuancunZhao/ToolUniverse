@@ -977,3 +977,99 @@ def test_uniprot_adapter_preserves_complete_normalized_entry_context():
     assert adapted["ptm_features"]
     assert adapted["cross_references"][0]["database"] == "PDB"
     assert adapted["references"][0]["citation"]["title"] == "BRCA1 study"
+
+
+def test_variantformatter_adapter_exposes_mane_consequence_projection():
+    adapted = adapt_source_output(
+        "VariantValidator_format_genomic_to_transcripts",
+        {
+            "metadata": {"variantformatter_version": "2.2.0"},
+            "submitted": {
+                "normalized": {
+                    "g_hgvs": "NC_000003.12:g.52396983_52396984del",
+                    "hgvs_t_and_p": {
+                        "NM_015512.5": {
+                            "t_hgvs": "NM_015512.5:c.11726_11727del",
+                            "p_hgvs": "NP_056327.4:p.Pro3909ArgfsTer33",
+                            "gene_info": {"symbol": "DNAH1"},
+                            "select_status": {"mane_select": True},
+                        }
+                    },
+                }
+            },
+        },
+    )
+    features = adapted["reviewable_features"]
+    candidate = features["consequence_candidates"][0]
+
+    assert features["provider_version"] == "2.2.0"
+    assert candidate["transcript"] == "NM_015512.5"
+    assert candidate["mane_select"] == "NM_015512.5"
+    assert candidate["consequence"] == ["frameshift_variant"]
+    observed, identity_verified, ready = source_fact_ready(
+        "VariantValidator_format_genomic_to_transcripts",
+        features,
+        {
+            "gene": "DNAH1",
+            "transcript": "NM_015512.5",
+            "hgvs_c": "NM_015512.5:c.11726_11727del",
+            "hgvs_g": "NC_000003.12:g.52396983_52396984del",
+        },
+    )
+    assert observed["gene"] == "DNAH1"
+    assert identity_verified is True
+    assert ready is True
+
+
+def test_favor_and_opentargets_adapters_preserve_transcript_consequences():
+    favor = adapt_source_output(
+        "FAVOR_annotate_variant",
+        {
+            "status": "success",
+            "variant": "3-52396982-CCT-C",
+            "metadata": {"source": "FAVOR fixture"},
+            "data": {
+                "variant": {"variant_vcf": "3-52396982-CCT-C"},
+                "gene_consequence": {
+                    "gene": "DNAH1",
+                    "transcript": "NM_015512.5",
+                    "hgvs_c": "NM_015512.5:c.11726_11727del",
+                    "hgvs_p": "NP_056327.4:p.Pro3909ArgfsTer33",
+                    "so_term": "frameshift_variant",
+                    "exon": "73",
+                },
+            },
+        },
+    )["reviewable_features"]
+    open_targets = adapt_source_output(
+        "OpenTargets_get_variant_transcript_consequences",
+        {
+            "status": "success",
+            "data": {
+                "id": "3_52396982_CCT_C",
+                "transcriptConsequences": [
+                    {
+                        "target": {"approvedSymbol": "DNAH1"},
+                        "transcriptId": "ENST00000420323.6",
+                        "aminoAcidChange": "P3909RfsTer33",
+                        "variantConsequences": [
+                            {"label": "frameshift_variant"}
+                        ],
+                        "impact": "HIGH",
+                        "isEnsemblCanonical": True,
+                    }
+                ],
+            },
+        },
+    )["reviewable_features"]
+
+    assert favor["consequence_candidates"][0]["exon"] == "73"
+    assert favor["consequence_candidates"][0]["consequence"] == [
+        "frameshift_variant"
+    ]
+    assert open_targets["consequence_candidates"][0]["transcript"] == (
+        "ENST00000420323.6"
+    )
+    assert open_targets["consequence_candidates"][0]["consequence"] == [
+        "frameshift_variant"
+    ]

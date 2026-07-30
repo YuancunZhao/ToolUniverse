@@ -96,6 +96,11 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "ACMG_evidence_collector",
         "cspec_proposals",
         "literature_proposals",
+        "recoverable_gaps",
+        "workflow_status",
+        "next_actions",
+        "Do not ask the user whether",
+        "End automated collection only when",
         "DS_AG",
         "DS_DL",
         "system_preview_bayesian",
@@ -443,6 +448,10 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
         "system_preview_bayesian",
         "user_selected_bayesian",
         "decision_report",
+        "recoverable_gaps",
+        "workflow_status",
+        "next_actions",
+        "literature_review",
     } <= collector_required
 
 
@@ -462,6 +471,20 @@ def test_collector_and_alias_expose_literature_and_decision_workbench_inputs():
         proposal_items = parameter["properties"]["literature_proposals"]["items"]
         assert "criterion" not in proposal_items["required"]
         assert "suggested_strength" not in proposal_items["required"]
+        assert {
+            "review_request_id",
+            "document_hash",
+            "reading_manifest",
+        } <= set(proposal_items["properties"])
+        reading_status = proposal_items["properties"]["reading_manifest"][
+            "properties"
+        ]["status"]
+        assert set(reading_status["enum"]) == {
+            "complete",
+            "partial",
+            "abstract_only",
+            "unavailable",
+        }
         assert {
             "segregation",
             "phenotype_specificity",

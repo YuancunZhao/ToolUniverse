@@ -488,8 +488,10 @@ def source_fact_ready(
     # still fails closed; only this narrow identity-only omission is tolerated.
     if observed_build or tool_name not in {
         "VariantValidator_validate_variant",
+        "VariantValidator_format_genomic_to_transcripts",
         "EnsemblVEP_variant_recoder",
         "MyVariant_get_pathogenicity_scores",
+        "Mutalyzer_normalize_variant",
     }:
         identity_verified = identity_verified and build_matches(
             expected_identity, observed_identity
@@ -570,16 +572,36 @@ def source_fact_ready(
             )
             and bool(provider_version(features))
         )
-    elif tool_name in {"EnsemblVEP_annotate_hgvs", "EnsemblVEP_annotate_rsid"}:
+    elif tool_name in {
+        "EnsemblVEP_annotate_hgvs",
+        "EnsemblVEP_annotate_rsid",
+        "ensembl_vep_region",
+        "VariantValidator_validate_variant",
+        "VariantValidator_format_genomic_to_transcripts",
+        "FAVOR_annotate_variant",
+        "OpenTargets_get_variant_transcript_consequences",
+        "Mutalyzer_normalize_variant",
+        "GenomeNexus_annotate_variant",
+        "GenomeNexus_annotate_dbsnp",
+        "ProtVar_map_variant",
+    }:
+        candidates = features.get("consequence_candidates")
+        if not isinstance(candidates, list):
+            candidates = features.get("vep_transcript_candidates")
         ready = (
             bool(provider_version(features))
-            and isinstance(features.get("vep_transcript_candidates"), list)
-            and bool(features.get("vep_transcript_candidates"))
+            and isinstance(candidates, list)
+            and bool(candidates)
+            and any(
+                isinstance(row, dict)
+                and bool(
+                    row.get("consequence")
+                    or row.get("consequence_terms")
+                )
+                for row in candidates
+            )
         )
-    elif tool_name in {
-        "VariantValidator_validate_variant",
-        "EnsemblVEP_variant_recoder",
-    }:
+    elif tool_name == "EnsemblVEP_variant_recoder":
         ready = bool(provider_version(features))
     else:
         ready = False
@@ -659,8 +681,19 @@ def _source_category(tool_name: str) -> str:
         return "splicing_prediction"
     if any(
         token in name
-        for token in ("cadd", "alphamissense", "myvariant", "opencravat", "vep")
-    ):
+        for token in (
+            "cadd",
+            "alphamissense",
+            "myvariant",
+            "opencravat",
+            "vep",
+            "favor",
+            "genomenexus",
+            "mutalyzer",
+            "protvar",
+            "gprofiler",
+        )
+    ) or tool_name.startswith("OpenTargets_get_variant"):
         return "computational_prediction"
     if "gnomad" in name or "population" in name:
         return "population"
@@ -722,7 +755,7 @@ def _identity_fields(raw: dict[str, Any], payload: dict[str, Any]) -> dict[str, 
 def _variantvalidator_fields(raw: dict[str, Any]) -> dict[str, Any]:
     data = raw.get("data")
     if not isinstance(data, dict):
-        return {}
+        return _variantformatter_fields(raw)
     metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
     record = next(
         (
@@ -742,8 +775,7 @@ def _variantvalidator_fields(raw: dict[str, Any]) -> dict[str, Any]:
         None,
     )
     if not isinstance(record, dict):
-        payload = data
-        return _identity_fields(raw, payload)
+        return _variantformatter_fields(raw)
     hgvs_c = str(record.get("hgvs_transcript_variant") or "")
     protein = record.get("hgvs_predicted_protein_consequence")
     protein = protein if isinstance(protein, dict) else {}
@@ -757,6 +789,19 @@ def _variantvalidator_fields(raw: dict[str, Any]) -> dict[str, Any]:
     }
     if ":" in hgvs_c:
         features["transcript"] = hgvs_c.split(":", 1)[0]
+    if hgvs_c:
+        features["consequence_candidates"] = [
+            {
+                "gene": record.get("gene_symbol"),
+                "transcript": features.get("transcript"),
+                "hgvsc": hgvs_c,
+                "hgvsp": features.get("hgvs_p"),
+                "consequence": _terms_from_hgvs(
+                    hgvs_c,
+                    str(features.get("hgvs_p") or ""),
+                ),
+            }
+        ]
     loci = record.get("primary_assembly_loci")
     loci = loci if isinstance(loci, dict) else {}
     for build, suffix in (("grch38", ""), ("grch37", "_grch37")):
@@ -783,6 +828,315 @@ def _variantvalidator_fields(raw: dict[str, Any]) -> dict[str, Any]:
         elif coordinates:
             features.update(coordinates)
     return {key: value for key, value in features.items() if value not in (None, "")}
+
+
+def _terms_from_hgvs(hgvs_c: str, hgvs_p: str) -> list[str]:
+    """Conservatively derive Sequence Ontology terms from provider HGVS."""
+    protein = str(hgvs_p or "").casefold()
+    coding = str(hgvs_c or "").casefold()
+    if "fs" in protein:
+        return ["frameshift_variant"]
+    if any(token in protein for token in ("ter", "*")):
+        return ["stop_gained"]
+    if protein.endswith(("=", "(=)")):
+        return ["synonymous_variant"]
+    if re.search(r"p\.\(?[a-z]{1,3}\d+[a-z]{1,3}\)?$", protein):
+        return ["missense_variant"]
+    if re.search(r"c\.\d+[+-][12](?:_|[a-z])", coding):
+        return [
+            "splice_donor_variant" if "+" in coding else "splice_acceptor_variant"
+        ]
+    return []
+
+
+def _variantformatter_fields(raw: dict[str, Any]) -> dict[str, Any]:
+    nested_data = raw.get("data")
+    data = nested_data if isinstance(nested_data, dict) else raw
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    pending: list[Any] = [data]
+    candidates: list[dict[str, Any]] = []
+    formatter_projections: dict[str, dict[str, Any]] = {}
+    genomic_hgvs = ""
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            if value.get("g_hgvs") and not genomic_hgvs:
+                genomic_hgvs = str(value["g_hgvs"])
+            projections = value.get("hgvs_t_and_p")
+            if isinstance(projections, dict):
+                for reference, projection in projections.items():
+                    if not isinstance(projection, dict):
+                        continue
+                    select_status = projection.get("select_status")
+                    select_status = (
+                        select_status if isinstance(select_status, dict) else {}
+                    )
+                    gene_info = projection.get("gene_info")
+                    gene_info = gene_info if isinstance(gene_info, dict) else {}
+                    hgvs_c = str(projection.get("t_hgvs") or "")
+                    hgvs_p = str(
+                        projection.get("p_hgvs")
+                        or projection.get("p_hgvs_tlc")
+                        or projection.get("p_hgvs_slc")
+                        or ""
+                    )
+                    candidates.append(
+                        {
+                            "gene": gene_info.get("symbol"),
+                            "transcript": str(reference),
+                            "mane_select": (
+                                str(reference)
+                                if select_status.get("mane_select") is True
+                                else ""
+                            ),
+                            "hgvsc": hgvs_c,
+                            "hgvsp": hgvs_p,
+                            "consequence": _terms_from_hgvs(hgvs_c, hgvs_p),
+                        }
+                    )
+                    formatter_projections[str(reference)] = {
+                        "t_hgvs": hgvs_c,
+                        "p_hgvs": hgvs_p,
+                        "gene_info": {"symbol": gene_info.get("symbol")},
+                        "select_status": {
+                            "mane_select": select_status.get("mane_select") is True,
+                            "mane_plus_clinical": (
+                                select_status.get("mane_plus_clinical") is True
+                            ),
+                        },
+                    }
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
+    genes = {str(row.get("gene") or "") for row in candidates if row.get("gene")}
+    features: dict[str, Any] = {
+        "hgvs_g": genomic_hgvs,
+        "g_hgvs": genomic_hgvs,
+        "hgvs_t_and_p": formatter_projections,
+        "consequence_candidates": candidates,
+        "provider_version": metadata.get("variantformatter_version")
+        or metadata.get("variantvalidator_version")
+        or metadata.get("vvdb_version"),
+    }
+    if len(genes) == 1:
+        features["gene"] = next(iter(genes))
+    return {key: value for key, value in features.items() if value not in (None, "")}
+
+
+def _variant_id_coordinates(value: Any) -> dict[str, Any]:
+    parts = re.split(r"[-_:]", str(value or "").removeprefix("chr"))
+    if len(parts) != 4:
+        return {}
+    chrom, position, ref, alt = parts
+    try:
+        return {"chr": chrom, "pos": int(position), "ref": ref, "alt": alt}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _favor_fields(payload: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
+    variant = payload.get("variant")
+    variant = variant if isinstance(variant, dict) else {}
+    consequence = payload.get("gene_consequence")
+    consequence = consequence if isinstance(consequence, dict) else {}
+    coordinates_value = _variant_id_coordinates(
+        variant.get("variant_vcf") or raw.get("variant")
+    )
+    hgvs_c = str(consequence.get("hgvs_c") or "")
+    hgvs_p = str(consequence.get("hgvs_p") or consequence.get("protein_variant") or "")
+    so_term = consequence.get("so_term") or consequence.get("exonic_category")
+    terms = (
+        [str(so_term).casefold().replace(" ", "_")]
+        if so_term not in (None, "")
+        else _terms_from_hgvs(hgvs_c, hgvs_p)
+    )
+    candidate = {
+        "gene": consequence.get("gene"),
+        "transcript": consequence.get("transcript"),
+        "mane_select": consequence.get("mane_select"),
+        "hgvsc": hgvs_c,
+        "hgvsp": hgvs_p,
+        "consequence": terms,
+        "canonical": consequence.get("is_canonical"),
+        "exon": consequence.get("exon"),
+    }
+    return {
+        **coordinates_value,
+        "build": "GRCh38",
+        "rsid": variant.get("rsid"),
+        "hgvs_g": variant.get("hgvs_genomic"),
+        "gene": consequence.get("gene"),
+        "hgvs_c": hgvs_c,
+        "hgvs_p": hgvs_p,
+        "most_severe_consequence": next(iter(terms), None),
+        "consequence_candidates": [candidate] if any(candidate.values()) else [],
+        "provider_version": (
+            (raw.get("metadata") or {}).get("source")
+            if isinstance(raw.get("metadata"), dict)
+            else None
+        )
+        or "FAVOR GRCh38",
+    }
+
+
+def _open_targets_consequence_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    coords = _variant_id_coordinates(payload.get("id"))
+    rows = payload.get("transcriptConsequences")
+    rows = rows if isinstance(rows, list) else []
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        target = row.get("target")
+        target = target if isinstance(target, dict) else {}
+        consequence_rows = row.get("variantConsequences")
+        consequence_rows = consequence_rows if isinstance(consequence_rows, list) else []
+        terms = [
+            str(item.get("label") or "").casefold().replace(" ", "_")
+            for item in consequence_rows
+            if isinstance(item, dict) and item.get("label")
+        ]
+        candidates.append(
+            {
+                "gene": target.get("approvedSymbol"),
+                "transcript": row.get("transcriptId"),
+                "hgvsp": row.get("aminoAcidChange"),
+                "consequence": terms,
+                "impact": row.get("impact"),
+                "canonical": row.get("isEnsemblCanonical"),
+            }
+        )
+    severe = payload.get("mostSevereConsequence")
+    severe = severe if isinstance(severe, dict) else {}
+    rsids = payload.get("rsIds")
+    return {
+        **coords,
+        "build": "GRCh38",
+        "rsid": (
+            str(rsids[0])
+            if isinstance(rsids, list) and len(rsids) == 1
+            else None
+        ),
+        "hgvs_g": payload.get("hgvsId"),
+        "most_severe_consequence": severe.get("label"),
+        "consequence_candidates": candidates,
+        "provider_version": "Open Targets Platform GraphQL",
+    }
+
+
+def _genome_nexus_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    candidates = []
+    for row in payload.get("transcript_consequences") or []:
+        if not isinstance(row, dict):
+            continue
+        candidates.append(
+            {
+                "gene": row.get("gene_symbol"),
+                "transcript": row.get("transcript_id"),
+                "hgvsc": row.get("hgvsc"),
+                "hgvsp": row.get("hgvsp"),
+                "consequence": row.get("consequence_terms") or [],
+                "canonical": row.get("canonical"),
+                "exon": row.get("exon"),
+            }
+        )
+    return {
+        "hgvs_g": payload.get("hgvsg") or payload.get("variant"),
+        "build": payload.get("assembly_name") or "GRCh37",
+        "most_severe_consequence": payload.get("most_severe_consequence"),
+        "consequence_candidates": candidates,
+        "provider_version": "Genome Nexus annotation API",
+    }
+
+
+def _mutalyzer_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    hgvs_c = str(
+        payload.get("normalized_description")
+        or payload.get("corrected_description")
+        or payload.get("input_description")
+        or ""
+    )
+    protein = payload.get("protein")
+    protein = protein if isinstance(protein, dict) else {}
+    hgvs_p = str(protein.get("description") or "")
+    transcript = hgvs_c.split(":", 1)[0] if ":" in hgvs_c else ""
+    return {
+        "hgvs_c": hgvs_c,
+        "transcript": transcript,
+        "hgvs_p": hgvs_p,
+        "consequence_candidates": [
+            {
+                "transcript": transcript,
+                "hgvsc": hgvs_c,
+                "hgvsp": hgvs_p,
+                "consequence": _terms_from_hgvs(hgvs_c, hgvs_p),
+            }
+        ],
+        "provider_version": "Mutalyzer API v3",
+    }
+
+
+def _protvar_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    genomic = payload.get("genomic_coordinates")
+    genomic = genomic if isinstance(genomic, dict) else {}
+    candidates = []
+    for row in payload.get("isoform_mappings") or []:
+        if not isinstance(row, dict):
+            continue
+        consequence = row.get("consequence") or []
+        candidates.append(
+            {
+                "gene": row.get("gene"),
+                "transcript": row.get("transcript"),
+                "hgvsp": row.get("protein_variant"),
+                "consequence": (
+                    consequence if isinstance(consequence, list) else [consequence]
+                ),
+                "canonical": row.get("canonical"),
+                "protein_position": row.get("position"),
+            }
+        )
+    return {
+        **genomic,
+        "build": payload.get("assembly") or "GRCh38",
+        "consequence_candidates": candidates,
+        "provider_version": "EBI ProtVar API",
+    }
+
+
+def _gprofiler_snp_fields(payload: Any) -> dict[str, Any]:
+    rows = (
+        payload
+        if isinstance(payload, list)
+        else payload.get("data", [])
+        if isinstance(payload, dict)
+        else []
+    )
+    candidates = []
+    identity: dict[str, Any] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if not identity:
+            identity = {
+                "rsid": row.get("rs_id"),
+                "chr": row.get("chromosome"),
+                "pos": row.get("start"),
+            }
+        for consequence in row.get("variant_consequences") or []:
+            if not isinstance(consequence, dict):
+                continue
+            candidates.append(
+                {
+                    "gene": next(iter(row.get("gene_names") or []), None),
+                    "consequence": [consequence.get("consequence")],
+                }
+            )
+    return {
+        **identity,
+        "consequence_candidates": candidates,
+        "provider_version": "g:Profiler g:SNPense",
+    }
 
 
 def _preferred_refseq_hgvs(candidates: Any) -> Any:
@@ -1532,6 +1886,8 @@ def _literature_search_fields(
         "LitVar"
         if tool_name
         in {"LitVar_search_variants", "LitVar_get_variant_publications"}
+        else "PubTator3"
+        if tool_name == "PubTator3_LiteratureSearch"
         else "Europe PMC"
     )
     return {
@@ -1547,8 +1903,54 @@ def _literature_search_fields(
         "request_url": (
             "https://www.ncbi.nlm.nih.gov/research/litvar2/"
             if source == "LitVar"
+            else "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
+            if source == "PubTator3"
             else "https://www.ebi.ac.uk/europepmc/webservices/rest/"
         ),
+        "review_only": True,
+    }
+
+
+def _literature_annotation_fields(
+    tool_name: str,
+    payload: Any,
+    raw: dict[str, Any],
+) -> dict[str, Any]:
+    """Preserve text-mined entities as review context, never as evidence."""
+    if tool_name == "PubTator3_get_annotations":
+        documents = payload if isinstance(payload, list) else []
+        if isinstance(payload, dict):
+            documents = (
+                payload.get("PubTator3")
+                or payload.get("documents")
+                or payload.get("results")
+                or []
+            )
+        documents = [
+            dict(row) for row in documents if isinstance(row, dict)
+        ]
+        return {
+            "pmids": [
+                str(row.get("pmid") or row.get("_id") or row.get("id") or "")
+                for row in documents
+                if row.get("pmid") or row.get("_id") or row.get("id")
+            ],
+            "annotations": documents,
+            "provider_version": "PubTator3",
+            "request_url": (
+                "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
+            ),
+            "review_only": True,
+        }
+    payload_map = payload if isinstance(payload, dict) else {}
+    return {
+        "pmid": raw.get("pmid") or payload_map.get("pmid"),
+        "pmcid": payload_map.get("pmcid") or raw.get("pmcid"),
+        "article_id": payload_map.get("article_id"),
+        "annotations": payload_map.get("annotations") or [],
+        "annotation_counts": payload_map.get("annotation_counts") or {},
+        "provider_version": "Europe PMC Annotations API",
+        "request_url": "https://www.ebi.ac.uk/europepmc/annotations_api/",
         "review_only": True,
     }
 
@@ -1713,6 +2115,28 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
         features = _interpro_protein_fields(payload_dict)
     elif tool_name == "UniProt_get_entry_by_accession":
         features = _uniprot_fields(payload_dict)
+    elif tool_name == "FAVOR_annotate_variant":
+        favor_payload = raw.get("data")
+        favor_payload = (
+            favor_payload if isinstance(favor_payload, dict) else payload_dict
+        )
+        features = _favor_fields(favor_payload, raw)
+    elif tool_name in {
+        "OpenTargets_get_variant_info",
+        "OpenTargets_get_variant_transcript_consequences",
+    }:
+        features = _open_targets_consequence_fields(payload_dict)
+    elif tool_name in {
+        "GenomeNexus_annotate_variant",
+        "GenomeNexus_annotate_dbsnp",
+    }:
+        features = _genome_nexus_fields(payload_dict)
+    elif tool_name == "Mutalyzer_normalize_variant":
+        features = _mutalyzer_fields(payload_dict)
+    elif tool_name == "ProtVar_map_variant":
+        features = _protvar_fields(payload_dict)
+    elif tool_name == "gProfiler_annotate_snps":
+        features = _gprofiler_snp_fields(payload)
     elif "variantvalidator" in name:
         features = _variantvalidator_fields(raw)
     elif "myvariant" in name:
@@ -1757,8 +2181,14 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
         "LitVar_search_variants",
         "LitVar_get_variant_publications",
         "EuropePMC_search_articles",
+        "PubTator3_LiteratureSearch",
     }:
         features = _literature_search_fields(tool_name, payload, raw)
+    elif tool_name in {
+        "PubTator3_get_annotations",
+        "EPMC_get_text_mined_annotations",
+    }:
+        features = _literature_annotation_fields(tool_name, payload, raw)
     elif category == "population":
         features = _population_fields(payload_dict)
     elif "clinvar" in name:

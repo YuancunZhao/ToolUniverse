@@ -18,6 +18,7 @@ from tooluniverse.acmg_runtime_tools import ACMGEvidenceCollector
 from tooluniverse.acmg.collector import (
     ACMGEvidencePipeline,
     _literature_candidate_index,
+    _literature_review_state,
 )
 from tooluniverse.acmg.cspec import cspec_content_hash
 from tooluniverse.acmg.models import SourceFact
@@ -113,6 +114,205 @@ def test_literature_candidate_index_deduplicates_cross_provider_hits():
     ]
     assert candidates[0]["source_fact_ids"] == ["epmc", "litvar", "pubmed"]
     assert candidates[0]["full_text_available"] is True
+
+
+def test_literature_candidate_index_does_not_treat_inepmc_as_full_text():
+    facts = {
+        "epmc": _source_fact(
+            "EuropePMC_search_articles",
+            "epmc",
+            {
+                "query": 'DNAH1 AND "NM_015512.5:c.11726_11727del"',
+                "articles": [
+                    {
+                        "pmid": "999",
+                        "title": "DNAH1 NM_015512.5:c.11726_11727del",
+                        "abstract": "The variant was observed in one family.",
+                        "inEPMC": True,
+                    }
+                ],
+            },
+        )
+    }
+
+    candidates = _literature_candidate_index(
+        facts,
+        identity={
+            "gene": "DNAH1",
+            "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+        },
+        arguments={"gene": "DNAH1"},
+    )
+
+    assert candidates[0]["match_class"] == "exact_variant_match"
+    assert candidates[0]["full_text_available"] is False
+    assert candidates[0]["full_text_status"] == "abstract_only"
+
+
+def test_literature_candidate_recognizes_historical_deletion_and_protein_aliases():
+    facts = {
+        "pubmed": _source_fact(
+            "PubMed_search_articles",
+            "pubmed",
+            {
+                "articles": [
+                    {
+                        "pmid": "27573432",
+                        "title": (
+                            "DNAH1 c.11726_11727delCT "
+                            "(p.P3909Rfs*33) in infertility"
+                        ),
+                    }
+                ]
+            },
+        )
+    }
+    candidates = _literature_candidate_index(
+        facts,
+        identity={
+            "gene": "DNAH1",
+            "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+            "hgvs_p": "NP_056327.4:p.Pro3909ArgfsTer33",
+            "coordinates": {
+                "chr": "3",
+                "pos": 52396982,
+                "ref": "CCT",
+                "alt": "C",
+            },
+        },
+        arguments={
+            "variant": "NM_015512.5:c.11726_11727del",
+            "gene": "DNAH1",
+        },
+    )
+
+    assert candidates[0]["match_class"] == "equivalent_variant_match"
+    assert {
+        "NM_015512.5:c.11726_11727delCT",
+        "c.11726_11727delCT",
+        "p.P3909Rfs*33",
+    }.intersection(candidates[0]["matched_variant_aliases"])
+
+
+def test_literature_candidate_does_not_promote_gene_only_article_to_variant_match():
+    facts = {
+        "pubmed": _source_fact(
+            "PubMed_search_articles",
+            "pubmed",
+            {
+                "articles": [
+                    {
+                        "pmid": "37457836",
+                        "title": "Novel compound heterozygous variants in DNAH1",
+                        "abstract": "DNAH1 was studied in one family.",
+                    }
+                ]
+            },
+        )
+    }
+    candidates = _literature_candidate_index(
+        facts,
+        identity={
+            "gene": "DNAH1",
+            "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+        },
+        arguments={
+            "variant": "NM_015512.5:c.11726_11727del",
+            "gene": "DNAH1",
+        },
+    )
+
+    assert candidates[0]["match_class"] == "gene_disease_background"
+
+
+def test_literature_identifier_conflicts_do_not_merge_records():
+    facts = {
+        "pubmed": _source_fact(
+            "PubMed_search_articles",
+            "pubmed",
+            {
+                "articles": [
+                    {
+                        "pmid": "123",
+                        "doi": "10.1/left",
+                        "title": "First record",
+                    }
+                ]
+            },
+        ),
+        "epmc": _source_fact(
+            "EuropePMC_search_articles",
+            "epmc",
+            {
+                "articles": [
+                    {
+                        "pmid": "123",
+                        "doi": "10.1/right",
+                        "title": "Second record",
+                    }
+                ]
+            },
+        ),
+    }
+
+    candidates = _literature_candidate_index(facts)
+
+    assert len(candidates) == 2
+    assert len({row["publication_id"] for row in candidates}) == 2
+    assert all(row["identifier_conflicts"] for row in candidates)
+
+
+def test_literature_review_request_is_executable_and_idempotent():
+    candidates = [
+        {
+            "publication_id": "pmid:999",
+            "pmid": "999",
+            "pmcid": "",
+            "match_class": "exact_variant_match",
+            "matched_variant_aliases": ["NM_015512.5:c.11726_11727del"],
+            "full_text_status": "availability_unknown",
+        }
+    ]
+    state = _literature_review_state(
+        candidates,
+        {},
+        identity={
+            "gene": "DNAH1",
+            "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+        },
+        arguments={"gene": "DNAH1"},
+    )
+
+    request = state["review_requests"][0]
+    assert state["workflow_status"] == "literature_review_required"
+    assert request["state"] == "pending"
+    assert request["tool_attempts"] == [
+        {
+            "tool_name": "EuropePMC_get_full_text",
+            "arguments": {"pmid": "999"},
+            "max_attempts": 1,
+        },
+        {
+            "tool_name": "EuropePMC_get_fulltext",
+            "arguments": {
+                "source_db": "MED",
+                "article_id": "999",
+                "output_format": "text",
+                "max_chars": 2000000,
+            },
+            "max_attempts": 1,
+        },
+    ]
+    repeated = _literature_review_state(
+        candidates,
+        {},
+        identity={
+            "gene": "DNAH1",
+            "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+        },
+        arguments={"gene": "DNAH1"},
+    )
+    assert repeated["review_requests"][0]["request_id"] == request["request_id"]
 
 
 def test_collector_accepts_minimal_input():
@@ -1195,6 +1395,10 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "compatibility_report",
         "conflict_report",
         "literature_candidates",
+        "literature_review",
+        "recoverable_gaps",
+        "workflow_status",
+        "next_actions",
         "system_preview_bayesian",
         "user_selected_bayesian",
         "decision_report",
@@ -1426,10 +1630,21 @@ class _ConsequenceFallbackToolUniverse:
     def __init__(self, outcomes: list[str]):
         self.outcomes = list(outcomes)
         self.calls = []
+        self.vep_call_count = 0
 
     def run_one_function(self, call, **kwargs):
         self.calls.append(call)
-        outcome = self.outcomes[len(self.calls) - 1]
+        if call["name"] not in {
+            "EnsemblVEP_annotate_hgvs",
+            "EnsemblVEP_annotate_rsid",
+        }:
+            return {"status": "unavailable", "reason": "fixture provider unavailable"}
+        outcome = (
+            self.outcomes[self.vep_call_count]
+            if self.vep_call_count < len(self.outcomes)
+            else "empty"
+        )
+        self.vep_call_count += 1
         features = {
             "chr": "4",
             "pos": 1803931,
@@ -1457,14 +1672,19 @@ class _ConsequenceFallbackToolUniverse:
         }
 
 
-def test_consequence_prefers_selected_transcript_hgvs_and_stops_on_success():
+def test_consequence_collects_all_sources_but_prefers_selected_transcript_hgvs():
     runtime = _ConsequenceFallbackToolUniverse(["resolved"])
     pipeline = ACMGEvidencePipeline(runtime)
     calls, diagnostics = pipeline._consequence_calls(_consequence_identity())
 
-    assert len(calls) == 1
+    assert len(calls) > 3
     assert calls[0].arguments == {"hgvs_notation": "NM_000142.5:c.1075+95C>G"}
     assert diagnostics["annotation_status"] == "resolved"
+    assert any(call.tool_name == "FAVOR_annotate_variant" for call in calls)
+    assert any(
+        call.tool_name == "OpenTargets_get_variant_transcript_consequences"
+        for call in calls
+    )
     assert diagnostics["attempted_representations"][0]["representation"] == (
         "selected_transcript_hgvs"
     )
@@ -1475,13 +1695,13 @@ def test_consequence_empty_transcript_result_falls_back_to_genomic_hgvs():
     pipeline = ACMGEvidencePipeline(runtime)
     calls, diagnostics = pipeline._consequence_calls(_consequence_identity())
 
-    assert [call.arguments for call in calls] == [
+    assert [call.arguments for call in calls[:2]] == [
         {"hgvs_notation": "NM_000142.5:c.1075+95C>G"},
         {"hgvs_notation": "NC_000004.12:g.1803931C>G"},
     ]
     assert diagnostics["annotation_status"] == "resolved"
     assert diagnostics["attempted_representations"][0]["outcome"] == (
-        "no_assessment_ready_annotation"
+        "queried"
     )
 
 
@@ -1493,25 +1713,34 @@ def test_consequence_all_representations_empty_reports_exact_limitation():
     facts = pipeline._source_facts(calls, identity)
     profile = pipeline._profile_from_facts(identity, facts, diagnostics)
 
-    assert [row["representation"] for row in profile["attempted_representations"]] == [
+    representations = {
+        row["representation"] for row in profile["attempted_representations"]
+    }
+    assert {
         "selected_transcript_hgvs",
         "genomic_hgvs",
         "rsid_single_allele",
-    ]
+        "vep_region",
+        "variantvalidator_all_transcripts",
+        "favor_grch38",
+        "opentargets_transcripts",
+    } <= representations
     assert profile["status"] == "unavailable"
-    assert profile["annotation_status"] == "empty"
-    assert profile["annotation_reason"] == "consequence_annotation_empty"
+    assert profile["annotation_status"] == "unavailable"
+    assert profile["annotation_reason"] == (
+        "no_identity_bound_selected_transcript_consequence"
+    )
 
 
-def test_consequence_identity_conflict_stops_without_fallback():
+def test_consequence_identity_conflict_fails_closed_after_all_sources_run():
     runtime = _ConsequenceFallbackToolUniverse(["conflict"])
     pipeline = ACMGEvidencePipeline(runtime)
     calls, diagnostics = pipeline._consequence_calls(_consequence_identity())
 
-    assert len(calls) == 1
+    assert len(calls) > 3
     assert diagnostics["annotation_status"] == "identity_conflict"
     assert diagnostics["annotation_reason"] == (
-        "consequence_annotation_identity_conflict"
+        "consequence_provider_identity_conflict"
     )
 
 
@@ -1522,7 +1751,7 @@ def test_consequence_rsid_fallback_requires_verified_single_allele():
         _consequence_identity()
     )
 
-    assert single_calls[-1].tool_name == "EnsemblVEP_annotate_rsid"
+    assert any(call.tool_name == "EnsemblVEP_annotate_rsid" for call in single_calls)
     assert single_diagnostics["annotation_status"] == "resolved"
 
     runtime = _ConsequenceFallbackToolUniverse(["empty", "empty"])
@@ -1531,9 +1760,141 @@ def test_consequence_rsid_fallback_requires_verified_single_allele():
         _consequence_identity(multiallelic=True)
     )
 
-    assert len(calls) == 2
     assert all(call.tool_name != "EnsemblVEP_annotate_rsid" for call in calls)
-    assert diagnostics["annotation_reason"] == "consequence_annotation_empty"
+    assert all(call.tool_name != "GenomeNexus_annotate_dbsnp" for call in calls)
+    assert all(call.tool_name != "gProfiler_annotate_snps" for call in calls)
+    assert diagnostics["annotation_reason"] == (
+        "no_identity_bound_selected_transcript_consequence"
+    )
+
+
+class _DNAH1ConsequenceRecoveryToolUniverse:
+    """Frozen DNAH1 identity where VEP annotation is unavailable."""
+
+    def __init__(self):
+        self.calls = []
+
+    def run_one_function(self, call, **kwargs):
+        self.calls.append((call, kwargs))
+        name = call["name"]
+        if name == "VariantValidator_validate_variant":
+            return {
+                "status": "success",
+                "reviewable_features": {
+                    "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+                    "hgvs_c": "NM_015512.5:c.11726_11727del",
+                    "hgvs_g": "NC_000003.12:g.52396983_52396984del",
+                    "hgvs_p": "NP_056327.4:p.Pro3909ArgfsTer33",
+                    "gene": "DNAH1",
+                    "transcript": "NM_015512.5",
+                    "build": "GRCh38",
+                    "chr": "3",
+                    "pos": 52396982,
+                    "ref": "CCT",
+                    "alt": "C",
+                    "provider_version": "VariantValidator fixture",
+                },
+            }
+        if name == "EnsemblVEP_variant_recoder":
+            return {
+                "status": "success",
+                "reviewable_features": {
+                    "validated_hgvs_c": "NM_015512.5:c.11726_11727del",
+                    "hgvs_c": "NM_015512.5:c.11726_11727del",
+                    "hgvs_g": "NC_000003.12:g.52396983_52396984del",
+                    "hgvs_p": "NP_056327.4:p.Pro3909ArgfsTer33",
+                    "hgvsc_candidates": ["NM_015512.5:c.11726_11727del"],
+                    "hgvsg_candidates": [
+                        "NC_000003.12:g.52396983_52396984del"
+                    ],
+                    "allele_candidates": [
+                        {
+                            "hgvsc": ["NM_015512.5:c.11726_11727del"],
+                            "hgvsg": [
+                                "NC_000003.12:g.52396983_52396984del"
+                            ],
+                            "hgvsp": [
+                                "NP_056327.4:p.Pro3909ArgfsTer33"
+                            ],
+                        }
+                    ],
+                    "gene": "DNAH1",
+                    "transcript": "NM_015512.5",
+                    "build": "GRCh38",
+                    "chr": "3",
+                    "pos": 52396982,
+                    "ref": "CCT",
+                    "alt": "C",
+                    "provider_version": "Ensembl recoder fixture",
+                },
+            }
+        if name in {
+            "EnsemblVEP_annotate_hgvs",
+            "EnsemblVEP_annotate_rsid",
+            "ensembl_vep_region",
+        }:
+            return {"status": "unavailable", "reason": "VEP fixture outage"}
+        if name == "VariantValidator_format_genomic_to_transcripts":
+            return {
+                "metadata": {"variantformatter_version": "fixture-2.2"},
+                "submitted": {
+                    "normalized": {
+                        "g_hgvs": "NC_000003.12:g.52396983_52396984del",
+                        "hgvs_t_and_p": {
+                            "NM_015512.5": {
+                                "t_hgvs": "NM_015512.5:c.11726_11727del",
+                                "p_hgvs": (
+                                    "NP_056327.4:p.Pro3909ArgfsTer33"
+                                ),
+                                "gene_info": {"symbol": "DNAH1"},
+                                "select_status": {"mane_select": True},
+                            }
+                        },
+                    }
+                },
+            }
+        return {"status": "unavailable", "reason": "fixture provider unavailable"}
+
+
+def test_dnah1_vep_outage_recovers_consequence_without_inventing_nmd():
+    runtime = _DNAH1ConsequenceRecoveryToolUniverse()
+    result = _make_tool(runtime).run(
+        {
+            "variant": "NM_015512.5:c.11726_11727del",
+            "gene": "DNAH1",
+            "transcript": "NM_015512.5",
+            "response_detail": "full",
+        }
+    )
+
+    assert result["status"] == "degraded"
+    assert result["variant_identity"]["hgvs_c"] == (
+        "NM_015512.5:c.11726_11727del"
+    )
+    assert result["consequence_profile"]["annotation_status"] == "resolved"
+    assert result["consequence_profile"]["selected_provider"] == (
+        "VariantValidator_format_genomic_to_transcripts"
+    )
+    assert result["consequence_profile"]["selected_transcript_terms"] == [
+        "frameshift_variant"
+    ]
+    assert any(
+        row["code"] == "consequence_primary_provider_failed_but_alternatives_available"
+        and row["status"] == "recovered"
+        for row in result["recoverable_gaps"]
+    )
+    assert {
+        row["code"]
+        for row in result["recoverable_gaps"]
+        if row["status"] == "unresolved"
+    } >= {"exon_structure_missing", "nmd_facts_missing"}
+    pvs1 = next(
+        row for row in result["evidence_cards"] if row["criterion"] == "PVS1"
+    )
+    assert pvs1["assessment_status"] == "not_assessed"
+    serialized = json.dumps(result, ensure_ascii=False)
+    assert "73/82" not in serialized
+    assert "PTC in exon 73" not in serialized
 
 
 def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
@@ -1897,6 +2258,76 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
     )
     assert fact["features"]["anchor_status"] == "verified"
     assert fact["features"]["semantic_status"] == "contradicted"
+
+
+def test_stale_document_hash_excludes_literature_proposal():
+    proposal = _case_control_literature_proposal(
+        document_hash="stale-document-hash",
+        review_request_id="acmg-literature-review:v1:fixture",
+        reading_manifest={
+            "status": "complete",
+            "sections_read": ["methods", "results"],
+            "tables_read": ["table 1"],
+            "figures_read": [],
+            "supplements_read": [],
+            "variant_match_locations": ["results"],
+            "limitations": [],
+        },
+    )
+    result = _make_tool(_FakeToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+        }
+    )
+
+    card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
+    fact = next(
+        row
+        for row in result["source_facts"]
+        if row["fact_id"] in card["source_fact_ids"]
+    )
+    assert card["system_preview_included"] is False
+    assert fact["assessment_ready"] is False
+    assert fact["features"]["anchor_status"] == "mismatch"
+    assert any(
+        "document_hash" in message
+        for message in fact["features"]["validation_errors"]
+    )
+
+
+def test_abstract_only_literature_proposal_stays_source_lead():
+    proposal = _case_control_literature_proposal(
+        reading_manifest={
+            "status": "abstract_only",
+            "sections_read": ["abstract"],
+            "tables_read": [],
+            "figures_read": [],
+            "supplements_read": [],
+            "variant_match_locations": ["abstract"],
+            "limitations": ["full text unavailable"],
+        }
+    )
+    result = _make_tool(_FakeToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+        }
+    )
+
+    card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
+    fact = next(
+        row
+        for row in result["source_facts"]
+        if row["fact_id"] in card["source_fact_ids"]
+    )
+    assert card["system_preview_included"] is False
+    assert fact["assessment_ready"] is False
+    assert fact["features"]["reading_manifest"]["status"] == "abstract_only"
 
 
 def test_user_decision_recalculates_only_accepted_stable_cards():

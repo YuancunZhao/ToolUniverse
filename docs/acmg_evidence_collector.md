@@ -57,16 +57,25 @@ Runtime data-source notes:
   the same forward-strand normalization. VEP requests include `mane=1` so
   consequence routing can bind Ensembl transcripts to the identity-selected
   RefSeq MANE transcript.
-- After identity is fixed, consequence annotation uses a separate bounded
-  representation chain: identity-selected transcript HGVS, then exact genomic
-  HGVS, then rsID only when normalization proved one genomic allele and kept
-  no allele alternatives. The next representation is attempted only after a
-  successful but unusable selected-transcript annotation. A contradictory
-  provider identity stops the chain immediately. `consequence_profile`
-  records `annotation_status`, `attempted_representations`, and
-  `annotation_reason`; if every allowed representation is empty, the reason is
-  `consequence_annotation_empty` and PP3/BP4, PM1, and PVS1 remain
-  `not_assessed` rather than inferring a consequence.
+- After identity is fixed, consequence annotation uses conditional exhaustive
+  collection rather than a VEP-only fallback chain. Applicable calls include
+  selected-transcript/genomic/single-allele-rsID/region VEP,
+  VariantValidator/VariantFormatter, FAVOR, OpenTargets transcript
+  consequences, Mutalyzer, GRCh37 GenomeNexus, and protein-representable
+  ProtVar. A failure or empty result from one provider never stops the other
+  read-only calls.
+- Every observation records build, allele, gene, transcript/MANE mapping,
+  HGVS c./p., SO terms, impact, biotype, exon/protein position, provider
+  version, query representation, identity status, and whether its method is
+  independent, VEP-derived, or an aggregation. The deterministic resolver
+  selects exact RefSeq, unique MANE, then version-compatible transcript
+  observations. It does not vote. Contradictory build, allele, gene,
+  transcript, consequence, or protein results fail closed.
+- `consequence_profile` reports all observations, selected and corroborating
+  SourceFacts, failures, conflicts, mapping reason, and missing requirements.
+  PVS1 may consume a uniquely resolved non-VEP observation, but consequence or
+  HIGH impact alone cannot supply exon structure, PTC/NMD, or disease
+  mechanism.
 
 ## Conditional exhaustive provider collection
 
@@ -78,10 +87,19 @@ ClinGen classifications, dosage, actionability, and all database labels remain
 themselves.
 
 Literature discovery combines LitVar, PubMed (abstracts requested, up to 50),
-and Europe PMC. Results are deduplicated by PMID, PMCID, then DOI while
-preserving every provider hit and query representation. Open full text can be
-anchored for `literature_proposals`; abstract-only or inaccessible records
-remain visible leads.
+Europe PMC, and paginated PubTator. It builds exact, equivalent, historical,
+protein, rsID, and coordinate aliases into provider-specific combined queries.
+Results are merged as a PMID/PMCID/DOI identifier graph while preserving every
+provider hit and query representation; conflicting identifiers are reported
+rather than merged.
+
+Full-text state is explicit:
+`full_text_verified_available`, `full_text_unavailable`, `abstract_only`,
+`index_record_only`, or `availability_unknown`. `inEPMC`, snippets, and
+text-mining hits do not prove full-text availability. Exact/equivalent papers
+produce executable `literature_review.review_requests` and `next_actions`.
+The host tries each listed legal full-text source once, reads the complete
+accessible article, and submits a reading manifest plus structured proposals.
 
 When a verified protein accession is available, the collector requests the
 complete UniProt entry together with EBI Proteins variation/features and
@@ -323,6 +341,10 @@ fetches the cited EuropePMC full text and verifies:
 - Variant and gene binding.
 - Extractor name and version.
 - A matching excerpt for every consumed structured field.
+- A reading manifest recording `complete`, `partial`, `abstract_only`, or
+  `unavailable` status; sections, tables, figures, and supplements reviewed;
+  variant-match locations; document hash when available; and missing-content
+  limitations.
 - A machine-anchored quote and locator match, or stronger host-curator
   verification, before the fact can support a candidate card.
 - A stable fact ID used for duplicate detection.
@@ -340,18 +362,25 @@ mechanism text remains visible background. Deterministic PS2/PM6, PM3, and
 PS3/BS3 engines consume their structured facts and retain the LLM explanation
 on that one rule card rather than creating a second generic card.
 
-## Dynamic CSpec and literature review cycle
+## Dynamic CSpec and literature automatic cycle
 
-1. Call the collector to discover the uniquely applicable online CSpec,
-   `cspec_review_requests`, literature gaps, and current provider facts.
-2. The host LLM reads the cited full text and CSpec passages and prepares
-   `literature_proposals` and/or `cspec_proposals` with exact locators,
-   excerpts, structured facts, confidence, questions, and extractor version.
-3. Call the collector again. It re-fetches the sources, verifies anchors and
-   hashes, maps facts to rules, emits one EvidenceCard per semantic evidence
+1. Call the collector and inspect `workflow_status`, `recoverable_gaps`,
+   `next_actions`, literature requests, and CSpec requests.
+2. The collector completes applicable consequence recovery internally. The
+   host automatically executes pending CSpec/full-text actions without asking
+   whether to continue.
+3. The host reads complete accessible papers section by section, including
+   relevant tables, figures, captions, and supplements, and prepares
+   `literature_proposals`/`cspec_proposals` with exact anchors, structured
+   facts, reading manifests, confidence, questions, and extractor version.
+4. Call the collector again automatically. It re-fetches sources, verifies
+   anchors and hashes, maps facts to rules, emits one EvidenceCard per semantic
    unit, checks conflicts, and computes the system preview.
-4. After user review, call it again with `evidence_decisions` to compute the
-   user-selected estimate.
+5. Process only newly discovered request IDs on at most one incremental pass.
+   Stable full-text failure ends as `blocked_external_full_text`, not an
+   infinite loop.
+6. User `evidence_decisions` are a separate optional round used only to
+   calculate the user-selected estimate.
 
 ## System preview and user-selected estimate
 
