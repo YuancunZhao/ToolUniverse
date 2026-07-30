@@ -617,16 +617,22 @@ class WebAPIDocumentationSearchTool(WebSearchTool):
             else:
                 enhanced_query = f'"{query}" documentation API reference'
 
-            # Use parent class search with enhanced query
-            arguments["query"] = enhanced_query
-            arguments["search_type"] = "api_documentation"
-            arguments["backend"] = backend
+            # The query is already focus-enhanced above. Pass it through the
+            # parent as a general search so it is not enhanced a second time,
+            # and do not mutate the caller's arguments dictionary.
+            parent_arguments = {
+                **arguments,
+                "query": enhanced_query,
+                "search_type": "general",
+                "backend": backend,
+            }
 
-            result = super().run(arguments)
+            result = super().run(parent_arguments)
 
             # Extract data from parent result and add focus-specific metadata
             if result["status"] == "success" and "data" in result:
                 result_data = result["data"]
+                result_data["search_type"] = "api_documentation"
                 result_data["focus"] = focus
                 result_data["enhanced_query"] = enhanced_query
 

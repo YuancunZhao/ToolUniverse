@@ -12,11 +12,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from tooluniverse import web_search_tool
 from tooluniverse.mcp_client_tool import BaseMCPClient
-from tooluniverse.web_search_tool import WebSearchTool
+from tooluniverse.web_search_tool import (
+    WebAPIDocumentationSearchTool,
+    WebSearchTool,
+)
 
 
 def _new_tool():
     return WebSearchTool({"name": "web_search", "parameter": {"type": "object"}})
+
+
+def _new_api_docs_tool():
+    return WebAPIDocumentationSearchTool(
+        {
+            "name": "web_api_documentation_search",
+            "parameter": {"type": "object"},
+        }
+    )
 
 
 @pytest.mark.unit
@@ -196,6 +208,89 @@ def test_parallel_search_uses_mcp_and_normalizes_structured_results(monkeypatch)
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"isError": True},
+        {"isError": False},
+        {"isError": False, "structuredContent": {"results": {}}},
+    ],
+)
+def test_parallel_search_rejects_error_or_malformed_mcp_responses(
+    monkeypatch, response
+):
+    class FakeMCPClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def _make_mcp_request(self, method, params):
+            return response
+
+        def _run_with_cleanup(self, async_func):
+            import asyncio
+
+            return asyncio.run(async_func())
+
+    monkeypatch.setattr(web_search_tool, "BaseMCPClient", FakeMCPClient)
+
+    with pytest.raises(RuntimeError):
+        _new_tool()._search_with_parallel("test query", max_results=2)
+
+
+@pytest.mark.unit
+def test_parallel_search_skips_malformed_items_and_reassigns_ranks(monkeypatch):
+    class FakeMCPClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def _make_mcp_request(self, method, params):
+            return {
+                "isError": False,
+                "structured_content": {
+                    "results": [
+                        None,
+                        {},
+                        {"url": ""},
+                        {
+                            "title": None,
+                            "url": "https://example.com/valid",
+                            "excerpts": ["Valid excerpt.", 7],
+                        },
+                        {
+                            "title": 12,
+                            "url": "https://example.com/second",
+                            "excerpts": "not a list",
+                        },
+                    ]
+                },
+            }
+
+        def _run_with_cleanup(self, async_func):
+            import asyncio
+
+            return asyncio.run(async_func())
+
+    monkeypatch.setattr(web_search_tool, "BaseMCPClient", FakeMCPClient)
+
+    results = _new_tool()._search_with_parallel("test query", max_results=2)
+
+    assert results == [
+        {
+            "title": "",
+            "url": "https://example.com/valid",
+            "snippet": "Valid excerpt.",
+            "rank": 1,
+        },
+        {
+            "title": "",
+            "url": "https://example.com/second",
+            "snippet": "",
+            "rank": 2,
+        },
+    ]
+
+
+@pytest.mark.unit
 def test_parallel_backend_reports_success(monkeypatch):
     tool = _new_tool()
     monkeypatch.setattr(
@@ -280,6 +375,27 @@ def test_parallel_backend_failure_falls_back_to_auto(monkeypatch):
 
 
 @pytest.mark.unit
+def test_parallel_all_provider_failure_keeps_disclosure(monkeypatch):
+    tool = _new_tool()
+
+    def always_fail(**kwargs):
+        raise RuntimeError("simulated provider failure")
+
+    monkeypatch.setattr(tool, "_search_with_parallel", always_fail)
+    monkeypatch.setattr(tool, "_search_with_ddgs", always_fail)
+    monkeypatch.setattr(tool, "_search_with_duckduckgo_html", always_fail)
+    monkeypatch.setattr(tool, "_search_with_wikipedia_api", always_fail)
+
+    result = tool.run({"query": "test query", "backend": "parallel"})
+
+    assert result["status"] == "success"
+    assert result["data"]["backend_used"] == "none"
+    assert result["data"]["all_providers_failed"] is True
+    assert result["data"]["attempted_backends"][0] == "parallel"
+    assert "search.parallel.ai/mcp" in result["data"]["provider_notice"]
+
+
+@pytest.mark.unit
 def test_auto_backend_does_not_call_parallel(monkeypatch):
     tool = _new_tool()
 
@@ -306,3 +422,49 @@ def test_auto_backend_does_not_call_parallel(monkeypatch):
     assert result["data"]["backend_used"] == "duckduckgo"
     assert "parallel" not in result["data"]["attempted_backends"]
     assert "provider_notice" not in result["data"]
+
+
+@pytest.mark.unit
+def test_api_documentation_search_enhances_query_once_without_mutating_input(
+    monkeypatch,
+):
+    tool = _new_api_docs_tool()
+    captured = {}
+
+    def fake_search(**kwargs):
+        captured.update(kwargs)
+        return (
+            [
+                {
+                    "title": "FastMCP Client",
+                    "url": "https://gofastmcp.com/clients/client",
+                    "snippet": "Client documentation",
+                    "rank": 1,
+                }
+            ],
+            "parallel",
+            ["parallel"],
+            None,
+            {},
+        )
+
+    monkeypatch.setattr(tool, "_search_with_fallback", fake_search)
+    monkeypatch.setattr(web_search_tool.time, "sleep", lambda _: None)
+    arguments = {
+        "query": "FastMCP Client",
+        "focus": "api_docs",
+        "backend": "parallel",
+        "max_results": 4,
+    }
+    original_arguments = dict(arguments)
+
+    result = tool.run(arguments)
+
+    expected_query = '"FastMCP Client" API documentation official docs'
+    assert captured["query"] == expected_query
+    assert result["status"] == "success"
+    assert result["data"]["query"] == expected_query
+    assert result["data"]["enhanced_query"] == expected_query
+    assert result["data"]["search_type"] == "api_documentation"
+    assert result["data"]["focus"] == "api_docs"
+    assert arguments == original_arguments
