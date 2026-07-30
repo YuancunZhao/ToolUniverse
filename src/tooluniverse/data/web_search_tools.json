@@ -2,7 +2,7 @@
   {
     "type": "WebSearchTool",
     "name": "web_search",
-    "description": "General web search using DDGS (Dux Distributed Global Search) supporting multiple search engines including Google, Bing, Brave, Yahoo, and DuckDuckGo. No API keys required. Parallel Search MCP is available as an optional backend.",
+    "description": "General web search using DDGS (Dux Distributed Global Search) supporting multiple search engines including Google, Bing, Brave, Yahoo, and DuckDuckGo. No API keys required. Parallel Search MCP is opt-in; selecting it sends the query to Parallel's hosted third-party service, so do not submit sensitive or patient-identifying information.",
     "parameter": {
       "type": "object",
       "properties": {
@@ -30,7 +30,7 @@
         },
         "backend": {
           "type": "string",
-          "description": "Search engine backend to use",
+          "description": "Search engine backend to use. Selecting 'parallel' sends the query to https://search.parallel.ai/mcp; that backend does not apply ToolUniverse region or safesearch controls.",
           "enum": [
             "auto",
             "parallel",
@@ -44,7 +44,7 @@
         },
         "region": {
           "type": "string",
-          "description": "Search region/locale",
+          "description": "Search region/locale for DDGS backends. Parallel does not support this control; only the default value is accepted with backend='parallel'.",
           "enum": [
             "us-en",
             "cn-zh",
@@ -57,7 +57,7 @@
         },
         "safesearch": {
           "type": "string",
-          "description": "Safe search level",
+          "description": "Safe search level for DDGS backends. Parallel does not support this control; only the default value is accepted with backend='parallel'.",
           "enum": [
             "on",
             "moderate",
@@ -129,6 +129,10 @@
                   "type": "string"
                 }
               }
+            },
+            "provider_notice": {
+              "type": "string",
+              "description": "Disclosure included when the query was sent to a hosted third-party backend."
             }
           },
           "required": [
@@ -177,7 +181,7 @@
   {
     "type": "WebAPIDocumentationSearchTool",
     "name": "web_api_documentation_search",
-    "description": "Specialized web search for API documentation, Python packages, and technical resources using DDGS with multiple search engines. Optimized for finding official documentation and library information. Parallel Search MCP is available as an optional backend.",
+    "description": "Specialized web search for API documentation, Python packages, and technical resources using DDGS with multiple search engines. Parallel Search MCP is opt-in; selecting it sends the query to Parallel's hosted third-party service, so do not submit sensitive information.",
     "parameter": {
       "type": "object",
       "properties": {
@@ -204,7 +208,7 @@
         },
         "backend": {
           "type": "string",
-          "description": "Search engine backend to use",
+          "description": "Search engine backend to use. Selecting 'parallel' sends the query to https://search.parallel.ai/mcp.",
           "enum": [
             "auto",
             "parallel",
@@ -280,6 +284,10 @@
                   "type": "string"
                 }
               }
+            },
+            "provider_notice": {
+              "type": "string",
+              "description": "Disclosure included when the query was sent to a hosted third-party backend."
             },
             "focus": {
               "type": "string"

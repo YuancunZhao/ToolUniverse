@@ -211,11 +211,42 @@ def test_parallel_backend_reports_success(monkeypatch):
         ],
     )
 
-    result = tool.run({"query": "test query", "backend": "parallel"})
+    result = tool.run(
+        {
+            "query": "test query",
+            "backend": "parallel",
+            "region": "us-en",
+            "safesearch": "moderate",
+        }
+    )
 
     assert result["status"] == "success"
     assert result["data"]["backend_used"] == "parallel"
     assert result["data"]["attempted_backends"] == ["parallel"]
+    assert "search.parallel.ai/mcp" in result["data"]["provider_notice"]
+    assert "patient-identifying" in result["data"]["provider_notice"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("control", "value"),
+    [("region", "cn-zh"), ("safesearch", "off")],
+)
+def test_parallel_backend_rejects_unsupported_controls(monkeypatch, control, value):
+    tool = _new_tool()
+
+    def unexpected_parallel_call(**kwargs):
+        raise AssertionError("Unsupported controls must fail before transmission")
+
+    monkeypatch.setattr(tool, "_search_with_parallel", unexpected_parallel_call)
+
+    result = tool.run(
+        {"query": "sensitive query", "backend": "parallel", control: value}
+    )
+
+    assert result["status"] == "error"
+    assert control in result["error"]
+    assert "does not support" in result["error"]
 
 
 @pytest.mark.unit
@@ -245,6 +276,7 @@ def test_parallel_backend_failure_falls_back_to_auto(monkeypatch):
     assert result["data"]["backend_used"] == "auto"
     assert result["data"]["attempted_backends"] == ["parallel", "auto"]
     assert result["data"]["provider_errors"]["parallel"] == "parallel failed"
+    assert "search.parallel.ai/mcp" in result["data"]["provider_notice"]
 
 
 @pytest.mark.unit
@@ -273,3 +305,4 @@ def test_auto_backend_does_not_call_parallel(monkeypatch):
     assert result["status"] == "success"
     assert result["data"]["backend_used"] == "duckduckgo"
     assert "parallel" not in result["data"]["attempted_backends"]
+    assert "provider_notice" not in result["data"]

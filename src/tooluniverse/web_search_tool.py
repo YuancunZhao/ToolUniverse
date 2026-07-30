@@ -16,6 +16,12 @@ from .mcp_client_tool import BaseMCPClient
 from .tool_registry import register_tool
 
 PARALLEL_SEARCH_MCP_URL = "https://search.parallel.ai/mcp"
+PARALLEL_PROVIDER_NOTICE = (
+    "Query sent to Parallel's hosted third-party Search MCP service at "
+    f"{PARALLEL_SEARCH_MCP_URL}. ToolUniverse region and safesearch controls "
+    "are not applied by this backend; do not submit sensitive or "
+    "patient-identifying information."
+)
 
 
 @register_tool("WebSearchTool")
@@ -453,6 +459,31 @@ print(json.dumps(results))
                     },
                 }
 
+            if backend == "parallel":
+                unsupported_controls = []
+                if region != "us-en":
+                    unsupported_controls.append("region")
+                if safesearch != "moderate":
+                    unsupported_controls.append("safesearch")
+                if unsupported_controls:
+                    controls = ", ".join(unsupported_controls)
+                    error_msg = (
+                        "The Parallel backend does not support non-default "
+                        f"ToolUniverse controls: {controls}. Omit these controls "
+                        "or use a DDGS backend."
+                    )
+                    return {
+                        "status": "error",
+                        "error": error_msg,
+                        "data": {
+                            "status": "error",
+                            "error": error_msg,
+                            "query": query,
+                            "total_results": 0,
+                            "results": [],
+                        },
+                    }
+
             # Validate max_results
             max_results = max(1, min(max_results, 50))  # Limit between 1-50
 
@@ -480,7 +511,7 @@ print(json.dumps(results))
             )
 
             if search_warning:
-                return {
+                response = {
                     "status": "success",
                     "warning": search_warning,
                     "data": {
@@ -496,6 +527,9 @@ print(json.dumps(results))
                         "warning": search_warning,
                     },
                 }
+                if "parallel" in attempted_backends:
+                    response["data"]["provider_notice"] = PARALLEL_PROVIDER_NOTICE
+                return response
 
             # Add rate limiting to be respectful
             time.sleep(0.5)
@@ -511,6 +545,8 @@ print(json.dumps(results))
             }
             if provider_errors:
                 result_data["provider_errors"] = provider_errors
+            if "parallel" in attempted_backends:
+                result_data["provider_notice"] = PARALLEL_PROVIDER_NOTICE
 
             return {"status": "success", "data": result_data}
 
