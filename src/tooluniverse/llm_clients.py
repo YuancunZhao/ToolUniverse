@@ -508,9 +508,7 @@ class GeminiClient(BaseLLMClient):
                     return (
                         parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
                     )
-                return getattr(resp, "text", None) or getattr(resp, "candidates", [{}])[
-                    0
-                ].get("content")
+                return self._extract_text_from_stream_chunk(resp)
             except Exception as e:  # noqa: BLE001
                 self.logger.error(f"Gemini error: {e}")
                 retries += 1
@@ -521,15 +519,17 @@ class GeminiClient(BaseLLMClient):
     def _extract_text_from_stream_chunk(chunk) -> Optional[str]:
         if chunk is None:
             return None
-        text = getattr(chunk, "text", None)
-        if text:
-            return text
 
         candidates = getattr(chunk, "candidates", None)
-        if not candidates and isinstance(chunk, dict):
+        if candidates is None and isinstance(chunk, dict):
             candidates = chunk.get("candidates")
         if not candidates:
-            return None
+            text = (
+                chunk.get("text")
+                if isinstance(chunk, dict)
+                else getattr(chunk, "text", None)
+            )
+            return text or None
 
         candidate = candidates[0]
         content = getattr(candidate, "content", None)

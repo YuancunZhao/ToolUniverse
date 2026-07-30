@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -109,6 +110,40 @@ def test_infer_returns_dumped_custom_format():
     result = client.infer([], 0.0, None, False, custom_format={"type": "object"})
 
     assert result == {"field": "value"}
+
+
+def test_infer_extracts_text_without_accessing_response_text_property():
+    class ResponseWithGuardedText:
+        def __init__(self, candidates):
+            self.candidates = candidates
+
+        @property
+        def text(self):
+            raise AssertionError(
+                "response.text must not be read when parts are present"
+            )
+
+    client = GeminiClient.__new__(GeminiClient)
+    client.model_name = "gemini-3.6-flash"
+    client._build_config = mock.Mock(return_value=None)
+    response = ResponseWithGuardedText(
+        [
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[
+                        SimpleNamespace(thought_signature=b"signature"),
+                        SimpleNamespace(text='{"field": "value"}'),
+                    ]
+                )
+            )
+        ]
+    )
+    client._client = mock.Mock()
+    client._client.models.generate_content.return_value = response
+
+    result = client.infer([], 0.0, None, True)
+
+    assert result == '{"field": "value"}'
 
 
 def test_infer_stream_buffers_custom_format():
