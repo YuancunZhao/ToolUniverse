@@ -1583,7 +1583,7 @@ class ToolUniverse:
 
         Side Effects:
             - May add new tools to the tool registry
-            - Prints debug information about the discovery process
+            - Logs debug information about the discovery process
             - Updates tool counts after MCP registration
         """
         self.logger.debug("Starting _process_mcp_auto_loaders")
@@ -1695,14 +1695,14 @@ class ToolUniverse:
                                 f"  - Registered: {result.get('registered_count', 0)} tools"
                             )
 
-                            # Print detailed tool information
+                            # Log detailed tool information without polluting stdio stdout.
                             if result.get("tools"):
-                                print(
+                                info(
                                     f"  📋 Discovered MCP tools: {', '.join(result['tools'])}"
                                 )
 
                             if result.get("registered_tools"):
-                                print(
+                                info(
                                     f"  🔧 Registered tools in ToolUniverse: {', '.join(result['registered_tools'])}"
                                 )
                                 self.logger.debug(
@@ -1716,11 +1716,11 @@ class ToolUniverse:
                                 if name.startswith("expert_")
                             ]
                             if expert_tools:
-                                print(
+                                info(
                                     f"  ✅ Expert tools now available: {', '.join(expert_tools)}"
                                 )
                             else:
-                                print(
+                                info(
                                     "  ⚠️  No expert tools found in callable_functions after registration"
                                 )
 
