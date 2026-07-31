@@ -51,6 +51,8 @@ ToolUniverse's `MSigDB_*` tools cover several collections that LAB-Bench questio
 
 `MSigDB_get_gene_set_members` (operation `get_gene_set`) returns `{genes:[...]}`; `MSigDB_check_gene_in_set` (operation `check_gene_in_set`, param `gene`) returns `{is_member: bool}`. Both report which `species` collection matched.
 
+**Fetch the set once, not once per option.** A multiple-choice question asks about one set and 3-5 candidates, so `MSigDB_get_gene_set_members` answers all of them in a single call — compare the options against the returned list yourself. Reserve `MSigDB_check_gene_in_set` for a single-gene question, or when the set is too large to return comfortably.
+
 ## Gene–disease "in database X but NOT database Y" recipe
 
 These questions (e.g. "which gene is associated with disease D according to DisGeNet but **not** OMIM?") need a *differential* lookup, not a single query:
