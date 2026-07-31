@@ -541,6 +541,26 @@ class TestAgenticToolEnvironmentVariables:
             with pytest.raises(ValueError, match="TOOLUNIVERSE_LLM_TEMPERATURE"):
                 AgenticTool(tool_config)
 
+    @pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+    def test_non_finite_temperature_env_var_fails_fast(self, value):
+        """Reject non-finite floats before they reach a provider client."""
+        os.environ["TOOLUNIVERSE_LLM_TEMPERATURE"] = value
+
+        tool_config = {
+            "name": "test_tool",
+            "prompt": "Test prompt: {input}",
+            "input_arguments": ["input"],
+            "parameter": {
+                "type": "object",
+                "properties": {"input": {"type": "string"}},
+                "required": ["input"],
+            },
+        }
+
+        with patch.object(AgenticTool, "_try_initialize_api"):
+            with pytest.raises(ValueError, match="finite numeric"):
+                AgenticTool(tool_config)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

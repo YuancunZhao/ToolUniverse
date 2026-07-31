@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import math
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -49,11 +50,16 @@ class AgenticTool(BaseTool):
         if value is None or value == "":
             return None
         try:
-            return float(value)
-        except ValueError as exc:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
             raise ValueError(
                 f"Expected numeric TOOLUNIVERSE_LLM_TEMPERATURE, got: {value!r}"
             ) from exc
+        if not math.isfinite(parsed):
+            raise ValueError(
+                f"Expected finite numeric TOOLUNIVERSE_LLM_TEMPERATURE, got: {value!r}"
+            )
+        return parsed
 
     @staticmethod
     def has_any_api_keys() -> bool:
