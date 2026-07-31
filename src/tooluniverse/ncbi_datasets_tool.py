@@ -10,12 +10,17 @@ API: https://api.ncbi.nlm.nih.gov/datasets/v2
 No authentication required (optional API key for higher rate limits).
 """
 
+import time
+from typing import Any, Dict
+
 import requests
-from typing import Dict, Any
+
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
 NCBI_DATASETS_BASE = "https://api.ncbi.nlm.nih.gov/datasets/v2"
+_TRANSIENT_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
+_MAX_GET_ATTEMPTS = 3
 
 
 @register_tool("NCBIDatasetsTool")
@@ -36,6 +41,32 @@ class NCBIDatasetsTool(BaseTool):
         self.endpoint_type = tool_config.get("fields", {}).get(
             "endpoint_type", "gene_by_id"
         )
+
+    def _get(self, url: str, **kwargs) -> requests.Response:
+        """GET with bounded retries for NCBI throttling and transient failures."""
+        for attempt in range(_MAX_GET_ATTEMPTS):
+            response = requests.get(url, **kwargs)
+            if (
+                response.status_code not in _TRANSIENT_HTTP_STATUS
+                or attempt == _MAX_GET_ATTEMPTS - 1
+            ):
+                return response
+
+            retry_after = (getattr(response, "headers", {}) or {}).get("Retry-After")
+            try:
+                delay = float(retry_after) if retry_after is not None else None
+            except (TypeError, ValueError):
+                delay = None
+            if delay is None:
+                delay = 0.5 * (2**attempt)
+            delay = min(max(delay, 0.0), 5.0)
+
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+            time.sleep(delay)
+
+        raise RuntimeError("NCBI GET retry loop exited unexpectedly")
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the NCBI Datasets API call."""
@@ -94,8 +125,8 @@ class NCBIDatasetsTool(BaseTool):
         if not gene_id:
             return {"status": "error", "error": "gene_id parameter is required"}
 
-        url = f"{NCBI_DATASETS_BASE}/gene/id/{gene_id}"
-        response = requests.get(
+        url = f"{NCBI_DATASETS_BASE}/gene/id/{gene_id}/dataset_report"
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
@@ -143,8 +174,8 @@ class NCBIDatasetsTool(BaseTool):
         if not symbol:
             return {"status": "error", "error": "symbol parameter is required"}
 
-        url = f"{NCBI_DATASETS_BASE}/gene/symbol/{symbol}/taxon/{taxon}"
-        response = requests.get(
+        url = f"{NCBI_DATASETS_BASE}/gene/symbol/{symbol}/taxon/{taxon}/dataset_report"
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
@@ -201,7 +232,7 @@ class NCBIDatasetsTool(BaseTool):
         url = f"{NCBI_DATASETS_BASE}/gene/id/{gene_id}/orthologs"
         params = {"page_size": min(int(page_size), 100)}
 
-        response = requests.get(
+        response = self._get(
             url,
             params=params,
             headers={"Accept": "application/json"},
@@ -243,38 +274,41 @@ class NCBIDatasetsTool(BaseTool):
         if not tax_id:
             return {"status": "error", "error": "tax_id parameter is required"}
 
-        url = f"{NCBI_DATASETS_BASE}/taxonomy/taxon/{tax_id}"
-        response = requests.get(
+        url = f"{NCBI_DATASETS_BASE}/taxonomy/taxon/{tax_id}/dataset_report"
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
         result = response.json()
 
-        nodes = result.get("taxonomy_nodes", [])
-        if not nodes:
+        reports = result.get("reports", [])
+        if not reports:
             return {
                 "status": "success",
                 "data": {},
                 "metadata": {"total_results": 0, "query_tax_id": str(tax_id)},
             }
 
-        tax_data = nodes[0].get("taxonomy", {})
-        lineage_ids = tax_data.get("lineage", [])
+        tax_data = reports[0].get("taxonomy", {})
+        scientific_name = tax_data.get("current_scientific_name") or {}
+        lineage_ids = tax_data.get("lineage") or tax_data.get("parents", [])
         return {
             "status": "success",
             "data": {
                 "tax_id": tax_data.get("tax_id"),
-                "organism_name": tax_data.get("organism_name"),
-                "genbank_common_name": tax_data.get("genbank_common_name"),
+                "organism_name": tax_data.get("organism_name")
+                or scientific_name.get("name"),
+                "genbank_common_name": tax_data.get("genbank_common_name")
+                or tax_data.get("curator_common_name"),
                 "rank": tax_data.get("rank"),
-                "blast_name": tax_data.get("blast_name"),
+                "blast_name": tax_data.get("blast_name") or tax_data.get("group_name"),
                 "lineage": lineage_ids,
                 "lineage_names": self._resolve_lineage_names(lineage_ids),
                 "children": tax_data.get("children", []),
                 "counts": tax_data.get("counts", []),
             },
             "metadata": {
-                "total_results": len(nodes),
+                "total_results": len(reports),
                 "query_tax_id": str(tax_id),
                 "source": "NCBI Datasets API v2",
             },
@@ -294,13 +328,14 @@ class NCBIDatasetsTool(BaseTool):
         if not tax_ids:
             return []
         try:
-            response = requests.get(
-                f"{NCBI_DATASETS_BASE}/taxonomy/taxon/{','.join(str(t) for t in tax_ids)}",
+            response = self._get(
+                f"{NCBI_DATASETS_BASE}/taxonomy/taxon/"
+                f"{','.join(str(t) for t in tax_ids)}/dataset_report",
                 headers={"Accept": "application/json"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
-            nodes = response.json().get("taxonomy_nodes", [])
+            nodes = response.json().get("reports", [])
         except requests.exceptions.RequestException:
             return []
 
@@ -309,9 +344,11 @@ class NCBIDatasetsTool(BaseTool):
             node_tax = node.get("taxonomy", {})
             node_tax_id = node_tax.get("tax_id")
             if node_tax_id is not None:
+                scientific_name = node_tax.get("current_scientific_name") or {}
                 by_id[node_tax_id] = {
                     "tax_id": node_tax_id,
-                    "organism_name": node_tax.get("organism_name"),
+                    "organism_name": node_tax.get("organism_name")
+                    or scientific_name.get("name"),
                     "rank": node_tax.get("rank"),
                 }
         return [
@@ -326,7 +363,7 @@ class NCBIDatasetsTool(BaseTool):
             return {"status": "error", "error": "query parameter is required"}
 
         url = f"{NCBI_DATASETS_BASE}/taxonomy/taxon_suggest/{query}"
-        response = requests.get(
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
@@ -394,7 +431,7 @@ class NCBIDatasetsTool(BaseTool):
             return {"status": "error", "error": "accession parameter is required"}
 
         url = f"{NCBI_DATASETS_BASE}/genome/accession/{accession}/dataset_report"
-        response = requests.get(
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
@@ -431,7 +468,7 @@ class NCBIDatasetsTool(BaseTool):
         ref_only = arguments.get("reference_only")
         if ref_only:
             params["filters.reference_only"] = "true"
-        response = requests.get(
+        response = self._get(
             url,
             params=params,
             headers={"Accept": "application/json"},
@@ -459,7 +496,7 @@ class NCBIDatasetsTool(BaseTool):
             return {"status": "error", "error": "accession parameter is required"}
 
         url = f"{NCBI_DATASETS_BASE}/genome/accession/{accession}/sequence_reports"
-        response = requests.get(
+        response = self._get(
             url, headers={"Accept": "application/json"}, timeout=self.timeout
         )
         response.raise_for_status()
