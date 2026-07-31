@@ -37,7 +37,10 @@
           "default": 100
         },
         "limit": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "description": "Alias for pagesize."
         },
         "page": {
@@ -76,7 +79,10 @@
               "type": "string"
             },
             "next_page_url": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "total_elements": {
               "type": "integer"
@@ -88,13 +94,24 @@
               "type": "integer"
             },
             "previous_page": {
-              "type": ["string", "integer", "null"]
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
             },
             "previous_page_url": {
-              "type": ["string", "null"]
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "next_page": {
-              "type": ["string", "integer", "null"]
+              "type": [
+                "string",
+                "integer",
+                "null"
+              ]
             }
           }
         }
@@ -160,7 +177,8 @@
       "properties": {
         "operation": {
           "const": "parse_adverse_reactions",
-          "description": "Operation type (fixed)"
+          "description": "Operation type (fixed)",
+          "default": "parse_adverse_reactions"
         },
         "setid": {
           "type": "string",
@@ -191,7 +209,10 @@
       {
         "setid": "030d9bca-a934-6ef9-e063-6394a90a8277"
       }
-    ]
+    ],
+    "fields": {
+      "operation": "parse_adverse_reactions"
+    }
   },
   {
     "type": "DailyMedSPLParserTool",
@@ -203,7 +224,8 @@
       "properties": {
         "operation": {
           "const": "parse_dosing",
-          "description": "Operation type (fixed)"
+          "description": "Operation type (fixed)",
+          "default": "parse_dosing"
         },
         "setid": {
           "type": "string",
@@ -234,7 +256,10 @@
       {
         "setid": "030d9bca-a934-6ef9-e063-6394a90a8277"
       }
-    ]
+    ],
+    "fields": {
+      "operation": "parse_dosing"
+    }
   },
   {
     "type": "DailyMedSPLParserTool",
@@ -246,7 +271,8 @@
       "properties": {
         "operation": {
           "const": "parse_contraindications",
-          "description": "Operation type (fixed)"
+          "description": "Operation type (fixed)",
+          "default": "parse_contraindications"
         },
         "setid": {
           "type": "string",
@@ -277,7 +303,10 @@
       {
         "setid": "030d9bca-a934-6ef9-e063-6394a90a8277"
       }
-    ]
+    ],
+    "fields": {
+      "operation": "parse_contraindications"
+    }
   },
   {
     "type": "DailyMedSPLParserTool",
@@ -289,7 +318,8 @@
       "properties": {
         "operation": {
           "const": "parse_drug_interactions",
-          "description": "Operation type (fixed)"
+          "description": "Operation type (fixed)",
+          "default": "parse_drug_interactions"
         },
         "setid": {
           "type": "string",
@@ -320,7 +350,10 @@
       {
         "setid": "030d9bca-a934-6ef9-e063-6394a90a8277"
       }
-    ]
+    ],
+    "fields": {
+      "operation": "parse_drug_interactions"
+    }
   },
   {
     "type": "DailyMedSPLParserTool",
@@ -332,7 +365,8 @@
       "properties": {
         "operation": {
           "const": "parse_clinical_pharmacology",
-          "description": "Operation type (fixed)"
+          "description": "Operation type (fixed)",
+          "default": "parse_clinical_pharmacology"
         },
         "setid": {
           "type": "string",
@@ -363,7 +397,10 @@
       {
         "setid": "030d9bca-a934-6ef9-e063-6394a90a8277"
       }
-    ]
+    ],
+    "fields": {
+      "operation": "parse_clinical_pharmacology"
+    }
   },
   {
     "type": "GetSPLBySetIDTool",
@@ -405,10 +442,16 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "spl_version": {
-                  "type": ["integer", "null"]
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
                 },
                 "media": {
                   "type": "array",
@@ -431,14 +474,19 @@
                   }
                 }
               },
-              "required": ["setid", "media"]
+              "required": [
+                "setid",
+                "media"
+              ]
             },
             "metadata": {
               "type": "object",
               "additionalProperties": true
             }
           },
-          "required": ["data"]
+          "required": [
+            "data"
+          ]
         },
         {
           "type": "object",
@@ -447,7 +495,9 @@
               "type": "string"
             }
           },
-          "required": ["error"]
+          "required": [
+            "error"
+          ]
         }
       ]
     }
@@ -492,7 +542,10 @@
                   "type": "string"
                 },
                 "title": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "history": {
                   "type": "array",
@@ -511,14 +564,19 @@
                   }
                 }
               },
-              "required": ["setid", "history"]
+              "required": [
+                "setid",
+                "history"
+              ]
             },
             "metadata": {
               "type": "object",
               "additionalProperties": true
             }
           },
-          "required": ["data"]
+          "required": [
+            "data"
+          ]
         },
         {
           "type": "object",
@@ -527,7 +585,9 @@
               "type": "string"
             }
           },
-          "required": ["error"]
+          "required": [
+            "error"
+          ]
         }
       ]
     }
