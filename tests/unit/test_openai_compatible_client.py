@@ -16,6 +16,15 @@ class FakeCompletions:
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
+        if kwargs.get("stream"):
+            return [
+                SimpleNamespace(
+                    choices=[SimpleNamespace(delta=SimpleNamespace(content="hel"))]
+                ),
+                SimpleNamespace(
+                    choices=[SimpleNamespace(delta=SimpleNamespace(content="lo"))]
+                ),
+            ]
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="ok"))]
         )
@@ -89,3 +98,49 @@ def test_openai_compatible_default_max_tokens_from_env(monkeypatch):
 
     assert result == "ok"
     assert FakeOpenAIClient.instances[0].completions.calls[0]["max_tokens"] == 123
+
+
+def test_openai_reasoning_model_uses_completion_tokens(monkeypatch):
+    monkeypatch.setenv("OPENAI_MAX_TOKENS_BY_MODEL", '{"o4-mini": 321}')
+    client = OpenAICompatibleClient(
+        "provider/o4-mini",
+        logger=SimpleNamespace(warning=lambda *_: None, error=lambda *_: None),
+    )
+
+    result = client.infer(
+        messages=[{"role": "user", "content": "ping"}],
+        temperature=0.7,
+        max_tokens=None,
+        return_json=False,
+        max_retries=1,
+        retry_delay=0,
+    )
+
+    assert result == "ok"
+    call = FakeOpenAIClient.instances[0].completions.calls[0]
+    assert call["max_completion_tokens"] == 321
+    assert "max_tokens" not in call
+    assert "temperature" not in call
+
+
+def test_openai_compatible_streaming():
+    client = OpenAICompatibleClient(
+        "provider/model",
+        logger=SimpleNamespace(warning=lambda *_: None, error=lambda *_: None),
+    )
+
+    chunks = list(
+        client.infer_stream(
+            messages=[{"role": "user", "content": "ping"}],
+            temperature=0,
+            max_tokens=16,
+            return_json=False,
+            max_retries=1,
+            retry_delay=0,
+        )
+    )
+
+    assert chunks == ["hel", "lo"]
+    call = FakeOpenAIClient.instances[0].completions.calls[0]
+    assert call["stream"] is True
+    assert call["max_tokens"] == 16

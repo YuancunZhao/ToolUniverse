@@ -685,29 +685,101 @@ class OpenAICompatibleClient(BaseLLMClient):
             except Exception:
                 mapping = {}
 
-        if model_id in mapping:
-            try:
-                return int(mapping[model_id])
-            except Exception:
-                pass
+        model_ids = (model_id, self._model_family(model_id))
+        for candidate in model_ids:
+            if candidate in mapping:
+                try:
+                    return int(mapping[candidate])
+                except Exception:
+                    pass
 
         for k, v in mapping.items():
             try:
-                if model_id.startswith(k):
+                if any(candidate.startswith(k) for candidate in model_ids):
                     return int(v)
             except Exception:
                 continue
 
-        if model_id in self._default_limits:
-            return int(self._default_limits[model_id].get("max_output", 0)) or None
+        for candidate in model_ids:
+            if candidate in self._default_limits:
+                return int(self._default_limits[candidate].get("max_output", 0)) or None
 
         for k, v in self._default_limits.items():
             try:
-                if model_id.startswith(k):
+                if any(candidate.startswith(k) for candidate in model_ids):
                     return int(v.get("max_output", 0)) or None
             except Exception:
                 continue
 
+        return None
+
+    @staticmethod
+    def _model_family(model_id: str) -> str:
+        """Return the provider-independent model portion of a model ID."""
+        return model_id.rsplit("/", 1)[-1].lower()
+
+    @classmethod
+    def _uses_max_completion_tokens(cls, model_id: str) -> bool:
+        family = cls._model_family(model_id)
+        return family.startswith(("gpt-5", "o1", "o3", "o4"))
+
+    @classmethod
+    def _normalize_temperature(
+        cls, model_id: str, temperature: Optional[float]
+    ) -> Optional[float]:
+        family = cls._model_family(model_id)
+        if family.startswith(("o1", "o3", "o4")):
+            return None
+        return temperature
+
+    @classmethod
+    def _set_token_limit(
+        cls, kwargs: Dict[str, Any], model_id: str, token_limit: Optional[int]
+    ) -> None:
+        if token_limit is None:
+            return
+        key = (
+            "max_completion_tokens"
+            if cls._uses_max_completion_tokens(model_id)
+            else "max_tokens"
+        )
+        kwargs[key] = token_limit
+
+    @staticmethod
+    def _extract_text_from_chunk(chunk: Any) -> Optional[str]:
+        if isinstance(chunk, dict):
+            choices = chunk.get("choices", [])
+        else:
+            choices = getattr(chunk, "choices", [])
+        if not choices:
+            return None
+
+        first = choices[0]
+        delta = (
+            first.get("delta")
+            if isinstance(first, dict)
+            else getattr(first, "delta", None)
+        )
+        if delta is None:
+            return None
+        content = (
+            delta.get("content")
+            if isinstance(delta, dict)
+            else getattr(delta, "content", None)
+        )
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            fragments = []
+            for part in content:
+                text = (
+                    part.get("text")
+                    if isinstance(part, dict)
+                    else getattr(part, "text", None)
+                )
+                if text:
+                    fragments.append(text)
+            return "".join(fragments) or None
         return None
 
     def test_api(self) -> None:
@@ -717,12 +789,15 @@ class OpenAICompatibleClient(BaseLLMClient):
 
         for tok in token_attempts:
             try:
-                self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=test_messages,
-                    max_tokens=tok,
-                    temperature=0,
-                )
+                kwargs: Dict[str, Any] = {
+                    "model": self.model_name,
+                    "messages": test_messages,
+                }
+                self._set_token_limit(kwargs, self.model_name, tok)
+                temperature = self._normalize_temperature(self.model_name, 0)
+                if temperature is not None:
+                    kwargs["temperature"] = temperature
+                self.client.chat.completions.create(**kwargs)
                 return
             except Exception as e:  # noqa: BLE001
                 last_error = e
@@ -765,6 +840,7 @@ class OpenAICompatibleClient(BaseLLMClient):
             if max_tokens is not None
             else self._resolve_default_max_tokens(self.model_name)
         )
+        eff_temp = self._normalize_temperature(self.model_name, temperature)
 
         while retries < max_retries:
             try:
@@ -774,10 +850,9 @@ class OpenAICompatibleClient(BaseLLMClient):
                 }
                 if response_format is not None:
                     kwargs["response_format"] = response_format
-                if temperature is not None:
-                    kwargs["temperature"] = temperature
-                if eff_max is not None:
-                    kwargs["max_tokens"] = eff_max
+                if eff_temp is not None:
+                    kwargs["temperature"] = eff_temp
+                self._set_token_limit(kwargs, self.model_name, eff_max)
 
                 resp = call_fn(**kwargs)
                 if custom_format is not None:
@@ -795,6 +870,68 @@ class OpenAICompatibleClient(BaseLLMClient):
 
         self.logger.error("Max retries exceeded for OpenAI-compatible request")
         return None
+
+    def infer_stream(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+        return_json: bool,
+        custom_format: Any = None,
+        max_retries: int = 5,
+        retry_delay: int = 5,
+    ):
+        if return_json or custom_format is not None:
+            yield from super().infer_stream(
+                messages,
+                temperature,
+                max_tokens,
+                return_json,
+                custom_format,
+                max_retries,
+                retry_delay,
+            )
+            return
+
+        eff_max = (
+            max_tokens
+            if max_tokens is not None
+            else self._resolve_default_max_tokens(self.model_name)
+        )
+        eff_temp = self._normalize_temperature(self.model_name, temperature)
+        retries = 0
+
+        while retries < max_retries:
+            try:
+                kwargs: Dict[str, Any] = {
+                    "model": self.model_name,
+                    "messages": messages,
+                    "stream": True,
+                }
+                if eff_temp is not None:
+                    kwargs["temperature"] = eff_temp
+                self._set_token_limit(kwargs, self.model_name, eff_max)
+
+                stream = self.client.chat.completions.create(**kwargs)
+                for chunk in stream:
+                    text = self._extract_text_from_chunk(chunk)
+                    if text:
+                        yield text
+                return
+            except self._openai.RateLimitError:  # type: ignore[attr-defined]
+                self.logger.warning(
+                    f"Rate limit exceeded. Retrying in {retry_delay} seconds..."
+                )
+                retries += 1
+                if retries < max_retries:
+                    time.sleep(retry_delay * retries)
+            except Exception as e:  # noqa: BLE001
+                self.logger.error(f"OpenAI-compatible streaming error: {e}")
+                break
+
+        self.logger.error(
+            "Max retries exceeded for OpenAI-compatible streaming request"
+        )
 
 
 class OpenRouterClient(BaseLLMClient):
