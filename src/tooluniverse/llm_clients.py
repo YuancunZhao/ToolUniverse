@@ -617,6 +617,186 @@ class GeminiClient(BaseLLMClient):
         )
 
 
+class OpenAICompatibleClient(BaseLLMClient):
+    """
+    Generic OpenAI-compatible chat completions client.
+
+    Supports OpenAI directly and compatible endpoints configured with
+    OPENAI_BASE_URL.
+    """
+
+    DEFAULT_MODEL_LIMITS: Dict[str, Dict[str, int]] = {
+        "gpt-5": {"max_output": 128_000, "context_window": 400_000},
+        "gpt-4.1": {"max_output": 32768, "context_window": 1_047_576},
+        "gpt-4o": {"max_output": 16384, "context_window": 128_000},
+        "o4-mini": {"max_output": 100_000, "context_window": 200_000},
+        "o3-mini": {"max_output": 100_000, "context_window": 200_000},
+    }
+
+    def __init__(self, model_id: str, logger):
+        try:
+            from openai import OpenAI as _OpenAI  # type: ignore
+            import openai as _openai  # type: ignore
+        except Exception as e:  # pragma: no cover
+            raise RuntimeError("openai client is not available") from e
+
+        self._OpenAI = _OpenAI
+        self._openai = _openai
+        self.model_name = model_id
+        self.logger = logger
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not set")
+
+        base_url = os.getenv("OPENAI_BASE_URL")
+        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        self.client = self._OpenAI(**client_kwargs)
+
+        env_limits_raw = os.getenv("OPENAI_DEFAULT_MODEL_LIMITS")
+        self._default_limits: Dict[str, Dict[str, int]] = (
+            self.DEFAULT_MODEL_LIMITS.copy()
+        )
+        if env_limits_raw:
+            try:
+                env_limits = _json.loads(env_limits_raw)
+                for k, v in env_limits.items():
+                    if isinstance(v, dict):
+                        base = self._default_limits.get(k, {}).copy()
+                        base.update(
+                            {
+                                kk: int(vv)
+                                for kk, vv in v.items()
+                                if isinstance(vv, (int, float, str))
+                            }
+                        )
+                        self._default_limits[k] = base
+            except Exception:
+                pass
+
+    def _resolve_default_max_tokens(self, model_id: str) -> Optional[int]:
+        mapping_raw = os.getenv("OPENAI_MAX_TOKENS_BY_MODEL")
+        mapping: Dict[str, Any] = {}
+        if mapping_raw:
+            try:
+                mapping = _json.loads(mapping_raw)
+            except Exception:
+                mapping = {}
+
+        if model_id in mapping:
+            try:
+                return int(mapping[model_id])
+            except Exception:
+                pass
+
+        for k, v in mapping.items():
+            try:
+                if model_id.startswith(k):
+                    return int(v)
+            except Exception:
+                continue
+
+        if model_id in self._default_limits:
+            return int(self._default_limits[model_id].get("max_output", 0)) or None
+
+        for k, v in self._default_limits.items():
+            try:
+                if model_id.startswith(k):
+                    return int(v.get("max_output", 0)) or None
+            except Exception:
+                continue
+
+        return None
+
+    def test_api(self) -> None:
+        test_messages = [{"role": "user", "content": "ping"}]
+        token_attempts = [1, 4, 16, 32]
+        last_error: Optional[Exception] = None
+
+        for tok in token_attempts:
+            try:
+                self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=test_messages,
+                    max_tokens=tok,
+                    temperature=0,
+                )
+                return
+            except Exception as e:  # noqa: BLE001
+                last_error = e
+                msg = str(e).lower()
+                if (
+                    "max_tokens" in msg
+                    or "model output limit" in msg
+                    or "finish the message" in msg
+                ) and tok != token_attempts[-1]:
+                    continue
+                break
+
+        if last_error:
+            raise ValueError(f"OpenAI-compatible API test failed: {last_error}")
+        raise ValueError("OpenAI-compatible API test failed: unknown error")
+
+    def infer(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+        return_json: bool,
+        custom_format: Any = None,
+        max_retries: int = 5,
+        retry_delay: int = 5,
+    ) -> Optional[str]:
+        retries = 0
+        call_fn = (
+            self.client.chat.completions.parse
+            if custom_format is not None
+            else self.client.chat.completions.create
+        )
+        response_format = (
+            custom_format
+            if custom_format is not None
+            else ({"type": "json_object"} if return_json else None)
+        )
+        eff_max = (
+            max_tokens
+            if max_tokens is not None
+            else self._resolve_default_max_tokens(self.model_name)
+        )
+
+        while retries < max_retries:
+            try:
+                kwargs: Dict[str, Any] = {
+                    "model": self.model_name,
+                    "messages": messages,
+                }
+                if response_format is not None:
+                    kwargs["response_format"] = response_format
+                if temperature is not None:
+                    kwargs["temperature"] = temperature
+                if eff_max is not None:
+                    kwargs["max_tokens"] = eff_max
+
+                resp = call_fn(**kwargs)
+                if custom_format is not None:
+                    return resp.choices[0].message.parsed.model_dump()
+                return resp.choices[0].message.content
+            except self._openai.RateLimitError:  # type: ignore[attr-defined]
+                self.logger.warning(
+                    f"Rate limit exceeded. Retrying in {retry_delay} seconds..."
+                )
+                retries += 1
+                time.sleep(retry_delay * retries)
+            except Exception as e:  # noqa: BLE001
+                self.logger.error(f"OpenAI-compatible error: {e}")
+                break
+
+        self.logger.error("Max retries exceeded for OpenAI-compatible request")
+        return None
+
+
 class OpenRouterClient(BaseLLMClient):
     """
     OpenRouter client using OpenAI SDK with custom base URL.
