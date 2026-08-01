@@ -650,7 +650,9 @@ class OpenAICompatibleClient(BaseLLMClient):
             raise ValueError("OPENAI_API_KEY not set")
 
         base_url = os.getenv("OPENAI_BASE_URL")
-        client_kwargs: Dict[str, Any] = {"api_key": api_key}
+        # Keep retries in this adapter so its max_retries/retry_delay arguments
+        # are authoritative instead of multiplying the SDK's own retries.
+        client_kwargs: Dict[str, Any] = {"api_key": api_key, "max_retries": 0}
         if base_url:
             client_kwargs["base_url"] = base_url
         self.client = self._OpenAI(**client_kwargs)
@@ -782,6 +784,24 @@ class OpenAICompatibleClient(BaseLLMClient):
             return "".join(fragments) or None
         return None
 
+    def _is_retryable_error(self, error: Exception) -> bool:
+        retryable_types = tuple(
+            error_type
+            for error_type in (
+                getattr(self._openai, "RateLimitError", None),
+                getattr(self._openai, "APIConnectionError", None),
+                getattr(self._openai, "APITimeoutError", None),
+            )
+            if isinstance(error_type, type)
+        )
+        if retryable_types and isinstance(error, retryable_types):
+            return True
+
+        status_code = getattr(error, "status_code", None)
+        return status_code in (408, 409, 429) or (
+            isinstance(status_code, int) and status_code >= 500
+        )
+
     def test_api(self) -> None:
         test_messages = [{"role": "user", "content": "ping"}]
         token_attempts = [1, 4, 16, 32]
@@ -858,15 +878,18 @@ class OpenAICompatibleClient(BaseLLMClient):
                 if custom_format is not None:
                     return resp.choices[0].message.parsed.model_dump()
                 return resp.choices[0].message.content
-            except self._openai.RateLimitError:  # type: ignore[attr-defined]
-                self.logger.warning(
-                    f"Rate limit exceeded. Retrying in {retry_delay} seconds..."
-                )
-                retries += 1
-                time.sleep(retry_delay * retries)
             except Exception as e:  # noqa: BLE001
-                self.logger.error(f"OpenAI-compatible error: {e}")
-                break
+                if not self._is_retryable_error(e):
+                    self.logger.error(f"OpenAI-compatible error: {e}")
+                    return None
+                retries += 1
+                if retries < max_retries:
+                    delay = retry_delay * retries
+                    self.logger.warning(
+                        f"Transient OpenAI-compatible error: {e}. "
+                        f"Retrying in {delay} seconds..."
+                    )
+                    time.sleep(delay)
 
         self.logger.error("Max retries exceeded for OpenAI-compatible request")
         return None
@@ -918,16 +941,18 @@ class OpenAICompatibleClient(BaseLLMClient):
                     if text:
                         yield text
                 return
-            except self._openai.RateLimitError:  # type: ignore[attr-defined]
-                self.logger.warning(
-                    f"Rate limit exceeded. Retrying in {retry_delay} seconds..."
-                )
+            except Exception as e:  # noqa: BLE001
+                if not self._is_retryable_error(e):
+                    self.logger.error(f"OpenAI-compatible streaming error: {e}")
+                    return
                 retries += 1
                 if retries < max_retries:
-                    time.sleep(retry_delay * retries)
-            except Exception as e:  # noqa: BLE001
-                self.logger.error(f"OpenAI-compatible streaming error: {e}")
-                break
+                    delay = retry_delay * retries
+                    self.logger.warning(
+                        f"Transient OpenAI-compatible streaming error: {e}. "
+                        f"Retrying in {delay} seconds..."
+                    )
+                    time.sleep(delay)
 
         self.logger.error(
             "Max retries exceeded for OpenAI-compatible streaming request"
