@@ -574,9 +574,21 @@ def _resolve_enzyme(name: str):
     site = getattr(enz, "site", None) if enz is not None else None
     if not site:
         return None
-    try:
-        off = max(0, int(enz.fst) - 1)
-    except Exception:
+    # Biopython exposes the sense-strand cut as `fst5` (offset from the start of
+    # the recognition site); there is no `fst`, so the previous lookup always
+    # raised and every fallback enzyme silently got a midpoint cut. That is wrong
+    # for any asymmetric cutter and badly wrong for Type IIS enzymes (BsaI, BbsI,
+    # Esp3I/BsmBI, SapI), which cut *outside* their recognition site -- the cut
+    # landed inside the site instead, so Golden Gate fragments and overhangs came
+    # out wrong. `fst5` reproduces all 25 curated NEB_CUT_OFFSETS exactly.
+    off = None
+    fst5 = getattr(enz, "fst5", None)
+    if fst5 is not None:
+        try:
+            off = int(fst5)
+        except (TypeError, ValueError):
+            off = None
+    if off is None or off < 0:
         off = len(site) // 2
     return str(enz), site.upper(), off
 
@@ -680,27 +692,33 @@ class DNATool(BaseTool):
                         f"{sorted(NEB_ENZYMES.keys())}"
                     ),
                 }
-            # Case-insensitive normalization: enzyme names like "ecori", "ECORI",
-            # or "EcoRi" are silently mapped to the canonical form "EcoRI".
-            _neb_lower = {name.lower(): name for name in NEB_ENZYMES}
-            normalized_requested = []
+            # Resolve through the shared helper so this tool accepts exactly what
+            # the virtual digest accepts: the curated NEB table (case-insensitively)
+            # and, failing that, Biopython's ~600-enzyme library. Previously this
+            # path checked only the 25-enzyme table, so Type IIS enzymes central to
+            # Golden Gate work -- BsaI, BbsI, Esp3I/BsmBI, SapI -- were rejected here
+            # while the digest tool resolved them.
+            enzyme_dict = {}
             unknown_enzymes = []
             for e in enzymes_requested:
-                if e in NEB_ENZYMES:
-                    normalized_requested.append(e)
-                elif e.lower() in _neb_lower:
-                    normalized_requested.append(_neb_lower[e.lower()])
-                else:
+                resolved = _resolve_enzyme(e)
+                if resolved is None:
                     unknown_enzymes.append(e)
+                else:
+                    cname, site, _off = resolved
+                    enzyme_dict[cname] = site
             # Previously the whole call failed when ANY enzyme was unknown,
             # discarding results for valid enzymes.  Now: proceed with recognized enzymes
             # and report unknown ones in a warning.  Only fail if ALL are unknown.
-            if unknown_enzymes and not normalized_requested:
+            if unknown_enzymes and not enzyme_dict:
                 return {
                     "status": "error",
-                    "error": f"Unknown enzymes: {unknown_enzymes}. Available: {sorted(NEB_ENZYMES.keys())}",
+                    "error": (
+                        f"Unknown enzymes: {unknown_enzymes}. Not found in the curated "
+                        f"NEB set {sorted(NEB_ENZYMES.keys())} nor in Biopython's "
+                        "restriction library."
+                    ),
                 }
-            enzyme_dict = {name: NEB_ENZYMES[name] for name in normalized_requested}
         else:
             enzyme_dict = NEB_ENZYMES
             unknown_enzymes = []

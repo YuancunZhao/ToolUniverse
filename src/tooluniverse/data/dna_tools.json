@@ -2,7 +2,7 @@
   {
     "name": "DNA_find_restriction_sites",
     "type": "DNATool",
-    "description": "Find restriction enzyme recognition sites in a DNA sequence using the NEB enzyme library (24 common enzymes including EcoRI, BamHI, HindIII, NotI, etc.). Returns positions, recognition sequences, and cut counts for each enzyme that has sites. Use for: cloning strategy design, vector linearization planning, molecular biology workflows.",
+    "description": "Find restriction enzyme recognition sites in a DNA sequence using the NEB enzyme library (25 curated common enzymes plus Biopython's ~600-enzyme library, including the Type IIS enzymes used for Golden Gate/MoClo: BsaI, BbsI, Esp3I/BsmBI, SapI). Returns positions, recognition sequences, and cut counts for each enzyme that has sites. Use for: cloning strategy design, vector linearization planning, molecular biology workflows.",
     "parameter": {
       "type": "object",
       "properties": {
@@ -438,7 +438,7 @@
   {
     "name": "DNA_virtual_digest",
     "type": "DNATool",
-    "description": "Perform a virtual restriction enzyme digest on a DNA sequence using the NEB enzyme library (24 enzymes). Returns all resulting fragments with their sequences, lengths, and positions, plus a list of cut sites. Supports both linear and circular DNA. Use for: cloning planning, gel electrophoresis prediction, verifying construct integrity.",
+    "description": "Perform a virtual restriction enzyme digest on a DNA sequence using the NEB enzyme library (25 curated enzymes plus Biopython's ~600-enzyme library, including Type IIS enzymes such as BsaI, BbsI, Esp3I/BsmBI and SapI, which cut outside their recognition site). Returns all resulting fragments with their sequences, lengths, and positions, plus a list of cut sites. Supports both linear and circular DNA. Use for: cloning planning, gel electrophoresis prediction, verifying construct integrity.",
     "parameter": {
       "type": "object",
       "properties": {
