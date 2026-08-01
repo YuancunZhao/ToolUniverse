@@ -1,7 +1,6 @@
 ---
 name: tooluniverse-structural-variant-analysis
 description: "Structural variant (SV) clinical interpretation: deletions, duplications, inversions, translocations, complex rearrangements. Applies ACMG-adapted criteria with ClinGen HI/TS dosage scores, gnomAD frequencies, and ClinVar evidence. Produces 5-tier classification with explicit per-criterion evidence. Use for clinical genomics SV review, dosage-sensitivity assessment, breakpoint analysis, and CNV pathogenicity calls. Gene-dosage-driven reasoning."
-disable-model-invocation: true
 ---
 
 ## COMPUTE, DON'T DESCRIBE
@@ -15,6 +14,19 @@ Systematic analysis of structural variants (deletions, duplications, inversions,
 > only; do not submit CNV/SV events to that collector for criteria,
 > compatibility, Bayesian scoring, or a five-tier result; use this
 > structural-variant workflow and an appropriate CNV/SV-specific framework.
+
+## Assembly Contract
+
+- Normalize hg19 to GRCh37 and hg38 to GRCh38 before querying any provider.
+- Preserve the original assembly and coordinates in the report.
+- Before a GRCh38-only query, call `EnsemblMap_convert_coordinates` with the
+  exact original interval. Continue only when it returns one contiguous,
+  chromosome-consistent mapping; record every returned mapping segment.
+- For zero, multiple, discontinuous, chromosome-changing, or build-mismatched
+  mappings, stop cross-build comparison and report the limitation. Never use a
+  remembered or approximate coordinate offset.
+- gnomAD SV v4 receives only the verified GRCh38 mapped interval through
+  `gnomad_get_sv_by_region` or `gnomad_get_sv_by_gene`.
 
 **LOOK UP DON'T GUESS** - Always retrieve ClinGen HI/TS scores, gnomAD frequencies, and ClinVar evidence from tools. Do not infer dosage sensitivity from gene function alone.
 
@@ -143,9 +155,9 @@ For implementation pseudocode, see `ANALYSIS_PROCEDURES.md` Phase 2.
 **Goal**: Determine if affected genes are dosage-sensitive.
 
 Tools:
-- `ClinGen_search_dosage_sensitivity` - HI/TS scores (0-3, gold standard)
+- `ClinGen_dosage_by_gene`, `ClinGen_dosage_region_search` - HI/TS scores and overlapping curated dosage regions
 - `ClinGen_search_gene_validity` - gene-disease validity level
-- `gnomad_search_variants` - pLI scores for LoF intolerance
+- `gnomad_get_constraint` - pLI/LOEUF context for LoF intolerance
 - `OMIM_get_entry` - inheritance pattern (AD suggests dosage sensitivity)
 
 Interpret scores using the reasoning above. ClinGen HI/TS score 3 = definitive; score 2 = likely; score 1 = little evidence; score 0 = no evidence. Do not equate AD inheritance with haploinsufficiency without ClinGen support.
@@ -157,9 +169,10 @@ Interpret scores using the reasoning above. ClinGen HI/TS score 3 = definitive; 
 **Goal**: Determine if SV is common (likely benign) or rare (supports pathogenicity).
 
 Tools:
-- `gnomad_search_variants` - population SV frequencies
-- `ClinVar_search_variants` - known pathogenic/benign SVs
-- `ClinGen_search_dosage_sensitivity` - patient SVs with phenotypes
+- `gnomad_get_sv_by_region`, `gnomad_get_sv_by_gene` - population SV frequencies
+- `ensembl_get_structural_variants` - known overlapping structural variants
+- `ClinVar_search_variants` - source leads only after an exact known Variant ID or HGVS is available; it is not a regional-overlap query
+- `ClinGen_dosage_region_search` - curated dosage regions, not patient-level cases
 
 Use >=70% reciprocal overlap to define "same" SV for comparison. A frequency >=1% triggers BA1 unless there is very strong clinical evidence to override.
 
@@ -184,7 +197,7 @@ For detailed scoring breakdowns and implementation, see `CLASSIFICATION_GUIDE.md
 Tools:
 - `PubMed_search_articles` - peer-reviewed literature
 - `EuropePMC_search_articles` - additional coverage
-- `ClinGen_search_dosage_sensitivity` - patient case database
+- `PubMed_search_articles`, `EuropePMC_search_articles` - case reports and cohort literature
 
 Search strategies: gene-specific dosage sensitivity papers, SV-specific case reports, phenotype-gene associations. See `ANALYSIS_PROCEDURES.md` Phase 6.
 
@@ -214,12 +227,15 @@ SV_analysis_[TYPE]_chr[CHR]_[START]_[END]_[GENES].md
 
 ## Required Tools Reference
 
-- `ClinGen_search_dosage_sensitivity` - HI/TS scores (required for all deletions/duplications)
+- `ClinGen_dosage_by_gene`, `ClinGen_dosage_region_search` - HI/TS scores and regions (required for deletions/duplications)
 - `ClinGen_search_gene_validity` - gene-disease validity (required)
-- `ClinVar_search_variants` - known pathogenic/benign SVs (required)
+- `ClinVar_search_variants` - exact-identity source leads when an ID/HGVS is available (not a regional query)
 - `ensembl_lookup_gene` - gene coordinates, structure (required)
 - `OMIM_search`, `OMIM_get_entry` - gene-disease associations (required)
-- `gnomad_search_variants` - population frequency and pLI (required)
+- `EnsemblMap_convert_coordinates` - exact GRCh37/GRCh38 interval mapping
+- `gnomad_get_sv_by_region`, `gnomad_get_sv_by_gene` - population SV frequency
+- `gnomad_get_constraint` - gene constraint context
+- `ensembl_get_structural_variants` - overlapping known SVs
 - `DisGeNET_search_gene` - additional disease associations (recommended)
 - `PubMed_search_articles` - literature evidence (recommended)
 - `GO_get_term_details` - gene function (supporting)
@@ -229,12 +245,12 @@ SV_analysis_[TYPE]_chr[CHR]_[START]_[END]_[GENES].md
 ## When NOT to Use This Skill
 
 - **Single nucleotide variants (SNVs)** - Use `tooluniverse-variant-interpretation`
-- **Small indels (<50 bp)** - Use variant interpretation skill
+- **Small variants (<=50 bp)** - Use variant interpretation skill
 - **Somatic variants in cancer** - Different framework needed
 - **Mitochondrial variants** - Specialized interpretation required
 - **Repeat expansions** - Different mechanism
 
-Use this skill for **structural variants >=50 bp** requiring dosage sensitivity assessment and ACMG-adapted classification.
+Use this skill for **structural variants >50 bp** requiring dosage sensitivity assessment and ACMG-adapted classification.
 
 ---
 

@@ -481,6 +481,88 @@ _DETERMINISTIC_GENERAL_CRITERIA = {
 }
 _DISEASE_SPECIFIC_CRITERIA = {"PS4", "PM1", "PP2", "PP4", "BA1", "BS1", "BS2"}
 
+_PROVIDER_ROUTES: dict[str, tuple[str, ...]] = {
+    "PVS1": (
+        "consequence",
+        "splicing_prediction",
+        "protein_context",
+        "disease_context",
+    ),
+    "PS1": ("consequence", "protein_context", "prior_variant_candidates"),
+    "PS2": ("literature",),
+    "PS3": ("literature",),
+    "PS4": ("literature", "disease_context"),
+    "PM1": ("protein_context", "dynamic_cspec", "literature"),
+    "PM2": ("population", "callability"),
+    "PM3": ("literature",),
+    "PM4": ("consequence", "protein_context", "literature"),
+    "PM5": ("consequence", "protein_context", "prior_variant_candidates"),
+    "PM6": ("literature",),
+    "PP1": ("literature",),
+    "PP2": ("disease_context", "constraint", "literature"),
+    "PP3": ("computational", "splicing_prediction"),
+    "PP4": ("phenotype_context", "dynamic_cspec", "literature"),
+    "PP5": (),
+    "BA1": ("population", "dynamic_cspec"),
+    "BS1": ("population", "dynamic_cspec"),
+    "BS2": ("literature",),
+    "BS3": ("literature",),
+    "BS4": ("literature",),
+    "BP1": ("disease_context", "constraint", "literature"),
+    "BP2": ("literature",),
+    "BP3": ("consequence", "protein_context", "literature"),
+    "BP4": ("computational", "splicing_prediction"),
+    "BP5": ("literature",),
+    "BP6": (),
+    "BP7": ("consequence", "splicing_prediction"),
+}
+
+_LITERATURE_FACT_TYPES: dict[str, tuple[str, ...]] = {
+    "PVS1": ("mechanism", "rna_splicing"),
+    "PS1": ("prior_variant",),
+    "PS2": ("de_novo",),
+    "PS3": ("functional",),
+    "PS4": ("case_control", "case_series"),
+    "PM1": ("region_hotspot",),
+    "PM3": ("pm3", "recessive_allelic"),
+    "PM4": ("protein_length_repeat",),
+    "PM5": ("prior_variant",),
+    "PM6": ("de_novo",),
+    "PP1": ("segregation",),
+    "PP2": ("mechanism",),
+    "PP4": ("phenotype_specificity",),
+    "BS2": ("healthy_observation",),
+    "BS3": ("functional",),
+    "BS4": ("segregation",),
+    "BP1": ("mechanism",),
+    "BP2": ("allelic_phase",),
+    "BP3": ("protein_length_repeat",),
+    "BP5": ("alternative_cause",),
+}
+
+_REQUIRED_CONTEXT: dict[str, tuple[str, ...]] = {
+    "PVS1": ("gene", "transcript"),
+    "PS1": ("gene", "transcript"),
+    "PS2": ("gene", "disease", "inheritance"),
+    "PS4": ("gene", "disease"),
+    "PM1": ("gene", "disease", "transcript"),
+    "PM3": ("gene", "inheritance"),
+    "PM4": ("gene", "transcript"),
+    "PM5": ("gene", "transcript"),
+    "PM6": ("gene", "disease", "inheritance"),
+    "PP1": ("gene", "disease", "inheritance"),
+    "PP2": ("gene", "disease"),
+    "PP4": ("gene", "disease", "inheritance"),
+    "BA1": ("gene", "disease"),
+    "BS1": ("gene", "disease"),
+    "BS2": ("gene", "disease", "inheritance"),
+    "BS4": ("gene", "disease", "inheritance"),
+    "BP1": ("gene", "disease"),
+    "BP2": ("gene", "inheritance"),
+    "BP3": ("gene", "transcript"),
+    "BP5": ("gene", "disease"),
+}
+
 
 def _criterion_direction(criterion: str) -> str:
     normalized = str(criterion or "").split("/", 1)[0].upper()
@@ -570,6 +652,9 @@ def criterion_use_matrix() -> dict[str, dict[str, Any]]:
             "conflict_relations": directional_conflicts.get(criterion, []),
             "bayesian_direction": _criterion_direction(criterion),
             "final_adoption": "user_decision",
+            "provider_routes": list(_PROVIDER_ROUTES.get(criterion, ())),
+            "literature_fact_types": list(_LITERATURE_FACT_TYPES.get(criterion, ())),
+            "required_context": list(_REQUIRED_CONTEXT.get(criterion, ())),
         }
     return matrix
 
@@ -589,13 +674,6 @@ def rule_for_criterion(criterion: str) -> dict[str, Any]:
 def consequence_policy_for(criterion: str) -> dict[str, Any]:
     normalized = _COMPOUND.get(str(criterion), str(criterion))
     return CONSEQUENCE_POLICIES.get(normalized, {"mode": "requires_context"})
-
-
-def cspec_contract_for(
-    specification_id: str,
-    version: str,
-) -> dict[str, Any] | None:
-    return CSPEC_RULE_CATALOG.get((str(specification_id), str(version)))
 
 
 def rule_for_output(
@@ -651,15 +729,6 @@ def rule_allows_system_preview_strength(
     )
 
 
-def bayesian_odds_for_strength(strength: str) -> float | None:
-    """Return odds only for an active, catalogued automatic rule output."""
-    for rule in [*RULE_CATALOG.values(), SPLICEAI_RULE, *CSPEC_RULE_CATALOG.values()]:
-        if strength in set(rule.get("countable_strengths", ())):
-            value = rule.get("bayesian_odds", {}).get(strength)
-            return float(value) if value is not None else None
-    return None
-
-
 def bayesian_odds_for_output(
     criterion: str,
     strength: str,
@@ -685,10 +754,8 @@ __all__ = [
     "CONSEQUENCE_POLICIES",
     "RULE_CATALOG",
     "SPLICEAI_RULE",
-    "bayesian_odds_for_strength",
     "bayesian_odds_for_output",
     "criterion_use_matrix",
-    "cspec_contract_for",
     "consequence_policy_for",
     "generic_bayesian_odds_for",
     "is_valid_strength_for_criterion",

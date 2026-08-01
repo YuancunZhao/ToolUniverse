@@ -2,7 +2,8 @@
 
 1. Call `ACMG_evidence_collector` with at least `variant` and, when known,
    `gene`, `transcript`, `disease`, and `inheritance`.
-2. Inspect `workflow_status`, `recoverable_gaps`, and `next_actions` before
+2. Inspect `workflow_status`, `review_readiness`, `criterion_reviews`,
+   `recoverable_gaps`, and `next_actions` before
    drafting an answer. The collector automatically runs applicable
    multi-provider consequence recovery; a VEP failure is not a stopping point.
    A partial provider failure remains visible and cannot masquerade as
@@ -23,7 +24,9 @@
    unavailable papers remain source leads.
 6. Review `system_preview_bayesian` and `conflict_report`. This is a review
    estimate; card inclusion is represented only by
-   `system_preview_included`.
+   `system_preview_included`. `ready_for_evidence_review` means automatic
+   collection is complete, not that all criteria are assessed and not that a
+   five-tier classification is available.
 7. If proposals were submitted, automatically call the collector again. Process
    only newly discovered request IDs on a possible final incremental pass.
    Do not end while a recoverable consequence gap or mandatory full-text

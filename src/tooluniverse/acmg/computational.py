@@ -8,7 +8,7 @@ from typing import Any
 from .consequence import consequence_applicability
 from .models import EvidenceCard
 from .rule_catalog import SPLICEAI_RULE, rule_for_criterion
-from .spliceai import normalize_spliceai_inputs
+from .spliceai import normalize_spliceai_inputs, walker_run_metadata_ready
 
 
 def _finite_number(value: object) -> float | None:
@@ -284,7 +284,7 @@ def _splice_prediction_cards(
     elif score is None:
         strength = "not_assessed"
         reason = "PP3/BP4 splicing: no SpliceAI maximum delta score was returned"
-    elif not _walker_run_metadata_ready(spliceai_run_metadata, score):
+    elif not walker_run_metadata_ready(spliceai_run_metadata, score):
         strength = "not_assessed"
         reason = (
             "PP3/BP4 splicing: SpliceAI run metadata does not prove the "
@@ -303,7 +303,7 @@ def _splice_prediction_cards(
         pass
     elif score is None:
         pass
-    elif not _walker_run_metadata_ready(spliceai_run_metadata, score):
+    elif not walker_run_metadata_ready(spliceai_run_metadata, score):
         pass
     elif cspec_decision is not None:
         strength = cspec_decision[1]
@@ -388,71 +388,6 @@ def _bp7_after_walker_bp4(
         rule_version=str(rule.get("version") or ""),
         rule_reference=str(rule.get("primary_reference") or ""),
     )
-
-
-def _walker_run_metadata_ready(
-    metadata: dict[str, Any] | None,
-    score: float,
-) -> bool:
-    """Require the exact auditable Walker calibration contract."""
-    if not isinstance(metadata, dict):
-        return False
-    if str(metadata.get("model_version") or "") != "1.3.1":
-        return False
-    if not str(metadata.get("annotation_version") or "").strip():
-        return False
-    if str(metadata.get("score_mode") or "").casefold() != "raw":
-        return False
-    if metadata.get("distance") != 500 or metadata.get("mask") is not False:
-        return False
-    if str(metadata.get("transcript_set") or "").casefold() != "mane":
-        return False
-    selected_transcript = str(metadata.get("selected_transcript") or "").strip()
-    selected_gene = str(metadata.get("selected_gene") or "").strip()
-    selected_row = metadata.get("selected_score_row")
-    if (
-        not selected_transcript
-        or not selected_gene
-        or not isinstance(selected_row, dict)
-    ):
-        return False
-    row_gene = str(
-        selected_row.get("gene")
-        or selected_row.get("gene_symbol")
-        or selected_row.get("symbol")
-        or selected_row.get("g_name")
-        or ""
-    ).strip()
-    if row_gene.casefold() != selected_gene.casefold():
-        return False
-    row_transcripts = {
-        str(selected_row.get(key)).strip().casefold()
-        for key in ("transcript", "transcript_id", "t_id")
-        if selected_row.get(key) not in (None, "")
-    }
-    refseq_ids = selected_row.get("t_refseq_ids")
-    if isinstance(refseq_ids, list):
-        row_transcripts.update(
-            str(value).strip().casefold() for value in refseq_ids if value
-        )
-    if row_transcripts and selected_transcript.casefold() not in row_transcripts:
-        return False
-    values = [
-        _finite_number(selected_row.get(key))
-        for key in (
-            "DS_AG",
-            "DS_AL",
-            "DS_DG",
-            "DS_DL",
-            "DP_AG",
-            "DP_AL",
-            "DP_DG",
-            "DP_DL",
-        )
-    ]
-    if any(value is None for value in values):
-        return False
-    return math.isclose(max(value for value in values[:4] if value is not None), score)
 
 
 def _cspec_predictor_decision(

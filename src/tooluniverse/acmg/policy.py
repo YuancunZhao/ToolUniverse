@@ -9,19 +9,12 @@ from .source_adapters import adapt_source_output
 
 ACMG_POLICY_CONTEXT = {"acmg_evidence_collection": True}
 ACMG_FRONT_DOOR_TOOL_NAME = "ACMG_evidence_collector"
-ACMG_ALLOWED_USE = "source_lead_or_audit_context"
-
 ACMG_EVIDENCE_NOTICE = (
     "Within an explicit ACMG evidence-collection policy context, direct provider "
     "outputs are retained as review-only source leads. Use ACMG_evidence_collector "
     "for deterministic EvidenceCards. Search recommendation alone cannot constrain "
     "reasoning outside ToolUniverse, and this runtime does not produce a five-tier "
     "classification. Ordinary ToolUniverse calls retain upstream output."
-)
-
-SOURCE_LEAD_NOTICE = (
-    "Automated classifier, database label, predictor score, or annotation output "
-    "is a source lead or audit fact, not independently adopted ACMG evidence."
 )
 
 HIGH_RISK_ACMG_TOOLS = {
@@ -86,6 +79,7 @@ HIGH_RISK_ACMG_TOOLS = {
     "G2P_get_gene",
     "MedGen_search",
     "EBIProteins_get_variation_by_hgvs",
+    "EBIProteins_get_variation",
     "EBIProteins_get_features",
     "InterPro_get_entries_for_protein",
     "UniProt_get_entry_by_accession",
@@ -159,16 +153,6 @@ class ACMGScopedExecutor:
         ]
 
 
-def acmg_source_lead_metadata() -> dict[str, Any]:
-    return {
-        "source_lead_only": True,
-        "final_classification_allowed": False,
-        "allowed_use": ACMG_ALLOWED_USE,
-        "acmg_evidence_notice": ACMG_EVIDENCE_NOTICE,
-        "recommended_front_door_tool": ACMG_FRONT_DOOR_TOOL_NAME,
-    }
-
-
 def sanitize_high_risk_acmg_result(
     tool_name: str,
     result: Any,
@@ -183,16 +167,12 @@ def sanitize_high_risk_acmg_result(
     )
     if not active or tool_name not in HIGH_RISK_ACMG_TOOLS:
         return result
-    if isinstance(result, dict) and isinstance(
-        result.get("source_lead_sandbox"), dict
-    ):
+    if isinstance(result, dict) and isinstance(result.get("source_lead_sandbox"), dict):
         return result
     response_status = status
     if response_status is None and isinstance(result, dict):
         response_status = str(result.get("status") or "success")
-    if isinstance(result, dict) and isinstance(
-        result.get("reviewable_features"), dict
-    ):
+    if isinstance(result, dict) and isinstance(result.get("reviewable_features"), dict):
         source_lead = {
             "tool_name": tool_name,
             "source_category": "provider",
@@ -217,13 +197,10 @@ def sanitize_high_risk_acmg_result(
 
 
 __all__ = [
-    "ACMG_ALLOWED_USE",
     "ACMG_EVIDENCE_NOTICE",
     "ACMG_FRONT_DOOR_TOOL_NAME",
     "ACMG_POLICY_CONTEXT",
     "ACMGScopedExecutor",
     "HIGH_RISK_ACMG_TOOLS",
-    "SOURCE_LEAD_NOTICE",
-    "acmg_source_lead_metadata",
     "sanitize_high_risk_acmg_result",
 ]

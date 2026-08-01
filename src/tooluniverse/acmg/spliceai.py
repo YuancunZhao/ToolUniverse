@@ -348,6 +348,66 @@ def normalize_spliceai_inputs(
     return profile
 
 
+def walker_run_metadata_ready(
+    metadata: dict[str, Any] | None,
+    score: Any,
+    *,
+    require_unique_row: bool = False,
+) -> bool:
+    """Require the exact identity-bound Walker 2023 calibration contract."""
+    if not isinstance(metadata, dict):
+        return False
+    if (
+        str(metadata.get("model_version") or "") != "1.3.1"
+        or not str(metadata.get("annotation_version") or "").strip()
+        or str(metadata.get("score_mode") or "").casefold() != "raw"
+        or metadata.get("distance") != 500
+        or metadata.get("mask") is not False
+        or str(metadata.get("transcript_set") or "").casefold() != "mane"
+        or (require_unique_row and metadata.get("row_match_count") != 1)
+    ):
+        return False
+    selected_transcript = str(metadata.get("selected_transcript") or "").strip()
+    selected_gene = str(metadata.get("selected_gene") or "").strip()
+    row = metadata.get("selected_score_row")
+    if not selected_transcript or not selected_gene or not isinstance(row, dict):
+        return False
+    row_gene = str(
+        row.get("gene")
+        or row.get("gene_symbol")
+        or row.get("symbol")
+        or row.get("g_name")
+        or ""
+    ).strip()
+    if row_gene.casefold() != selected_gene.casefold():
+        return False
+    row_transcripts = {
+        str(row.get(key)).strip().casefold()
+        for key in ("transcript", "transcript_id", "t_id")
+        if row.get(key) not in (None, "")
+    }
+    if isinstance(row.get("t_refseq_ids"), list):
+        row_transcripts.update(
+            str(value).strip().casefold() for value in row["t_refseq_ids"] if value
+        )
+    if row_transcripts and selected_transcript.casefold() not in row_transcripts:
+        return False
+    values = [
+        _finite_float(row.get(key)) for key in (*DELTA_CHANNELS, *POSITION_CHANNELS)
+    ]
+    expected = _finite_float(score)
+    return bool(
+        expected is not None
+        and all(value is not None for value in values)
+        and math.isclose(
+            max(value for value in values[:4] if value is not None),
+            expected,
+            rel_tol=0.0,
+            abs_tol=_MAX_TOLERANCE,
+        )
+    )
+
+
 __all__ = [
     "DELTA_CHANNELS",
     "DEFAULT_INTERPRETATION_THRESHOLD",
@@ -357,4 +417,5 @@ __all__ = [
     "bind_spliceai_site",
     "normalize_spliceai_inputs",
     "normalize_spliceai_profile",
+    "walker_run_metadata_ready",
 ]

@@ -19,28 +19,48 @@ _DE_NOVO_POINTS = {
 }
 
 
+def _not_assessed(
+    criterion: str,
+    input_source: str,
+    rule: str,
+    input_values: dict,
+    reason: str,
+    *,
+    source_case_ids: list[str] | None = None,
+) -> EvidenceCard:
+    return EvidenceCard(
+        criterion=criterion,
+        strength="not_assessed",
+        input_source=input_source,
+        input_values=input_values,
+        clinvar_rule_applied=rule,
+        provenance_chain=[reason],
+        source_case_ids=list(source_case_ids or []),
+    )
+
+
 def _de_novo_evidence(
     probands: list[dict],
     *,
     inheritance_mode: str,
 ) -> EvidenceCard:
+    source = "Structured de novo probands"
+    rule = "ClinGen SVI De Novo Recommendation v1.1"
     if any(not isinstance(proband, dict) for proband in probands):
-        return EvidenceCard(
-            criterion="PS2/PM6",
-            strength="not_assessed",
-            input_source="Structured de novo probands",
-            input_values={"proband_count": len(probands)},
-            clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-            provenance_chain=["PS2/PM6: every proband record must be an object"],
+        return _not_assessed(
+            "PS2/PM6",
+            source,
+            rule,
+            {"proband_count": len(probands)},
+            "PS2/PM6: every proband record must be an object",
         )
     if not inheritance_mode:
-        return EvidenceCard(
-            criterion="PS2/PM6",
-            strength="not_assessed",
-            input_source="Structured de novo probands",
-            input_values={"proband_count": len(probands)},
-            clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-            provenance_chain=["PS2/PM6: inheritance mode is required"],
+        return _not_assessed(
+            "PS2/PM6",
+            source,
+            rule,
+            {"proband_count": len(probands)},
+            "PS2/PM6: inheritance mode is required",
         )
 
     total = 0.0
@@ -55,25 +75,21 @@ def _de_novo_evidence(
             relationship not in {"confirmed", "assumed"}
             or phenotype not in _DE_NOVO_POINTS
         ):
-            return EvidenceCard(
-                criterion="PS2/PM6",
-                strength="not_assessed",
-                input_source="Structured de novo probands",
-                input_values={"invalid_proband": proband},
-                clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-                provenance_chain=[
-                    "PS2/PM6: each proband requires parental_relationships "
-                    "and a recognized phenotype_consistency category"
-                ],
+            return _not_assessed(
+                "PS2/PM6",
+                source,
+                rule,
+                {"invalid_proband": proband},
+                "PS2/PM6: each proband requires parental_relationships "
+                "and a recognized phenotype_consistency category",
             )
         if not case_id or case_id in case_ids:
-            return EvidenceCard(
-                criterion="PS2/PM6",
-                strength="not_assessed",
-                input_source="Structured de novo probands",
-                input_values={"case_id": case_id},
-                clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-                provenance_chain=["PS2/PM6: unique non-empty case IDs are required"],
+            return _not_assessed(
+                "PS2/PM6",
+                source,
+                rule,
+                {"case_id": case_id},
+                "PS2/PM6: unique non-empty case IDs are required",
             )
         case_ids.append(case_id)
         relationship_states.add(relationship)
@@ -91,13 +107,12 @@ def _de_novo_evidence(
             if len(relationship_states) > 1
             else "no de novo points were awarded"
         )
-        return EvidenceCard(
-            criterion="PS2/PM6",
-            strength="not_assessed",
-            input_source="Structured de novo probands",
-            input_values={"total_points": total},
-            clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-            provenance_chain=[f"PS2/PM6: {reason}"],
+        return _not_assessed(
+            "PS2/PM6",
+            source,
+            rule,
+            {"total_points": total},
+            f"PS2/PM6: {reason}",
             source_case_ids=case_ids,
         )
 
@@ -145,20 +160,18 @@ def _pm3_evidence(
     frequency_eligible: bool,
 ) -> EvidenceCard:
     rule = "ClinGen SVI PM3 Recommendation v1.0, Tables 1-2"
+    source = "Structured PM3 probands"
     if "recessive" not in inheritance_mode.lower() or frequency_eligible is not True:
-        return EvidenceCard(
-            criterion="PM3",
-            strength="not_assessed",
-            input_source="Structured PM3 probands",
-            input_values={
+        return _not_assessed(
+            "PM3",
+            source,
+            rule,
+            {
                 "inheritance_mode": inheritance_mode,
                 "frequency_eligible": frequency_eligible,
             },
-            clinvar_rule_applied=rule,
-            provenance_chain=[
-                "PM3: recessive inheritance and PM2-eligible frequencies for "
-                "both alleles are required"
-            ],
+            "PM3: recessive inheritance and PM2-eligible frequencies for "
+            "both alleles are required",
         )
 
     total = 0.0
@@ -166,36 +179,31 @@ def _pm3_evidence(
     consanguineous_or_vus_total = 0.0
     case_ids: list[str] = []
     if any(not isinstance(observation, dict) for observation in observations):
-        return EvidenceCard(
-            criterion="PM3",
-            strength="not_assessed",
-            input_source="Structured PM3 probands",
-            input_values={"proband_count": len(observations)},
-            clinvar_rule_applied=rule,
-            provenance_chain=["PM3: every proband record must be an object"],
+        return _not_assessed(
+            "PM3",
+            source,
+            rule,
+            {"proband_count": len(observations)},
+            "PM3: every proband record must be an object",
         )
     for observation in observations:
         case_id = str(observation.get("case_id") or "")
         if not case_id or case_id in case_ids:
-            return EvidenceCard(
-                criterion="PM3",
-                strength="not_assessed",
-                input_source="Structured PM3 probands",
-                input_values={"case_id": case_id},
-                clinvar_rule_applied=rule,
-                provenance_chain=["PM3: unique non-empty case IDs are required"],
+            return _not_assessed(
+                "PM3",
+                source,
+                rule,
+                {"case_id": case_id},
+                "PM3: unique non-empty case IDs are required",
             )
         if observation.get("other_variant_frequency_eligible") is not True:
-            return EvidenceCard(
-                criterion="PM3",
-                strength="not_assessed",
-                input_source="Structured PM3 probands",
-                input_values={"case_id": case_id},
-                clinvar_rule_applied=rule,
-                provenance_chain=[
-                    "PM3: the variant on the other allele must also meet the "
-                    "frequency requirement"
-                ],
+            return _not_assessed(
+                "PM3",
+                source,
+                rule,
+                {"case_id": case_id},
+                "PM3: the variant on the other allele must also meet the "
+                "frequency requirement",
             )
         case_ids.append(case_id)
         zygosity = str(observation.get("zygosity") or "").lower()
@@ -231,15 +239,12 @@ def _pm3_evidence(
             points = -1.0
 
         if points < 0:
-            return EvidenceCard(
-                criterion="PM3",
-                strength="not_assessed",
-                input_source="Structured PM3 probands",
-                input_values={"invalid_observation": observation},
-                clinvar_rule_applied=rule,
-                provenance_chain=[
-                    "PM3: unsupported zygosity, phase, or other-allele classification"
-                ],
+            return _not_assessed(
+                "PM3",
+                source,
+                rule,
+                {"invalid_observation": observation},
+                "PM3: unsupported zygosity, phase, or other-allele classification",
                 source_case_ids=case_ids,
             )
         total += points
@@ -293,9 +298,7 @@ def clinical_evidence(
                 input_source="Clinical report",
                 input_values={},
                 clinvar_rule_applied="ClinGen SVI De Novo Recommendation v1.1",
-                provenance_chain=[
-                    "PS2/PM6: structured de_novo_probands are required"
-                ],
+                provenance_chain=["PS2/PM6: structured de_novo_probands are required"],
             )
         )
 

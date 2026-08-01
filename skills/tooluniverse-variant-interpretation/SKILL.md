@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-variant-interpretation
-description: Variant evidence intake and draft interpretation support from raw variant calls, with structural, population, clinical-database, computational, and literature annotation. Germline ACMG requests must be handed to the evidence-only ACMG collector, which does not permit a five-tier final verdict.
+description: Variant evidence intake and draft interpretation support from raw variant calls, with structural, population, clinical-database, computational, and literature annotation. Structural variants route to the dedicated SV workflow; germline small-variant ACMG requests route to the evidence-only collector.
 ---
 
 # Clinical Variant Interpreter
@@ -15,7 +15,17 @@ Use this skill when users:
 - Need source, population, computational, structural, or literature evidence gathered for variants
 - Want structural impact analysis for missense variants
 
-If the user asks whether a germline variant is pathogenic, asks for ACMG classification, clinical significance, or any final five-tier verdict, hand off to the evidence-only ACMG runtime through `ACMG_evidence_collector`. The current runtime may report validated criteria, conflicts, limitations, and a Bayesian review estimate, but it must explicitly decline an automated five-tier verdict.
+Before any pathogenicity handoff, classify the variant. Genomic intervals over
+50 bp, symbolic ALT or breakend notation, and DEL/DUP/INV/BND/CPX/CNV events
+must go to `tooluniverse-structural-variant-analysis`; do not call the
+small-variant collector first. Normalize hg19 to GRCh37 and hg38 to GRCh38,
+and never use an approximate assembly offset.
+
+For germline small variants, hand off pathogenicity, ACMG, clinical
+significance, or five-tier requests to the evidence-only ACMG runtime through
+`ACMG_evidence_collector`. It may report validated criteria, conflicts,
+limitations, and a Bayesian review estimate, but must decline an automated
+five-tier verdict.
 
 Loading the collector is not the end of that handoff. Follow the mandatory
 state machine in `tooluniverse-acmg-variant-classification`: consume

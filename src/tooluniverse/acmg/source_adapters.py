@@ -12,7 +12,7 @@ import math
 import re
 from typing import Any
 
-from .spliceai import normalize_spliceai_profile
+from .spliceai import normalize_spliceai_profile, walker_run_metadata_ready
 
 
 _GNOMAD_DATASET_BUILDS = {
@@ -31,6 +31,10 @@ _GNOMAD_DATASET_BUILDS = {
     "gnomad_r2_1_non_topmed": "GRCh37",
     "exac": "GRCh37",
 }
+
+
+def _drop_empty(values: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in values.items() if value not in (None, "")}
 
 
 def provider_version(features: dict[str, Any]) -> str:
@@ -313,6 +317,20 @@ def source_fact_ready(
         ready = identity_verified and bool(features.get("protein_candidates"))
         return observed_identity, identity_verified, ready
 
+    if tool_name == "EBIProteins_get_variation":
+        expected_accession = _norm(expected_identity.get("protein_accession"))
+        observed_accession = _norm(features.get("protein_accession"))
+        identity_verified = bool(
+            expected_accession and observed_accession == expected_accession
+        )
+        candidates = features.get("same_residue_candidates")
+        ready = identity_verified and isinstance(candidates, list)
+        return (
+            {"protein_accession": features.get("protein_accession")},
+            identity_verified,
+            ready,
+        )
+
     if tool_name in {
         "EBIProteins_get_features",
         "InterPro_get_entries_for_protein",
@@ -536,39 +554,20 @@ def source_fact_ready(
         scores = features.get("scores")
         metadata = features.get("spliceai_run_metadata")
         metadata = metadata if isinstance(metadata, dict) else {}
-        selected_row = metadata.get("selected_score_row")
-        selected_row = selected_row if isinstance(selected_row, dict) else {}
         spliceai_profile = features.get("spliceai_profile")
         spliceai_profile = (
             spliceai_profile if isinstance(spliceai_profile, dict) else {}
         )
-        required_score_keys = (
-            "DS_AG",
-            "DS_AL",
-            "DS_DG",
-            "DS_DL",
-            "DP_AG",
-            "DP_AL",
-            "DP_DG",
-            "DP_DL",
-        )
+        max_delta = _number(spliceai_profile, "max_delta_score")
         ready = (
             bool(observed_build)
             and build_matches(expected_identity, observed_identity)
             and isinstance(scores, list)
             and spliceai_profile.get("status") == "resolved"
-            and _number(spliceai_profile, "max_delta_score") is not None
-            and metadata.get("model_version") == "1.3.1"
-            and bool(str(metadata.get("annotation_version") or "").strip())
-            and str(metadata.get("score_mode") or "").casefold() == "raw"
-            and metadata.get("distance") == 500
-            and metadata.get("mask") is False
-            and str(metadata.get("transcript_set") or "").casefold() == "mane"
-            and bool(str(metadata.get("selected_transcript") or "").strip())
-            and bool(str(metadata.get("selected_gene") or "").strip())
-            and metadata.get("row_match_count") == 1
-            and all(
-                _number(selected_row, key) is not None for key in required_score_keys
+            and walker_run_metadata_ready(
+                metadata,
+                max_delta,
+                require_unique_row=True,
             )
             and bool(provider_version(features))
         )
@@ -594,10 +593,7 @@ def source_fact_ready(
             and bool(candidates)
             and any(
                 isinstance(row, dict)
-                and bool(
-                    row.get("consequence")
-                    or row.get("consequence_terms")
-                )
+                and bool(row.get("consequence") or row.get("consequence_terms"))
                 for row in candidates
             )
         )
@@ -827,7 +823,7 @@ def _variantvalidator_fields(raw: dict[str, Any]) -> dict[str, Any]:
             features["coordinates_grch37"] = coordinates
         elif coordinates:
             features.update(coordinates)
-    return {key: value for key, value in features.items() if value not in (None, "")}
+    return _drop_empty(features)
 
 
 def _terms_from_hgvs(hgvs_c: str, hgvs_p: str) -> list[str]:
@@ -843,9 +839,7 @@ def _terms_from_hgvs(hgvs_c: str, hgvs_p: str) -> list[str]:
     if re.search(r"p\.\(?[a-z]{1,3}\d+[a-z]{1,3}\)?$", protein):
         return ["missense_variant"]
     if re.search(r"c\.\d+[+-][12](?:_|[a-z])", coding):
-        return [
-            "splice_donor_variant" if "+" in coding else "splice_acceptor_variant"
-        ]
+        return ["splice_donor_variant" if "+" in coding else "splice_acceptor_variant"]
     return []
 
 
@@ -920,7 +914,7 @@ def _variantformatter_fields(raw: dict[str, Any]) -> dict[str, Any]:
     }
     if len(genes) == 1:
         features["gene"] = next(iter(genes))
-    return {key: value for key, value in features.items() if value not in (None, "")}
+    return _drop_empty(features)
 
 
 def _variant_id_coordinates(value: Any) -> dict[str, Any]:
@@ -990,7 +984,9 @@ def _open_targets_consequence_fields(payload: dict[str, Any]) -> dict[str, Any]:
         target = row.get("target")
         target = target if isinstance(target, dict) else {}
         consequence_rows = row.get("variantConsequences")
-        consequence_rows = consequence_rows if isinstance(consequence_rows, list) else []
+        consequence_rows = (
+            consequence_rows if isinstance(consequence_rows, list) else []
+        )
         terms = [
             str(item.get("label") or "").casefold().replace(" ", "_")
             for item in consequence_rows
@@ -1013,9 +1009,7 @@ def _open_targets_consequence_fields(payload: dict[str, Any]) -> dict[str, Any]:
         **coords,
         "build": "GRCh38",
         "rsid": (
-            str(rsids[0])
-            if isinstance(rsids, list) and len(rsids) == 1
-            else None
+            str(rsids[0]) if isinstance(rsids, list) and len(rsids) == 1 else None
         ),
         "hgvs_g": payload.get("hgvsId"),
         "most_severe_consequence": severe.get("label"),
@@ -1428,6 +1422,36 @@ def _ebi_protein_feature_fields(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ebi_protein_known_variation_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    accession = str(payload.get("accession") or "")
+    variants = []
+    for row in payload.get("variants") or []:
+        if not isinstance(row, dict):
+            continue
+        variants.append(
+            {
+                "position_start": row.get("position_start"),
+                "position_end": row.get("position_end"),
+                "wild_type": row.get("wild_type"),
+                "alternative": row.get("alternative"),
+                "source_type": row.get("source_type"),
+                "associations": list(row.get("associations") or []),
+                "xrefs": list(row.get("xrefs") or []),
+                "clinical_significances": list(row.get("clinical_significances") or []),
+            }
+        )
+    return {
+        "protein_accession": accession,
+        "entry_name": payload.get("entry_name"),
+        "protein_variants": variants,
+        "total_variants": payload.get("total_variants")
+        or payload.get("total_all_sources")
+        or len(variants),
+        "provider_version": "EBI Proteins API",
+        "request_url": f"https://www.ebi.ac.uk/proteins/api/variation/{accession}",
+    }
+
+
 def _interpro_protein_fields(payload: dict[str, Any]) -> dict[str, Any]:
     accession = str(payload.get("protein_accession") or "")
     entries = [
@@ -1693,7 +1717,6 @@ def prepare_spliceai_features(
         }
     )
     prepared["spliceai_run_metadata"] = run_metadata
-    prepared["run_metadata"] = run_metadata
     if run_metadata.get("model_version") not in (None, ""):
         prepared["provider_version"] = str(run_metadata["model_version"])
     if len(matches) == 1:
@@ -1735,9 +1758,7 @@ def _clingen_context_fields(
     tool_name: str, payload: Any, raw: dict[str, Any]
 ) -> dict[str, Any]:
     request_arguments = raw.get("request_arguments")
-    request_arguments = (
-        request_arguments if isinstance(request_arguments, dict) else {}
-    )
+    request_arguments = request_arguments if isinstance(request_arguments, dict) else {}
     gene = str(
         raw.get("gene_searched")
         or raw.get("gene")
@@ -1749,9 +1770,7 @@ def _clingen_context_fields(
         "ClinGen_get_actionability_pediatric",
     }:
         context = (
-            "Adult"
-            if tool_name == "ClinGen_get_actionability_adult"
-            else "Pediatric"
+            "Adult" if tool_name == "ClinGen_get_actionability_adult" else "Pediatric"
         )
         rows = payload if isinstance(payload, list) else []
         if not gene:
@@ -1772,9 +1791,7 @@ def _clingen_context_fields(
         values: dict[str, Any] = {
             "gene": gene,
             "actionability_context": context,
-            "actionability": [
-                dict(row) for row in rows if isinstance(row, dict)
-            ],
+            "actionability": [dict(row) for row in rows if isinstance(row, dict)],
             "total_available": raw.get("total", len(rows)),
             "provider_version": "ClinGen Clinical Actionability",
             "request_url": "https://actionability.clinicalgenome.org/",
@@ -1816,7 +1833,7 @@ def _clingen_context_fields(
                 else "https://erepo.clinicalgenome.org/"
             ),
         }
-    return {key: value for key, value in values.items() if value not in (None, "")}
+    return _drop_empty(values)
 
 
 def _hpo_fields(tool_name: str, payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
@@ -1835,7 +1852,7 @@ def _hpo_fields(tool_name: str, payload: Any, raw: dict[str, Any]) -> dict[str, 
         "request_url": "https://ontology.jax.org/api/hp/",
         "review_only": True,
     }
-    return {key: value for key, value in values.items() if value not in (None, "")}
+    return _drop_empty(values)
 
 
 def _pubmed_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
@@ -1873,8 +1890,7 @@ def _literature_search_fields(
         pmids = payload.get("pmids") if isinstance(payload, dict) else []
         pmcids = payload.get("pmcids") if isinstance(payload, dict) else []
         articles = [
-            {"pmid": str(value)}
-            for value in (pmids if isinstance(pmids, list) else [])
+            {"pmid": str(value)} for value in (pmids if isinstance(pmids, list) else [])
         ]
         for index, value in enumerate(pmcids if isinstance(pmcids, list) else []):
             pmcid = str(value)
@@ -1884,8 +1900,7 @@ def _literature_search_fields(
                 articles.append({"pmcid": pmcid})
     source = (
         "LitVar"
-        if tool_name
-        in {"LitVar_search_variants", "LitVar_get_variant_publications"}
+        if tool_name in {"LitVar_search_variants", "LitVar_get_variant_publications"}
         else "PubTator3"
         if tool_name == "PubTator3_LiteratureSearch"
         else "Europe PMC"
@@ -1926,9 +1941,7 @@ def _literature_annotation_fields(
                 or payload.get("results")
                 or []
             )
-        documents = [
-            dict(row) for row in documents if isinstance(row, dict)
-        ]
+        documents = [dict(row) for row in documents if isinstance(row, dict)]
         return {
             "pmids": [
                 str(row.get("pmid") or row.get("_id") or row.get("id") or "")
@@ -1937,9 +1950,7 @@ def _literature_annotation_fields(
             ],
             "annotations": documents,
             "provider_version": "PubTator3",
-            "request_url": (
-                "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
-            ),
+            "request_url": ("https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"),
             "review_only": True,
         }
     payload_map = payload if isinstance(payload, dict) else {}
@@ -2078,8 +2089,7 @@ def _uniprot_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "domain_features": [
             row
             for row in protein_sites
-            if str(row.get("type") or "").casefold()
-            in {"domain", "region", "repeat"}
+            if str(row.get("type") or "").casefold() in {"domain", "region", "repeat"}
         ],
         "keywords": payload.get("keywords") or [],
         "cross_references": payload.get("uniProtKBCrossReferences") or [],
@@ -2109,6 +2119,8 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
         features = _spliceai_fields(payload_dict)
     elif tool_name == "EBIProteins_get_variation_by_hgvs":
         features = _ebi_protein_variation_fields(raw, payload_dict)
+    elif tool_name == "EBIProteins_get_variation":
+        features = _ebi_protein_known_variation_fields(payload_dict)
     elif tool_name == "EBIProteins_get_features":
         features = _ebi_protein_feature_fields(payload_dict)
     elif tool_name == "InterPro_get_entries_for_protein":
@@ -2323,16 +2335,14 @@ def _clingen_validity_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any
         (str(curation["gene"]) for curation in curations if curation.get("gene")),
         "",
     )
-    return {
-        key: value
-        for key, value in {
+    return _drop_empty(
+        {
             "gene": gene or None,
             "validity_curations": curations,
             "provider_version": "ClinGen Gene-Disease Validity",
             "request_url": "https://search.clinicalgenome.org/kb/gene-validity/download",
-        }.items()
-        if value not in (None, "")
-    }
+        }
+    )
 
 
 def _constraint_fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2341,9 +2351,8 @@ def _constraint_fields(payload: dict[str, Any]) -> dict[str, Any]:
     provider = release or (
         f"gnomAD constraint {dataset}" if dataset else "gnomAD gene constraint GraphQL"
     )
-    return {
-        key: value
-        for key, value in {
+    return _drop_empty(
+        {
             "gene": payload.get("gene_symbol") or payload.get("gene"),
             "gene_id": payload.get("gene_id"),
             "dataset": dataset,
@@ -2359,9 +2368,8 @@ def _constraint_fields(payload: dict[str, Any]) -> dict[str, Any]:
             "exp_lof": payload.get("exp_lof"),
             "release": release,
             "provider_version": provider,
-        }.items()
-        if value not in (None, "")
-    }
+        }
+    )
 
 
 def _ensembl_lookup_fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2387,16 +2395,14 @@ def _ensembl_lookup_fields(payload: dict[str, Any]) -> dict[str, Any]:
                     "strand": exon.get("strand"),
                 }
             )
-    return {
-        key: value
-        for key, value in {
+    return _drop_empty(
+        {
             "transcript_id": payload.get("id"),
             "chrom": payload.get("seq_region_name"),
             "exons": exons,
             "provider_version": "Ensembl REST lookup",
-        }.items()
-        if value not in (None, "")
-    }
+        }
+    )
 
 
 def _gnomad_region_variants_fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2419,17 +2425,15 @@ def _gnomad_region_variants_fields(payload: dict[str, Any]) -> dict[str, Any]:
                 "homozygote_count_genome": genome.get("homozygote_count"),
             }
         )
-    return {
-        key: value
-        for key, value in {
+    return _drop_empty(
+        {
             "chrom": region.get("chrom"),
             "start": region.get("start"),
             "stop": region.get("stop"),
             "variants": variants,
             "provider_version": "gnomAD GraphQL region variants",
-        }.items()
-        if value not in (None, "")
-    }
+        }
+    )
 
 
 __all__ = [

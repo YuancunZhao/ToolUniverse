@@ -10,37 +10,6 @@ from .rule_catalog import bayesian_odds_for_output, generic_bayesian_odds_for
 from .runtime_manifest import BAYESIAN_PRIOR
 
 
-def _candidate(row: dict[str, Any], trusted_source_fact_ids: set[str] | None) -> bool:
-    return is_candidate_evidence(
-        row, trusted_source_fact_ids=trusted_source_fact_ids
-    )
-
-
-def summarize_strengths(
-    rows: list[dict[str, Any]],
-    *,
-    trusted_source_fact_ids: set[str] | None = None,
-) -> dict[str, Any]:
-    selected = [
-        row
-        for row in rows
-        if isinstance(row, dict)
-        and _candidate(row, trusted_source_fact_ids)
-    ]
-    strengths = Counter(str(row.get("strength") or "") for row in selected)
-    return {
-        "system_preview_criteria": [
-            str(row.get("criterion") or "") for row in selected
-        ],
-        "strength_counts": dict(sorted(strengths.items())),
-        "strength_summary": (
-            ", ".join(f"{key}={value}" for key, value in sorted(strengths.items()))
-            if strengths
-            else "No compatible candidate evidence."
-        ),
-    }
-
-
 def compute_bayesian_score(
     rows: list[dict[str, Any]],
     *,
@@ -64,7 +33,9 @@ def compute_bayesian_score(
                 **row,
                 "system_preview_included": True,
             }
-        if not _candidate(candidate_row, trusted_source_fact_ids):
+        if not is_candidate_evidence(
+            candidate_row, trusted_source_fact_ids=trusted_source_fact_ids
+        ):
             continue
         strength = str(row.get("effective_strength") or row.get("strength") or "")
         criterion = str(row.get("criterion") or "")
@@ -121,9 +92,7 @@ def compute_bayesian_score(
     posterior = odds_path * prior / ((odds_path - 1.0) * prior + 1.0)
     strength_counts = Counter(row["strength"] for row in included_cards)
     strength_summary = (
-        ", ".join(
-            f"{key}={value}" for key, value in sorted(strength_counts.items())
-        )
+        ", ".join(f"{key}={value}" for key, value in sorted(strength_counts.items()))
         if strength_counts
         else "No compatible candidate evidence."
     )
@@ -152,7 +121,10 @@ def detect_conflicts(
         row
         for row in rows
         if isinstance(row, dict)
-        and _candidate(row, trusted_source_fact_ids)
+        and is_candidate_evidence(
+            row,
+            trusted_source_fact_ids=trusted_source_fact_ids,
+        )
     ]
     pathogenic = [
         str(row.get("criterion") or "")
@@ -187,5 +159,4 @@ def detect_conflicts(
 __all__ = [
     "compute_bayesian_score",
     "detect_conflicts",
-    "summarize_strengths",
 ]

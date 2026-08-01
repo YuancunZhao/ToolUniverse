@@ -14,7 +14,7 @@ def ACMG_overlay_gate_assess_variant(
     transcript: Optional[str] = None,
     disease: Optional[str] = None,
     inheritance: Optional[str] = None,
-    genome_build: Optional[str] = 'GRCh38',
+    genome_build: Optional[str] = None,
     source_outputs_or_leads: Optional[list[Any]] = None,
     literature_proposals: Optional[list[Any]] = None,
     cspec_proposals: Optional[list[Any]] = None,

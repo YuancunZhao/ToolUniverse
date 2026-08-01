@@ -11,7 +11,7 @@ from . import pvs1, rule_catalog
 
 
 ACMG_RUNTIME_VERSION = "evidence-only-1"
-COLLECTOR_SCHEMA_VERSION = "2026-07-27"
+COLLECTOR_SCHEMA_VERSION = "2026-08-01"
 UPSTREAM_BASE_COMMIT = "089eb8e6308fc64ae5af3de4bfbec32b5cf07b61"
 BAYESIAN_PRIOR = 0.1
 
@@ -51,6 +51,7 @@ def _ruleset_payload() -> dict[str, Any]:
     ]
     return {
         "criterion_rules": rule_catalog.RULE_CATALOG,
+        "criterion_use_matrix": rule_catalog.criterion_use_matrix(),
         "consequence_policies": rule_catalog.CONSEQUENCE_POLICIES,
         "spliceai_rule": rule_catalog.SPLICEAI_RULE,
         "pvs1_rule": {

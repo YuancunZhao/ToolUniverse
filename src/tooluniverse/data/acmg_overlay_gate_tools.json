@@ -28,8 +28,8 @@
         },
         "genome_build": {
           "type": "string",
-          "enum": ["GRCh38", "GRCh37"],
-          "default": "GRCh38"
+          "enum": ["GRCh38", "GRCh37", "hg38", "hg19"],
+          "description": "Genome assembly. hg19/hg38 normalize to GRCh37/GRCh38; coordinate inputs without an explicit or accession-inferred build fail closed."
         },
         "source_outputs_or_leads": {
           "type": "array",
@@ -182,7 +182,8 @@
           "enum": [
             "success",
             "degraded",
-            "error"
+            "error",
+            "not_applicable"
           ]
         },
         "execution_status": {"type": "string"},
@@ -191,6 +192,10 @@
           "type": "object"
         },
         "variant_identity": {"type": "object"},
+        "variant_scope": {
+          "type": "object",
+          "description": "Pre-provider build and small-variant/SV scope decision."
+        },
         "clinical_context": {
           "type": ["object", "null"],
           "description": "Review-only clinical context echo; never evidence."
@@ -241,6 +246,11 @@
           "items": {"type": "object"}
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
+        "prior_variant_candidates": {
+          "type": "array",
+          "description": "Same-residue germline-compatible prior-variant leads. Database labels remain review-only until independently anchored literature facts validate PS1 or PM5.",
+          "items": {"type": "object"}
+        },
         "literature_candidates": {
           "type": "array",
           "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
@@ -253,11 +263,26 @@
         "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
         "workflow_status": {
           "type": "string",
-          "enum": ["collecting", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+          "enum": ["collecting", "input_correction_required", "unsupported_variant_class", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+        },
+        "review_readiness": {
+          "type": "object",
+          "description": "Auditable evidence-review readiness. This is workflow completeness, not a five-tier classification."
         },
         "next_actions": {"type": "array", "items": {"type": "object"}},
         "predictor_scores": {"type": "object"},
-        "criterion_reviews": {"type": "array", "items": {"type": "object"}},
+        "criterion_reviews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": {"type": "string"},
+              "route_status": {"type": "string", "enum": ["assessed", "proposal_validated", "candidate_available", "review_pending", "insufficient_information", "not_applicable", "deprecated"]},
+              "candidate_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+              "pending_request_ids": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
         "evidence_cards": {
           "type": "array",
           "items": {
@@ -288,16 +313,19 @@
         "coverage_status",
         "variant",
         "variant_identity",
+        "variant_scope",
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
         "coverage_summary",
         "source_facts",
         "source_assertions",
+        "prior_variant_candidates",
         "literature_candidates",
         "literature_review",
         "recoverable_gaps",
         "workflow_status",
+        "review_readiness",
         "next_actions",
         "predictor_scores",
         "criterion_reviews",
@@ -341,8 +369,8 @@
         },
         "genome_build": {
           "type": "string",
-          "enum": ["GRCh38", "GRCh37"],
-          "default": "GRCh38"
+          "enum": ["GRCh38", "GRCh37", "hg38", "hg19"],
+          "description": "Genome assembly. hg19/hg38 normalize to GRCh37/GRCh38; coordinate inputs without an explicit or accession-inferred build fail closed."
         },
         "source_outputs_or_leads": {
           "type": "array",
@@ -487,11 +515,15 @@
     "return_schema": {
       "type": "object",
       "properties": {
-        "status": {"type": "string", "enum": ["success", "degraded", "error"]},
+        "status": {"type": "string", "enum": ["success", "degraded", "error", "not_applicable"]},
         "execution_status": {"type": "string"},
         "coverage_status": {"type": "string"},
         "variant": {"type": "object"},
         "variant_identity": {"type": "object"},
+        "variant_scope": {
+          "type": "object",
+          "description": "Pre-provider build and small-variant/SV scope decision."
+        },
         "clinical_context": {
           "type": ["object", "null"],
           "description": "Review-only clinical context echo; never evidence."
@@ -537,6 +569,11 @@
           "items": {"type": "object"}
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
+        "prior_variant_candidates": {
+          "type": "array",
+          "description": "Same-residue germline-compatible prior-variant leads. Database labels remain review-only until independently anchored literature facts validate PS1 or PM5.",
+          "items": {"type": "object"}
+        },
         "literature_candidates": {
           "type": "array",
           "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
@@ -549,11 +586,26 @@
         "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
         "workflow_status": {
           "type": "string",
-          "enum": ["collecting", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+          "enum": ["collecting", "input_correction_required", "unsupported_variant_class", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+        },
+        "review_readiness": {
+          "type": "object",
+          "description": "Auditable evidence-review readiness. This is workflow completeness, not a five-tier classification."
         },
         "next_actions": {"type": "array", "items": {"type": "object"}},
         "predictor_scores": {"type": "object"},
-        "criterion_reviews": {"type": "array", "items": {"type": "object"}},
+        "criterion_reviews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": {"type": "string"},
+              "route_status": {"type": "string", "enum": ["assessed", "proposal_validated", "candidate_available", "review_pending", "insufficient_information", "not_applicable", "deprecated"]},
+              "candidate_source_fact_ids": {"type": "array", "items": {"type": "string"}},
+              "pending_request_ids": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
         "evidence_cards": {"type": "array", "items": {"type": "object"}},
         "compatibility_report": {"type": "object"},
         "conflict_report": {"type": "object"},
@@ -569,16 +621,19 @@
         "coverage_status",
         "variant",
         "variant_identity",
+        "variant_scope",
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
         "coverage_summary",
         "source_facts",
         "source_assertions",
+        "prior_variant_candidates",
         "literature_candidates",
         "literature_review",
         "recoverable_gaps",
         "workflow_status",
+        "review_readiness",
         "next_actions",
         "predictor_scores",
         "criterion_reviews",

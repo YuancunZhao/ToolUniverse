@@ -624,6 +624,47 @@ def test_protein_feature_and_interpro_adapters_do_not_invent_coordinates():
     )
 
 
+def test_ebi_known_variation_adapter_requires_residue_filter_before_readiness():
+    features = adapt_source_output(
+        "EBIProteins_get_variation",
+        {
+            "status": "success",
+            "data": {
+                "accession": "P22607",
+                "variants": [
+                    {
+                        "position_start": 380,
+                        "position_end": 380,
+                        "wild_type": "G",
+                        "alternative": "A",
+                        "source_type": "mixed",
+                        "xrefs": [{"id": "VCV000000123"}],
+                    }
+                ],
+            },
+        },
+    )["reviewable_features"]
+
+    assert features["protein_variants"][0]["alternative"] == "A"
+    assert (
+        source_fact_ready(
+            "EBIProteins_get_variation",
+            features,
+            {"protein_accession": "P22607"},
+        )[2]
+        is False
+    )
+    features["same_residue_candidates"] = []
+    assert (
+        source_fact_ready(
+            "EBIProteins_get_variation",
+            features,
+            {"protein_accession": "P22607"},
+        )[2]
+        is True
+    )
+
+
 def test_ensembl_lookup_gene_exon_contract():
     features = {
         "transcript_id": "ENST00000357654",
@@ -821,9 +862,7 @@ def test_new_gnomad_constraint_contract_is_complete_and_identity_bound():
     assert identity_verified is True
     assert ready is True
     assert (
-        source_fact_ready(
-            "gnomad_get_constraint", features, {"gene": "NOTCH1"}
-        )[2]
+        source_fact_ready("gnomad_get_constraint", features, {"gene": "NOTCH1"})[2]
         is False
     )
 
@@ -838,9 +877,7 @@ def test_clinvar_adapter_accepts_raw_search_and_new_data_payload_shapes():
                     "1": {
                         "uid": "1",
                         "title": "NM_000518.5(HBB):c.20A>T",
-                        "germline_classification": {
-                            "description": "Pathogenic"
-                        },
+                        "germline_classification": {"description": "Pathogenic"},
                     },
                 }
             },
@@ -852,17 +889,13 @@ def test_clinvar_adapter_accepts_raw_search_and_new_data_payload_shapes():
                 "raw_data": {
                     "uid": "2",
                     "title": "NM_000518.5(HBB):c.20A>T",
-                    "germline_classification": {
-                        "description": "Pathogenic"
-                    },
+                    "germline_classification": {"description": "Pathogenic"},
                 },
             },
         },
     ]
     for payload in payloads:
-        adapted = adapt_source_output(
-            "ClinVar_get_clinical_significance", payload
-        )
+        adapted = adapt_source_output("ClinVar_get_clinical_significance", payload)
         assert adapted["reviewable_features"]["title"].endswith("c.20A>T")
         assert "germline_classification" not in adapted["reviewable_features"]
         assert any(
@@ -908,8 +941,7 @@ def test_clingen_context_adapters_preserve_direct_actionability_and_classificati
     assert adult["actionability"][0]["intervention"] == "Screening"
     assert classification["reviewable_features"]["variant_classifications"]
     assert any(
-        "Classification" in key
-        for key in classification["quarantined_conclusions"]
+        "Classification" in key for key in classification["quarantined_conclusions"]
     )
 
 
@@ -1052,9 +1084,7 @@ def test_favor_and_opentargets_adapters_preserve_transcript_consequences():
                         "target": {"approvedSymbol": "DNAH1"},
                         "transcriptId": "ENST00000420323.6",
                         "aminoAcidChange": "P3909RfsTer33",
-                        "variantConsequences": [
-                            {"label": "frameshift_variant"}
-                        ],
+                        "variantConsequences": [{"label": "frameshift_variant"}],
                         "impact": "HIGH",
                         "isEnsemblCanonical": True,
                     }
@@ -1064,9 +1094,7 @@ def test_favor_and_opentargets_adapters_preserve_transcript_consequences():
     )["reviewable_features"]
 
     assert favor["consequence_candidates"][0]["exon"] == "73"
-    assert favor["consequence_candidates"][0]["consequence"] == [
-        "frameshift_variant"
-    ]
+    assert favor["consequence_candidates"][0]["consequence"] == ["frameshift_variant"]
     assert open_targets["consequence_candidates"][0]["transcript"] == (
         "ENST00000420323.6"
     )

@@ -16,40 +16,31 @@ from .base_tool import BaseTool
 from .tool_registry import register_tool
 
 
-def _trusted_source_fact_ids(collector_result: Any) -> set[str] | None:
-    """Extract only ready facts from a collector result for the internal guard."""
+def _source_fact_ids(
+    collector_result: Any,
+) -> tuple[set[str] | None, set[str] | None]:
+    """Extract known and assessment-ready fact IDs in one pass."""
     if not isinstance(collector_result, dict):
-        return None
+        return None, None
     facts = collector_result.get("source_facts")
     if not isinstance(facts, list):
-        return None
-    trusted = {
-        fact.get("fact_id", "").strip()
-        for fact in facts
-        if isinstance(fact, dict)
-        and isinstance(fact.get("fact_id"), str)
-        and fact.get("fact_id", "").strip()
-        and fact.get("status") == "success"
-        and fact.get("identity_verified") is True
-        and fact.get("assessment_ready") is True
-    }
-    return trusted
-
-
-def _known_source_fact_ids(collector_result: Any) -> set[str] | None:
-    """Extract all serialized collector fact IDs for citation-only card checks."""
-    if not isinstance(collector_result, dict):
-        return None
-    facts = collector_result.get("source_facts")
-    if not isinstance(facts, list):
-        return None
-    return {
-        fact.get("fact_id", "").strip()
-        for fact in facts
-        if isinstance(fact, dict)
-        and isinstance(fact.get("fact_id"), str)
-        and fact.get("fact_id", "").strip()
-    }
+        return None, None
+    known: set[str] = set()
+    trusted: set[str] = set()
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        fact_id = str(fact.get("fact_id") or "").strip()
+        if not fact_id:
+            continue
+        known.add(fact_id)
+        if (
+            fact.get("status") == "success"
+            and fact.get("identity_verified") is True
+            and fact.get("assessment_ready") is True
+        ):
+            trusted.add(fact_id)
+    return trusted, known
 
 
 @register_tool("ACMG_evidence_collector")
@@ -124,11 +115,12 @@ class ACMGGuardFinalAnswerTool(BaseTool):
             cards = collector_result.get("evidence_cards", [])
         if not isinstance(cards, list):
             cards = []
+        trusted_ids, known_ids = _source_fact_ids(collector_result)
         return guard_acmg_answer(
             answer_text,
             cards,
-            trusted_source_fact_ids=_trusted_source_fact_ids(collector_result),
-            known_source_fact_ids=_known_source_fact_ids(collector_result),
+            trusted_source_fact_ids=trusted_ids,
+            known_source_fact_ids=known_ids,
         )
 
 

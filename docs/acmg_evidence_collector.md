@@ -14,6 +14,36 @@ The workbench path is:
 criterion and strength plus its rule basis, caveats, missing requirements, and
 review state. Neither is a final clinical adoption.
 
+## Input scope and genome assembly
+
+The collector is limited to germline small variants. It classifies the input
+before calling identity, consequence, population, or literature providers and
+returns a top-level `variant_scope` with the input kind, affected span,
+normalized build, build-resolution source, support status, and recommended
+route.
+
+- `hg19` and `GRCh37` normalize to `GRCh37`; `hg38` and `GRCh38` normalize to
+  `GRCh38`.
+- An interval of at most 50 bp remains eligible for the small-variant route.
+  Intervals over 50 bp, symbolic ALT or breakend notation, and
+  DEL/DUP/INV/BND/CPX/CNV representations route to
+  `tooluniverse-structural-variant-analysis`.
+- A coordinate input without an explicit build that also cannot be inferred
+  from a versioned RefSeq genomic accession returns
+  `workflow_status=input_correction_required`. It is never silently treated as
+  GRCh38.
+- Transcript HGVS and rsID inputs without coordinates retain the historical
+  GRCh38 default, recorded as `build_resolution_source=default_noncoordinate`.
+- A structural variant returns `status=not_applicable` and
+  `workflow_status=unsupported_variant_class`. No small-variant identity,
+  consequence, PVS1, PM2, EvidenceCard, or Bayesian computation is attempted.
+
+The structural-variant workflow preserves the original assembly and may call
+`EnsemblMap_convert_coordinates` before a GRCh38-only provider. It must obtain
+one verified contiguous mapping on the same chromosome; zero, multiple, or
+discontinuous mappings fail closed. Approximate coordinate offsets and
+cross-build regional comparisons are prohibited.
+
 Runtime data-source notes:
 
 - ClinGen CSpec discovery uses the JSON-LD registry
@@ -108,6 +138,12 @@ recommended or submission name, function, disease notes, catalytic activity,
 cofactors, PTMs, domains, sequence length, cross-references, and publications.
 Inactive or deleted entries remain visible with their reason.
 
+For missense variants, the protein-wide EBI variation response is reduced to
+germline-compatible variants at the exact selected residue. These are returned
+as `prior_variant_candidates` and trigger `prior_variant` full-text requests.
+ClinVar/EBI labels remain leads: PS1 or PM5 requires an independently anchored
+paper fact that verifies the prior variant and its pathogenic evidence.
+
 Every attempted provider produces a SourceFact even for an empty, incomplete,
 unversioned, or failed response. Conditions that cannot apply are represented
 as `not_applicable` coverage rather than synthetic negative evidence. Summary
@@ -145,6 +181,23 @@ embedding provider raw payloads.
   `review_only`/`not_evidence` markers and never generates PS2, PM3, PP4, or
   any classification; unknown fields are dropped and reported in
   `ignored_fields`.
+
+`criterion_reviews` covers all 28 criteria and derives its route from the
+versioned use matrix. Each row has one `route_status`: `assessed`,
+`proposal_validated`, `candidate_available`, `review_pending`,
+`insufficient_information`, `not_applicable`, or `deprecated`, plus compact
+candidate SourceFact IDs, pending request IDs, card IDs, and missing
+requirements. `not_assessed` and `insufficient_information` mean evidence was
+not established; neither is benign evidence.
+
+The top-level `review_readiness` describes workflow completion, not clinical
+classification. `ready_for_evidence_review` means all currently executable
+provider, consequence, CSpec, and full-text actions have finished;
+`incomplete` means actions or inaccessible mandatory content remain;
+`blocked` means identity/build is unresolved; `not_applicable` means the event
+is outside germline-small-variant scope. Missing optional evidence for one or
+more criteria does not prevent review readiness. Conflicts remain listed and
+continue to control compatibility and Bayesian inclusion.
 
 Each system-preview card has a valid ACMG strength, has
 `overlay_validated=true`, references identity-bound `source_fact_ids`, and
@@ -284,6 +337,11 @@ preview:
   review facts and cannot bypass the PVS1 decision tree. An LLM-suggested
   criterion outside the allowed fact-type mapping is preserved as `unmapped`
   and excluded from the system preview.
+- Provider-resolved in-frame or stop-loss consequences can produce a
+  review-required PM4 proposal when the unique protein mapping is outside a
+  repeat, or BP3 when it overlaps a repeat/low-complexity region without a
+  known functional feature. Ambiguous mappings or unresolved feature context
+  remain candidates only.
 
 For general Walker PP3/BP4, the collector explicitly requests raw, unmasked
 SpliceAI output at distance 500. `DS_AG`, `DS_AL`, `DS_DG`, and `DS_DL` are

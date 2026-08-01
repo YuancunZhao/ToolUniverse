@@ -110,8 +110,15 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 
 ### 3. Clinical Decision Support
 
+**Variant routing precedence:** classify the input shape before matching broad
+words such as "pathogenicity", "ACMG", or "clinical significance". A genomic
+interval over 50 bp, symbolic ALT, breakend, or DEL/DUP/INV/BND/CPX/CNV token
+always routes to the structural-variant Skill, including Chinese requests that
+say 结构变异、拷贝数变异、缺失、重复、倒位或易位.
+
 | Keywords | Action |
 |----------|--------|
+| "**structural variant**", "SV", "CNV", "DEL", "DUP", "INV", "BND", "CPX", "deletion", "duplication", "结构变异", "拷贝数变异", "缺失", "重复", "倒位", "易位", `chr:start-end` | `Skill(skill="tooluniverse-structural-variant-analysis")` |
 | "**drug safety**", "adverse events", "side effects", "pharmacovigilance", "pharmacogenomics", "FAERS", "black box warning" | `Skill(skill="tooluniverse-pharmacovigilance")` |
 | "**adverse event signal**", "safety signal detection", "disproportionality", "PRR", "ROR" | `Skill(skill="tooluniverse-adverse-event-detection")` |
 | "**drug safety profile**", "drug safety assessment", "comprehensive safety" | `Skill(skill="tooluniverse-pharmacovigilance")` |
@@ -156,7 +163,6 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | "**fine-mapping**", "credible sets", "causal variants", "statistical refinement" | `Skill(skill="tooluniverse-gwas-finemapping")` |
 | "**SNP interpretation**", "rsID", "rs[number]", "variant annotation" | `Skill(skill="tooluniverse-gwas-snp-interpretation")` |
 | "**polygenic risk**", "PRS", "genetic risk", "risk score for [disease]" | `Skill(skill="tooluniverse-polygenic-risk-score")` |
-| "**structural variant**", "SV", "CNV", "deletion", "duplication", "chromosomal rearrangement" | `Skill(skill="tooluniverse-structural-variant-analysis")` |
 | "**VCF**", "variant calling", "mutation analysis", "variant annotation pipeline", "**VAF**", "variant allele frequency", "coding variant", "synonymous", "missense" | `Skill(skill="tooluniverse-variant-analysis")` |
 | "**variant functional annotation**", "protein variant effect", "variant consequence", "missense effect" | `Skill(skill="tooluniverse-variant-functional-annotation")` |
 | "**regulatory variant**", "non-coding variant", "eQTL variant", "regulatory region variant" | `Skill(skill="tooluniverse-regulatory-variant-analysis")` |

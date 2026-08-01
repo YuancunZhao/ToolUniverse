@@ -118,7 +118,7 @@
 
 **Interpretation**: NF1 has the highest level of evidence for haploinsufficiency. Deletion of one copy is sufficient to cause neurofibromatosis type 1 with high penetrance (>95%).
 
-*Sources: `ClinGen_search_dosage_sensitivity`, `ClinGen_search_gene_validity`, gnomAD*
+*Sources: `ClinGen_dosage_by_gene`, `ClinGen_search_gene_validity`, `gnomad_get_constraint`*
 
 ### 3.2 Triplosensitive Genes
 
@@ -181,7 +181,7 @@
 
 **ACMG Code**: **PP4** (Supporting) - Patient phenotype highly specific for NF1-related disorder
 
-*Source: `ClinGen_search_dosage_sensitivity` (accessed 2026-02-09)*
+*Source: `ClinGen_dosage_by_gene` (accessed 2026-02-09)*
 
 ---
 
@@ -433,18 +433,18 @@ No significant uncertainties affect the Pathogenic classification. NF1 haploinsu
 |----------|------|-------|--------|
 | Ensembl | `ensembl_lookup_gene` | NF1 gene coordinates | chr17:31094927-31377677 confirmed |
 | NCBI Gene | `NCBIGene_search` | NF1 function | GeneID: 4763, RAS-GAP function confirmed |
-| ClinVar | `ClinVar_search_variants` | chr17:31094927-31377677 DEL | 3 pathogenic matches found |
-| gnomAD | Browser query | NF1 LoF variants | 0 LoF in 152,312 alleles; pLI=1.00 |
+| Ensembl | `ensembl_get_structural_variants` | chr17:31094927-31377677 | Overlapping known SV source leads |
+| gnomAD | `gnomad_get_sv_by_region` | chr17:31094927-31377677 | Population SV context |
 
 ### 10.2 Clinical Databases
 
 | Database | Tool | Query | Result |
 |----------|------|-------|--------|
-| ClinGen | `ClinGen_search_dosage_sensitivity` | NF1 | HI score 3 (Sufficient evidence) |
+| ClinGen | `ClinGen_dosage_by_gene` | NF1 | HI score 3 (Sufficient evidence) |
 | ClinGen | `ClinGen_search_gene_validity` | NF1 - Neurofibromatosis 1 | Definitive |
 | OMIM | `OMIM_search` | NF1 | Gene #613113, Disease #162200 |
 | OMIM | `OMIM_get_entry` | 162200 | Neurofibromatosis type 1 details |
-| DECIPHER | `ClinGen_search_dosage_sensitivity` | NF1 deletions | 87 patients, phenotype frequencies |
+| External case database | No current ToolUniverse provider | NF1 deletions | Not assessed in this example |
 | DisGeNET | `DisGeNET_search_gene` | NF1 | Score 0.8 for neurofibromatosis |
 
 ### 10.3 Literature
@@ -519,7 +519,7 @@ No significant uncertainties affect the Pathogenic classification. NF1 haploinsu
 - Gain of function → MECP2 duplication syndrome (males)
 - Goldilocks gene: "just right" dosage required
 
-*Sources: `ClinGen_search_dosage_sensitivity`, `ClinGen_search_gene_validity`*
+*Sources: `ClinGen_dosage_by_gene`, `ClinGen_search_gene_validity`*
 
 ---
 

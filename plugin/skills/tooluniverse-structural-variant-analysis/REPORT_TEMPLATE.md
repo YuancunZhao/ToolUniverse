@@ -29,7 +29,10 @@ SV_analysis_INV_chr11_2100000_2400000_complex.md
 | Field | Value |
 |-------|-------|
 | **SV Type** | Deletion / Duplication / Inversion / Translocation |
-| **Coordinates** | chr_:________-________ (GRCh38) |
+| **Original Coordinates** | chr_:________-________ (GRCh37 / GRCh38) |
+| **Mapped Coordinates** | chr_:________-________ (GRCh38), or not available |
+| **Mapping Source** | EnsemblMap exact mapping / not required / failed closed |
+| **Mapping Segments** | One contiguous segment required; list returned segments |
 | **Size** | ___ kb |
 | **Gene Content** | X genes fully contained, Y partially disrupted |
 | **Classification** | Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign |
@@ -99,9 +102,9 @@ SV_analysis_INV_chr11_2100000_2400000_complex.md
 
 ## 4. Population Frequency Context
 
-### 4.1 ClinVar Matches (Overlapping SVs)
+### 4.1 Known Overlapping SV Source Leads
 
-| VCV ID | Classification | Size | Overlap | Review Status | Genes |
+| Source ID | Source Label | Size | Overlap | Review Status | Genes |
 |--------|----------------|------|---------|---------------|-------|
 | | | | | | |
 
@@ -111,7 +114,7 @@ SV_analysis_INV_chr11_2100000_2400000_complex.md
 
 **Search Result**: [Frequency or absent]
 
-### 4.3 DECIPHER Patient Cases
+### 4.3 External Patient Cases (when an available provider is documented)
 
 | Case ID | Phenotype | SV Type | Size | Overlap | Similarity |
 |---------|-----------|---------|------|---------|------------|

@@ -25,7 +25,7 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     )
 
     assert manifest["acmg_runtime_version"] == "evidence-only-1"
-    assert manifest["collector_schema_version"] == "2026-07-27"
+    assert manifest["collector_schema_version"] == "2026-08-01"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {

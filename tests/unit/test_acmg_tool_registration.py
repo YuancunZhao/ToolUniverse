@@ -8,12 +8,15 @@ import re
 from pathlib import Path
 
 from tooluniverse.tool_registry import lazy_import_tool
+from tooluniverse.tools.ACMG_evidence_collector import ACMG_evidence_collector
+from tooluniverse.tools.ACMG_overlay_gate_assess_variant import (
+    ACMG_overlay_gate_assess_variant,
+)
 
 
 def test_acmg_summary_imports_without_legacy_overlay_package():
     from tooluniverse.acmg import summary
 
-    assert hasattr(summary, "summarize_strengths")
     assert hasattr(summary, "compute_bayesian_score")
     assert hasattr(summary, "detect_conflicts")
 
@@ -129,15 +132,17 @@ def test_active_skills_do_not_depend_on_retired_acmg_routing_core():
 def test_structural_variant_skill_excludes_small_variant_collector():
     paths = (
         Path("skills/tooluniverse-structural-variant-analysis/SKILL.md"),
-        Path(
-            "skills/tooluniverse-structural-variant-analysis/"
-            "CLASSIFICATION_GUIDE.md"
-        ),
+        Path("skills/tooluniverse-structural-variant-analysis/CLASSIFICATION_GUIDE.md"),
     )
     for path in paths:
         text = " ".join(path.read_text(encoding="utf-8").split())
         assert "supports germline small variants" in text
         assert "do not submit" in text or "never submit" in text
+    skill = paths[0].read_text(encoding="utf-8")
+    assert "disable-model-invocation" not in skill
+    assert "EnsemblMap_convert_coordinates" in skill
+    assert "gnomad_get_sv_by_region" in skill
+    assert "approximate coordinate offset" in skill
 
 
 def test_general_router_preserves_biology_routes_and_enhanced_acmg_route():
@@ -152,10 +157,26 @@ def test_general_router_preserves_biology_routes_and_enhanced_acmg_route():
         "tooluniverse-acmg-variant-classification",
     ):
         assert f'Skill(skill="{skill_name}")' in text
-    assert (
-        text.count('Skill(skill="tooluniverse-acmg-variant-classification")')
-        < text.count("Skill(skill=")
+    assert text.count(
+        'Skill(skill="tooluniverse-acmg-variant-classification")'
+    ) < text.count("Skill(skill=")
+    structural = 'Skill(skill="tooluniverse-structural-variant-analysis")'
+    assert structural in text
+    assert text.index(structural) < text.index(
+        'Skill(skill="tooluniverse-acmg-variant-classification")'
     )
+    assert all(token in text for token in ("结构变异", "缺失", "BND", "chr:start-end"))
+
+
+def test_variant_interpretation_routes_sv_before_small_variant_collector():
+    text = Path("skills/tooluniverse-variant-interpretation/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    structural = "tooluniverse-structural-variant-analysis"
+    collector = "ACMG_evidence_collector"
+    assert text.index(structural) < text.index(collector)
+    assert "intervals over 50 bp" in " ".join(text.split())
+    assert "Normalize hg19 to GRCh37" in text
 
 
 def test_acmg_evidence_collector_lazy_imports():
@@ -174,19 +195,11 @@ def test_public_acmg_runtime_tool_types_lazy_import():
 
 
 def test_collector_is_the_primary_runtime_discovery_front_door():
-    from tooluniverse.acmg import policy, search
+    from tooluniverse.acmg import policy
     from tooluniverse import tools
 
     assert policy.ACMG_FRONT_DOOR_TOOL_NAME == "ACMG_evidence_collector"
     assert "ACMG_evidence_collector" in tools.__all__
-
-    search_entry = search.prioritize_acmg_tools(
-        [{"name": "ACMG_evidence_collector", "type": "ACMG_evidence_collector"}]
-    )[0]
-    assert search_entry["name"] == "ACMG_evidence_collector"
-    assert search_entry["type"] == "ACMG_evidence_collector"
-    assert "must_route_through" not in search_entry
-    assert "acmg_countable_evidence" not in search_entry
 
     sandboxed = policy.sanitize_high_risk_acmg_result(
         "GeneBe_classify_variant",
@@ -194,93 +207,6 @@ def test_collector_is_the_primary_runtime_discovery_front_door():
         policy_context={"acmg_evidence_collection": True},
     )
     assert sandboxed["recommended_front_door_tool"] == "ACMG_evidence_collector"
-
-
-def test_search_does_not_inject_removed_overlay_metadata():
-    from tooluniverse.acmg.search import prioritize_acmg_tools
-
-    rows = prioritize_acmg_tools(
-        [
-            {
-                "name": "ACMG_population_evidence",
-                "description": "provider description",
-            }
-        ]
-    )
-    encoded = json.dumps(rows, sort_keys=True)
-    assert "ACMG_overlay_pm2" not in encoded
-    assert "overlay_validated" not in encoded
-    assert "must_route_through" not in encoded
-    assert "source_tools_must_use_sandbox" not in encoded
-
-
-def test_search_only_decorates_acmg_queries_and_preserves_results():
-    from tooluniverse.acmg.search import (
-        decorate_search_payload,
-        is_acmg_query,
-    )
-
-    assert is_acmg_query("ACMG interpretation for NM_000059.4:c.5946delT")
-    assert is_acmg_query("ClinGen guidance for NM_000059.4:c.5946delT")
-    assert not is_acmg_query("NM_000059.4:c.5946delT transcript sequence")
-    assert not is_acmg_query("ClinGen gene validity for BRCA2")
-    assert not is_acmg_query("pathogenic bacteria")
-
-    original = [
-        {"name": "ordinary_tool"},
-        {"name": "ACMG_evidence_collector"},
-        {"name": "ClinVar_get_variant_details"},
-    ]
-    result = decorate_search_payload({"tools": original})
-    assert [row["name"] for row in result["tools"]] == [
-        "ACMG_evidence_collector",
-        "ClinVar_get_variant_details",
-        "ordinary_tool",
-    ]
-    assert result["tools"][1]["source_lead_only"] is True
-    assert "source_lead_only" not in result
-    assert "acmg_intent" not in result
-    assert "acmg_evidence_notice" not in result
-    assert "recommended_front_door_tool" not in result
-
-
-def test_search_does_not_fabricate_collector_or_repeat_it_on_later_pages():
-    from tooluniverse.acmg.search import decorate_search_payload
-
-    missing = decorate_search_payload({"tools": [{"name": "ordinary_tool"}]})
-    assert [row["name"] for row in missing["tools"]] == ["ordinary_tool"]
-
-    later_page = decorate_search_payload(
-        {
-            "offset": 10,
-            "tools": [
-                {"name": "ordinary_tool"},
-                {"name": "ACMG_evidence_collector"},
-            ],
-        }
-    )
-    assert [row["name"] for row in later_page["tools"]] == [
-        "ordinary_tool",
-        "ACMG_evidence_collector",
-    ]
-
-
-def test_non_acmg_category_does_not_promote_collector():
-    from tooluniverse.acmg.search import decorate_search_payload
-
-    result = decorate_search_payload(
-        {
-            "categories": ["literature"],
-            "tools": [
-                {"name": "ordinary_tool"},
-                {"name": "ACMG_evidence_collector"},
-            ],
-        }
-    )
-    assert [row["name"] for row in result["tools"]] == [
-        "ordinary_tool",
-        "ACMG_evidence_collector",
-    ]
 
 
 def test_acmg_evidence_collector_has_public_tool_config():
@@ -445,6 +371,7 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
     )
     assert "consequence_profile" in collector_required
     assert {
+        "variant_scope",
         "system_preview_bayesian",
         "user_selected_bayesian",
         "decision_report",
@@ -453,6 +380,22 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
         "next_actions",
         "literature_review",
     } <= collector_required
+
+    build_schema = by_name["ACMG_evidence_collector"]["parameter"]["properties"][
+        "genome_build"
+    ]
+    assert set(build_schema["enum"]) == {"GRCh37", "GRCh38", "hg19", "hg38"}
+    assert "default" not in build_schema
+    collector_signature = inspect.signature(ACMG_evidence_collector)
+    alias_signature = inspect.signature(ACMG_overlay_gate_assess_variant)
+    assert collector_signature.parameters["genome_build"].default is None
+    assert alias_signature.parameters["genome_build"].default is None
+    workflow_statuses = by_name["ACMG_evidence_collector"]["return_schema"][
+        "properties"
+    ]["workflow_status"]["enum"]
+    assert {"input_correction_required", "unsupported_variant_class"} <= set(
+        workflow_statuses
+    )
 
 
 def test_collector_and_alias_expose_literature_and_decision_workbench_inputs():
@@ -476,9 +419,9 @@ def test_collector_and_alias_expose_literature_and_decision_workbench_inputs():
             "document_hash",
             "reading_manifest",
         } <= set(proposal_items["properties"])
-        reading_status = proposal_items["properties"]["reading_manifest"][
-            "properties"
-        ]["status"]
+        reading_status = proposal_items["properties"]["reading_manifest"]["properties"][
+            "status"
+        ]
         assert set(reading_status["enum"]) == {
             "complete",
             "partial",

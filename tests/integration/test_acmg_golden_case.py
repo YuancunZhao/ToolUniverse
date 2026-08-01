@@ -16,10 +16,7 @@ from tooluniverse.smcp import SMCP
 
 
 FIXTURE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "fixtures"
-    / "acmg"
-    / "brca2_5946delt.json"
+    Path(__file__).resolve().parents[1] / "fixtures" / "acmg" / "brca2_5946delt.json"
 )
 BASE_ARGUMENTS = {
     "variant": "NM_000059.4:c.5946delT",
@@ -82,6 +79,14 @@ class GoldenProviderFixture:
         self.calls.append(deepcopy(call))
         return {"status": "unavailable", "reason": "golden fixture has no result"}
 
+    def run_many_functions(
+        self,
+        calls: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> list[Any]:
+        """Keep the golden path fully offline while exercising batch orchestration."""
+        return [self.run_one_function(call, **kwargs) for call in calls]
+
 
 class MCPGoldenToolUniverse(ToolUniverse, GoldenProviderFixture):
     """Real ToolUniverse dispatch with provider calls replaced by frozen data."""
@@ -96,6 +101,23 @@ class MCPGoldenToolUniverse(ToolUniverse, GoldenProviderFixture):
         if fixture is not None:
             return fixture
         return super().run_one_function(call, **kwargs)
+
+    def run_many_functions(
+        self,
+        calls: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> list[Any]:
+        results = []
+        for call in calls:
+            fixture = self.fixture_response(call)
+            if fixture is None:
+                self.calls.append(deepcopy(call))
+                fixture = {
+                    "status": "unavailable",
+                    "reason": "golden fixture has no result",
+                }
+            results.append(fixture)
+        return results
 
 
 def _trusted_fact_ids(result: dict[str, Any]) -> set[str]:
@@ -151,6 +173,8 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert initial["variant_identity"]["gene"] == "BRCA2"
     assert initial["variant_identity"]["transcript"] == "NM_000059.4"
     assert initial["consequence_profile"]["protein_effect"] == "lof"
+    assert initial["review_readiness"]["status"] == "incomplete"
+    assert initial["review_readiness"]["pending_request_ids"]
     assert initial["final_classification_allowed"] is False
     assert initial["runtime_manifest"]["acmg_runtime_version"] == "evidence-only-1"
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
@@ -163,13 +187,13 @@ def test_brca2_golden_three_phase_evidence_workflow():
             "literature_proposals": [MECHANISM_PROPOSAL],
         }
     )
-    pvs1 = next(
-        row for row in proposed["evidence_cards"] if row["criterion"] == "PVS1"
-    )
+    pvs1 = next(row for row in proposed["evidence_cards"] if row["criterion"] == "PVS1")
     assert pvs1["assessment_status"] == "met"
     assert pvs1["strength"] == "PVS1"
     assert pvs1["system_preview_included"] is True
     assert pvs1["card_id"] in proposed["system_preview_bayesian"]["included_card_ids"]
+    assert proposed["review_readiness"]["status"] == "ready_for_evidence_review"
+    assert proposed["review_readiness"]["pending_request_ids"] == []
     assert "compatibility_exclusions" in proposed["conflict_report"]
     assert "correlated_source_exclusions" in proposed["conflict_report"]
 
@@ -242,5 +266,5 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
     payload = _mcp_payload(response)
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
-    assert payload["runtime_manifest"]["collector_schema_version"] == "2026-07-27"
+    assert payload["runtime_manifest"]["collector_schema_version"] == "2026-08-01"
     assert payload["final_classification_allowed"] is False

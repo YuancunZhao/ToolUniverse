@@ -27,6 +27,14 @@ GENOMIC_VCF_RE = re.compile(
     r"|^(?:chr)?[^-\s]+-\d+-[ACGT]+-[ACGT]+$",
     re.IGNORECASE,
 )
+_VCF_COLON_RE = re.compile(
+    r"^(?:chr)?[^:\s]+:(?P<position>\d+):(?P<ref>[ACGT]+):(?P<alt>[ACGT]+)$",
+    re.IGNORECASE,
+)
+_VCF_DASH_RE = re.compile(
+    r"^(?:chr)?[^-\s]+-(?P<position>\d+)-(?P<ref>[ACGT]+)-(?P<alt>[ACGT]+)$",
+    re.IGNORECASE,
+)
 COMPACT_GENOMIC_RE = re.compile(
     r"^(?:chr)?(?P<chrom>[^:\s]+):(?P<position>\d+)"
     r"(?P<ref>[ACGT]+)>(?P<alt>[ACGT]+)$",
@@ -35,6 +43,73 @@ COMPACT_GENOMIC_RE = re.compile(
 _NC_GENOMIC_RE = re.compile(r"^NC_(?P<accession>\d+)\.\d+:g\.(?P<body>.+)$")
 _NC_SERIAL_CHROM = {str(number): str(number) for number in range(1, 23)}
 _NC_SERIAL_CHROM.update({"23": "X", "24": "Y", "12920": "MT"})
+
+_BUILD_ALIASES = {
+    "grch37": "GRCh37",
+    "hg19": "GRCh37",
+    "grch38": "GRCh38",
+    "hg38": "GRCh38",
+}
+_BUILD_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(GRCh37|hg19|GRCh38|hg38)(?![A-Za-z0-9])", re.IGNORECASE
+)
+_INTERVAL_RE = re.compile(
+    r"^(?:chr)?(?P<chrom>[^:\s]+):(?P<start>\d+)-(?P<end>\d+)"
+    r"(?:-(?P<kind>DEL|DUP|INV|CNV|CPX))?$",
+    re.IGNORECASE,
+)
+_HGVS_INTERVAL_RE = re.compile(
+    r"(?:^|:)[gcnmr]\.\(?(?P<start>\d+)(?:[+-]\d+)?_"
+    r"(?P<end>\d+)(?:[+-]\d+)?\)?(?P<kind>del|dup|inv)",
+    re.IGNORECASE,
+)
+_SYMBOLIC_SV_RE = re.compile(
+    r"(?:^|[:\s])<(?:DEL|DUP|INV|CNV|INS|BND|CPX)>(?:$|[:\s])", re.IGNORECASE
+)
+_BND_RE = re.compile(r"[ACGTN]*[\[\]][^\[\]]+:\d+[\[\]][ACGTN]*", re.IGNORECASE)
+_SV_TOKEN_RE = re.compile(
+    r"(?:^|[-_:;\s])(DEL|DUP|INV|BND|CPX|CNV)(?:$|[-_:;\s])", re.IGNORECASE
+)
+_COPY_NUMBER_RE = re.compile(r"(?:\)|\])x(?:0|1|3|4|\d{2,})$", re.IGNORECASE)
+
+# Primary chromosome RefSeq versions uniquely identify the human assembly.
+_GRCH37_VERSIONS = (
+    10,
+    11,
+    11,
+    11,
+    9,
+    11,
+    13,
+    10,
+    11,
+    10,
+    9,
+    11,
+    10,
+    8,
+    9,
+    9,
+    10,
+    9,
+    9,
+    10,
+    8,
+    10,
+    10,
+    9,
+)
+_GRCH38_VERSIONS = tuple(version + 1 for version in _GRCH37_VERSIONS)
+_ACCESSION_BUILDS = {
+    **{
+        f"NC_{serial:06d}.{version}": "GRCh37"
+        for serial, version in enumerate(_GRCH37_VERSIONS, start=1)
+    },
+    **{
+        f"NC_{serial:06d}.{version}": "GRCh38"
+        for serial, version in enumerate(_GRCH38_VERSIONS, start=1)
+    },
+}
 
 
 def _norm(value: Any) -> str:
@@ -57,6 +132,124 @@ def _payload(result: Any) -> Any:
         if isinstance(value, (dict, list)):
             return value
     return result
+
+
+def classify_variant_scope(variant: str, genome_build: str = "") -> dict[str, Any]:
+    """Classify build and small-variant scope before any provider call."""
+    original = str(variant or "").strip()
+    embedded_builds = {
+        _BUILD_ALIASES[match.group(1).casefold()]
+        for match in _BUILD_TOKEN_RE.finditer(original)
+    }
+    requested_build = _BUILD_ALIASES.get(str(genome_build or "").strip().casefold())
+    invalid_build = bool(genome_build) and requested_build is None
+    normalized_variant = _BUILD_TOKEN_RE.sub(" ", original).strip(" ,;:")
+    normalized_variant = " ".join(normalized_variant.split())
+
+    accession_build = next(
+        (
+            build
+            for accession, build in _ACCESSION_BUILDS.items()
+            if accession.casefold() in normalized_variant.casefold()
+        ),
+        "",
+    )
+    build_conflict = (
+        len(embedded_builds) > 1
+        or bool(
+            requested_build
+            and embedded_builds
+            and requested_build not in embedded_builds
+        )
+        or bool(
+            requested_build and accession_build and requested_build != accession_build
+        )
+        or bool(
+            embedded_builds
+            and accession_build
+            and accession_build not in embedded_builds
+        )
+    )
+    if requested_build:
+        normalized_build = requested_build
+        build_source = (
+            "explicit_canonical"
+            if str(genome_build).casefold().startswith("grch")
+            else "explicit_alias"
+        )
+    elif len(embedded_builds) == 1:
+        normalized_build = next(iter(embedded_builds))
+        build_source = "embedded_alias"
+    elif accession_build:
+        normalized_build = accession_build
+        build_source = "accession_inferred"
+    else:
+        normalized_build = ""
+        build_source = "missing"
+
+    interval = _INTERVAL_RE.fullmatch(normalized_variant)
+    hgvs_interval = _HGVS_INTERVAL_RE.search(normalized_variant)
+    vcf_allele = (
+        _VCF_COLON_RE.fullmatch(normalized_variant)
+        or _VCF_DASH_RE.fullmatch(normalized_variant)
+        or COMPACT_GENOMIC_RE.fullmatch(normalized_variant)
+    )
+    start = end = None
+    explicit_sv = bool(
+        _SYMBOLIC_SV_RE.search(normalized_variant)
+        or _BND_RE.search(normalized_variant)
+        or _SV_TOKEN_RE.search(normalized_variant)
+        or _COPY_NUMBER_RE.search(normalized_variant)
+    )
+    if interval:
+        start, end = int(interval.group("start")), int(interval.group("end"))
+        explicit_sv = explicit_sv or bool(interval.group("kind"))
+    elif hgvs_interval:
+        start, end = int(hgvs_interval.group("start")), int(hgvs_interval.group("end"))
+    span_bp = abs(end - start) + 1 if start is not None and end is not None else None
+    if span_bp is None and vcf_allele:
+        ref_length = len(vcf_allele.group("ref"))
+        alt_length = len(vcf_allele.group("alt"))
+        span_bp = (
+            ref_length if ref_length == alt_length else abs(ref_length - alt_length)
+        )
+    is_structural = explicit_sv or (span_bp is not None and span_bp > 50)
+    coordinate_input = bool(
+        interval
+        or GENOMIC_HGVS_RE.match(normalized_variant)
+        or GENOMIC_VCF_RE.fullmatch(normalized_variant)
+        or COMPACT_GENOMIC_RE.fullmatch(normalized_variant)
+        or _SYMBOLIC_SV_RE.search(normalized_variant)
+        or _BND_RE.search(normalized_variant)
+    )
+    if not normalized_build and not coordinate_input:
+        normalized_build = "GRCh38"
+        build_source = "default_noncoordinate"
+    input_error = (
+        "genome_build_conflict"
+        if build_conflict
+        else "unsupported_genome_build"
+        if invalid_build
+        else "genome_build_required_for_coordinate_input"
+        if coordinate_input and not normalized_build
+        else ""
+    )
+    input_kind = "structural_variant" if is_structural else "small_variant"
+    supported = input_kind == "small_variant" and not input_error
+    return {
+        "input_kind": input_kind,
+        "span_bp": span_bp,
+        "normalized_genome_build": normalized_build or None,
+        "build_resolution_source": build_source,
+        "collector_supported": supported,
+        "recommended_route": (
+            "tooluniverse-structural-variant-analysis"
+            if is_structural
+            else "tooluniverse-acmg-variant-classification"
+        ),
+        "input_error": input_error,
+        "normalized_variant": normalized_variant,
+    }
 
 
 def myvariant_id_from_hgvs_g(hgvs_g: str) -> str:
@@ -134,7 +327,8 @@ def transcript_candidates(result: Any, expected_gene: str) -> list[dict[str, Any
                     {
                         "reference": reference,
                         "mane_select": annotations.get("mane_select") is True,
-                        "mane_plus_clinical": annotations.get("mane_plus_clinical") is True,
+                        "mane_plus_clinical": annotations.get("mane_plus_clinical")
+                        is True,
                         "gene": record_gene or expected_gene,
                     }
                 )
@@ -170,7 +364,9 @@ def formatted_transcript_candidates(result: Any) -> list[dict[str, Any]]:
                     if not isinstance(projection, dict):
                         continue
                     select_status = projection.get("select_status")
-                    select_status = select_status if isinstance(select_status, dict) else {}
+                    select_status = (
+                        select_status if isinstance(select_status, dict) else {}
+                    )
                     gene_info = projection.get("gene_info")
                     gene_info = gene_info if isinstance(gene_info, dict) else {}
                     candidates.append(
@@ -190,7 +386,8 @@ def formatted_transcript_candidates(result: Any) -> list[dict[str, Any]]:
 
 def select_formatted_transcript(result: Any) -> dict[str, Any] | None:
     candidates = [
-        item for item in formatted_transcript_candidates(result)
+        item
+        for item in formatted_transcript_candidates(result)
         if item["mane_select"] and item["t_hgvs"]
     ]
     refseq = [item for item in candidates if str(item["reference"]).startswith("NM_")]

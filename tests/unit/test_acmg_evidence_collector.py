@@ -159,8 +159,7 @@ def test_literature_candidate_recognizes_historical_deletion_and_protein_aliases
                     {
                         "pmid": "27573432",
                         "title": (
-                            "DNAH1 c.11726_11727delCT "
-                            "(p.P3909Rfs*33) in infertility"
+                            "DNAH1 c.11726_11727delCT (p.P3909Rfs*33) in infertility"
                         ),
                     }
                 ]
@@ -1062,7 +1061,13 @@ def test_genomic_input_uses_variantformatter_mane_projection():
 
 def test_compact_genomic_input_is_adapted_for_variantformatter():
     runtime = _IdentityRoutingToolUniverse()
-    result = _make_tool(runtime).run({"variant": "chr13:32316461T>A", "gene": "BRCA2"})
+    result = _make_tool(runtime).run(
+        {
+            "variant": "chr13:32316461T>A",
+            "gene": "BRCA2",
+            "genome_build": "GRCh38",
+        }
+    )
 
     assert result["status"] == "degraded"
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
@@ -1381,6 +1386,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "coverage_status",
         "variant",
         "variant_identity",
+        "variant_scope",
         "clinical_context",
         "response_detail",
         "consequence_profile",
@@ -1389,6 +1395,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "coverage_summary",
         "source_facts",
         "source_assertions",
+        "prior_variant_candidates",
         "predictor_scores",
         "criterion_reviews",
         "evidence_cards",
@@ -1398,6 +1405,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "literature_review",
         "recoverable_gaps",
         "workflow_status",
+        "review_readiness",
         "next_actions",
         "system_preview_bayesian",
         "user_selected_bayesian",
@@ -1455,6 +1463,154 @@ def test_collector_exposes_pm1_domain_context_without_counting_it():
     )
     assert protein_coverage["query_completed"] is True
     assert protein_coverage["assessment_ready"] is True
+
+
+class _PriorVariantToolUniverse(_ProteinContextToolUniverse):
+    def run_one_function(self, call, **kwargs):
+        name = call["name"]
+        if name == "EBIProteins_get_variation":
+            self.calls.append((call, kwargs))
+            return {
+                "status": "success",
+                "data": {
+                    "accession": "P22607",
+                    "variants": [
+                        {
+                            "position_start": 380,
+                            "position_end": 380,
+                            "wild_type": "G",
+                            "alternative": "A",
+                            "source_type": "mixed",
+                            "associations": ["skeletal dysplasia"],
+                            "xrefs": [{"id": "VCV000000123"}],
+                        },
+                        {
+                            "position_start": 380,
+                            "position_end": 380,
+                            "wild_type": "G",
+                            "alternative": "V",
+                            "source_type": "COSMIC somatic",
+                            "xrefs": [{"id": "COSM123"}],
+                        },
+                    ],
+                },
+            }
+        if name in {
+            "PubMed_search_articles",
+            "EuropePMC_search_articles",
+        } and "VCV000000123" in call["arguments"].get("query", ""):
+            self.calls.append((call, kwargs))
+            return {
+                "status": "success",
+                "source_lead_sandbox": {
+                    "reviewable_features": {
+                        "query": call["arguments"]["query"],
+                        "articles": [
+                            {
+                                "pmid": "12345678",
+                                "title": "FGFR3 VCV000000123 at residue 380",
+                                "abstract": "A prior FGFR3 variant was reported.",
+                            }
+                        ],
+                        "provider_version": "fixture",
+                    }
+                },
+            }
+        return super().run_one_function(call, **kwargs)
+
+
+def test_same_residue_variants_are_review_only_and_trigger_prior_variant_request():
+    result = _make_tool(_PriorVariantToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+        }
+    )
+
+    assert [
+        row["prior_variant_identity"] for row in result["prior_variant_candidates"]
+    ] == ["VCV000000123"]
+    assert not any(
+        row["criterion"] in {"PS1", "PM5"} and row["system_preview_included"]
+        for row in result["evidence_cards"]
+    )
+    request = next(
+        row
+        for row in result["literature_review"]["review_requests"]
+        if "prior_variant" in row["allowed_fact_types"]
+    )
+    assert request["match_class"] == "same_residue_match"
+    assert (
+        request["prior_variant_candidates"][0]["prior_variant_identity"]
+        == "VCV000000123"
+    )
+    reviews = {row["criterion"]: row for row in result["criterion_reviews"]}
+    assert reviews["PS1"]["route_status"] == "review_pending"
+    assert reviews["PM5"]["route_status"] == "review_pending"
+
+
+def test_review_readiness_is_evidence_review_status_not_classification():
+    result = _make_tool(_FakeToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+        }
+    )
+
+    readiness = result["review_readiness"]
+    assert readiness["status"] in {"incomplete", "ready_for_evidence_review"}
+    assert readiness["criterion_counts"]["total"] == 28
+    assert sum(readiness["criterion_counts"]["by_route_status"].values()) == 28
+    assert result["final_classification_allowed"] is False
+
+
+def test_pm4_bp3_provider_proposals_require_unique_mapping_and_repeat_context():
+    profile = {
+        "protein_effect": "inframe",
+        "selected_transcript_terms": ["inframe_deletion"],
+        "hgvs_p": "NP_000133.1:p.Gly380del",
+        "source_fact_ids": ["consequence-fact"],
+    }
+    context = {
+        "mapping_status": "resolved",
+        "selected_mapping": {"protein_accession": "P22607"},
+        "protein_position": 380,
+        "overlapping_features": [
+            {
+                "type": "REPEAT",
+                "position_start": 370,
+                "position_end": 390,
+                "description": "low complexity repeat",
+            }
+        ],
+    }
+    feature_fact = _source_fact(
+        "EBIProteins_get_features",
+        "feature-fact",
+        {"protein_accession": "P22607", "features": context["overlapping_features"]},
+    )
+
+    bp3 = ACMGEvidencePipeline._protein_length_repeat_cards(
+        profile, {feature_fact.fact_id: feature_fact}, context
+    )
+    assert [card.criterion for card in bp3] == ["BP3"]
+    assert bp3[0].proposal_status == "requires_user_review"
+
+    pm4_context = {**context, "overlapping_features": []}
+    pm4 = ACMGEvidencePipeline._protein_length_repeat_cards(
+        profile, {feature_fact.fact_id: feature_fact}, pm4_context
+    )
+    assert [card.criterion for card in pm4] == ["PM4"]
+
+    ambiguous = {**context, "mapping_status": "ambiguous"}
+    assert (
+        ACMGEvidencePipeline._protein_length_repeat_cards(
+            profile, {feature_fact.fact_id: feature_fact}, ambiguous
+        )
+        == []
+    )
 
 
 def test_pm1_protein_mapping_requires_gene_and_selected_transcript_protein_change():
@@ -1700,9 +1856,7 @@ def test_consequence_empty_transcript_result_falls_back_to_genomic_hgvs():
         {"hgvs_notation": "NC_000004.12:g.1803931C>G"},
     ]
     assert diagnostics["annotation_status"] == "resolved"
-    assert diagnostics["attempted_representations"][0]["outcome"] == (
-        "queried"
-    )
+    assert diagnostics["attempted_representations"][0]["outcome"] == ("queried")
 
 
 def test_consequence_all_representations_empty_reports_exact_limitation():
@@ -1804,18 +1958,12 @@ class _DNAH1ConsequenceRecoveryToolUniverse:
                     "hgvs_g": "NC_000003.12:g.52396983_52396984del",
                     "hgvs_p": "NP_056327.4:p.Pro3909ArgfsTer33",
                     "hgvsc_candidates": ["NM_015512.5:c.11726_11727del"],
-                    "hgvsg_candidates": [
-                        "NC_000003.12:g.52396983_52396984del"
-                    ],
+                    "hgvsg_candidates": ["NC_000003.12:g.52396983_52396984del"],
                     "allele_candidates": [
                         {
                             "hgvsc": ["NM_015512.5:c.11726_11727del"],
-                            "hgvsg": [
-                                "NC_000003.12:g.52396983_52396984del"
-                            ],
-                            "hgvsp": [
-                                "NP_056327.4:p.Pro3909ArgfsTer33"
-                            ],
+                            "hgvsg": ["NC_000003.12:g.52396983_52396984del"],
+                            "hgvsp": ["NP_056327.4:p.Pro3909ArgfsTer33"],
                         }
                     ],
                     "gene": "DNAH1",
@@ -1843,9 +1991,7 @@ class _DNAH1ConsequenceRecoveryToolUniverse:
                         "hgvs_t_and_p": {
                             "NM_015512.5": {
                                 "t_hgvs": "NM_015512.5:c.11726_11727del",
-                                "p_hgvs": (
-                                    "NP_056327.4:p.Pro3909ArgfsTer33"
-                                ),
+                                "p_hgvs": ("NP_056327.4:p.Pro3909ArgfsTer33"),
                                 "gene_info": {"symbol": "DNAH1"},
                                 "select_status": {"mane_select": True},
                             }
@@ -1868,9 +2014,7 @@ def test_dnah1_vep_outage_recovers_consequence_without_inventing_nmd():
     )
 
     assert result["status"] == "degraded"
-    assert result["variant_identity"]["hgvs_c"] == (
-        "NM_015512.5:c.11726_11727del"
-    )
+    assert result["variant_identity"]["hgvs_c"] == ("NM_015512.5:c.11726_11727del")
     assert result["consequence_profile"]["annotation_status"] == "resolved"
     assert result["consequence_profile"]["selected_provider"] == (
         "VariantValidator_format_genomic_to_transcripts"
@@ -1888,9 +2032,7 @@ def test_dnah1_vep_outage_recovers_consequence_without_inventing_nmd():
         for row in result["recoverable_gaps"]
         if row["status"] == "unresolved"
     } >= {"exon_structure_missing", "nmd_facts_missing"}
-    pvs1 = next(
-        row for row in result["evidence_cards"] if row["criterion"] == "PVS1"
-    )
+    pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
     assert pvs1["assessment_status"] == "not_assessed"
     serialized = json.dumps(result, ensure_ascii=False)
     assert "73/82" not in serialized
@@ -2293,8 +2435,7 @@ def test_stale_document_hash_excludes_literature_proposal():
     assert fact["assessment_ready"] is False
     assert fact["features"]["anchor_status"] == "mismatch"
     assert any(
-        "document_hash" in message
-        for message in fact["features"]["validation_errors"]
+        "document_hash" in message for message in fact["features"]["validation_errors"]
     )
 
 
@@ -2730,9 +2871,7 @@ def test_clinvar_resolution_uses_rsid_then_identity_hgvs():
 
 def test_clinvar_resolution_stops_on_nonempty_identity_conflict():
     runtime = _ClinVarRepresentationToolUniverse(conflict=True)
-    calls, variation_id = ACMGEvidencePipeline(
-        runtime
-    )._resolve_clinvar_calls(
+    calls, variation_id = ACMGEvidencePipeline(runtime)._resolve_clinvar_calls(
         {"variant": "NM_000518.5:c.20A>T", "gene": "HBB"},
         {
             "gene": "HBB",
@@ -2801,8 +2940,7 @@ def test_constraint_provider_never_calls_removed_acmg_fallback():
         {"variant": "NM_000142.5:c.1A>G", "gene": "FGFR3"}, identity
     )
     assert not any(
-        call.tool_name == "gnomad_get_gene_constraints"
-        for call in ready_calls
+        call.tool_name == "gnomad_get_gene_constraints" for call in ready_calls
     )
 
 

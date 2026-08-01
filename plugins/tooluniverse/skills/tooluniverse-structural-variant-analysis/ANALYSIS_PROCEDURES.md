@@ -4,6 +4,29 @@ Detailed implementation guidance for each phase of the structural variant analys
 
 ---
 
+## Assembly preflight (required)
+
+Normalize `hg19` to `GRCh37` and `hg38` to `GRCh38`. Preserve the original
+interval. Before any GRCh38-only regional query, call:
+
+```python
+mapping = tu.tools.EnsemblMap_convert_coordinates(
+    species="human",
+    source_assembly=original_build,
+    chromosome=chrom,
+    start=sv_start,
+    end=sv_end,
+    target_assembly="GRCh38",
+)
+```
+
+Continue only when the result contains exactly one contiguous mapping on the
+same chromosome and explicitly identifies GRCh38. Zero, multiple,
+discontinuous, or build-mismatched mappings stop cross-build regional queries.
+Never use a remembered or approximate coordinate offset.
+
+---
+
 ## Phase 2: Gene Content Analysis
 
 ### Gene Categories
@@ -70,7 +93,7 @@ def assess_dosage_sensitivity(tu, gene_list):
 
     for gene_symbol in gene_list:
         # ClinGen dosage sensitivity (gold standard)
-        clingen = tu.tools.ClinGen_search_dosage_sensitivity(gene=gene_symbol)
+        clingen = tu.tools.ClinGen_dosage_by_gene(gene=gene_symbol)
         hi_score, ts_score = None, None
         if clingen.get('data'):
             for entry in clingen['data']:
@@ -108,30 +131,22 @@ def assess_dosage_sensitivity(tu, gene_list):
 
 ```python
 def assess_population_frequency(tu, chrom, sv_start, sv_end, sv_type):
-    """Check population databases for overlapping SVs."""
-    # ClinVar for known pathogenic/benign SVs
-    clinvar = tu.tools.ClinVar_search_variants(
-        chromosome=str(chrom), start=sv_start, stop=sv_end, variant_type=sv_type.upper()
+    """Check overlapping SVs after exact GRCh38 coordinate verification."""
+    gnomad = tu.tools.gnomad_get_sv_by_region(
+        chrom=str(chrom),
+        start=sv_start,
+        stop=sv_end,
+        reference_genome="GRCh38",
     )
-
-    known_svs = []
-    if clinvar.get('data'):
-        for variant in clinvar['data']:
-            known_svs.append({
-                'database': 'ClinVar',
-                'classification': variant.get('clinical_significance'),
-                'review_status': variant.get('review_status'),
-            })
-
-    # DECIPHER for similar patient cases
-    decipher_search = tu.tools.DECIPHER_search(
-        query=f"chr{chrom}:{sv_start}-{sv_end}", search_type="region"
+    ensembl = tu.tools.ensembl_get_structural_variants(
+        species="human",
+        region=f"{chrom}:{sv_start}-{sv_end}",
     )
 
     return {
-        'clinvar_matches': known_svs,
-        'decipher_cases': decipher_search.get('data', []),
-        'frequency_interpretation': interpret_frequency(known_svs)
+        'gnomad_sv_matches': gnomad,
+        'ensembl_sv_matches': ensembl,
+        'frequency_interpretation': interpret_frequency(gnomad),
     }
 
 def interpret_frequency(known_svs):
@@ -212,10 +227,9 @@ def comprehensive_literature_search(tu, genes, sv_type, phenotype):
         )
         literature.append({'gene': gene, 'dosage_papers': dosage_papers, 'case_reports': case_papers})
 
-    # DECIPHER cases
-    decipher_cases = [tu.tools.DECIPHER_search(query=gene, search_type="gene") for gene in genes]
-
-    return {'gene_literature': literature, 'decipher_cases': decipher_cases}
+    # External case databases require a separately documented, available
+    # provider. Do not invent or call a retired generic DECIPHER tool name.
+    return {'gene_literature': literature, 'external_case_leads': []}
 ```
 
 ---

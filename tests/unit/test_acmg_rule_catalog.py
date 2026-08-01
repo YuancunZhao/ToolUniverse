@@ -42,6 +42,9 @@ def test_criterion_use_matrix_covers_all_28_codes():
             "default_strength",
             "automation_level",
             "required_facts",
+            "provider_routes",
+            "literature_fact_types",
+            "required_context",
             "conflict_relations",
             "bayesian_direction",
         }
@@ -50,6 +53,12 @@ def test_criterion_use_matrix_covers_all_28_codes():
     )
     assert matrix["PP5"]["automation_level"] == "deprecated"
     assert matrix["BP6"]["automation_level"] == "deprecated"
+    assert matrix["PS1"]["provider_routes"] == [
+        "consequence",
+        "protein_context",
+        "prior_variant_candidates",
+    ]
+    assert matrix["PP1"]["literature_fact_types"] == ["segregation"]
 
 
 def test_generic_tavtigian_odds_preserve_direction():

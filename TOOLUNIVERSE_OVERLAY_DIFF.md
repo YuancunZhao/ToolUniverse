@@ -36,11 +36,13 @@ execution, async, or cache paths. Search metadata recommends the collector but
 does not claim to authorize evidence or prevent model reasoning outside
 ToolUniverse.
 
-The supporting code is deliberately thin: `acmg/search.py` only detects ACMG
-search intent and ranks the collector, `acmg/policy.py` owns the scoped
-source-lead boundary, `acmg/source_adapters.py` owns provider field parsing,
+The supporting code is deliberately thin: the user-facing router Skills own
+request routing, `acmg/policy.py` owns the scoped source-lead boundary,
+`acmg/source_adapters.py` owns provider field parsing,
 `acmg/consequence_sources.py` resolves auditable multi-provider observations,
-and `acmg/consequence.py` normalizes criterion applicability.
+and `acmg/consequence.py` normalizes criterion applicability. The former
+runtime-only `acmg/search.py` recommendation layer had no active consumer and
+has been removed.
 The retired `acmg_gate_search.py` mixed these responsibilities and has been
 removed.
 
@@ -59,6 +61,18 @@ before validation. Gene;transcript:c. input is validated directly, while gene
 plus p. input uses `EnsemblVEP_annotate_hgvs` for genomic identity and then the
 MANE projection path. Ambiguous transcript or protein-to-genomic resolution
 fails closed and never creates ACMG evidence.
+
+Before identity normalization, the collector performs a deterministic scope
+and assembly preflight. `hg19`/`GRCh37` normalize to `GRCh37`, while
+`hg38`/`GRCh38` normalize to `GRCh38`. Coordinate inputs without an explicit or
+accession-derived assembly return `input_correction_required` instead of
+silently defaulting to GRCh38. Intervals over 50 bp, symbolic alleles,
+breakends, and DEL/DUP/INV/BND/CPX/CNV representations return
+`unsupported_variant_class` with `recommended_route` set to
+`tooluniverse-structural-variant-analysis`; no small-variant provider,
+EvidenceCard, PVS1, PM2, or Bayesian path is executed. Transcript HGVS and
+rsID inputs without coordinates retain the documented GRCh38 default and
+record `build_resolution_source=default_noncoordinate`.
 
 Scientific changes include provider-verified identity-bound SourceFacts, a
 dedicated gnomAD per-locus callability provider, Pejaver missense calibration,
@@ -189,6 +203,18 @@ version, evidence-only runtime version, collector schema version, a stable
 hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
+
+Collector schema `2026-08-01` adds an auditable 28-criterion routing contract.
+Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
+pending full-text request IDs, and missing requirements. Top-level
+`review_readiness` distinguishes automatic-workflow readiness from clinical
+classification readiness. Same-residue EBI protein variants are exposed as
+review-only `prior_variant_candidates` and automatically trigger literature
+requests; database labels alone cannot establish PS1/PM5. Unique
+identity-bound protein length/repeat context may generate review-required
+PM4/BP3 proposals. `clinical_context` remains caller background only; family,
+case, phase, health, phenotype, and alternative-cause evidence enters solely
+through re-anchored full-text `literature_proposals`.
 
 An offline BRCA2 `NM_000059.4:c.5946delT` golden fixture now exercises initial
 collection, anchored literature interpretation, deterministic PVS1, stable

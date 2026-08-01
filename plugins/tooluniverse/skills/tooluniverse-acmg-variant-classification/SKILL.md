@@ -12,6 +12,13 @@ free-form model reasoning.
 
 ## Required Entry Point
 
+First classify the input shape. Genomic intervals over 50 bp, symbolic ALT or
+breakend notation, and DEL/DUP/INV/BND/CPX/CNV events are structural variants:
+route them to `tooluniverse-structural-variant-analysis` without calling the
+small-variant collector. Normalize hg19 to GRCh37 and hg38 to GRCh38. A
+coordinate input with no explicit or accession-inferred build must stop for
+input correction; never silently assume GRCh38.
+
 For every germline small-variant ACMG request, call
 `ACMG_evidence_collector`. `ACMG_overlay_gate_assess_variant` is a
 backward-compatible alias with the same parameters and return structure; it has
@@ -29,6 +36,11 @@ separate user-selected estimate. It always returns
 `final_classification_allowed: false`. `runtime_manifest` anchors the installed
 runtime, schema, deterministic ruleset hash, available VCS revision, and
 applicable dynamic CSpec.
+
+If a mistakenly submitted event returns
+`workflow_status: unsupported_variant_class`, execute the structural-variant
+route in `next_actions`; do not reinterpret that response as a recoverable
+consequence failure.
 
 For targeted review, the five deterministic group tools are:
 
@@ -48,7 +60,8 @@ Run this state machine to completion in the same user task:
 1. Call the collector with the variant and all known gene, transcript, disease,
    inheritance, phenotype, and protein context.
 2. Inspect `workflow_status`, `recoverable_gaps`, `next_actions`,
-   `consequence_profile`, `literature_review.review_requests`, and
+   `review_readiness`, `criterion_reviews`, `consequence_profile`,
+   `literature_review.review_requests`, and
    `rule_context.cspec_review_requests`.
 3. The collector performs every applicable read-only consequence recovery
    query itself. Do not ask the user whether to try VariantValidator, FAVOR,
@@ -64,7 +77,7 @@ Run this state machine to completion in the same user task:
    completed request or unchanged document hash.
 7. End automated collection only when no mandatory request remains, or when
    the result is stably `blocked_external_full_text`. Return EvidenceCards,
-   exclusions, conflicts, and `system_preview_bayesian`.
+   exclusions, conflicts, `review_readiness`, and `system_preview_bayesian`.
 8. Call `ACMG_guard_final_answer` before returning criterion claims.
 
 Read-only retrieval, consequence recovery, full-text reading, structured fact
@@ -74,6 +87,15 @@ I call an alternative tool?” when `next_actions` or applicable ToolUniverse
 providers can continue the task. The user decision round is separate and is
 needed only when the user asks to accept, reject, or change cards for
 `user_selected_bayesian`.
+
+`review_readiness.status=ready_for_evidence_review` means every currently
+executable collection action has finished. It does not mean all 28 criteria
+have evidence and never means a five-tier classification is ready. Read each
+criterion's `route_status`: `assessed`, `proposal_validated`,
+`candidate_available`, `review_pending`, `insufficient_information`,
+`not_applicable`, or `deprecated`. Missing optional family, case, phenotype,
+or literature evidence remains `insufficient_information` and does not by
+itself block evidence review.
 
 See [QUICK_START.md](QUICK_START.md) for the three-round request shape.
 
@@ -145,6 +167,21 @@ Only cards with `assessment_status: met`, `system_preview_included: true`,
 system-preview estimate. `not_met`, `not_assessed`, `not_applicable`,
 deprecated cards, and source leads do not enter it. PP5 and BP6 remain
 deprecated.
+
+For missense variants, same-residue EBI Proteins records and ClinVar Variation
+IDs are `prior_variant_candidates` only. Automatically execute their
+`prior_variant` full-text requests; PS1/PM5 requires an independently anchored
+prior-variant identity and pathogenic evidence. A database label alone must
+never enter Bayesian computation. Generic domains, constraint, and validity
+are likewise PM1/PP2/BP1 context only. Identity-bound in-frame or stop-loss
+facts may generate review-required PM4/BP3 proposals only when repeat and
+functional-feature overlap are explicitly resolved.
+
+`clinical_context` is caller-provided background for search and consistency
+checking, not a clinical observation channel. Zygosity, phase, phenotype, HPO,
+parental-origin, and second-allele values there never generate PP1/BS4, PP4,
+BS2, BP2, BP5, PS2/PM6, or PM3. Such evidence must arrive as re-fetchable,
+full-text-anchored `literature_proposals`.
 
 `gnomad_get_site_callability` records auditable coverage. Without an applicable
 CSpec, general ClinGen/SVI may suggest PM2_Supporting for AC=0 with verified
