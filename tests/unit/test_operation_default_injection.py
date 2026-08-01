@@ -89,3 +89,46 @@ def test_wired_operations_match_documented_examples():
             if documented and operation not in documented:
                 mismatched.append((cfg.get("name"), operation, sorted(documented)))
     assert not mismatched, f"fields.operation disagrees with example: {mismatched[:5]}"
+
+
+def test_every_wired_tool_accepts_its_example_without_operation():
+    """The property this fix delivers: for a single-operation tool, the call the
+    tool's own name implies must satisfy the schema with `operation` omitted.
+
+    Schema-only (no network), so it covers every wired tool rather than just the
+    ones whose examples happen to name their operation.
+    """
+    jsonschema = pytest.importorskip("jsonschema")
+
+    offenders = []
+    for path in DATA_DIR.glob("*.json"):
+        try:
+            raw = json.loads(path.read_text())
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        tools = raw if isinstance(raw, list) else raw.get("tools")
+        if not isinstance(tools, list):
+            continue
+        for cfg in tools:
+            if not isinstance(cfg, dict):
+                continue
+            if not (cfg.get("fields") or {}).get("operation"):
+                continue
+            schema = cfg.get("parameter") or {}
+            if not schema.get("properties"):
+                continue
+            examples = [e for e in (cfg.get("test_examples") or []) if isinstance(e, dict)]
+            if not examples:
+                continue
+            natural = {k: v for k, v in examples[0].items() if k != "operation"}
+            try:
+                jsonschema.validate(natural, schema)
+            except jsonschema.ValidationError as exc:
+                offenders.append(f"{cfg.get('name')}: {exc.message}")
+            except jsonschema.SchemaError:
+                continue  # malformed schema is a separate concern
+
+    assert not offenders, (
+        f"{len(offenders)} single-operation tools reject their own example when "
+        f"'operation' is omitted: {offenders[:8]}"
+    )
