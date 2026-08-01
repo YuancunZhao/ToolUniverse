@@ -542,6 +542,53 @@ def _site_to_regex(site: str) -> str:
     return "".join(_IUPAC_RE.get(c, c) for c in site.upper())
 
 
+_COMPLEMENT = str.maketrans("ACGTRYSWKMBDHVNacgtryswkmbdhvn", "TGCAYRSWMKVHDBNtgcayrswmkvhdbn")
+
+
+def _reverse_complement(site: str) -> str:
+    """Reverse complement of an IUPAC recognition sequence."""
+    return site.translate(_COMPLEMENT)[::-1]
+
+
+def _biopython_cut_positions(sequence: str, enzyme_name: str, circular: bool):
+    """Cut positions (0-based top-strand bond indices) via Biopython, or None.
+
+    Recognition sites are only palindromic for a minority of enzymes. A
+    non-palindromic site (BsaI GGTCTC, Esp3I CGTCTC, BbsI GAAGAC, ...) also occurs
+    in the reverse orientation, and a forward-strand-only scan silently misses
+    those: a Golden Gate plasmid carries its two Type IIS sites *inverted* around
+    the insert, so a forward-only search finds one of two and reports the plasmid
+    as uncut. Biopython searches both strands and knows each enzyme's real cut
+    geometry, so delegate when it is available.
+
+    Returns None when Biopython or the enzyme is unavailable, so callers keep
+    their regex fallback.
+    """
+    try:
+        from Bio import Restriction
+        from Bio.Seq import Seq
+    except Exception:
+        return None
+    enz = getattr(Restriction, enzyme_name, None)
+    if enz is None:
+        try:
+            for a in Restriction.AllEnzymes:
+                if str(a).lower() == enzyme_name.lower():
+                    enz = a
+                    break
+        except Exception:
+            return None
+    if enz is None:
+        return None
+    try:
+        # Biopython returns 1-based positions of the bond on the sense strand;
+        # subtract 1 for the 0-based fragment-boundary convention used here.
+        positions = enz.search(Seq(sequence), linear=not circular)
+        return sorted({int(p) - 1 for p in positions})
+    except Exception:
+        return None
+
+
 def _resolve_enzyme(name: str):
     """Resolve an enzyme name to (canonical_name, recognition_site, cut_offset).
 
@@ -755,16 +802,45 @@ class DNATool(BaseTool):
                     positions.append(pos + 1)  # 1-based
                     start = pos + 1
 
-            cut_off = NEB_CUT_OFFSETS.get(enzyme_name, len(recognition_seq) // 2)
+            # A non-palindromic site also occurs reverse-complemented; a
+            # forward-only scan reports half the sites (see
+            # _biopython_cut_positions). Add those occurrences so Golden Gate
+            # plasmids, whose Type IIS sites are inverted around the insert,
+            # report both.
+            rc_site = _reverse_complement(recognition_seq)
+            if rc_site != recognition_seq:
+                rc_pattern = _site_to_regex(rc_site)
+                rc_positions = [
+                    m.start() + 1
+                    for m in re.finditer(f"(?={rc_pattern})", search_seq)
+                    if (not circular) or m.start() < seq_len
+                ]
+                positions = sorted(set(positions) | set(rc_positions))
+
+            # Use the resolved offset, not the curated table: enzymes that come
+            # from Biopython are absent there and were silently given a midpoint
+            # cut, which is wrong for every Type IIS enzyme.
+            resolved = _resolve_enzyme(enzyme_name)
+            cut_off = (
+                resolved[2]
+                if resolved
+                else NEB_CUT_OFFSETS.get(enzyme_name, len(recognition_seq) // 2)
+            )
+            bio_cuts = _biopython_cut_positions(sequence, enzyme_name, circular)
             if positions:
                 # `cut_sites` reports 1-based recognition sequence start
                 # positions, NOT the actual phosphodiester bond cleavage positions.
                 # For enzymes like KpnI (GGTAC^C, cut_offset=5), the difference is 4 bp.
                 # Add `cleavage_positions` (1-based) so callers can determine the exact
                 # cut site without having to look up enzyme-specific offsets.
-                cleavage_pos = sorted(
-                    set(((p - 1 + cut_off) % seq_len) + 1 for p in positions)
-                )
+                if bio_cuts:
+                    # Real cut geometry for both strands, converted back to the
+                    # 1-based convention this tool reports.
+                    cleavage_pos = sorted({(c % seq_len) + 1 for c in bio_cuts})
+                else:
+                    cleavage_pos = sorted(
+                        set(((p - 1 + cut_off) % seq_len) + 1 for p in positions)
+                    )
                 results[enzyme_name] = {
                     "recognition_sequence": recognition_seq,
                     "cut_sites": positions,  # 1-based recognition site START positions
@@ -1441,6 +1517,16 @@ class DNATool(BaseTool):
         cut_sites_list = []
         enzymes_used = []
         for enzyme_name, recognition_seq in enzyme_dict.items():
+            bio_cuts = _biopython_cut_positions(sequence, enzyme_name, circular)
+            if bio_cuts is not None:
+                # Both strands, real cut geometry (see _biopython_cut_positions).
+                for cut_pos in bio_cuts:
+                    cut_sites_list.append(
+                        {"enzyme": enzyme_name, "position": cut_pos % seq_len}
+                    )
+                if bio_cuts:
+                    enzymes_used.append(enzyme_name)
+                continue
             pattern = _site_to_regex(recognition_seq)
             positions = [
                 m.start()

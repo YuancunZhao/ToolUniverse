@@ -89,3 +89,52 @@ def test_unknown_enzyme_still_errors():
     )
     assert result["status"] == "error"
     assert "NotARealEnzyme9" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# Both-strand search. Recognition sites are palindromic only for a minority of
+# enzymes; a non-palindromic site also occurs reverse-complemented. The scan was
+# forward-strand-only, so it found half the sites -- and a Golden Gate plasmid
+# carries its two Type IIS sites INVERTED around the insert, so each real plasmid
+# reported 1 site and came back "uncut" (1 fragment). Verified on the three
+# LAB-Bench CloningScenarios plasmids: each has one CGTCTC and one GAGACG.
+# ---------------------------------------------------------------------------
+
+# One forward site (CGTCTC @16) and one reverse site (GAGACG @46).
+INVERTED_SEQ = (
+    "AAAACCCCTTTTGGGG" "CGTCTC" "ATTTTCCCCGGGGAAAATTTTCCCC" "GAGACG" "TTTTAAAACCCC"
+)
+
+
+def test_finds_reverse_strand_sites():
+    result = DNATool(SITES).run({"sequence": INVERTED_SEQ, "enzymes": ["Esp3I"]})
+    assert result["status"] == "success", result.get("error")
+    sites = result["data"]["enzymes_with_sites"]["Esp3I"]["cut_sites"]
+    assert len(sites) == 2, f"expected both orientations, got {sites}"
+
+
+def test_digest_cuts_inverted_type_iis_pair():
+    result = DNATool(DIGEST).run(
+        {"sequence": INVERTED_SEQ, "enzymes": ["Esp3I"], "circular": False}
+    )
+    assert result["status"] == "success", result.get("error")
+    assert len(result["data"]["fragments"]) == 3, "two cuts must give three fragments"
+
+
+def test_palindromic_site_is_not_double_counted():
+    """EcoRI's site equals its own reverse complement -- one site, one cut."""
+    seq = "AAAA" + "GAATTC" + "AAAACCCCGGGG"
+    sites = DNATool(SITES).run({"sequence": seq, "enzymes": ["EcoRI"]})
+    assert sites["data"]["enzymes_with_sites"]["EcoRI"]["cut_sites"] == [5]
+    digest = DNATool(DIGEST).run(
+        {"sequence": seq, "enzymes": ["EcoRI"], "circular": False}
+    )
+    assert len(digest["data"]["fragments"]) == 2, "one cut must give two fragments"
+
+
+def test_circular_plasmid_with_inverted_pair_yields_two_fragments():
+    result = DNATool(DIGEST).run(
+        {"sequence": INVERTED_SEQ, "enzymes": ["Esp3I"], "circular": True}
+    )
+    assert result["status"] == "success", result.get("error")
+    assert len(result["data"]["fragments"]) == 2, "circular + 2 cuts -> 2 fragments"
