@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import math
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
@@ -43,6 +44,22 @@ class AgenticTool(BaseTool):
         if normalized in {"0", "false", "no", "off"}:
             return False
         raise ValueError(f"Expected boolean environment value, got: {value!r}")
+
+    @staticmethod
+    def _parse_float_env(value: Optional[str]) -> Optional[float]:
+        if value is None or value == "":
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Expected numeric TOOLUNIVERSE_LLM_TEMPERATURE, got: {value!r}"
+            ) from exc
+        if not math.isfinite(parsed):
+            raise ValueError(
+                f"Expected finite numeric TOOLUNIVERSE_LLM_TEMPERATURE, got: {value!r}"
+            )
+        return parsed
 
     @staticmethod
     def has_any_api_keys() -> bool:
@@ -100,8 +117,9 @@ class AgenticTool(BaseTool):
                     "TOOLUNIVERSE_LLM_MODEL_DEFAULT"
                 )
             elif key == "temperature":
-                temp_str = os.getenv("TOOLUNIVERSE_LLM_TEMPERATURE")
-                env_value = float(temp_str) if temp_str else None
+                env_value = self._parse_float_env(
+                    os.getenv("TOOLUNIVERSE_LLM_TEMPERATURE")
+                )
             elif key == "return_json":
                 env_value = self._parse_bool_env(
                     os.getenv("TOOLUNIVERSE_LLM_RETURN_JSON")
