@@ -1,6 +1,6 @@
 ---
 name: tooluniverse-molecular-cloning
-description: Molecular cloning assembly design — Gibson Assembly (overlap design for seamless multi-fragment joining) and Golden Gate Assembly (Type IIS / BsaI / BbsI design with unique 4-bp fusion overhangs). Use when you need to plan how to join DNA fragments into a construct, design assembly overlaps/overhangs, or decide between cloning methods. Covers the domestication (internal-site removal), overhang-uniqueness, and overlap-Tm rules. For PCR primers to generate the fragments, see tooluniverse-primer-design.
+description: Molecular cloning, in both directions. DESIGN — Gibson Assembly (overlap design for seamless multi-fragment joining) and Golden Gate Assembly (Type IIS / BsaI / BbsI / Esp3I / BsmBI / SapI design with unique 4-bp fusion overhangs). ANALYSIS — work out what an existing reaction produces: given input plasmid sequences and an enzyme, digest them, join the fragments by their overhangs, and identify features of the product (expressed ORF, gRNA spacer and its target gene). Use when you need to plan how to join DNA fragments into a construct, design assembly overlaps/overhangs, decide between cloning methods, or determine the product of a stated Gibson/Golden Gate reaction. Covers the domestication (internal-site removal), overhang-uniqueness, and overlap-Tm rules. For PCR primers to generate the fragments, see tooluniverse-primer-design.
 disable-model-invocation: true
 ---
 
@@ -63,9 +63,43 @@ Returns `parts_with_overhangs`: each part's unique 4-bp `left_overhang`/`right_o
 - **Overlap Tm imbalance** (Gibson) → some junctions form, others don't.
 - **Generating the fragments** still needs primers with the overlaps/overhangs appended — design and QC those in `tooluniverse-primer-design` (and BLAST for specificity).
 
+## Working backwards — what does an existing assembly produce?
+
+The reverse question ("I combined these plasmids in a Golden Gate reaction with
+Esp3I — what does the product express / what does the gRNA target?") is answered by
+digesting the inputs, not by designing anything. Do **not** hand-write a digestion
+simulator; `DNA_virtual_digest` handles Type IIS enzymes on both strands.
+
+```bash
+# One call per input plasmid. circular=true — these are plasmids, not linear PCR products.
+tu run DNA_virtual_digest '{"sequence":"<plasmid>","enzymes":["Esp3I"],"circular":true}'
+```
+
+1. **Digest every input.** A Golden Gate donor carries its two Type IIS sites
+   **inverted** around the insert, so a correct digest returns **2 fragments** per
+   plasmid. Getting 1 fragment means the enzyme name or `circular` is wrong — not
+   that the plasmid lacks sites.
+2. **Tell insert from backbone.** The backbone is the fragment shared across donors
+   (identical length/sequence) and carries the selection marker and origin; the
+   insert is the other one.
+3. **Join by 4-bp overhangs**, not by fragment order — the junction overhangs
+   determine which insert follows which, exactly as in the design direction.
+4. **Annotate the product.** Locate features in the joined sequence (promoter,
+   ORF, gRNA spacer). For a gRNA cassette the spacer is the ~20 nt between the
+   promoter/tRNA leader and the scaffold; identify its target by matching that
+   spacer against the genome (`BLAST_*`, or an Ensembl/NCBI sequence lookup) and
+   check for an adjacent PAM. Match the **species implied by the construct**
+   (yeast tRNA/Pol III parts → search the yeast genome, not human).
+
+Enzyme names: `Esp3I` and `BsmBI` are the same enzyme (`CGTCTC`); `BsaI`
+(`GGTCTC`), `BbsI` (`GAAGAC`) and `SapI` (`GCTCTTC`) all resolve too.
+
 ## Honest limitations
 
-- These tools design the assembly junctions; they do not simulate the full ligation/exonuclease reaction or guarantee efficiency — validate by sequencing the assembled construct.
+- The design tools produce assembly junctions; they do not model ligation/exonuclease
+  efficiency — validate by sequencing the assembled construct. (Digestion itself *is*
+  simulated faithfully: `DNA_virtual_digest` cuts both strands at each enzyme's real
+  offset, including Type IIS enzymes that cut outside their recognition site.)
 - No vector-backbone or ORF-frame checking — confirm reading frame and backbone compatibility yourself.
 
 ## Related skills
