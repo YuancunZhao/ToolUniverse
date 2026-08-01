@@ -67,30 +67,42 @@ class NCBIDatasetsTool(BaseTool):
         if not isinstance(payload, dict):
             return ""
 
-        top_message = payload.get("message")
-        if isinstance(top_message, str) and top_message.strip():
-            return top_message.strip()
+        def error_text(value: Any) -> str:
+            if isinstance(value, str):
+                return value.strip()
+            if isinstance(value, dict):
+                for key in ("message", "reason", "error", "detail"):
+                    message = error_text(value.get(key))
+                    if message:
+                        return message
+            if isinstance(value, list):
+                for item in value:
+                    message = error_text(item)
+                    if message:
+                        return message
+            return ""
+
+        for key in ("message", "error", "errors"):
+            message = error_text(payload.get(key))
+            if message:
+                return message
 
         messages = payload.get("messages") or []
         for entry in messages:
             if not isinstance(entry, dict):
                 continue
             detail = entry.get("error", entry)
-            if not isinstance(detail, dict):
-                continue
-            message = detail.get("message") or detail.get("reason")
-            if isinstance(message, str) and message.strip():
-                return message.strip()
+            message = error_text(detail)
+            if message:
+                return message
 
         for report in payload.get("reports") or []:
             if not isinstance(report, dict):
                 continue
             for detail in report.get("errors") or []:
-                if not isinstance(detail, dict):
-                    continue
-                message = detail.get("message") or detail.get("reason")
-                if isinstance(message, str) and message.strip():
-                    return message.strip()
+                message = error_text(detail)
+                if message:
+                    return message
 
         return ""
 
@@ -110,7 +122,10 @@ class NCBIDatasetsTool(BaseTool):
                 ) from exc
             raise
 
-        payload = response.json()
+        try:
+            payload = response.json()
+        except (TypeError, ValueError) as exc:
+            raise _NCBIResponseError("NCBI Datasets API returned invalid JSON") from exc
         detail = self._extract_api_error(payload)
         if detail:
             raise _NCBIResponseError(f"NCBI Datasets API error: {detail}")

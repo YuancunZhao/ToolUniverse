@@ -298,6 +298,64 @@ def test_http_error_preserves_ncbi_diagnostic(monkeypatch):
     }
 
 
+@pytest.mark.parametrize(
+    ("payload", "expected_message"),
+    [
+        (
+            {"error": "Too many requests for this API key."},
+            "Too many requests for this API key.",
+        ),
+        ({"error": {"message": "Invalid page token."}}, "Invalid page token."),
+        (
+            {"messages": [{"error": "Taxonomy lookup failed."}]},
+            "Taxonomy lookup failed.",
+        ),
+    ],
+)
+def test_ncbi_error_variants_preserve_the_upstream_diagnostic(
+    monkeypatch, payload, expected_message
+):
+    monkeypatch.setattr(
+        "tooluniverse.ncbi_datasets_tool.requests.get",
+        lambda url, **kwargs: _FakeResponse(payload, status_code=400),
+    )
+    tool = NCBIDatasetsTool(
+        {
+            "name": "NCBIDatasets_get_gene",
+            "fields": {"endpoint_type": "gene_by_id"},
+        }
+    )
+
+    result = tool.run({"gene_id": "7157"})
+
+    assert result["status"] == "error"
+    assert expected_message in result["error"]
+
+
+def test_non_json_success_response_has_a_clear_protocol_error(monkeypatch):
+    class _NonJsonResponse(_FakeResponse):
+        def json(self):
+            raise ValueError("not JSON")
+
+    monkeypatch.setattr(
+        "tooluniverse.ncbi_datasets_tool.requests.get",
+        lambda url, **kwargs: _NonJsonResponse("<html>proxy error</html>"),
+    )
+    tool = NCBIDatasetsTool(
+        {
+            "name": "NCBIDatasets_get_gene",
+            "fields": {"endpoint_type": "gene_by_id"},
+        }
+    )
+
+    result = tool.run({"gene_id": "7157"})
+
+    assert result == {
+        "status": "error",
+        "error": "NCBI Datasets API returned invalid JSON",
+    }
+
+
 def test_optional_api_key_is_read_from_environment_and_sent_as_header(monkeypatch):
     calls = []
 
@@ -410,6 +468,10 @@ def test_ncbi_parameter_schemas_reject_invalid_boundary_values():
         (
             "NCBIDatasets_get_sequence_reports",
             {"accession": "GCF_000005845.2", "page_size": 0},
+        ),
+        (
+            "NCBIDatasets_get_sequence_reports",
+            {"accession": "GCF_000005845.2", "page_token": "   "},
         ),
     ]
 

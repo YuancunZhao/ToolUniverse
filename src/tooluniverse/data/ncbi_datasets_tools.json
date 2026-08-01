@@ -848,6 +848,7 @@
                         "null"
                     ],
                     "minLength": 1,
+                    "pattern": ".*\\S.*",
                     "description": "Opaque next_page_token returned by a previous call. Omit for the first page."
                 }
             },
