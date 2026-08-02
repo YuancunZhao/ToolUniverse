@@ -684,6 +684,7 @@ class DNATool(BaseTool):
             "primer_design": self._primer_design,
             "gibson_design": self._gibson_design,
             "golden_gate_design": self._golden_gate_design,
+            "golden_gate_assemble": self._golden_gate_assemble,
         }
 
         handler = operation_handlers.get(operation)
@@ -2025,6 +2026,189 @@ class DNATool(BaseTool):
                 "n_fragments": n,
                 "overlap_length": overlap_length,
                 "topology": "circular" if circular else "linear",
+            },
+        }
+
+    def _golden_gate_assemble(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Simulate a Golden Gate reaction: digest the inputs and ligate by overhang.
+
+        Answers the reverse of `golden_gate_design`: given the plasmids actually
+        combined in a reaction, work out what the product is. Fragments that keep a
+        recognition site are re-cut in the reaction and cannot persist, so only
+        site-free fragments are assembled; they are chained by matching each
+        fragment's right-hand overhang to the next fragment's left-hand overhang.
+        """
+        fragments_in = arguments.get("fragments") or arguments.get("sequences")
+        if not fragments_in or not isinstance(fragments_in, list):
+            return {
+                "status": "error",
+                "error": "fragments must be a list of DNA sequences (the plasmids/parts combined in the reaction)",
+            }
+
+        enzyme_name = (arguments.get("enzyme") or "BsaI").strip()
+        resolved = _resolve_enzyme(enzyme_name)
+        if resolved is None:
+            return {
+                "status": "error",
+                "error": f"Unknown enzyme: {enzyme_name}. Golden Gate uses a Type IIS enzyme (BsaI, BbsI, Esp3I/BsmBI, SapI).",
+            }
+        canonical, site, _off = resolved
+
+        try:
+            from Bio import Restriction
+
+            enz = getattr(Restriction, canonical, None)
+            ovhg = int(getattr(enz, "ovhg", -4))
+        except Exception:
+            enz, ovhg = None, -4
+        if ovhg >= 0:
+            return {
+                "status": "error",
+                "error": (
+                    f"{canonical} does not leave a 5' overhang (ovhg={ovhg}); Golden Gate "
+                    "requires a Type IIS enzyme that cuts outside its site leaving a 5' overhang."
+                ),
+            }
+        ov_len = abs(ovhg)
+        circular_in = arguments.get("circular", True)
+        labels = arguments.get("labels") or []
+
+        rc_site = _reverse_complement(site)
+
+        def _has_site(seq: str) -> bool:
+            return site in seq or rc_site in seq
+
+        pieces = []
+        per_input = []
+        for idx, raw in enumerate(fragments_in):
+            if not isinstance(raw, str) or not raw.strip():
+                return {"status": "error", "error": f"fragment {idx + 1} is not a DNA sequence"}
+            seq = raw.upper().replace(" ", "").replace("\n", "").replace("\t", "")
+            err = self._validate_dna_sequence(seq)
+            if err:
+                return err
+            label = labels[idx] if idx < len(labels) else f"input_{idx + 1}"
+            n = len(seq)
+            cuts = _biopython_cut_positions(seq, canonical, circular_in)
+            cuts = sorted({c % n for c in (cuts or [])})
+            if len(cuts) < 2:
+                per_input.append(
+                    {"label": label, "length": n, "cut_sites": cuts, "released_fragments": 0}
+                )
+                continue
+
+            released = 0
+            for i, start in enumerate(cuts):
+                end = cuts[(i + 1) % len(cuts)]
+                if end > start:
+                    span = seq[start:end]
+                elif circular_in:
+                    span = seq[start:] + seq[:end]
+                else:
+                    continue
+                # The overhang at a cut is the ov_len bases starting at the cut.
+                left_ov = (seq + seq)[start : start + ov_len]
+                right_ov = (seq + seq)[end : end + ov_len]
+                if _has_site(span):
+                    continue  # re-cut in the reaction; cannot persist
+                pieces.append(
+                    {
+                        "source": label,
+                        "length": len(span),
+                        "left_overhang": left_ov,
+                        "right_overhang": right_ov,
+                        "sequence": span,
+                    }
+                )
+                released += 1
+            per_input.append(
+                {
+                    "label": label,
+                    "length": n,
+                    "cut_sites": cuts,
+                    "released_fragments": released,
+                }
+            )
+
+        if not pieces:
+            return {
+                "status": "error",
+                "error": (
+                    f"No site-free fragments were released by {canonical}. Check the enzyme "
+                    "and whether the inputs are circular (`circular`)."
+                ),
+                "data": {"enzyme": canonical, "inputs": per_input},
+            }
+
+        # Chain fragments by overhang compatibility, starting from each candidate.
+        def _assemble_from(start_i):
+            order = [start_i]
+            used = {start_i}
+            cur = pieces[start_i]
+            while True:
+                nxt = [
+                    j
+                    for j, p in enumerate(pieces)
+                    if j not in used and p["left_overhang"] == cur["right_overhang"]
+                ]
+                if len(nxt) != 1:
+                    if cur["right_overhang"] == pieces[start_i]["left_overhang"]:
+                        return order, True, None  # closed a circle
+                    return order, False, ("ambiguous" if nxt else "dead_end")
+                order.append(nxt[0])
+                used.add(nxt[0])
+                cur = pieces[nxt[0]]
+                if cur["right_overhang"] == pieces[start_i]["left_overhang"]:
+                    return order, True, None
+
+        best = None
+        for i in range(len(pieces)):
+            order, closed, why = _assemble_from(i)
+            if closed and (best is None or len(order) > len(best[0])):
+                best = (order, why)
+        if best is None:
+            return {
+                "status": "error",
+                "error": (
+                    "The site-free fragments do not form a circular product — their overhangs "
+                    "do not chain. Check the enzyme and that every intended part was supplied."
+                ),
+                "data": {
+                    "enzyme": canonical,
+                    "inputs": per_input,
+                    "fragments": [
+                        {k: v for k, v in p.items() if k != "sequence"} for p in pieces
+                    ],
+                },
+            }
+
+        order = best[0]
+        product = "".join(pieces[i]["sequence"] for i in order)
+        return {
+            "status": "success",
+            "data": {
+                "enzyme": canonical,
+                "recognition_site": site,
+                "overhang_length": ov_len,
+                "product_length": len(product),
+                "is_circular": True,
+                "num_fragments_assembled": len(order),
+                "assembly_order": [
+                    {
+                        "source": pieces[i]["source"],
+                        "length": pieces[i]["length"],
+                        "left_overhang": pieces[i]["left_overhang"],
+                        "right_overhang": pieces[i]["right_overhang"],
+                    }
+                    for i in order
+                ],
+                "unused_fragments": [
+                    {k: v for k, v in pieces[j].items() if k != "sequence"}
+                    for j in range(len(pieces))
+                    if j not in order
+                ],
+                "inputs": per_input,
+                "product_sequence": product,
             },
         }
 

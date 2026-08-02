@@ -924,5 +924,121 @@
     "fields": {
       "operation": "golden_gate_design"
     }
+  },
+  {
+    "name": "DNA_golden_gate_assemble",
+    "type": "DNATool",
+    "fields": {
+      "operation": "golden_gate_assemble"
+    },
+    "description": "Work out the product of a Golden Gate reaction that has already been performed: given the plasmids/parts that were combined and the Type IIS enzyme used (BsaI, BbsI, Esp3I/BsmBI, SapI), digest each input, discard fragments that keep a recognition site (they are re-cut in the reaction), and ligate the rest by matching 4-bp overhangs into the circular product. Returns the assembled sequence, its length, and the fragment order with the overhang at each junction. Use to answer 'I combined these plasmids with <enzyme> \u2014 what does the resulting plasmid contain/express?'. This is the reverse of DNA_golden_gate_design, which designs parts rather than analysing a finished reaction.",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": [
+            "golden_gate_assemble"
+          ],
+          "description": "Operation (optional; defaults to 'golden_gate_assemble' for this tool).",
+          "default": "golden_gate_assemble"
+        },
+        "fragments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The DNA sequences combined in the reaction (plasmids or linear parts), A/T/G/C only. At least 2."
+        },
+        "enzyme": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": "BsaI",
+          "description": "Type IIS enzyme used in the reaction, e.g. 'BsaI' (default), 'BbsI', 'Esp3I'/'BsmBI', 'SapI'."
+        },
+        "circular": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": true,
+          "description": "Whether the inputs are circular plasmids (default true). Set false for linear parts."
+        },
+        "labels": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional names for the inputs (e.g. plasmid names), echoed in the assembly order."
+        }
+      },
+      "required": [
+        "fragments"
+      ]
+    },
+    "return_schema": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "enzyme": {
+                  "type": "string"
+                },
+                "product_length": {
+                  "type": "integer",
+                  "description": "Length of the assembled circular product in bp."
+                },
+                "num_fragments_assembled": {
+                  "type": "integer"
+                },
+                "assembly_order": {
+                  "type": "array",
+                  "description": "Fragments in assembly order, each with source, length and its two overhangs."
+                },
+                "unused_fragments": {
+                  "type": "array",
+                  "description": "Site-free fragments that did not enter the circular product."
+                },
+                "product_sequence": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string"
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "test_examples": [
+      {
+        "fragments": [
+          "GGTCTCAAGGTGGGGCCCCGGGGCCCCAAAACATCAGAGACCACGTACGTACGTACGTACGTACGTAC",
+          "GGTCTCACATCCCCCGGGGCCCCGGGGTTTTAGGTAGAGACCTGCATGCATGCATGCATGCATGCATG"
+        ],
+        "enzyme": "BsaI",
+        "circular": true
+      }
+    ]
   }
 ]

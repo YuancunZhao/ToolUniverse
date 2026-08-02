@@ -67,39 +67,43 @@ Returns `parts_with_overhangs`: each part's unique 4-bp `left_overhang`/`right_o
 
 The reverse question ("I combined these plasmids in a Golden Gate reaction with
 Esp3I — what does the product express / what does the gRNA target?") is answered by
-digesting the inputs, not by designing anything. Do **not** hand-write a digestion
-simulator; `DNA_virtual_digest` handles Type IIS enzymes on both strands.
+one call. Do **not** hand-write a digestion/ligation simulator.
 
 ```bash
-# One call per input plasmid. circular=true — these are plasmids, not linear PCR products.
-tu run DNA_virtual_digest '{"sequence":"<plasmid>","enzymes":["Esp3I"],"circular":true}'
+tu run DNA_golden_gate_assemble '{"fragments":["<plasmid1>","<plasmid2>","<plasmid3>"],
+    "enzyme":"Esp3I","labels":["pLAB-CTU","pLAB-gTU2E","pLAB-CH3"]}'
 ```
 
-1. **Digest every input.** A Golden Gate donor carries its two Type IIS sites
-   **inverted** around the insert, so a correct digest returns **2 fragments** per
-   plasmid. Getting 1 fragment means the enzyme name or `circular` is wrong — not
-   that the plasmid lacks sites.
-2. **Tell insert from backbone.** The backbone is the fragment shared across donors
-   (identical length/sequence) and carries the selection marker and origin; the
-   insert is the other one.
-3. **Join by 4-bp overhangs**, not by fragment order — the junction overhangs
-   determine which insert follows which, exactly as in the design direction.
-4. **Annotate the product.** Locate features in the joined sequence (promoter,
-   ORF, gRNA spacer). For a gRNA cassette the spacer is the ~20 nt between the
-   promoter/tRNA leader and the scaffold; identify its target by matching that
-   spacer against the genome (`BLAST_*`, or an Ensembl/NCBI sequence lookup) and
-   check for an adjacent PAM. Match the **species implied by the construct**
-   (yeast tRNA/Pol III parts → search the yeast genome, not human).
+It digests each input, drops the fragments that keep a recognition site (those are
+re-cut in the reaction and cannot persist), chains the rest by matching 4-bp
+overhangs, and returns `product_sequence`, `product_length` and the `assembly_order`
+with the overhang at every junction. Inputs are treated as circular plasmids unless
+you pass `circular: false`.
+
+Then **annotate the product**. Locate features in `product_sequence` (promoter, ORF,
+gRNA spacer). For a gRNA cassette the spacer is the ~20 nt immediately 5′ of the
+scaffold (`GTTTTAGAGCTAGAAATAGCAAG`); identify its target by matching that spacer
+against the genome (`BLAST_*`, or an Ensembl/NCBI/SGD sequence lookup) and check for
+an adjacent PAM. Match the **species implied by the construct** — yeast tRNA/Pol III
+parts mean search the yeast genome, not human.
+
+If the assembly reports that the fragments do not chain, digest the inputs
+individually with `DNA_virtual_digest` (`circular: true`) to see what each released:
+a Golden Gate donor carries its two Type IIS sites **inverted** around the insert, so
+a correct digest gives **2 fragments** per plasmid. Getting 1 means the enzyme name or
+`circular` is wrong — not that the plasmid lacks sites.
 
 Enzyme names: `Esp3I` and `BsmBI` are the same enzyme (`CGTCTC`); `BsaI`
 (`GGTCTC`), `BbsI` (`GAAGAC`) and `SapI` (`GCTCTTC`) all resolve too.
 
 ## Honest limitations
 
-- The design tools produce assembly junctions; they do not model ligation/exonuclease
-  efficiency — validate by sequencing the assembled construct. (Digestion itself *is*
-  simulated faithfully: `DNA_virtual_digest` cuts both strands at each enzyme's real
-  offset, including Type IIS enzymes that cut outside their recognition site.)
+- Digestion and overhang-driven ligation are simulated faithfully (`DNA_virtual_digest`
+  and `DNA_golden_gate_assemble` cut both strands at each enzyme's real offset, including
+  Type IIS enzymes that cut outside their site). What is *not* modelled is reaction
+  efficiency — overhang ligation bias, partial digestion, incorrect-but-possible
+  junctions — so a returned product is the intended assembly, not a yield prediction.
+  Validate by sequencing the assembled construct.
 - No vector-backbone or ORF-frame checking — confirm reading frame and backbone compatibility yourself.
 
 ## Related skills
