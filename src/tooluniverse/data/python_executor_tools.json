@@ -27,11 +27,6 @@
           "description": "Variable name to extract as result from the executed code",
           "default": "result"
         },
-        "allowed_imports": {
-          "type": "array",
-          "items": {"type": "string"},
-          "description": "Additional allowed modules beyond the default safe set (math, json, datetime, etc.)"
-        },
         "dependencies": {
           "type": "array",
           "items": {"type": "string"},
