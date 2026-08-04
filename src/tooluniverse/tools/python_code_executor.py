@@ -35,7 +35,7 @@ def python_code_executor(
     return_variable : str
         Variable name to extract as result from the executed code
     dependencies : list[str]
-        List of Python packages that the code depends on. Will be checked and optiona...
+        List of exact Python distribution package names, as accepted by pip, that the...
     auto_install_dependencies : bool
         Whether to automatically install missing dependencies without user confirmation
     require_confirmation : bool

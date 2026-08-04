@@ -277,6 +277,38 @@ class BasePythonExecutor:
                     ):
                         warnings.append(f"Forbidden import: {alias.name}")
 
+            elif isinstance(node, ast.ImportFrom):
+                module_name = node.module or ""
+                module_parts = module_name.split(".") if module_name else []
+                module_root = module_parts[0] if module_parts else ""
+
+                if (
+                    module_root in self.FORBIDDEN_AST_NODES["Import"]
+                    and module_root not in self.allowed_modules
+                ):
+                    warnings.append(f"Forbidden import: {module_name}")
+
+                dangerous_module_parts = [
+                    part
+                    for part in module_parts[1:]
+                    if self._is_dangerous_attribute(part)
+                ]
+                if dangerous_module_parts:
+                    warnings.append(
+                        f"Forbidden import path (sandbox escape): {module_name}"
+                    )
+
+                for alias in node.names:
+                    if alias.name == "*":
+                        warnings.append(
+                            "Forbidden wildcard import: imported names cannot be "
+                            "validated safely"
+                        )
+                    elif self._is_dangerous_attribute(alias.name):
+                        warnings.append(
+                            f"Forbidden imported name (sandbox escape): {alias.name}"
+                        )
+
             # Check for forbidden function calls
             elif isinstance(node, ast.Call):
                 if isinstance(node.func, ast.Name):
@@ -510,13 +542,6 @@ class BasePythonExecutor:
             },
         }
 
-    def _get_package_to_install(self, package: str) -> str:
-        """Get the actual package name to install (parent package for submodules)"""
-        if "." in package:
-            # For submodules like 'keggtools.keggrest', install the parent package 'keggtools'
-            return package.split(".")[0]
-        return package
-
     def _check_and_install_dependencies(
         self,
         dependencies: List[str],
@@ -537,25 +562,10 @@ class BasePythonExecutor:
             # import-package names. Checking imports conflates distributions that
             # expose the same module (for example onnxruntime and
             # onnxruntime-gpu), so consult installed distribution metadata.
-            distribution_names = [package]
-            if "." in package:
-                distribution_names.append(package.split(".")[0])
-
-            installed_distribution = None
-            for distribution_name in distribution_names:
-                try:
-                    importlib_metadata.version(distribution_name)
-                    installed_distribution = distribution_name
-                    break
-                except importlib_metadata.PackageNotFoundError:
-                    continue
-
-            if installed_distribution:
-                print(
-                    f"   ✅ {package} is installed "
-                    f"(distribution: {installed_distribution})"
-                )
-            else:
+            try:
+                importlib_metadata.version(package)
+                print(f"   ✅ {package} distribution is installed")
+            except importlib_metadata.PackageNotFoundError:
                 print(f"   ❌ {package} is not installed")
                 missing_packages.append(package)
 
@@ -564,11 +574,10 @@ class BasePythonExecutor:
 
         print(f"\n⚠️  Missing packages: {missing_packages}")
 
-        # Get packages to actually install (parent packages for submodules)
-        packages_to_install = [
-            self._get_package_to_install(pkg) for pkg in missing_packages
-        ]
-        packages_to_install = list(set(packages_to_install))  # Remove duplicates
+        # Preserve exact distribution identities and caller order. Distribution
+        # names may legitimately contain dots, so they must not be truncated as
+        # though they were import submodules.
+        packages_to_install = list(dict.fromkeys(missing_packages))
 
         # Handle missing packages
         if not auto_install:
@@ -934,9 +943,10 @@ class PythonScriptRunner(BasePythonExecutor, BaseTool):
 
     @staticmethod
     def _read_subprocess_output(output_file) -> str:
-        """Read a binary subprocess capture using the platform text encoding."""
+        """Read binary subprocess output with ``text=True`` newline semantics."""
         output_file.flush()
         output_file.seek(0)
-        return output_file.read().decode(
+        output = output_file.read().decode(
             locale.getpreferredencoding(False), errors="replace"
         )
+        return output.replace("\r\n", "\n").replace("\r", "\n")
