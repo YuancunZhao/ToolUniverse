@@ -133,7 +133,11 @@ class PDBe_KB_Tool(BaseTool):
         protein_data = data[acc]
         ligands = []
         all_ligand_entries = protein_data.get("data", [])
-        max_ligands = arguments.get("max_ligands") or 100
+        max_ligands = arguments.get("max_ligands")
+        # `or 100` would silently turn an explicit 0 into 100 (0 is falsy),
+        # and a negative value would slice from the end instead of erroring
+        # -- check for None explicitly and clamp instead.
+        max_ligands = 100 if max_ligands is None else max(0, max_ligands)
 
         for entry in all_ligand_entries[:max_ligands]:
             binding_residues = []
@@ -203,7 +207,11 @@ class PDBe_KB_Tool(BaseTool):
         protein_data = data[acc]
         partners = []
         all_partner_entries = protein_data.get("data", [])
-        max_partners = arguments.get("max_partners") or 60
+        max_partners = arguments.get("max_partners")
+        # `or 60` would silently turn an explicit 0 into 60 (0 is falsy),
+        # and a negative value would slice from the end instead of erroring
+        # -- check for None explicitly and clamp instead.
+        max_partners = 60 if max_partners is None else max(0, max_partners)
 
         for entry in all_partner_entries[:max_partners]:
             interface_residues = []
