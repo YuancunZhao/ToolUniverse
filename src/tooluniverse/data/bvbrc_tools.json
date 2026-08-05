@@ -246,7 +246,8 @@
           "description": "Maximum number of results. Default: 25. Max: 100."
         }
       },
-      "required": []
+      "required": [],
+      "additionalProperties": false
     },
     "fields": {
       "data_type": "genome_amr",
