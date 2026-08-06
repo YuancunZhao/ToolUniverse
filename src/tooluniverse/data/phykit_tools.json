@@ -23,9 +23,10 @@
             "dvmc",
             "long_branch_score",
             "total_tree_length",
-            "parsimony_informative"
+            "parsimony_informative",
+            "treeness_over_rcv"
           ],
-          "description": "PhyKIT function to run"
+          "description": "PhyKIT function to run. 'treeness_over_rcv' (treeness/RCV) is distinct from 'treeness' and needs both an alignment and a tree."
         },
         "file": {
           "type": [

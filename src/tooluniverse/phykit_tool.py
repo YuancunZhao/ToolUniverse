@@ -21,22 +21,47 @@ from .tool_registry import register_tool
 # returns the help banner with non-zero exit, silently producing zero values.
 PHYKIT_CLI_ALIAS = {
     "parsimony_informative": "parsimony_informative_sites",
+    # BixBench asks for "treeness/RCV", which is a distinct phykit function from
+    # plain `treeness` and was not exposed at all.
+    "treeness_over_rcv": "treeness_over_rcv",
+    "toverr": "treeness_over_rcv",
 }
 
 
-def _run_phykit(function: str, filepath: str, extra_args: list = None) -> str | None:
-    """Run a single phykit command."""
+# `saturation` takes its alignment through -a, not positionally:
+#   phykit saturation -a <alignment> -t <tree>
+# Passing it positionally makes phykit exit 2 with
+# "the following arguments are required: -a/--alignment", so the function could
+# never run. Functions not listed here take the file positionally as before.
+PHYKIT_ALIGNMENT_FLAG = {"saturation", "treeness_over_rcv"}
+
+
+def _run_phykit(
+    function: str, filepath: str, extra_args: list = None
+) -> "tuple[str | None, str]":
+    """Run one phykit command; return (stdout, error_reason).
+
+    The reason is returned rather than swallowed: every failure used to collapse to
+    None, so a wrong flag or an unreadable file both surfaced as "no values
+    computed" with nothing to act on.
+    """
     cli = PHYKIT_CLI_ALIAS.get(function, function)
-    cmd = ["phykit", cli, filepath]
+    if function in PHYKIT_ALIGNMENT_FLAG:
+        cmd = ["phykit", cli, "-a", filepath]
+    else:
+        cmd = ["phykit", cli, filepath]
     if extra_args:
         cmd.extend(extra_args)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if r.returncode == 0:
-            return r.stdout.strip()
-        return None
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
+            return r.stdout.strip(), ""
+        detail = (r.stderr or r.stdout or "").strip().splitlines()
+        return None, (detail[0][:200] if detail else f"exit {r.returncode}")
+    except subprocess.TimeoutExpired:
+        return None, "phykit timed out after 120s"
+    except FileNotFoundError:
+        return None, "phykit executable not found on PATH"
 
 
 @register_tool("PhyKITTool")
@@ -86,11 +111,11 @@ class PhyKITTool(BaseTool):
             if tree_file:
                 extra = ["-t", tree_file]
 
-        output = _run_phykit(function, filepath, extra)
+        output, reason = _run_phykit(function, filepath, extra)
         if output is None:
             return {
                 "status": "error",
-                "error": f"PhyKIT {function} failed on {filepath}",
+                "error": f"PhyKIT {function} failed on {filepath}: {reason}",
             }
 
         return {
@@ -120,18 +145,30 @@ class PhyKITTool(BaseTool):
         values: List[float] = []
         processed = 0
         errors = 0
+        first_error = ""
 
         for f in files:
             extra = []
             if function == "saturation" and tree_dir:
-                tree_path = str(Path(tree_dir) / f"{f.stem}{tree_ext}")
+                # Path.stem drops only the LAST suffix, but these files carry
+                # multi-part extensions (foo.faa.mafft.clipkit). Using .stem built
+                # foo.faa.mafft + .faa.mafft.clipkit.treefile, which never exists,
+                # so every file was skipped silently and the batch reported
+                # "0 files (0 errors)". Strip the caller's own extension instead.
+                base = f.name[: -len(ext)] if ext and f.name.endswith(ext) else f.stem
+                tree_path = str(Path(tree_dir) / f"{base}{tree_ext}")
                 if not os.path.exists(tree_path):
+                    errors += 1
+                    if not first_error:
+                        first_error = f"{f.name}: no matching tree at {tree_path}"
                     continue
                 extra = ["-t", tree_path]
 
-            output = _run_phykit(function, str(f), extra)
+            output, reason = _run_phykit(function, str(f), extra)
             if output is None:
                 errors += 1
+                if not first_error:
+                    first_error = f"{f.name}: {reason}"
                 continue
 
             processed += 1
@@ -165,6 +202,10 @@ class PhyKITTool(BaseTool):
                     # Saturation outputs slope<TAB>1-slope; use 1-slope (col 1)
                     if function == "saturation" and len(parts) >= 2:
                         val = float(parts[1])
+                    elif function in ("treeness_over_rcv", "toverr") and parts:
+                        # phykit toverr prints: treeness/RCV <TAB> treeness <TAB> RCV.
+                        # The question asks for treeness/RCV, i.e. column 1.
+                        val = float(parts[0])
                     elif function == "parsimony_informative" and len(parts) >= 3:
                         # phykit pis output: n_pi <TAB> n_total <TAB> percent.
                         # The "%PIS" column (col 3) is what scientific
@@ -179,7 +220,11 @@ class PhyKITTool(BaseTool):
         if not values:
             return {
                 "status": "error",
-                "error": f"No values computed from {processed} files ({errors} errors)",
+                "error": (
+                    f"No values computed from {processed} files ({errors} errors)"
+                    + (f". First failure -- {first_error}" if first_error else "")
+                    + (f". No files matched '*{ext}' in {directory}" if not processed and not errors else "")
+                ),
             }
 
         values.sort()
