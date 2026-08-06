@@ -92,26 +92,13 @@
       ]
     },
     "return_schema": {
-      "type": "object",
       "oneOf": [
         {
-          "properties": {
-            "status": {
-              "const": "success"
-            },
-            "data": {
-              "type": "object"
-            }
-          },
-          "required": [
-            "data"
-          ]
+          "type": "object"
         },
         {
+          "type": "object",
           "properties": {
-            "status": {
-              "const": "error"
-            },
             "error": {
               "type": "string"
             }

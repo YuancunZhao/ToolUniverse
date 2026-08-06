@@ -152,12 +152,8 @@
       }
     ],
     "return_schema": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string"
-        },
-        "data": {
+      "oneOf": [
+        {
           "type": "array",
           "items": {
             "type": "object",
@@ -181,8 +177,19 @@
             },
             "additionalProperties": true
           }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "error"
+          ]
         }
-      }
+      ]
     }
   },
   {
@@ -338,35 +345,58 @@
       }
     ],
     "return_schema": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string"
-        },
-        "data": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "objCls": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "location": {
-                "type": "object"
-              },
-              "gene": {
-                "type": "object"
-              }
-            },
-            "additionalProperties": true
+      "type": "array",
+      "description": "List of matching PharmGKB genetic variants.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "objCls": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "changeClassification": {
+            "type": "string"
+          },
+          "clinicalSignificance": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array"
+          },
+          "lastUpdatedFromDbsnp": {
+            "type": "string"
+          },
+          "obsolete": {
+            "type": "boolean"
+          },
+          "rare": {
+            "type": "boolean"
+          },
+          "raritySource": {
+            "type": "string"
+          },
+          "terms": {
+            "type": "array"
+          },
+          "type": {
+            "type": "string"
+          },
+          "location": {
+            "type": "object"
+          },
+          "gene": {
+            "type": "object"
           }
-        }
+        },
+        "additionalProperties": true
       }
     }
   },
