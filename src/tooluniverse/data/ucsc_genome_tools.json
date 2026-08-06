@@ -300,7 +300,7 @@
   },
   {
     "name": "UCSC_get_sequence",
-    "description": "Get DNA sequence from the UCSC Genome Browser for a specified genomic region. Returns the nucleotide sequence for a given chromosome, start, and end position in a genome assembly. Useful for primer design, sequence analysis, and regulatory element inspection. Example: hg38, chr17, start=7668421, end=7668521 returns 100bp of TP53 sequence.",
+    "description": "Get DNA sequence from the UCSC Genome Browser for a genomic region. Pass 'region' as a written locus (e.g. 'chr14:89000000-89000100', 1-based inclusive, 101 bp) to paste coordinates verbatim, or give chrom/start/end with 'coordinate_system'. Returns the nucleotide sequence plus the resolved region in both conventions. Useful for primer design, sequence analysis and regulatory element inspection.",
     "parameter": {
       "type": "object",
       "properties": {
@@ -314,18 +314,28 @@
         },
         "start": {
           "type": "integer",
-          "description": "0-based start position (inclusive). Example: 7668421."
+          "description": "Start position. Interpreted per 'coordinate_system' (default 0-based, inclusive). Example: 7668421."
         },
         "end": {
           "type": "integer",
-          "description": "End position (exclusive). Must be > start and span <= 100000 bp. Example: 7668521."
+          "description": "End position. Exclusive when coordinate_system is 0-based, inclusive when 1-based. Span must be <= 100000 bp. Example: 7668521."
+        },
+        "region": {
+          "type": "string",
+          "description": "Genomic region written the usual way, 1-based INCLUSIVE on both ends, e.g. 'chr14:89000000-89000100' (101 bp). This is the form shown by the UCSC browser, IGV and samtools, so you can paste a locus verbatim. PREFERRED over chrom/start/end: it removes the 0-based/1-based conversion that otherwise silently drops the first base."
+        },
+        "coordinate_system": {
+          "type": "string",
+          "enum": [
+            "0-based",
+            "1-based"
+          ],
+          "description": "Which convention chrom/start/end are given in. '0-based' (default) is half-open, matching the UCSC API: length = end - start. '1-based' is inclusive, matching a written locus: length = end - start + 1. Ignored when 'region' is supplied.",
+          "default": "0-based"
         }
       },
       "required": [
-        "genome",
-        "chrom",
-        "start",
-        "end"
+        "genome"
       ]
     },
     "fields": {
@@ -335,15 +345,20 @@
     "test_examples": [
       {
         "genome": "hg38",
+        "region": "chr14:89000000-89000100"
+      },
+      {
+        "genome": "hg38",
         "chrom": "chr17",
         "start": 7668421,
         "end": 7668521
       },
       {
         "genome": "hg38",
-        "chrom": "chrM",
-        "start": 4321,
-        "end": 5678
+        "chrom": "chr17",
+        "start": 7668422,
+        "end": 7668521,
+        "coordinate_system": "1-based"
       }
     ],
     "return_schema": {
