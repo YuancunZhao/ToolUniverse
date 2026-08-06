@@ -8,6 +8,7 @@ single files or batch processing on directories.
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -154,8 +155,12 @@ class PhyKITTool(BaseTool):
         errors = 0
         first_error = ""
 
-        for f in files:
-            extra = []
+        # Resolve each file's tree before running anything, so a missing tree is
+        # counted without paying for a subprocess.
+        planned = []  # (index, file, extra_args)
+        missing = []  # (index, message)
+        for idx, f in enumerate(files):
+            extra: List[str] = []
             if function in PHYKIT_NEEDS_TREE and tree_dir:
                 # Path.stem drops only the LAST suffix, but these files carry
                 # multi-part extensions (foo.faa.mafft.clipkit). Using .stem built
@@ -165,17 +170,40 @@ class PhyKITTool(BaseTool):
                 base = f.name[: -len(ext)] if ext and f.name.endswith(ext) else f.stem
                 tree_path = str(Path(tree_dir) / f"{base}{tree_ext}")
                 if not os.path.exists(tree_path):
-                    errors += 1
-                    if not first_error:
-                        first_error = f"{f.name}: no matching tree at {tree_path}"
+                    missing.append((idx, f"{f.name}: no matching tree at {tree_path}"))
                     continue
                 extra = ["-t", tree_path]
+            planned.append((idx, f, extra))
 
-            output, reason = _run_phykit(function, str(f), extra)
+        # phykit is a separate process per file and takes ~2 s on a typical
+        # ortholog, so a few hundred files ran well past the caller's timeout
+        # (249 alignments x ~2.2 s = ~9 min for a single metric). The work is
+        # independent per file and dominated by subprocess wall time, so a
+        # thread pool collapses it to roughly wall/N without touching the
+        # per-file logic below.
+        max_workers = min(16, (os.cpu_count() or 4), len(planned)) or 1
+        outputs: Dict[int, "tuple[str | None, str]"] = {}
+        if planned:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futures = {
+                    pool.submit(_run_phykit, function, str(f), extra): idx
+                    for idx, f, extra in planned
+                }
+                for fut in as_completed(futures):
+                    outputs[futures[fut]] = fut.result()
+
+        # Report in input order, so first_error names the first file in the
+        # listing rather than whichever thread happened to fail first.
+        results = sorted(
+            [(idx, files[idx], outputs[idx]) for idx, _f, _e in planned]
+            + [(idx, files[idx], (None, msg)) for idx, msg in missing]
+        )
+
+        for _idx, f, (output, reason) in results:
             if output is None:
                 errors += 1
                 if not first_error:
-                    first_error = f"{f.name}: {reason}"
+                    first_error = reason if reason.startswith(f.name) else f"{f.name}: {reason}"
                 continue
 
             processed += 1
