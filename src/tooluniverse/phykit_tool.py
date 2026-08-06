@@ -33,7 +33,10 @@ PHYKIT_CLI_ALIAS = {
 # Passing it positionally makes phykit exit 2 with
 # "the following arguments are required: -a/--alignment", so the function could
 # never run. Functions not listed here take the file positionally as before.
-PHYKIT_ALIGNMENT_FLAG = {"saturation", "treeness_over_rcv"}
+PHYKIT_ALIGNMENT_FLAG = {"saturation", "treeness_over_rcv", "toverr"}
+# Functions that also need the tree passed with -t. Previously only saturation
+# was handled, so treeness/RCV failed with "required: -t/--tree".
+PHYKIT_NEEDS_TREE = {"saturation", "treeness_over_rcv", "toverr"}
 
 
 def _run_phykit(
@@ -75,6 +78,10 @@ class PhyKITTool(BaseTool):
         "long_branch_score",
         "total_tree_length",
         "parsimony_informative",
+        # treeness/RCV -- a distinct phykit function from plain treeness, and what
+        # questions phrased "treeness/RCV" actually ask for.
+        "treeness_over_rcv",
+        "toverr",
     ]
 
     def __init__(self, tool_config: Dict[str, Any], **kwargs):
@@ -106,7 +113,7 @@ class PhyKITTool(BaseTool):
             return {"status": "error", "error": f"File not found: {filepath}"}
 
         extra = []
-        if function == "saturation":
+        if function in PHYKIT_NEEDS_TREE:
             tree_file = arguments.get("tree_file", "")
             if tree_file:
                 extra = ["-t", tree_file]
@@ -149,7 +156,7 @@ class PhyKITTool(BaseTool):
 
         for f in files:
             extra = []
-            if function == "saturation" and tree_dir:
+            if function in PHYKIT_NEEDS_TREE and tree_dir:
                 # Path.stem drops only the LAST suffix, but these files carry
                 # multi-part extensions (foo.faa.mafft.clipkit). Using .stem built
                 # foo.faa.mafft + .faa.mafft.clipkit.treefile, which never exists,
