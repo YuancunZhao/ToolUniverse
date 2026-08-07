@@ -598,10 +598,19 @@ class DNATool(BaseTool):
         super().__init__(tool_config)
         self.parameter = tool_config.get("parameter", {})
         self.required = self.parameter.get("required", [])
+        # Each registered tool (DNA_find_orfs, DNA_virtual_digest, ...) is one
+        # operation, so its config names that operation and the caller does not
+        # have to repeat it. Fall back to the tool name (DNA_<operation>) when
+        # `fields` is absent, matching the pattern used by MSigDBTool.
+        self.operation = (tool_config.get("fields") or {}).get("operation")
+        if not self.operation:
+            name = tool_config.get("name", "")
+            if name.startswith("DNA_"):
+                self.operation = name[len("DNA_"):]
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute DNA analysis tool with given arguments."""
-        operation = arguments.get("operation")
+        operation = arguments.get("operation") or self.operation
         if not operation:
             return {"status": "error", "error": "Missing required parameter: operation"}
 
