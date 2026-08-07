@@ -774,6 +774,18 @@ def search_openfda(
     # Extract meta information
     meta_info = response_data.get("meta", {})
     meta_info = meta_info.get("results", {})
+    # The NOT_FOUND fallback engine above re-queries with an internal
+    # `limit_override` (floored at 25) to get enough candidates to rank/dedupe,
+    # then truncates `extracted_results` back down to the caller's requested
+    # limit. Without this, `meta.limit` would leak that internal retry value
+    # (e.g. 25) even though only the caller's requested number of results
+    # (e.g. 1) is actually returned in `results`.
+    if meta_info:
+        meta_info = dict(meta_info)
+        if params.get("limit") is not None:
+            meta_info["limit"] = params.get("limit")
+        if params.get("skip") is not None:
+            meta_info["skip"] = params.get("skip")
 
     # Extract results and return only the specified return fields
     results = response_data.get("results", [])

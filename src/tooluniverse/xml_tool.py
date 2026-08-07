@@ -129,7 +129,7 @@ class XMLDatasetTool(BaseTool):
                     for el in found_elements
                     if el.get(attr_name)
                 )
-                return " | ".join(values)
+                return " | ".join(dict.fromkeys(values))
 
             # Handle direct attribute on current element
             if xpath_expr.startswith("@"):
@@ -143,7 +143,11 @@ class XMLDatasetTool(BaseTool):
             # Use generator expression and filter out empty text
             values = ((elem.text or "").strip() for elem in found_elements)
             non_empty_values = (v for v in values if v)
-            return " | ".join(non_empty_values)
+            # Dedupe while preserving order: fields with many repeated child
+            # elements (e.g. DrugBank <products><product><name> repeats the
+            # same brand name once per country/dosage-form combination) would
+            # otherwise return the same string hundreds of times.
+            return " | ".join(dict.fromkeys(non_empty_values))
 
         except Exception:
             return ""
