@@ -148,7 +148,6 @@ that line when the raw min in a group is 0.
 scogs zips ship in two shapes:
 - **Full**: `<gene>.faa`, `<gene>.faa.mafft`, `<gene>.faa.mafft.clipkit`,
   `<gene>.faa.mafft.clipkit.treefile`, plus iqtree/bionj/log/mldist.
-  Use clipkit alignment + treefile for tree-paired metrics.
 - **Alignment-only**: just `<gene>.faa` + `<gene>.faa.mafft`. No
   trees, no clipkit. Used for parsimony, RCV, gap-percentage
   questions. Use the `.faa.mafft` (NOT raw `.faa`) — the published
@@ -157,6 +156,47 @@ scogs zips ship in two shapes:
 Both bundled scripts auto-detect the layout and use the best available
 alignment per ortholog. Do NOT re-run MAFFT or ClipKit yourself; the
 shipped files are canonical.
+
+#### Which alignment goes with which metric (this changes the answer)
+
+The tree is always the ClipKit-derived `.faa.mafft.clipkit.treefile`. The
+**alignment** argument depends on the metric:
+
+| metric | alignment to pass |
+|---|---|
+| `treeness`, `dvmc`, `total_tree_length`, `long_branch_score` | tree only — no alignment |
+| `saturation` | `.faa.mafft.clipkit` (trimmed) |
+| **`treeness_over_rcv` / `rcv`** | **`.faa.mafft` (untrimmed)** |
+| parsimony-informative sites, gap percentage | `.faa.mafft` (untrimmed) |
+
+RCV measures compositional variability **across the alignment's columns**, so
+trimming changes it materially — and `treeness_over_rcv` divides by RCV, so the
+trimmed alignment shifts the ratio for every gene. Verified on the fungal scogs
+set (249 orthologs, canonical shipped files):
+
+```
+median treeness/RCV   untrimmed .faa.mafft = 0.2683    trimmed .clipkit = 0.3050
+max treeness/RCV                                                      (>70% gap genes)
+                      untrimmed .faa.mafft = 0.1866    trimmed .clipkit = 0.4205
+```
+
+Plain `treeness` needs no alignment and is unaffected — it reproduces exactly
+(median 0.0501 on the same 249 files), which is how the alignment choice was
+isolated as the cause rather than the tree set or the tool.
+
+`phykit_batch_analysis` takes the two independently, so pass them explicitly:
+
+```bash
+tu run phykit_batch_analysis '{"operation":"batch","function":"treeness_over_rcv",
+  "directory":"<dir>","extension":".faa.mafft",
+  "tree_directory":"<dir>","tree_extension":".faa.mafft.clipkit.treefile"}'
+```
+
+**Gap percentage** in these questions means the fraction of alignment
+**columns containing at least one gap**, not the fraction of all residues that
+are gaps. The two differ by an order of magnitude: with the residue definition
+no fungal ortholog exceeds 70% gaps, so a ">70% gaps" filter silently selects
+nothing.
 
 **Anti-pattern:** running `phykit` on the raw `*.busco.zip` extracted
 ortholog FASTAs and aligning/tree-building yourself. The pre-computed
