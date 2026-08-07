@@ -578,7 +578,9 @@ def _site_to_regex(site: str) -> str:
     return "".join(_IUPAC_RE.get(c, c) for c in site.upper())
 
 
-_COMPLEMENT = str.maketrans("ACGTRYSWKMBDHVNacgtryswkmbdhvn", "TGCAYRSWMKVHDBNtgcayrswmkvhdbn")
+_COMPLEMENT = str.maketrans(
+    "ACGTRYSWKMBDHVNacgtryswkmbdhvn", "TGCAYRSWMKVHDBNtgcayrswmkvhdbn"
+)
 
 
 def _reverse_complement(site: str) -> str:
@@ -757,7 +759,7 @@ class DNATool(BaseTool):
         if not self.operation:
             name = tool_config.get("name", "")
             if name.startswith("DNA_"):
-                self.operation = name[len("DNA_"):]
+                self.operation = name[len("DNA_") :]
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute DNA analysis tool with given arguments."""
@@ -1624,10 +1626,9 @@ class DNATool(BaseTool):
             cut_offsets = dict(NEB_CUT_OFFSETS)
             unknown_enzymes = []
 
-        # Search a doubled sequence for circular DNA to detect recognition sites
-        # that straddle the origin; keep only sites starting within [0, seq_len).
+        # Origin-straddling sites on circular DNA are handled inside
+        # _enzyme_cut_positions, which does the doubled-sequence search itself.
         seq_len = len(sequence)
-        search_seq = (sequence + sequence) if circular else sequence
         cut_sites_list = []
         enzymes_used = []
         for enzyme_name, recognition_seq in enzyme_dict.items():
@@ -2198,7 +2199,10 @@ class DNATool(BaseTool):
         per_input = []
         for idx, raw in enumerate(fragments_in):
             if not isinstance(raw, str) or not raw.strip():
-                return {"status": "error", "error": f"fragment {idx + 1} is not a DNA sequence"}
+                return {
+                    "status": "error",
+                    "error": f"fragment {idx + 1} is not a DNA sequence",
+                }
             seq = raw.upper().replace(" ", "").replace("\n", "").replace("\t", "")
             err = self._validate_dna_sequence(seq)
             if err:
@@ -2209,7 +2213,12 @@ class DNATool(BaseTool):
             cuts = sorted({c % n for c in (cuts or [])})
             if len(cuts) < 2:
                 per_input.append(
-                    {"label": label, "length": n, "cut_sites": cuts, "released_fragments": 0}
+                    {
+                        "label": label,
+                        "length": n,
+                        "cut_sites": cuts,
+                        "released_fragments": 0,
+                    }
                 )
                 continue
 
