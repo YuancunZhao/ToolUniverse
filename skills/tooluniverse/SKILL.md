@@ -102,6 +102,7 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 
 | Keywords | Action |
 |----------|--------|
+| **A single database-checkable fact**, especially multiple-choice — "which of the following gene/drug/variant/pathway is…", anything phrased "**according to** <database>" (DisGeNet, OMIM, MSigDB, miRDB, GTRD, MGI, Ensembl, ClinVar, ChEMBL, OpenTargets, UniProt). Look it up rather than answering from memory; niche annotations are what gets hallucinated | `Skill(skill="tooluniverse-biomedical-fact-lookup")` |
 | "research", "profile", "**disease**", "syndrome", "disorder", "comprehensive report on [disease]" | `Skill(skill="tooluniverse-disease-research")` |
 | "research", "profile", "**drug**", "medication", "therapeutic agent", "tell me about [drug]" | `Skill(skill="tooluniverse-drug-research")` |
 | "**literature review**", "papers about", "publications on", "research articles", "recent studies" | `Skill(skill="tooluniverse-literature-deep-research")` |
@@ -129,6 +130,7 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | "**device adverse events**", "device recall", "MAUDE", "food/supplement adverse event", "CAERS", "veterinary adverse event", "drug shortage" | `Skill(skill="tooluniverse-product-safety-surveillance")` |
 | "**variant interpretation**", "VUS", "pathogenicity", "clinical significance", "is [variant] pathogenic" | `Skill(skill="tooluniverse-variant-interpretation")` |
 | "**clinical guidelines**", "practice guidelines", "treatment guidelines", "dosing recommendations", "standard of care" | `Skill(skill="tooluniverse-clinical-guidelines")` |
+| **Drug choice for a described patient** — "which of the following is most appropriate for", "which drug should this patient receive"; a vignette naming a modifier (**hepatic/renal impairment**, Child-Pugh, "on a strong CYP3A4 inhibitor", pregnancy, a contraindication) alongside candidate drugs. The deciding fact is in each candidate's FDA label, not recall | `Skill(skill="tooluniverse-biomedical-fact-lookup")` |
 | "**patient stratification**", "precision medicine", "biomarker stratification", "treatment selection" | `Skill(skill="tooluniverse-precision-medicine-stratification")` |
 
 ### 4. Discovery & Design
