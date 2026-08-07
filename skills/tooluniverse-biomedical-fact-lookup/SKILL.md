@@ -31,10 +31,11 @@ Most of these questions are MCQ with an "Insufficient information to answer the 
 | **TF binding site / target** "according to GTRD" (e.g. PGM3) | `MSigDB_check_gene_in_set` (collection C3:TFT:GTRD) | set name = `<TF>_TARGET_GENES`, e.g. `PGM3_TARGET_GENES`; pass `gene` per option |
 | **pathway / hallmark** membership | `MSigDB_get_hallmark_geneset`, `MSigDB_get_geneset` | `HALLMARK_<NAME>` or exact set name |
 | **gene ↔ disease** association (DisGeNet, OpenTargets, OMIM) | `umls_search_concepts` → `DisGeNET_get_disease_genes`/`DisGeNET_get_gda`; `OpenTargets_*`, `MyDisease_get_disease`, `OMIM_search`; **text-mined fallback:** `PubTator3_LiteratureSearch` / `PubTator3_GetEntityRelations` (`e1=@GENE_<sym>`), `EPMC_get_text_mined_annotations` | DisGeNET needs a **UMLS CUI** (resolve via `umls_search_concepts` → `C0152200`, then `disease=C0152200`) + `DISGENET_API_KEY`. See the "in X but not Y" recipe below |
-| **mouse phenotype** gene set (MGI / MP:xxxxx, e.g. "increased carcinoma incidence") | `MGI_search_genes` → `MGI_get_phenotypes` | for **each** candidate gene: search → take the `MGI:` id → `MGI_get_phenotypes`; the matching gene is the one whose `phenotype_statement` list contains the phenotype the question names (see interpretation note) |
+| **mouse phenotype** gene set (MP / MGI, e.g. "increased melanoma incidence") | `MSigDB_check_gene_in_set` (mouse M5, set `MP_<PHENOTYPE>`) — fall back to `MGI_search_genes` → `MGI_get_phenotypes` | **one call per option** against the `MP_*` set (e.g. `MP_INCREASED_MELANOMA_INCIDENCE`); the member is the answer. Only if the set name doesn't resolve, use the MGI per-gene route below |
 | **gene genomic location** (Ensembl band, e.g. chr7q34) | `Ensembl_*` / `NCBIDatasets_get_gene_by_symbol` | resolve each option, compare cytoband/coordinates |
 | **variant / sequence** pathogenicity ("which variant/sequence is pathogenic *or* benign per ClinVar") | (only when genuinely unsure) `annotate_variant_multi_source`, `VEP_predict_pathogenicity`, `UniProt_get_disease_variants_by_accession` | **Be efficient — do NOT query every option (that causes timeouts).** Identify the protein once, find each option's single substitution, and reason about the specific residue changes directly; the base model is usually reliable on well-characterized ClinVar variants. Make at most ONE targeted tool call to resolve a truly uncertain variant. **Watch the question's polarity** (benign vs pathogenic): for "most likely benign", a common/reference-matching variant is the answer; for "most likely pathogenic", a rare damaging one is. |
 | **drug / compound** target, MoA, approval | `ChEMBL_*`, `OpenFDA_*`, `GtoPdb_*`, `PubChem_*` | resolve drug, query the relation |
+| **which drug for this patient** (clinical vignette naming a modifier) | `FDA_*_by_drug_name` — pick the section by modifier | see "Drug choice for a described patient" below |
 | **protein** function / domain / sequence | `UniProt_*` | resolve accession, read annotation |
 
 When unsure which tool wraps a database, search the catalog by the *relation* (e.g. "gene disease association", "gene set members"), not the brand name — ToolUniverse usually already has it.
@@ -47,8 +48,11 @@ ToolUniverse's `MSigDB_*` tools cover several collections that LAB-Bench questio
 - **C3:MIR:MIRDB** (miRDB v6.0 predicted miRNA targets) — `MIR<number>_<3P|5P>` (e.g. `MIR186_3P`, `MIR675_3P`). This *is* miRDB; do not say "no access to miRDB".
 - **C3:TFT:GTRD** (GTRD TF target genes) — `<TF>_TARGET_GENES` (e.g. `PGM3_TARGET_GENES`). This *is* GTRD.
 - **Hallmark** — `HALLMARK_<NAME>`.
+- **Mouse M5 (MGI mammalian phenotype)** — `MP_<PHENOTYPE_IN_CAPS>` (e.g. "increased melanoma incidence" → `MP_INCREASED_MELANOMA_INCIDENCE`). These are **mouse** sets: the tools try human then mouse automatically, or pass `species: "mouse"` to skip the human miss. Prefer this over querying each gene's full MGI phenotype list.
 
-`MSigDB_get_gene_set_members` (operation `get_gene_set`) returns `{genes:[...]}`; `MSigDB_check_gene_in_set` (operation `check_gene_in_set`, param `gene`) returns `{is_member: bool}`.
+`MSigDB_get_gene_set_members` (operation `get_gene_set`) returns `{genes:[...]}`; `MSigDB_check_gene_in_set` (operation `check_gene_in_set`, param `gene`) returns `{is_member: bool}`. Both report which `species` collection matched.
+
+**Fetch the set once, not once per option.** A multiple-choice question asks about one set and 3-5 candidates, so `MSigDB_get_gene_set_members` answers all of them in a single call — compare the options against the returned list yourself. Reserve `MSigDB_check_gene_in_set` for a single-gene question, or when the set is too large to return comfortably.
 
 ## Gene–disease "in database X but NOT database Y" recipe
 
@@ -61,9 +65,59 @@ These questions (e.g. "which gene is associated with disease D according to DisG
 5. **Elimination:** rule out options that ARE OMIM-causal for D; among the rest, pick the one with a DisGeNet/text-mined association. If exactly one option is non-OMIM and has any association signal, that is the answer.
 6. Only answer "Insufficient information" if no option has any association in any source. If the gold gene appears in neither curated DisGeNet, OMIM, nor PubTator literature, it may rely on a DisGeNet-internal text-mined signal the academic tier can't reach — say so honestly rather than guessing.
 
-## Mouse-phenotype matching (MGI)
+## Drug choice for a described patient (clinical vignette)
 
-`MGI_get_phenotypes` returns a list of `phenotype_statement` strings per gene. To answer "which gene is annotated to phenotype P" (e.g. an MP term like *increased carcinoma incidence*), query each candidate gene and pick the one whose statements include a phrase matching P (the statements are human-readable, e.g. "increased incidence of carcinoma", "tumor"). Match on the phenotype concept, not an exact MP id string. If several match, prefer the most specific statement.
+"Which of the following is most appropriate for this patient?" with a vignette
+naming a **modifier** — hepatic or renal impairment, a Child-Pugh class, a
+concomitant strong CYP3A4 inhibitor, pregnancy, an allergy or contraindication —
+and several candidate drugs. These read like clinical-judgement questions, but
+the modifier is doing all the work and the deciding fact is printed in each
+candidate's FDA label. Answering from recall is the failure mode here: the
+options are usually all plausible drugs for the condition, and only the label
+separates them.
+
+**1. Resolve every option brand → generic first.**
+`FDA_get_active_ingredient_info_by_drug_name` on each option. Do this before any
+reasoning, for two reasons: label lookups are keyed on the ingredient, and **two
+options are sometimes the same drug** under a brand and a generic name. When
+that happens neither can be the intended answer — they cannot be
+distinguished — so it eliminates both and often decides the question outright.
+Note the duplicate explicitly; it is also worth reporting as a benchmark defect.
+
+**2. Look up only the section the modifier turns on.** One targeted call per
+candidate beats pulling whole labels:
+
+| The vignette says… | Read this section |
+|---|---|
+| hepatic impairment, Child-Pugh A/B/C, cirrhosis | `FDA_get_pharmacokinetics_by_drug_name` (hepatic-impairment subsection), then `FDA_get_dosage_and_storage_information_by_drug_name` for the adjustment. A Child-Pugh grading may sit in either of those or in contraindications, and some labels describe hepatic impairment without using the term at all — absence from one section is not absence from the label |
+| renal impairment, CrCl/eGFR, dialysis | same pair — PK first, then dosage |
+| "on a strong CYP3A4 inhibitor/inducer", any named co-medication | `FDA_get_drug_interactions_by_drug_name`; `FDA_get_clinical_pharmacology_by_drug_name` when the label states the metabolic pathway rather than the pairing |
+| pregnancy, breastfeeding, "planning to conceive" | `FDA_get_pregnancy_or_breastfeeding_info_by_drug_name` (`FDA_get_teratogenic_effects_by_drug_name` when the question is about fetal harm specifically) |
+| an allergy, a comorbidity that rules a drug out | `FDA_get_contraindications_by_drug_name`, then `FDA_get_boxed_warning_info_by_drug_name` |
+| elderly / pediatric patient | `FDA_get_geriatric_use_info_by_drug_name` / `FDA_get_pediatric_use_info_by_drug_name` |
+| the drug simply may not treat the condition | `FDA_get_indications_by_drug_name` |
+
+The naming is regular — `FDA_get_<section>_by_drug_name` — so a section not listed
+here can be found by searching the catalog for the section name rather than
+guessing a tool name.
+
+**3. Decide by elimination, and say what eliminated each option.** The intended
+answer is normally the one candidate the modifier does *not* exclude:
+contraindicated in hepatic impairment, requires an unavailable dose reduction,
+interacts with the stated co-medication, or is not indicated for the condition.
+Quote the label phrase that rules each option out — a vignette answer without a
+cited label sentence is a guess wearing a citation.
+
+**Do not over-query.** Resolve the ingredients (one call per option), then read
+one section per remaining candidate. If the label is silent on the modifier for
+every option, say so and answer on indication — do not keep pulling sections
+hoping for a discriminator.
+
+## Mouse-phenotype matching (MGI) — fallback only
+
+Try the `MP_<PHENOTYPE>` MSigDB set first (above): it answers in one call per option and is the same MGI annotation. Use this per-gene route only when the set name does not resolve.
+
+`MGI_get_phenotypes` returns a list of `phenotype_statement` strings per gene, **paginated** — a gene's matching statement is often on a later page, so a single page is not evidence of absence. To answer "which gene is annotated to phenotype P", query each candidate gene and pick the one whose statements include a phrase matching P (the statements are human-readable, e.g. "increased incidence of carcinoma", "tumor"). Match on the phenotype concept, not an exact MP id string. If several match, prefer the most specific statement.
 
 ## Computational procedures (when the answer is COMPUTED, not looked up)
 
