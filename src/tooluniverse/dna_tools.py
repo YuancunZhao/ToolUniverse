@@ -533,6 +533,24 @@ NEB_CUT_OFFSETS: Dict[str, int] = {
     "SapI": 8,  # GCTCTTCN^NNN    (3-base 5' overhang, 1 nt spacer)
 }
 
+# Overhang length produced by each enzyme, needed to place the cut for a site
+# found in the REVERSE orientation. A reverse-oriented site is read by the
+# enzyme on the bottom strand, so its top-strand cut sits upstream of the site:
+#
+#     reverse_cut = site_start - (cut_offset - site_length + overhang_length)
+#
+# Only non-palindromic enzymes can occur in a distinguishable reverse
+# orientation, which in practice means the Type IIS cutters. Verified against
+# Bio.Restriction: the formula reproduces its both-strand `search()` positions
+# exactly for every enzyme listed here.
+NEB_OVERHANG_LEN: Dict[str, int] = {
+    "BsaI": 4,
+    "BbsI": 4,
+    "Esp3I": 4,
+    "BsmBI": 4,
+    "SapI": 3,
+}
+
 
 # IUPAC ambiguity codes → regex character classes, so recognition sites with
 # degenerate bases (N and any of R/Y/S/W/K/M/B/D/H/V) match correctly.
@@ -566,6 +584,62 @@ _COMPLEMENT = str.maketrans("ACGTRYSWKMBDHVNacgtryswkmbdhvn", "TGCAYRSWMKVHDBNtg
 def _reverse_complement(site: str) -> str:
     """Reverse complement of an IUPAC recognition sequence."""
     return site.translate(_COMPLEMENT)[::-1]
+
+
+def _enzyme_cut_positions(sequence: str, enzyme_name: str, circular: bool):
+    """Cut positions (0-based top-strand bond indices), Biopython optional.
+
+    Prefers Bio.Restriction, which knows every enzyme's real geometry. Falls
+    back to scanning both orientations of the recognition site and applying the
+    curated offsets, so the Type IIS enzymes Golden Gate depends on work without
+    the optional `bioinformatics` extra installed. The fallback reproduces
+    Bio.Restriction's both-strand `search()` exactly for those enzymes
+    (verified over randomised sequences).
+    """
+    cuts = _biopython_cut_positions(sequence, enzyme_name, circular)
+    if cuts:
+        return cuts
+
+    resolved = _resolve_enzyme(enzyme_name)
+    if resolved is None:
+        return []
+    canonical, site, cut_off = resolved
+    site_len = len(site)
+    ov = NEB_OVERHANG_LEN.get(canonical, 0)
+    n = len(sequence)
+    if n == 0:
+        return []
+
+    search_seq = (sequence + sequence) if circular else sequence
+    rc_site = _reverse_complement(site)
+    fwd_re = _site_to_regex(site)
+    out = []
+
+    for m in re.finditer(f"(?={fwd_re})", search_seq):
+        i = m.start()
+        if i >= n:
+            break
+        cut = i + cut_off
+        # A linear molecule can only be cut where the whole cut geometry fits;
+        # a circular one wraps instead.
+        if circular:
+            out.append(cut % n)
+        elif cut + ov <= n:
+            out.append(cut)
+
+    if rc_site != site:
+        back = cut_off - site_len + ov
+        for m in re.finditer(f"(?={_site_to_regex(rc_site)})", search_seq):
+            i = m.start()
+            if i >= n:
+                break
+            cut = i - back
+            if circular:
+                out.append(cut % n)
+            elif cut >= 0:
+                out.append(cut)
+
+    return sorted(set(out))
 
 
 def _biopython_cut_positions(sequence: str, enzyme_name: str, circular: bool):
@@ -827,6 +901,7 @@ class DNATool(BaseTool):
             # plasmids, whose Type IIS sites are inverted around the insert,
             # report both.
             rc_site = _reverse_complement(recognition_seq)
+            rc_positions: List[int] = []
             if rc_site != recognition_seq:
                 rc_pattern = _site_to_regex(rc_site)
                 rc_positions = [
@@ -834,7 +909,18 @@ class DNATool(BaseTool):
                     for m in re.finditer(f"(?={rc_pattern})", search_seq)
                     if (not circular) or m.start() < seq_len
                 ]
+                # Keep the two orientations apart: they are reported together as
+                # recognition-site positions, but they cut on opposite sides of
+                # the site, so the cleavage calculation below must know which is
+                # which. Merging them and applying the forward offset to both
+                # placed every reverse-site cut in the wrong position -- which
+                # left the recognition site inside the fragment and made Golden
+                # Gate report that no site-free fragments were released.
+                forward_positions = sorted(set(positions))
                 positions = sorted(set(positions) | set(rc_positions))
+            else:
+                forward_positions = sorted(set(positions))
+                positions = forward_positions
 
             # Use the resolved offset, not the curated table: enzymes that come
             # from Biopython are absent there and were silently given a midpoint
@@ -857,9 +943,18 @@ class DNATool(BaseTool):
                     # 1-based convention this tool reports.
                     cleavage_pos = sorted({(c % seq_len) + 1 for c in bio_cuts})
                 else:
-                    cleavage_pos = sorted(
-                        set(((p - 1 + cut_off) % seq_len) + 1 for p in positions)
+                    # Forward site: cut sits cut_off bases from the site start.
+                    cuts0 = [(p - 1 + cut_off) % seq_len for p in forward_positions]
+                    # Reverse site: the enzyme reads the bottom strand, so its
+                    # top-strand cut is upstream of the site by the spacer plus
+                    # the overhang (see NEB_OVERHANG_LEN).
+                    site_len = len(recognition_seq)
+                    ovhg = NEB_OVERHANG_LEN.get(
+                        (resolved[0] if resolved else enzyme_name), 0
                     )
+                    back = cut_off - site_len + ovhg
+                    cuts0 += [(p - 1 - back) % seq_len for p in rc_positions]
+                    cleavage_pos = sorted({c + 1 for c in cuts0})
                 results[enzyme_name] = {
                     "recognition_sequence": recognition_seq,
                     "cut_sites": positions,  # 1-based recognition site START positions
@@ -1536,28 +1631,17 @@ class DNATool(BaseTool):
         cut_sites_list = []
         enzymes_used = []
         for enzyme_name, recognition_seq in enzyme_dict.items():
-            bio_cuts = _biopython_cut_positions(sequence, enzyme_name, circular)
-            if bio_cuts is not None:
-                # Both strands, real cut geometry (see _biopython_cut_positions).
-                for cut_pos in bio_cuts:
+            # Both strands with real cut geometry, whether or not Biopython is
+            # installed (see _enzyme_cut_positions). The previous fallback here
+            # scanned the forward strand only, so an inverted Type IIS pair --
+            # exactly what a Golden Gate donor carries -- yielded one cut
+            # instead of two and the plasmid came back looking almost uncut.
+            cuts = _enzyme_cut_positions(sequence, enzyme_name, circular)
+            if cuts:
+                for cut_pos in cuts:
                     cut_sites_list.append(
                         {"enzyme": enzyme_name, "position": cut_pos % seq_len}
                     )
-                if bio_cuts:
-                    enzymes_used.append(enzyme_name)
-                continue
-            pattern = _site_to_regex(recognition_seq)
-            positions = [
-                m.start()
-                for m in re.finditer(f"(?={pattern})", search_seq)
-                if m.start() < seq_len
-            ]
-            cut_offset = cut_offsets.get(enzyme_name, len(recognition_seq) // 2)
-            for pos in positions:
-                cut_pos = (pos + cut_offset) % seq_len  # wrap into [0, seq_len)
-                cut_sites_list.append({"enzyme": enzyme_name, "position": cut_pos})
-
-            if positions:
                 enzymes_used.append(enzyme_name)
 
         cut_sites_list.sort(key=lambda x: x["position"])
@@ -2072,13 +2156,27 @@ class DNATool(BaseTool):
             }
         canonical, site, _off = resolved
 
+        # Overhang length: from Biopython when available, else the curated table.
+        # The previous -4 default was silently wrong for SapI (3 nt).
+        _table_ov = NEB_OVERHANG_LEN.get(canonical)
         try:
             from Bio import Restriction
 
             enz = getattr(Restriction, canonical, None)
-            ovhg = int(getattr(enz, "ovhg", -4))
+            ovhg = int(getattr(enz, "ovhg", -(_table_ov or 4)))
         except Exception:
-            enz, ovhg = None, -4
+            enz, ovhg = None, -(_table_ov or 4)
+        if _table_ov is None and enz is None:
+            # Not a known Type IIS cutter and no Biopython to say otherwise.
+            return {
+                "status": "error",
+                "error": (
+                    f"{canonical} is not known to leave a 5' overhang. Golden Gate requires "
+                    "a Type IIS enzyme that cuts outside its site leaving a 5' overhang "
+                    "(BsaI, BbsI, Esp3I/BsmBI, SapI); install the 'bioinformatics' extra "
+                    "for the full Bio.Restriction enzyme set."
+                ),
+            }
         if ovhg >= 0:
             return {
                 "status": "error",
@@ -2107,7 +2205,7 @@ class DNATool(BaseTool):
                 return err
             label = labels[idx] if idx < len(labels) else f"input_{idx + 1}"
             n = len(seq)
-            cuts = _biopython_cut_positions(seq, canonical, circular_in)
+            cuts = _enzyme_cut_positions(seq, canonical, circular_in)
             cuts = sorted({c % n for c in (cuts or [])})
             if len(cuts) < 2:
                 per_input.append(
