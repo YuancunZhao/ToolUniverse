@@ -480,6 +480,17 @@ NEB_ENZYMES = {
     "AscI": "GGCGCGCC",
     "PacI": "TTAATTAA",
     "SfiI": "GGCCNNNNNGGCC",
+    # Type IIS -- these cut OUTSIDE their recognition site, which is what makes
+    # them usable for Golden Gate (the fusion junction carries no enzyme scar).
+    # DNA_golden_gate_design/_assemble are built around exactly these, so they
+    # must resolve from the built-in table: Bio.Restriction is an optional
+    # dependency, and without these entries Golden Gate failed outright with
+    # "Unknown enzyme: BsaI" anywhere Biopython was absent.
+    "BsaI": "GGTCTC",
+    "BbsI": "GAAGAC",
+    "Esp3I": "CGTCTC",
+    "BsmBI": "CGTCTC",  # isoschizomer of Esp3I
+    "SapI": "GCTCTTC",
 }
 
 # Enzyme-specific cut offset (0-based, from start of recognition sequence)
@@ -513,6 +524,13 @@ NEB_CUT_OFFSETS: Dict[str, int] = {
     "AscI": 2,  # GG^CGCGCC (4-base 5' overhang)
     "PacI": 5,  # TTAAT^TAA (2-base 3' overhang)
     "SfiI": 8,  # GGCCNNNN^NGGCC (3-base 3' overhang)
+    # Type IIS: the cut is past the end of the recognition site, so the offset
+    # exceeds the site length. Values match Bio.Restriction's `fst5` exactly.
+    "BsaI": 7,  # GGTCTCN^NNNN    (4-base 5' overhang, 1 nt spacer)
+    "BbsI": 8,  # GAAGACNN^NNNN   (4-base 5' overhang, 2 nt spacer)
+    "Esp3I": 7,  # CGTCTCN^NNNN    (4-base 5' overhang, 1 nt spacer)
+    "BsmBI": 7,  # CGTCTCN^NNNN    (isoschizomer of Esp3I)
+    "SapI": 8,  # GCTCTTCN^NNN    (3-base 5' overhang, 1 nt spacer)
 }
 
 
