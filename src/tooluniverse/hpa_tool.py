@@ -1,5 +1,6 @@
 # hpa_tool.py
 
+import re
 import requests
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, List
@@ -87,6 +88,22 @@ class HPAJsonApiTool(BaseTool):
 
     def _make_api_request(self, ensembl_id: str) -> Dict[str, Any]:
         """Make HPA JSON API request for a specific gene"""
+        if not re.match(r"^ENS[A-Z]*G\d+(\.\d+)?$", ensembl_id.strip(), re.IGNORECASE):
+            # HPA's endpoint 404s identically whether the ID is a
+            # validly-formatted-but-unknown Ensembl Gene ID or simply the
+            # wrong kind of identifier (e.g. a gene symbol like 'CLEC4C'
+            # instead of 'ENSG00000198178'). Catch the format mismatch here so
+            # the error tells the caller *why* nothing was found instead of
+            # implying the gene itself has no HPA data.
+            return {
+                "status": "error",
+                "error": (
+                    f"'{ensembl_id}' is not a valid Ensembl Gene ID format "
+                    "(expected e.g. 'ENSG00000141510'). This tool requires an "
+                    "Ensembl Gene ID, not a gene symbol -- resolve the symbol "
+                    "first (e.g. via Ensembl_lookup_gene_by_symbol)."
+                ),
+            }
         url = self.base_url_template.format(ensembl_id=ensembl_id)
         try:
             resp = requests.get(url, timeout=self.timeout)
