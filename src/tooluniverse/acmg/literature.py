@@ -63,6 +63,9 @@ def literature_evidence(
             and str(fact.get("gene") or "").casefold() == expected_gene.casefold()
         )
         strength = _suggested_strength(fact, contract)
+        anchor_status = str(fact.get("anchor_status") or "unavailable")
+        semantic_status = str(fact.get("semantic_status") or "unresolved")
+        document_truncated = fact.get("document_truncated") is True
         assessment_status = "not_assessed"
         proposal_status = "insufficient_information"
         reason = ""
@@ -74,9 +77,16 @@ def literature_evidence(
             reason = "PS4: fact identity does not match the assessed variant"
         elif fact.get("evidence_verified") is False:
             reason = "PS4: source fact was not independently verified"
+        elif semantic_status == "contradicted":
+            reason = "PS4: submitted values contradict the cited source"
+        elif anchor_status == "mismatch":
+            reason = "PS4: the cited source does not match the submitted identity"
         elif fact.get("assessment_ready") is False:
+            assessment_status = "indeterminate"
+            proposal_status = "requires_user_review"
             reason = (
-                "PS4: full-text identity, anchor, or semantic verification failed"
+                "PS4: source-backed case evidence requires further full-text or "
+                "semantic verification"
             )
         elif not strength:
             reason = "PS4: no valid strength could be mapped"
@@ -118,6 +128,44 @@ def literature_evidence(
             if dynamic and isinstance(rule_override, dict)
             else ""
         )
+        source_backed_suggestion = bool(
+            fact_id
+            and valid_identity
+            and strength
+            and anchor_status != "mismatch"
+            and semantic_status != "contradicted"
+        )
+        missing_requirements: list[str] = []
+        if anchor_status != "verified":
+            missing_requirements.append("identity-bound full-text anchor")
+        if semantic_status == "unresolved":
+            missing_requirements.append("semantically verified extracted values")
+        if document_truncated:
+            missing_requirements.append("complete untruncated full-text retrieval")
+        verification_status = (
+            "contradicted"
+            if semantic_status == "contradicted"
+            else "identity_mismatch"
+            if anchor_status == "mismatch"
+            else "source_unavailable"
+            if anchor_status == "unavailable"
+            else "verified"
+            if fact.get("assessment_ready") is not False
+            else "unresolved"
+        )
+        caveats = (
+            []
+            if dynamic
+            else [
+                "No uniquely applicable disease-specific PS4 threshold was "
+                "available; the proposed strength uses general SVI review."
+            ]
+        )
+        if document_truncated:
+            caveats.append(
+                "The retrieved document was truncated; this proposal is excluded "
+                "from the validated subset."
+            )
         cards.append(
             EvidenceCard(
                 criterion="PS4",
@@ -151,6 +199,8 @@ def literature_evidence(
                     if fact.get("source_fact_id")
                     else []
                 ),
+                suggested_criterion="PS4" if source_backed_suggestion else "",
+                suggested_strength=strength if source_backed_suggestion else "",
                 proposal_origin="llm_literature",
                 proposal_status=proposal_status,
                 rule_id=rule_id,
@@ -173,14 +223,9 @@ def literature_evidence(
                     else "llm_review_required"
                 ),
                 llm_suggestion=dict(fact.get("llm_suggestion") or {}),
-                caveats=(
-                    []
-                    if dynamic
-                    else [
-                        "No uniquely applicable disease-specific PS4 threshold was "
-                        "available; the proposed strength uses general SVI review."
-                    ]
-                ),
+                caveats=caveats,
+                missing_requirements=missing_requirements,
+                verification_status=verification_status,
             )
         )
     if not cards:

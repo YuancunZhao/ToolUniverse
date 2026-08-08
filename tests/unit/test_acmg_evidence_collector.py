@@ -113,7 +113,9 @@ def test_literature_candidate_index_deduplicates_cross_provider_hits():
         "PubMed_search_articles",
     ]
     assert candidates[0]["source_fact_ids"] == ["epmc", "litvar", "pubmed"]
-    assert candidates[0]["full_text_available"] is True
+    assert candidates[0]["full_text_available"] is False
+    assert candidates[0]["full_text_reported_available"] is False
+    assert candidates[0]["full_text_status"] == "abstract_only"
 
 
 def test_literature_candidate_index_does_not_treat_inepmc_as_full_text():
@@ -222,6 +224,77 @@ def test_literature_candidate_does_not_promote_gene_only_article_to_variant_matc
     )
 
     assert candidates[0]["match_class"] == "gene_disease_background"
+
+
+def test_literature_query_text_cannot_prove_an_exact_article_match():
+    facts = {
+        "pubmed": _source_fact(
+            "PubMed_search_articles",
+            "pubmed",
+            {
+                "query": 'MAT1A AND "NM_000429.3:c.746G>A"',
+                "articles": [
+                    {
+                        "pmid": "100",
+                        "title": "Clinical spectrum of MAT1A deficiency",
+                        "abstract": "Patients with MAT1A deficiency were reviewed.",
+                    }
+                ],
+            },
+        )
+    }
+
+    candidate = _literature_candidate_index(
+        facts,
+        identity={
+            "gene": "MAT1A",
+            "validated_hgvs_c": "NM_000429.3:c.746G>A",
+        },
+        arguments={"gene": "MAT1A", "variant": "NM_000429.3:c.746G>A"},
+    )[0]
+
+    assert candidate["match_class"] == "gene_disease_background"
+    assert candidate["search_queries"] == ['MAT1A AND "NM_000429.3:c.746G>A"']
+
+
+def test_litvar_relationship_is_distinct_from_article_text_match():
+    facts = {
+        "litvar": _source_fact(
+            "LitVar_get_variant_publications",
+            "litvar",
+            {"articles": [{"pmid": "200", "title": "Methionine metabolism"}]},
+        )
+    }
+    candidates = _literature_candidate_index(
+        facts,
+        identity={
+            "gene": "MAT1A",
+            "validated_hgvs_c": "NM_000429.3:c.746G>A",
+        },
+        arguments={"gene": "MAT1A", "variant": "NM_000429.3:c.746G>A"},
+    )
+
+    assert candidates[0]["match_class"] == "provider_linked_variant_match"
+
+
+def test_same_residue_search_hit_is_visible_but_not_a_mandatory_review_request():
+    candidates = [
+        {
+            "publication_id": "pmid:300",
+            "pmid": "300",
+            "match_class": "same_residue_match",
+            "matched_variant_aliases": [],
+            "full_text_status": "availability_unknown",
+        }
+    ]
+    state = _literature_review_state(
+        candidates,
+        {},
+        identity={"gene": "MAT1A", "hgvs_p": "NP_000420.1:p.Arg249Gln"},
+        arguments={"gene": "MAT1A"},
+    )
+
+    assert state["review_requests"] == []
 
 
 def test_literature_identifier_conflicts_do_not_merge_records():
@@ -572,6 +645,14 @@ class _FakeToolUniverse:
                             "1000 controls with odds ratio 6.2 and lower confidence limit 1.4."
                         )
                     },
+                },
+                "metadata": {
+                    "source": "Europe PMC structured XML",
+                    "format": "xml",
+                    "url": "https://europepmc.org/articles/PMC1234567",
+                    "retrieval_trace": [
+                        {"source": "Europe PMC structured XML", "status": "success"}
+                    ],
                 },
             }
         if name == "ClinVar_search_variants":
@@ -1391,7 +1472,8 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "response_detail",
         "consequence_profile",
         "rule_context",
-        "runtime_manifest",
+            "runtime_manifest",
+            "guard_context",
         "coverage_summary",
         "source_facts",
         "source_assertions",
@@ -1407,8 +1489,9 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "workflow_status",
         "review_readiness",
         "next_actions",
-        "system_preview_bayesian",
-        "user_selected_bayesian",
+            "system_preview_bayesian",
+            "validated_subset_bayesian",
+            "user_selected_bayesian",
         "decision_report",
         "limitations",
         "final_classification_allowed",
@@ -1519,7 +1602,7 @@ class _PriorVariantToolUniverse(_ProteinContextToolUniverse):
         return super().run_one_function(call, **kwargs)
 
 
-def test_same_residue_variants_are_review_only_and_trigger_prior_variant_request():
+def test_same_residue_variants_are_visible_without_entering_mandatory_review_queue():
     result = _make_tool(_PriorVariantToolUniverse()).run(
         {
             "variant": "NM_000142.5:c.1075+95C>G",
@@ -1535,19 +1618,13 @@ def test_same_residue_variants_are_review_only_and_trigger_prior_variant_request
         row["criterion"] in {"PS1", "PM5"} and row["system_preview_included"]
         for row in result["evidence_cards"]
     )
-    request = next(
-        row
+    assert not any(
+        "prior_variant" in row["allowed_fact_types"]
         for row in result["literature_review"]["review_requests"]
-        if "prior_variant" in row["allowed_fact_types"]
-    )
-    assert request["match_class"] == "same_residue_match"
-    assert (
-        request["prior_variant_candidates"][0]["prior_variant_identity"]
-        == "VCV000000123"
     )
     reviews = {row["criterion"]: row for row in result["criterion_reviews"]}
-    assert reviews["PS1"]["route_status"] == "review_pending"
-    assert reviews["PM5"]["route_status"] == "review_pending"
+    assert reviews["PS1"]["route_status"] == "candidate_available"
+    assert reviews["PM5"]["route_status"] == "candidate_available"
 
 
 def test_review_readiness_is_evidence_review_status_not_classification():
@@ -2060,6 +2137,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
             "assessment_ready",
             "provider_version",
             "request_arguments",
+            "request_id",
             "provenance",
             "limitation",
             "observed_values",
@@ -2102,7 +2180,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
     )
     assert "compatibility_exclusions" not in result["system_preview_bayesian"]
     assert "included_card_ids" in result["system_preview_bayesian"]
-    assert "excluded_card_ids" in result["system_preview_bayesian"]
+    assert "excluded_card_ids" not in result["system_preview_bayesian"]
     assert all(
         "observed_facts" not in review and "required_facts" not in review
         for review in result["criterion_reviews"]
@@ -2350,6 +2428,43 @@ def _case_control_literature_proposal(**overrides):
     return proposal
 
 
+class _HTMLFallbackToolUniverse(_FakeToolUniverse):
+    def run_one_function(self, call, **kwargs):
+        if call["name"] == "EuropePMC_get_full_text":
+            self.calls.append((call, kwargs))
+            return {"status": "error", "error": "structured XML unavailable"}
+        if call["name"] == "EuropePMC_get_fulltext":
+            self.calls.append((call, kwargs))
+            return {
+                "status": "success",
+                "text": (
+                    "Results: FGFR3 NM_000142.5:c.1075+95C>G was observed in "
+                    "12 cases and 1000 controls with odds ratio 6.2 and lower "
+                    "confidence limit 1.4."
+                ),
+                "source": "NCBI PMC HTML",
+                "format": "html",
+                "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC1234567/",
+                "retrieval_trace": [
+                    {"source": "Europe PMC XML", "status": "unavailable"},
+                    {"source": "NCBI PMC HTML", "status": "success"},
+                ],
+            }
+        return super().run_one_function(call, **kwargs)
+
+
+class _TruncatedStructuredToolUniverse(_FakeToolUniverse):
+    def run_one_function(self, call, **kwargs):
+        result = super().run_one_function(call, **kwargs)
+        if call["name"] == "EuropePMC_get_full_text":
+            return {
+                **result,
+                "truncated": True,
+                "truncated_sections": ["results"],
+            }
+        return result
+
+
 def test_verified_llm_literature_proposal_enters_system_preview_for_review():
     result = _make_tool(_FakeToolUniverse()).run(
         {
@@ -2376,6 +2491,83 @@ def test_verified_llm_literature_proposal_enters_system_preview_for_review():
     )
     assert fact["features"]["anchor_status"] == "verified"
     assert fact["features"]["semantic_status"] == "verified"
+    assert fact["features"]["document_source"] == "Europe PMC structured XML"
+    assert fact["features"]["document_format"] == "xml"
+    assert fact["provider_version"] == "Europe PMC structured XML"
+
+
+def test_pmc_html_fallback_is_reanchored_with_actual_source_provenance():
+    proposal = _case_control_literature_proposal(
+        pmcid="PMC1234567",
+        document_source="NCBI PMC HTML",
+        reading_manifest={
+            "status": "complete",
+            "sections_read": ["results"],
+            "tables_read": [],
+            "figures_read": [],
+            "supplements_read": [],
+            "variant_match_locations": ["results"],
+            "limitations": [],
+        },
+    )
+    result = _make_tool(_HTMLFallbackToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+        }
+    )
+
+    card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
+    fact = next(
+        row
+        for row in result["source_facts"]
+        if row["fact_id"] in card["source_fact_ids"]
+    )
+    assert card["system_preview_included"] is True
+    assert card["validated_subset_included"] is True
+    assert fact["features"]["document_source_tool"] == "EuropePMC_get_fulltext"
+    assert fact["features"]["document_source"] == "NCBI PMC HTML"
+    assert fact["features"]["document_format"] == "html"
+    assert fact["features"]["document_url"].startswith("https://pmc.ncbi.nlm.nih.gov/")
+    assert fact["features"]["retrieval_trace"][-1]["status"] == "success"
+
+
+def test_truncated_fulltext_is_partial_and_broad_only():
+    proposal = _case_control_literature_proposal(
+        pmcid="PMC1234567",
+        reading_manifest={
+            "status": "complete",
+            "sections_read": ["results"],
+            "tables_read": [],
+            "figures_read": [],
+            "supplements_read": [],
+            "variant_match_locations": ["results"],
+            "limitations": [],
+        },
+    )
+    result = _make_tool(_TruncatedStructuredToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+        }
+    )
+
+    card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
+    fact = next(
+        row
+        for row in result["source_facts"]
+        if row["fact_id"] in card["source_fact_ids"]
+    )
+    assert card["system_preview_included"] is True
+    assert card["validated_subset_included"] is False
+    assert card["verification_status"] == "unresolved"
+    assert "complete untruncated full-text retrieval" in card["missing_requirements"]
+    assert fact["features"]["document_truncated"] is True
+    assert fact["features"]["reading_manifest"]["status"] == "partial"
 
 
 def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
@@ -2393,6 +2585,8 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
     card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
     assert card["proposal_status"] == "insufficient_information"
     assert card["system_preview_included"] is False
+    assert card["validated_subset_included"] is False
+    assert card["verification_status"] == "contradicted"
     fact = next(
         row
         for row in result["source_facts"]
@@ -2400,6 +2594,25 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
     )
     assert fact["features"]["anchor_status"] == "verified"
     assert fact["features"]["semantic_status"] == "contradicted"
+
+    selected = _make_tool(_FakeToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+            "evidence_decisions": [
+                {"card_id": card["card_id"], "decision": "accept"}
+            ],
+        }
+    )
+    assert selected["user_selected_bayesian"]["included_card_ids"] == []
+    assert selected["decision_report"]["decision_errors"] == [
+        {
+            "card_id": card["card_id"],
+            "reason": "proposal_not_eligible_for_source_backed_selection",
+        }
+    ]
 
 
 def test_stale_document_hash_excludes_literature_proposal():
@@ -2432,6 +2645,8 @@ def test_stale_document_hash_excludes_literature_proposal():
         if row["fact_id"] in card["source_fact_ids"]
     )
     assert card["system_preview_included"] is False
+    assert card["validated_subset_included"] is False
+    assert card["verification_status"] == "identity_mismatch"
     assert fact["assessment_ready"] is False
     assert fact["features"]["anchor_status"] == "mismatch"
     assert any(
@@ -2466,9 +2681,32 @@ def test_abstract_only_literature_proposal_stays_source_lead():
         for row in result["source_facts"]
         if row["fact_id"] in card["source_fact_ids"]
     )
-    assert card["system_preview_included"] is False
+    assert card["system_preview_included"] is True
+    assert card["validated_subset_included"] is False
+    assert card["verification_status"] == "unresolved"
     assert fact["assessment_ready"] is False
     assert fact["features"]["reading_manifest"]["status"] == "abstract_only"
+
+    reviewed = _make_tool(_FakeToolUniverse()).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+            "literature_proposals": [proposal],
+            "evidence_decisions": [
+                {"card_id": card["card_id"], "decision": "accept"}
+            ],
+        }
+    )
+    selected = next(
+        row
+        for row in reviewed["evidence_cards"]
+        if row["card_id"] == card["card_id"]
+    )
+    assert selected["user_selected_included"] is True
+    assert reviewed["user_selected_bayesian"]["included_card_ids"] == [
+        card["card_id"]
+    ]
 
 
 def test_user_decision_recalculates_only_accepted_stable_cards():

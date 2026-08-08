@@ -1,0 +1,295 @@
+{
+  "VariantValidator_gene2transcripts": [
+    {
+      "current_symbol": "MAT1A",
+      "transcripts": [
+        {
+          "reference": "NM_000429.3",
+          "annotations": {
+            "mane_select": true,
+            "mane_plus_clinical": false
+          }
+        }
+      ]
+    }
+  ],
+  "VariantValidator_validate_variant": {
+    "status": "success",
+    "reviewable_features": {
+      "validated_hgvs_c": "NM_000429.3:c.746G>A",
+      "hgvs_c": "NM_000429.3:c.746G>A",
+      "hgvs_g": "NC_000010.11:g.80276398C>T",
+      "hgvs_g_grch37": "NC_000010.10:g.82036155G>A",
+      "hgvs_p": "NP_000420.1:p.Arg249Gln",
+      "rsid": "rs757685655",
+      "gene": "MAT1A",
+      "transcript": "NM_000429.3",
+      "build": "GRCh38",
+      "chr": "10",
+      "pos": 80276398,
+      "ref": "C",
+      "alt": "T",
+      "coordinates_grch37": {
+        "chr": "10",
+        "pos": 82036155,
+        "ref": "G",
+        "alt": "A"
+      },
+      "consequence": "missense_variant",
+      "provider_version": "VariantValidator MAT1A fixture 1"
+    }
+  },
+  "EnsemblVEP_variant_recoder": {
+    "status": "success",
+    "reviewable_features": {
+      "chr": "10",
+      "pos": 80276398,
+      "ref": "C",
+      "alt": "T",
+      "build": "GRCh38",
+      "gene": "MAT1A",
+      "transcript": "NM_000429.3",
+      "rsid": "rs757685655",
+      "hgvs_c": "NM_000429.3:c.746G>A",
+      "hgvs_g": "NC_000010.11:g.80276398C>T",
+      "hgvs_p": "NP_000420.1:p.Arg249Gln",
+      "hgvsc_candidates": ["NM_000429.3:c.746G>A"],
+      "hgvsg_candidates": ["NC_000010.11:g.80276398C>T"],
+      "allele_candidates": [
+        {
+          "hgvsc": ["NM_000429.3:c.746G>A"],
+          "hgvsg": ["NC_000010.11:g.80276398C>T"],
+          "hgvsp": ["NP_000420.1:p.Arg249Gln"]
+        }
+      ],
+      "provider_version": "Ensembl Variant Recoder MAT1A fixture 1"
+    }
+  },
+  "EnsemblVEP_annotate_hgvs": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chr": "10",
+        "pos": 80276398,
+        "ref": "C",
+        "alt": "T",
+        "build": "GRCh38",
+        "most_severe_consequence": "missense_variant",
+        "vep_transcript_candidates": [
+          {
+            "gene": "MAT1A",
+            "transcript": "NM_000429.3",
+            "mane_select": "NM_000429.3",
+            "hgvsc": "NM_000429.3:c.746G>A",
+            "hgvsp": "NP_000420.1:p.Arg249Gln",
+            "biotype": "protein_coding",
+            "exon": "7/9",
+            "protein_start": 249,
+            "consequence": ["missense_variant"]
+          }
+        ],
+        "provider_version": "Ensembl VEP MAT1A fixture 1"
+      }
+    }
+  },
+  "gnomad_get_variant": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "10-80276398-C-T",
+        "build": "GRCh38",
+        "AF": 0.0000041,
+        "AC": 6,
+        "AN": 1461796,
+        "popmax": 0.000101,
+        "homozygote_count": 0,
+        "dataset": "gnomad_r4",
+        "callset": "exome",
+        "provider_version": "gnomAD MAT1A fixture 1"
+      }
+    }
+  },
+  "gnomad_get_site_callability": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chrom": "10",
+        "position": 80276398,
+        "reference_genome": "GRCh38",
+        "dataset": "gnomad_r4",
+        "callsets": {
+          "exome": {
+            "position": 80276398,
+            "median": 31,
+            "over_20": 0.94
+          },
+          "genome": {
+            "position": 80276398,
+            "median": 29,
+            "over_20": 0.91
+          }
+        },
+        "provider_version": "gnomAD callability MAT1A fixture 1"
+      }
+    }
+  },
+  "MyVariant_get_metadata": {
+    "status": "success",
+    "source": "dbNSFP",
+    "version": "4.8a",
+    "provider": "MyVariant.info"
+  },
+  "MyVariant_get_pathogenicity_scores": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "10-82036155-G-A",
+        "chr": "10",
+        "pos": 82036155,
+        "ref": "G",
+        "alt": "A",
+        "build": "GRCh37",
+        "revel_score": 0.599,
+        "cadd_phred": 24.8,
+        "predictor_audit": {
+          "revel_score": 0.599,
+          "alphamissense_score": 0.1378,
+          "alphamissense_prediction": "B",
+          "sift_score": 0.01,
+          "sift_prediction": "D",
+          "polyphen2_hdiv_score": 0.91,
+          "polyphen2_hdiv_prediction": "D",
+          "metarnn_score": 0.82,
+          "metarnn_prediction": "D",
+          "vest4_score": 0.77,
+          "mutationtaster_prediction": "D",
+          "gerp_rs": 4.9,
+          "phylop100way_vertebrate_rankscore": 0.87,
+          "phastcons100way_vertebrate_rankscore": 0.89
+        },
+        "predictor_concordance": {
+          "has_disagreement": true,
+          "interpretation": "Context only; predictor labels are not combined by majority vote."
+        },
+        "provider_version": "dbNSFP 4.8a"
+      }
+    }
+  },
+  "SpliceAI_predict_splice": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "10-80276398-C-T",
+        "chr": "10",
+        "pos": 80276398,
+        "ref": "C",
+        "alt": "T",
+        "build": "GRCh38",
+        "scores": [
+          {
+            "gene": "MAT1A",
+            "transcript": "NM_000429.3",
+            "DS_AG": 0.0,
+            "DS_AL": 0.02,
+            "DS_DG": 0.04,
+            "DS_DL": 0.15,
+            "DP_AG": 175,
+            "DP_AL": 121,
+            "DP_DG": -51,
+            "DP_DL": 0
+          }
+        ],
+        "run_metadata": {
+          "model_version": "1.3.1",
+          "annotation_version": "MANE MAT1A fixture",
+          "score_mode": "raw"
+        },
+        "provider_version": "SpliceAI 1.3.1 MAT1A fixture"
+      }
+    }
+  },
+  "EuropePMC_search_articles": {
+    "status": "success",
+    "data": {
+      "results": [
+        {
+          "pmid": "26933843",
+          "pmcid": "PMC5004716",
+          "title": "MAT1A p.Arg249Gln in autosomal dominant deficiency",
+          "abstract": "NM_000429.3:c.746G>A p.Arg249Gln occurred in four independent probands."
+        },
+        {
+          "pmid": "28748147",
+          "pmcid": "PMC5512230",
+          "title": "MAT1A dimer-interface variants",
+          "abstract": "p.Arg249Gln was reported in six patients including previously published families."
+        }
+      ]
+    }
+  },
+  "PubMed_search_articles": {
+    "status": "success",
+    "data": {
+      "articles": [
+        {
+          "pmid": "26933843",
+          "pmcid": "PMC5004716",
+          "title": "MAT1A p.Arg249Gln in autosomal dominant deficiency",
+          "abstract": "NM_000429.3:c.746G>A p.Arg249Gln occurred in four independent probands."
+        },
+        {
+          "pmid": "28748147",
+          "pmcid": "PMC5512230",
+          "title": "MAT1A dimer-interface variants",
+          "abstract": "p.Arg249Gln was reported in six patients including previously published families."
+        }
+      ]
+    }
+  },
+  "LitVar_get_variant_publications": {
+    "status": "success",
+    "data": {
+      "articles": [
+        {"pmid": "26933843", "pmcid": "PMC5004716"},
+        {"pmid": "28748147", "pmcid": "PMC5512230"}
+      ]
+    }
+  },
+  "documents": {
+    "26933843": {
+      "status": "success",
+      "text": "Results. MAT1A NM_000429.3:c.746G>A p.Arg249Gln was observed in 4 independent probands. cases_independent true. phenotype consistency consistent. cohort mat1a-r249q-published-cases. Family findings. family mat1a-r249q-two-families. segregation direction segregates. 2 informative meioses. phenotype consistency consistent. Protein region dimer interface. pathogenic enrichment true. benign variation depleted true.",
+      "source": "NCBI PMC HTML",
+      "format": "html",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5004716/",
+      "retrieval_trace": [
+        {"source": "Europe PMC XML", "status": "unavailable"},
+        {"source": "NCBI PMC HTML", "status": "success"}
+      ]
+    },
+    "28748147": {
+      "status": "success",
+      "data": {
+        "pmid": "28748147",
+        "pmcid": "PMC5512230",
+        "sections": {
+          "results": "MAT1A NM_000429.3:c.746G>A p.Arg249Gln was reported in 6 patients including the previously published cohort mat1a-r249q-published-cases. cases_independent true. phenotype consistency consistent."
+        }
+      },
+      "source": "Europe PMC structured XML",
+      "format": "xml",
+      "url": "https://europepmc.org/articles/PMC5512230",
+      "retrieval_trace": [
+        {"source": "Europe PMC structured XML", "status": "success"}
+      ],
+      "truncated": false,
+      "truncated_sections": [],
+      "metadata": {
+        "pmcid": "PMC5512230",
+        "source": "Europe PMC structured XML",
+        "format": "xml",
+        "url": "https://europepmc.org/articles/PMC5512230"
+      }
+    }
+  }
+}

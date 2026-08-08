@@ -11,7 +11,7 @@ import pytest
 
 from tooluniverse import ToolUniverse
 from tooluniverse.acmg.collector import ACMGEvidencePipeline
-from tooluniverse.acmg.guard import guard_acmg_answer
+from tooluniverse.acmg.guard import guard_acmg_answer, validate_guard_context
 from tooluniverse.smcp import SMCP
 
 
@@ -165,7 +165,9 @@ def test_brca2_golden_three_phase_evidence_workflow():
         "compatibility_report",
         "conflict_report",
         "system_preview_bayesian",
+        "validated_subset_bayesian",
         "user_selected_bayesian",
+        "guard_context",
         "decision_report",
         "final_classification_allowed",
     }
@@ -176,8 +178,12 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert initial["review_readiness"]["status"] == "incomplete"
     assert initial["review_readiness"]["pending_request_ids"]
     assert initial["final_classification_allowed"] is False
-    assert initial["runtime_manifest"]["acmg_runtime_version"] == "evidence-only-1"
+    assert initial["runtime_manifest"]["acmg_runtime_version"] == "evidence-only-2"
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
+    assert validate_guard_context(initial["guard_context"]) == (True, "")
+    assert initial["guard_context"]["ruleset_hash"] == initial["runtime_manifest"][
+        "ruleset_hash"
+    ]
     assert len(json.dumps(initial, ensure_ascii=False, separators=(",", ":"))) < 50_000
 
     proposed = ACMGEvidencePipeline(fixture).run(
@@ -191,7 +197,9 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert pvs1["assessment_status"] == "met"
     assert pvs1["strength"] == "PVS1"
     assert pvs1["system_preview_included"] is True
+    assert pvs1["validated_subset_included"] is True
     assert pvs1["card_id"] in proposed["system_preview_bayesian"]["included_card_ids"]
+    assert pvs1["card_id"] in proposed["validated_subset_bayesian"]["included_card_ids"]
     assert proposed["review_readiness"]["status"] == "ready_for_evidence_review"
     assert proposed["review_readiness"]["pending_request_ids"] == []
     assert "compatibility_exclusions" in proposed["conflict_report"]
@@ -266,5 +274,5 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
     payload = _mcp_payload(response)
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
-    assert payload["runtime_manifest"]["collector_schema_version"] == "2026-08-01"
+    assert payload["runtime_manifest"]["collector_schema_version"] == "2026-08-07"
     assert payload["final_classification_allowed"] is False

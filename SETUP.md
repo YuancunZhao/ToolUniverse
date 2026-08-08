@@ -85,7 +85,7 @@ second global copy of the same Skills. The exact-SHA installer is retained here
 because a floating upstream plugin or `npx skills add` cannot reproduce this
 branch's ACMG runtime and Skill contract.
 
-Set `SKILLS_DIR` and `SKILLS_PROFILE` first:
+Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 
 | Client | Skills directory | Profile |
 |---|---|---|
@@ -101,6 +101,7 @@ Then run:
 TOOLUNIVERSE_COMMIT="911200550b10600ded44b36dcb614c25ff06e0e6"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
+: "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
 
 tmp_dir="$(mktemp -d)"
 git init -q "$tmp_dir"
@@ -111,15 +112,18 @@ git -C "$tmp_dir" checkout -q --detach FETCH_HEAD
 
 bash "$tmp_dir/scripts/install_tooluniverse_skills.sh" \
   --client "$SKILLS_PROFILE" \
-  --dest "$SKILLS_DIR"
+  --dest "$SKILLS_DIR" \
+  --project-root "$PROJECT_ROOT"
 
 rm -rf "$tmp_dir"
 ```
 
 The installer replaces only current ToolUniverse Skill names, removes the
 retired `tooluniverse-acmg-overlay-routing-core` and criterion-specific
-`tooluniverse-acmg-*refinement` directories, and preserves unrelated user
-Skills.
+`tooluniverse-acmg-*refinement` directories across known global and supplied
+project Skill roots, and preserves unrelated user Skills. It reports stale
+retired workflow references in the supplied project's `AGENTS.md`,
+`CLAUDE.md`, or `reasonix.toml` instead of rewriting user instructions.
 
 ## Runtime tools
 
@@ -176,14 +180,22 @@ The principal outputs are:
 - `evidence_cards`
 - `compatibility_report` and `conflict_report`
 - `system_preview_bayesian`
+- `validated_subset_bayesian`
 - `user_selected_bayesian`
+- `guard_context`
 - `decision_report`
 - `limitations`
 
-Evidence-card inclusion is represented by `system_preview_included` and
-`user_selected_included`. The removed output fields `counted`,
+Evidence-card inclusion is represented by `system_preview_included`,
+`validated_subset_included`, and `user_selected_included`. The removed output fields `counted`,
 `included_in_candidate_bayesian`, `counted_criteria`, and
 `bayesian_estimate` must not appear.
+
+`guard_context` is a compact self-checking contract. Its `context_hash` covers
+the schema version, variant identity hash, ruleset hash, cards, and known and
+trusted SourceFact ID sets. Guard recomputes the checksum and fails closed if
+the context was truncated or accidentally modified. It is not a digital
+signature and does not authenticate a malicious sender.
 
 ## Evidence workflow
 
@@ -238,7 +250,10 @@ Provider contracts worth checking:
   summarized without majority voting.
 - PubMed is queried with abstracts enabled for the candidate pool; Europe PMC
   supplies full text when available; LitVar contributes variant-linked
-  publications. Abstract-only or inaccessible-full-text papers remain leads.
+  publications. If full text is unavailable, the runtime must not claim it was
+  read. Source-located abstracts, snippets, and provider-linked facts may form
+  explicitly `source_unavailable` or `unresolved` broad candidates, but never
+  validated-subset evidence.
 - UniProt preserves entry status, names, function, disease comments, catalytic
   activity, cofactors, PTMs, domains, sequence length, cross-references, and
   references. Inactive or deleted entries remain visible with their reason.
@@ -259,7 +274,8 @@ interpretation.
 
 The collector merges LitVar, PubMed, and Europe PMC candidates by PMID, PMCID,
 DOI, or stable title while preserving all source hits. Full text is preferred;
-abstract-only records remain leads.
+abstract-only records can support a labeled broad candidate when their source
+and identity are traceable, but cannot enter the validated subset.
 
 The host LLM may interpret CSpec prose and literature, but it must return
 anchored structured proposals:
@@ -276,9 +292,12 @@ an arbitrary criterion.
 
 ### 3. Review the system preview
 
-`system_preview_bayesian` is a reproducible review estimate, not a clinical
-classification. It includes only eligible, identity-bound and compatible
-suggestions. Excluded cards remain visible with reasons.
+`system_preview_bayesian` is a reproducible broad review estimate, not a
+clinical classification. It includes eligible, identity-bound, source-backed
+and compatible candidates, including explicitly unresolved candidates.
+`validated_subset_bayesian` is the stricter comparison and excludes truncated,
+source-unavailable, unresolved, contradicted, and identity-mismatched material.
+Excluded cards remain visible with reasons.
 
 Conflict handling checks duplicate criteria and shared cases, families,
 cohorts, assays, publications, prior variants, CSpec rules, computational

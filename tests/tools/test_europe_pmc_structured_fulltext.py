@@ -2,6 +2,15 @@
 
 import pytest
 from tooluniverse import ToolUniverse
+from tooluniverse.europe_pmc_tool import EuropePMCStructuredFullTextTool
+
+
+class _FakeResponse:
+    def __init__(self, *, status_code=200, text="", url=""):
+        self.status_code = status_code
+        self.text = text
+        self.url = url or "https://example.test/fullTextXML"
+        self.headers = {"Content-Type": "application/xml"}
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +35,26 @@ def test_tool_registered(tu):
     assert "EuropePMC_get_full_text" in tu.all_tool_dict
     tool = tu.all_tool_dict["EuropePMC_get_full_text"]
     assert tool["type"] == "EuropePMCStructuredFullTextTool"
+
+
+def test_tool_schema_declares_provenance_and_truncation(tu):
+    """The public return contract exposes retrieval provenance and completeness."""
+    schema = tu.all_tool_dict["EuropePMC_get_full_text"]["return_schema"]
+    success_schema = next(
+        branch
+        for branch in schema["oneOf"]
+        if "status" in branch.get("properties", {})
+    )
+    properties = success_schema["properties"]
+    assert {
+        "source",
+        "format",
+        "url",
+        "retrieval_trace",
+        "truncated",
+        "truncated_sections",
+    } <= properties.keys()
+    assert {"status", "data"} <= set(success_schema["required"])
 
 
 # ------------------------------------------------------------------
@@ -160,3 +189,34 @@ def test_max_section_chars(tu):
         if isinstance(val, str):
             # Sections longer than 1000 chars should be truncated
             assert len(val) <= 1020  # 1000 + " ... [truncated]"
+
+
+def test_structured_fulltext_reports_provenance_and_truncation(monkeypatch):
+    """Structured XML reports its actual source and section truncation."""
+    xml_payload = (
+        "<article><front><article-meta><title-group><article-title>Fixture</article-title>"
+        "</title-group><abstract>Fixture abstract.</abstract></article-meta></front>"
+        "<body><sec sec-type='results'><title>Results</title><p>"
+        + ("A" * 1500)
+        + "</p></sec></body></article>"
+    )
+
+    def fake_request_with_retry(
+        session, method, url, *, timeout=None, max_attempts=None, **kwargs
+    ):
+        return _FakeResponse(status_code=200, text=xml_payload, url=url)
+
+    monkeypatch.setattr(
+        "tooluniverse.europe_pmc_tool.request_with_retry", fake_request_with_retry
+    )
+    tool = EuropePMCStructuredFullTextTool({"name": "EuropePMC_get_full_text"})
+    result = tool.run({"pmcid": "PMC111", "max_section_chars": 1000})
+
+    assert result["status"] == "success"
+    assert result["source"] == "Europe PMC fullTextXML"
+    assert result["format"] == "xml"
+    assert result["url"].endswith("/PMC111/fullTextXML")
+    assert result["retrieval_trace"]
+    assert result["truncated"] is True
+    assert result["truncated_sections"] == ["results"]
+    assert result["metadata"]["source"] == result["source"]

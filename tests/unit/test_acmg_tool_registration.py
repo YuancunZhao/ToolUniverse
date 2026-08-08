@@ -107,9 +107,15 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "DS_AG",
         "DS_DL",
         "system_preview_bayesian",
+        "validated_subset_bayesian",
+        "guard_context",
         "user_selected_bayesian",
         "ACMG_guard_final_answer",
         "`reviewer` and `decided_at` are optional",
+    )
+    forbidden_tokens = (
+        "abstract-only or unavailable material remains a source lead",
+        "Abstract-only or unavailable papers remain source leads",
     )
 
     for root in roots:
@@ -119,6 +125,7 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
             root / "tooluniverse-acmg-variant-classification" / "SKILL.md"
         ).read_text(encoding="utf-8")
         assert all(token in text for token in required_tokens)
+        assert not any(token in text for token in forbidden_tokens)
 
 
 def test_active_skills_do_not_depend_on_retired_acmg_routing_core():
@@ -373,6 +380,8 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
     assert {
         "variant_scope",
         "system_preview_bayesian",
+        "validated_subset_bayesian",
+        "guard_context",
         "user_selected_bayesian",
         "decision_report",
         "recoverable_gaps",

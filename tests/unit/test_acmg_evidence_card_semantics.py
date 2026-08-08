@@ -45,6 +45,49 @@ def test_review_cards_cannot_enter_preview_without_a_trusted_source_fact():
     assert result["evidence_cards"][0]["overlay_validated"] is False
 
 
+def test_unresolved_source_backed_suggestion_enters_broad_not_validated_preview():
+    card = _card("PM2", "not_assessed")
+    card.source_fact_ids = ["source-1"]
+    card.suggested_criterion = "PM2"
+    card.suggested_strength = "PM2_Supporting"
+    card.proposal_status = "requires_user_review"
+    card.rule_verification = "generic_svi"
+    card.rule_mapping_status = "llm_review_required"
+    card.verification_status = "unresolved"
+
+    row = evidence_cards_to_result(
+        [card],
+        trusted_source_fact_ids=set(),
+        known_source_fact_ids={"source-1"},
+    )["evidence_cards"][0]
+
+    assert row["suggested_criterion"] == "PM2"
+    assert row["suggested_strength"] == "PM2_Supporting"
+    assert row["system_preview_included"] is True
+    assert row["validated_subset_included"] is False
+    assert row["preview_inclusion_basis"] == "source_backed_candidate"
+
+
+def test_semantic_contradiction_cannot_be_inferred_as_strictly_verified():
+    card = _card("PS4", "PS4_Supporting", trusted=True)
+    card.proposal_status = "requires_user_review"
+    card.rule_mapping_status = "llm_review_required"
+    card.input_values = {
+        "anchor_status": "verified",
+        "semantic_status": "contradicted",
+    }
+
+    row = evidence_cards_to_result(
+        [card],
+        trusted_source_fact_ids={"source-1"},
+        known_source_fact_ids={"source-1"},
+    )["evidence_cards"][0]
+
+    assert row["verification_status"] == "contradicted"
+    assert row["system_preview_included"] is False
+    assert row["validated_subset_included"] is False
+
+
 def test_all_non_met_assessment_states_fail_closed():
     cards = [
         _card("PM2", "not_met"),

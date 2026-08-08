@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@089eb8e6308fc64ae5af3de4bfbec32b5cf07b61` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.0+acmg.1`. Files unrelated to the ACMG runtime,
+The package version is `1.4.0+acmg.2`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -90,8 +90,11 @@ content hash, criterion, and excerpt. Local compiled contracts are optional
 exact-hash caches or fixtures, not a whitelist. Missing context, ambiguity, or
 network failure remains visible and falls back without blocking evidence.
 Under that fallback, AC=0 with auditable callability may suggest
-PM2_Supporting; when no versioned coverage-adequacy policy is available the
-suggestion is explicitly `requires_user_review`. BS1, BA1 exceptions, and PS4
+PM2_Supporting; the fork's review-only candidate filter requires global AF <=
+0.0001, absent or <=0.001 popmax AF, AC > 0, and no disease-specific MCAF. This
+is not a deterministic ClinGen SVI PM2 threshold and the card says so. When no
+versioned coverage-adequacy policy is available the suggestion is explicitly
+`requires_user_review`. BS1, BA1 exceptions, and PS4
 use applicable disease-specific contracts when available. Without a CSpec,
 anchored PS4 case-control or independent case-series facts still produce a
 general-SVI review proposal. PM3 is now a formal proposal when its structured
@@ -100,7 +103,11 @@ system preview after ToolUniverse full-text identity, locator, field-excerpt,
 and semantic checks; unresolved semantics remain review-required while
 explicit contradictions are retained but excluded. The fixed literature fact
 mapping also covers PP1/BS4, PP4, BS2, BP2, BP5, PS1/PM5, mechanism context,
-PM1, and PM4/BP3. Criterion-specific PS2/PM6, PM3, and PS3/BS3 engines retain
+PM1, and PM4/BP3. Full-text retrieval records the actual source, format, URL,
+retrieval trace, and truncation state. Truncated, abstract-only, or unavailable
+material may remain an explicitly unresolved broad candidate when it is
+source-located, but it cannot enter the validated subset and must never be
+described as fully read. Criterion-specific PS2/PM6, PM3, and PS3/BS3 engines retain
 the LLM explanation on one rule card rather than emitting a duplicate generic
 card.
 
@@ -174,8 +181,8 @@ only.
 EvidenceCards separate observed facts, proposal origin/status, suggested
 criterion/strength, rule verification, caveats, system-preview inclusion, and
 user decision state. `system_preview_included` does not mean clinical
-approval. The
-collector returns `system_preview_bayesian` plus a separate
+approval. The collector returns a broad source-backed
+`system_preview_bayesian`, a strict `validated_subset_bayesian`, and a separate
 `user_selected_bayesian` after stable-card `evidence_decisions`.
 
 Collector output defaults to a compact `summary` shape (unified card index,
@@ -204,7 +211,8 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-01` adds an auditable 28-criterion routing contract.
+Collector schema `2026-08-07` adds broad/strict candidate policies and retains
+the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
 `review_readiness` distinguishes automatic-workflow readiness from clinical
@@ -273,8 +281,10 @@ is an exact-SHA ACMG deployment extension: Claude and Codex profiles use the
 same generated mirrors as their upstream plugins, while the generic profile
 uses the same filtered canonical Skill set exposed to standalone clients.
 Ordinary upstream users continue to use the marketplace plugins or
-`npx skills add`; the branch installer preserves unrelated user Skills and
-removes only retired ACMG directories. The packaged mirrors are rebuilt from
+`npx skills add`; the branch installer preserves unrelated user Skills,
+removes only retired ACMG directories from known global and supplied project
+roots, and reports stale retired workflow instructions without rewriting them.
+The packaged mirrors are rebuilt from
 canonical `skills/` with the upstream `plugin/sync-skills.sh` rules; the mirror
 verifier checks the complete published file set and documented host-specific
 YAML frontmatter differences.
@@ -311,8 +321,8 @@ Skill clients, and `uvx tooluniverse` for the compact MCP runtime. The branch
 setup adds only the exact-SHA path needed to bind the enhanced ACMG runtime and
 Skill contract reproducibly. That path installs the complete user-facing
 ToolUniverse Skill bundle, replaces current ToolUniverse Skill names, and
-removes retired routing-core and criterion/refinement directories without
-touching unrelated user Skills.
+removes retired routing-core and criterion/refinement directories from known
+global and supplied project roots without touching unrelated user Skills.
 The fork's Claude and Codex `.mcp.json` manifests pin that same validated Git
 SHA; this is the only intentional difference from the upstream plugins'
 floating `uvx tooluniverse` package resolution.

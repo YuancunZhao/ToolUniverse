@@ -74,7 +74,7 @@ ClinGen/SVI or uniquely matched CSpec rules, reports compatibility/conflicts,
 and calculates system-preview and user-selected Bayesian estimates. It never
 returns a five-tier final classification.
 
-The fork version is `1.4.0+acmg.1`, based on upstream commit
+The fork version is `1.4.0+acmg.2`, based on upstream commit
 `089eb8e6308fc64ae5af3de4bfbec32b5cf07b61`. Ordinary users should keep using
 the upstream installation commands above. Enhanced ACMG deployments must use
 the exact validated Git SHA and matching Skill bundle documented in

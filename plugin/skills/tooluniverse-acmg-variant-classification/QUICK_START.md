@@ -20,13 +20,17 @@
    relevant tables, figures, captions, and supplements. Submit
    `literature_proposals` with PMID/PMCID, fact type, locator, excerpt,
    per-field excerpts, structured facts, interpretation, confidence, extractor
-   version, unresolved questions, and a `reading_manifest`. Abstract-only or
-   unavailable papers remain source leads.
-6. Review `system_preview_bayesian` and `conflict_report`. This is a review
-   estimate; card inclusion is represented only by
-   `system_preview_included`. `ready_for_evidence_review` means automatic
-   collection is complete, not that all criteria are assessed and not that a
-   five-tier classification is available.
+   version, unresolved questions, and a `reading_manifest`. If full text is
+   unavailable, do not claim it was read. A source-located abstract, snippet,
+   or provider-linked fact may still form a `source_unavailable` or
+   `unresolved` broad candidate, but it cannot enter the validated subset.
+6. Review `system_preview_bayesian`, `validated_subset_bayesian`, and
+   `conflict_report`. The first is a broad source-backed-candidate estimate;
+   the second is the strict overlay-validated subset. Card inclusion is shown
+   by `system_preview_included` and `validated_subset_included`.
+   `ready_for_evidence_review` means automatic collection is complete, not
+   that all criteria are assessed and not that a five-tier classification is
+   available.
 7. If proposals were submitted, automatically call the collector again. Process
    only newly discovered request IDs on a possible final incremental pass.
    Do not end while a recoverable consequence gap or mandatory full-text
@@ -34,8 +38,13 @@
 8. After user review, call the collector again with `evidence_decisions`
    (`card_id`, `accept|reject`, optional reasoned `strength_override`) and use
    `user_selected_bayesian`. Unmatched card IDs do not affect other evidence.
-9. Use `ACMG_guard_final_answer`; do not return a five-tier final label in this
-   evidence-only phase.
+9. Draft the candidate evidence table first, then conflicts and all available
+   Bayesian estimates. Do not expose tool-discovery narration, shell parsing,
+   Guard debugging, or retired route/combiner searches.
+10. Use `ACMG_guard_final_answer` with `final_answer_text` and the compact
+    `guard_context`. The Guard verifies its `context_hash` as a transport
+    integrity checksum, not a digital signature. Do not return a five-tier
+    final label in this evidence-only phase.
 
 For one evidence domain, call the matching `ACMG_*_evidence` group tool. These
 tools and the collector share the same pure rule functions.
@@ -93,7 +102,7 @@ blocks the call or changes compatibility or Bayesian scoring. Finally call:
 ```json
 {
   "final_answer_text": "<draft evidence-only answer>",
-  "collector_result": "<complete collector result>"
+  "guard_context": "<compact guard_context returned by the collector>"
 }
 ```
 

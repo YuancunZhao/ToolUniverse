@@ -182,19 +182,44 @@ check(
     "",
 )
 
+from tooluniverse.acmg.guard import guard_context_hash
+from tooluniverse.acmg.runtime_manifest import ruleset_hash
+
+guard_context = {
+    "schema_version": "2026-08-07",
+    "variant_identity_hash": "a" * 64,
+    "ruleset_hash": ruleset_hash(),
+    "cards": [],
+    "known_source_fact_ids": [],
+    "trusted_source_fact_ids": [],
+}
+guard_context["context_hash"] = guard_context_hash(guard_context)
 guard = tu.run_one_function(
     {
         "name": "ACMG_guard_final_answer",
         "arguments": {
             "final_answer_text": "This variant is classified as Pathogenic.",
-            "collector_result": {
-                "source_facts": [],
-                "evidence_cards": [],
-            },
+            "guard_context": guard_context,
         },
     }
 )
 check("guard_blocks_five_tier_label", guard.get("status") == "BLOCK", guard.get("status"))
+
+tampered_context = {**guard_context, "ruleset_hash": "c" * 64}
+tampered = tu.run_one_function(
+    {
+        "name": "ACMG_guard_final_answer",
+        "arguments": {
+            "final_answer_text": "PP3 is a candidate.",
+            "guard_context": tampered_context,
+        },
+    }
+)
+check(
+    "guard_context_tampering_fails_closed",
+    tampered.get("blocking_reasons") == ["guard_context_invalid"],
+    tampered.get("blocking_reasons"),
+)
 
 # --- PMM2 rs104894531 multi-allele regression, offline fixture executor ---
 from tooluniverse.acmg.collector import ACMGEvidencePipeline

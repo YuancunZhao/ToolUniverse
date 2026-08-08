@@ -7,11 +7,11 @@ from importlib import metadata
 import json
 from typing import Any
 
-from . import pvs1, rule_catalog
+from . import compatibility, models, population, pvs1, rule_catalog
 
 
-ACMG_RUNTIME_VERSION = "evidence-only-1"
-COLLECTOR_SCHEMA_VERSION = "2026-08-01"
+ACMG_RUNTIME_VERSION = "evidence-only-2"
+COLLECTOR_SCHEMA_VERSION = "2026-08-07"
 UPSTREAM_BASE_COMMIT = "089eb8e6308fc64ae5af3de4bfbec32b5cf07b61"
 BAYESIAN_PRIOR = 0.1
 
@@ -61,6 +61,61 @@ def _ruleset_payload() -> dict[str, Any]:
         },
         "generic_tavtigian_odds": generic_odds,
         "bayesian_prior": BAYESIAN_PRIOR,
+        "preview_policy": {
+            "version": models.CANDIDATE_PREVIEW_POLICY_VERSION,
+            "system_preview": "source_backed_candidates",
+            "validated_subset": "identity_bound_validated_rules",
+            "source_backed": {
+                "allowed_proposal_statuses": sorted(
+                    models.SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES
+                ),
+                "excluded_verification_statuses": sorted(
+                    models.SOURCE_BACKED_EXCLUDED_VERIFICATION_STATUSES
+                ),
+                "excluded_mapping_statuses": sorted(
+                    models.SOURCE_BACKED_EXCLUDED_MAPPING_STATUSES
+                ),
+                "requires_known_source_facts": (
+                    models.SOURCE_BACKED_REQUIRES_KNOWN_SOURCE_FACTS
+                ),
+                "requires_valid_criterion_strength": (
+                    models.SOURCE_BACKED_REQUIRES_VALID_STRENGTH
+                ),
+            },
+            "validated_subset_policy": {
+                "allowed_proposal_statuses": sorted(
+                    models.STRICT_ALLOWED_PROPOSAL_STATUSES
+                ),
+                "inferred_excluded_verification_statuses": sorted(
+                    models.STRICT_INFERRED_EXCLUDED_VERIFICATION_STATUSES
+                ),
+                "explicit_excluded_verification_statuses": sorted(
+                    models.STRICT_EXPLICIT_EXCLUDED_VERIFICATION_STATUSES
+                ),
+            },
+            "compatibility_policy_version": (
+                compatibility.COMPATIBILITY_POLICY_VERSION
+            ),
+            "pm2_rare_observed_candidate": {
+                "version": (
+                    population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION
+                ),
+                "requires_ac_greater_than": 0,
+                "global_af_max": population.PM2_RARE_OBSERVED_GLOBAL_AF_MAX,
+                "popmax_af_max_or_missing": (
+                    population.PM2_RARE_OBSERVED_POPMAX_AF_MAX
+                ),
+                "requires_missing_disease_specific_mcaf": True,
+                "deterministic_svi_threshold": False,
+            },
+            "hard_exclusions": [
+                "identity_mismatch",
+                "contradicted",
+                "missing_source",
+                "illegal_criterion_or_strength",
+                "duplicate_or_hard_conflict",
+            ],
+        },
     }
 
 

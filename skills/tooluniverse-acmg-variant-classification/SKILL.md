@@ -29,9 +29,9 @@ switch to direct provider HTTP requests, manual ACMG scoring, or general-model
 inference as a fallback.
 
 The collector returns SourceFacts, visible external leads, EvidenceCard
-criterion/strength proposals, compatibility and conflict reports, a
-system-preview Bayesian estimate, and—after explicit evidence decisions—a
-separate user-selected estimate. It always returns
+criterion/strength proposals, compatibility and conflict reports, a broad
+source-backed system preview, a strictly validated-subset estimate, and—after
+explicit evidence decisions—a separate user-selected estimate. It always returns
 `final_classification_allowed: false`. `runtime_manifest` anchors the installed
 runtime, schema, deterministic ruleset hash, available VCS revision, and
 applicable dynamic CSpec.
@@ -75,9 +75,12 @@ Run this state machine to completion in the same user task:
    request IDs and allow one incremental collector call. Never repeat a
    completed request or unchanged document hash.
 7. End automated collection only when no mandatory request remains, or when
-   the result is stably `blocked_external_full_text`. Return EvidenceCards,
-   exclusions, conflicts, `review_readiness`, and `system_preview_bayesian`.
-8. Call `ACMG_guard_final_answer` before returning criterion claims.
+   the result is stably `blocked_external_full_text`. Return the candidate
+   evidence table, verification gaps, exclusions, conflicts,
+   `review_readiness`, `system_preview_bayesian`, and
+   `validated_subset_bayesian`.
+8. Call `ACMG_guard_final_answer` with the compact `guard_context` before
+   returning criterion claims.
 
 Read-only retrieval, consequence recovery, full-text reading, structured fact
 extraction, proposal generation, and the system preview do not require
@@ -110,7 +113,11 @@ exact-hash caches or fixtures, never an online-rule whitelist.
 For every exact/equivalent paper, follow
 `literature_review.review_requests`. A PMID, `inEPMC`, snippet, or text-mining
 hit does not prove full-text availability. Try the ordered `tool_attempts`;
-abstract-only or unavailable material remains a source lead.
+if full text is unavailable, do not claim that the article was read. A
+source-located abstract, snippet, or provider-linked fact may still produce a
+`source_unavailable` or `unresolved` candidate in the broad system preview.
+Such a card must expose the missing source material and cannot enter
+`validated_subset_bayesian`.
 
 Read Methods, Results, tables, figure captions, and accessible supplements—not
 only the abstract. Submit a `reading_manifest` with publication identifiers,
@@ -129,9 +136,12 @@ source-located, excerpt-backed structured result into `literature_proposals`;
 the figure Skill does not assign or count ACMG criteria by itself.
 
 ToolUniverse re-fetches source documents and reports `anchor_status` separately
-from `semantic_status`. Unavailable or mismatched full text and contradicted
-semantics remain visible but do not enter the system preview. A verified anchor
-with unresolved machine semantics remains a review-required proposal.
+from `semantic_status`. Identity mismatch and contradicted semantics remain
+visible but are excluded from every estimate. Source-unavailable or unresolved
+material may remain a source-backed candidate in the broad system preview, but
+must be labeled with its verification gap and cannot enter the strictly
+validated subset. A verified anchor with unresolved machine semantics remains
+a review-required proposal.
 Deterministic PS2/PM6, PM3, and PS3/BS3 processing emits one rule card and
 stores the LLM interpretation on that card rather than double-counting it.
 
@@ -161,11 +171,14 @@ PVS1; every fact must return through the collector. Generic UniProt/InterPro
 overlap is PM1 review context only; PM1 requires an exact online-bound CSpec
 region contract.
 
-Only cards with `assessment_status: met`, `system_preview_included: true`,
-`overlay_validated: true`, and trusted non-empty `source_fact_ids` support the
-system-preview estimate. `not_met`, `not_assessed`, `not_applicable`,
-deprecated cards, and source leads do not enter it. PP5 and BP6 remain
-deprecated.
+Every legal criterion/strength suggestion with at least one traceable
+SourceFact, identity/build consistency, and no explicit contradiction may be
+shown as a source-backed candidate. This remains true when strict verification
+is incomplete: `suggested_criterion` and `suggested_strength` must not be
+erased merely because `assessment_status` is `not_assessed` or `indeterminate`.
+`not_suggested`, `not_applicable`, deprecated, source-free, identity-mismatched,
+contradicted, duplicate, and hard-conflict cards are excluded. PP5 and BP6
+remain deprecated.
 
 For missense variants, same-residue EBI Proteins records and ClinVar Variation
 IDs are `prior_variant_candidates` only. Automatically execute their
@@ -219,13 +232,20 @@ deterministic decision tree.
 Treat every card as a proposal, not a clinical decision:
 
 - `system_preview_included` is card inclusion in
-  `system_preview_bayesian`, ToolUniverse's review estimate.
-- A valid `requires_user_review` proposal may enter that preview after identity,
-  source, strength, and compatibility checks.
+  `system_preview_bayesian`, the broad source-backed-candidate estimate.
+- `validated_subset_included` is card inclusion in
+  `validated_subset_bayesian`, the stricter overlay-validated comparison.
+- `verification_status` and `preview_inclusion_basis` explain whether a card is
+  verified, unresolved, source-unavailable, contradicted, identity-mismatched,
+  validation-backed, source-backed only, or excluded.
+- A legal `requires_user_review` proposal may enter the broad preview after
+  identity, source, direction, and compatibility checks even when strict
+  semantic or disease-specific validation is incomplete.
 - Same-criterion duplicates, shared cases/families/cohorts/experiments, splice
   overlap, and directional conflicts are excluded by compatibility rules while
   remaining visible.
-- `user_selected_bayesian` includes accepted regenerated cards only.
+- `user_selected_bayesian` includes accepted regenerated source-backed cards
+  only; hard-error cards cannot be accepted.
 
 Each evidence decision requires `card_id` and `decision=accept|reject`. A
 strength override must remain direction-consistent and include a reason.
@@ -239,7 +259,21 @@ Clearly distinguish observed facts, source leads, system suggestions,
 system-preview inclusion, and user acceptance. The Bayesian posterior is a
 review estimate, not a final classification.
 
-Call `ACMG_guard_final_answer` before returning criterion claims. The runtime
+Default answers must start with the evidence result, not an account of the
+agent's internal process. Present a compact table containing proposed
+criterion/strength, source, observed value or excerpt, verification status,
+broad/strict/user inclusion, and decisive caveats, followed by conflicts and
+the available Bayesian estimates. Do not narrate tool discovery, manual shell
+parsing, Guard regular-expression debugging, or searches for retired routing,
+combiner, or finalizer tools.
+
+Call `ACMG_guard_final_answer` with `final_answer_text` plus the returned
+`guard_context` before returning criterion claims. The runtime
+recomputes `context_hash` over the compact context and fails closed if the
+schema, variant identity hash, ruleset hash, cards, or source-ID sets were
+truncated or modified. This checksum detects accidental transport changes; it
+is not a digital signature.
+The runtime
 blocks Pathogenic, Likely Pathogenic, VUS, Likely Benign, Benign, and equivalent
 Chinese five-tier labels. ToolUniverse enforcement begins only after the agent
 enters its explicit ACMG policy context; global enforcement requires host

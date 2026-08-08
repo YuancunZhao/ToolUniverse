@@ -8,6 +8,11 @@ from typing import Any
 from .models import EvidenceCard
 
 
+PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-07"
+PM2_RARE_OBSERVED_GLOBAL_AF_MAX = 0.0001
+PM2_RARE_OBSERVED_POPMAX_AF_MAX = 0.001
+
+
 def _finite_number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
@@ -52,6 +57,17 @@ def population_evidence(
         "population_details": dict(population_details or {}),
         "callability_metrics": dict(callability_metrics or {}),
     }
+    rare_observed_candidate = bool(
+        gnomad_ac is not None
+        and gnomad_ac > 0
+        and gnomad_af_global is not None
+        and gnomad_af_global <= PM2_RARE_OBSERVED_GLOBAL_AF_MAX
+        and (
+            gnomad_af_popmax is None
+            or gnomad_af_popmax <= PM2_RARE_OBSERVED_POPMAX_AF_MAX
+        )
+        and maximum_credible_af is None
+    )
 
     def above(value: float | None, threshold: float) -> bool:
         return value is not None and value > threshold
@@ -118,13 +134,24 @@ def population_evidence(
             input_source=population_source or "gnomAD",
             input_values=pm2_values,
             clinvar_rule_applied="ClinGen SVI PM2 Recommendation v1.0",
+            rule_basis=(
+                "Fork review-only rare-observed PM2 candidate policy "
+                f"{PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION}; its AF filters "
+                "are not a deterministic ClinGen SVI PM2 threshold."
+                if rare_observed_candidate
+                else ""
+            ),
             provenance_chain=[pm2_reason],
             proposal_status=(
                 "suggested"
                 if pm2_strength == "PM2_Supporting" and coverage_confirmed_adequate
                 else "requires_user_review"
-                if pm2_strength == "PM2_Supporting"
+                if pm2_strength == "PM2_Supporting" or rare_observed_candidate
                 else ""
+            ),
+            suggested_criterion="PM2" if rare_observed_candidate else "",
+            suggested_strength=(
+                "PM2_Supporting" if rare_observed_candidate else ""
             ),
             rule_verification=(
                 "versioned_deterministic"
@@ -132,7 +159,16 @@ def population_evidence(
                 else "generic_svi"
             ),
             caveats=(
-                []
+                [
+                    "The observed frequency passes the fork review-only candidate "
+                    f"filters (global AF <= {PM2_RARE_OBSERVED_GLOBAL_AF_MAX}; "
+                    "popmax AF missing or <= "
+                    f"{PM2_RARE_OBSERVED_POPMAX_AF_MAX}), but no disease-specific "
+                    "maximum credible allele frequency was available. These are "
+                    "candidate-routing filters, not deterministic SVI thresholds."
+                ]
+                if rare_observed_candidate
+                else []
                 if coverage_confirmed_adequate or not callability_available
                 else [
                     "Coverage metrics were returned, but coverage adequacy was not "
@@ -142,10 +178,13 @@ def population_evidence(
             missing_requirements=(
                 []
                 if coverage_confirmed_adequate
+                else ["disease-specific maximum credible allele frequency"]
+                if rare_observed_candidate
                 else ["versioned site-coverage adequacy assessment"]
                 if callability_available
                 else []
             ),
+            verification_status=("unresolved" if rare_observed_candidate else ""),
         )
     )
     if maximum_credible_af is not None:

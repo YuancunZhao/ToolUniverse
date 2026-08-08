@@ -55,7 +55,8 @@ exact checkout, and run:
 ```bash
 bash "$CHECKOUT/scripts/install_tooluniverse_skills.sh" \
   --client "$SKILLS_PROFILE" \
-  --dest "$SKILLS_DIR"
+  --dest "$SKILLS_DIR" \
+  --project-root "$PROJECT_ROOT"
 ```
 
 Profiles:
@@ -72,7 +73,14 @@ This branch-only installer:
 - uses canonical filtered Skills for the generic profile;
 - adds the consolidated ACMG evidence-only Skill;
 - removes retired ACMG routing/refinement Skills;
+- checks the known global Skill roots and the supplied project's
+  `.reasonix/skills`, `.agents/skills`, and `.claude/skills` roots;
 - preserves unrelated user Skills.
+
+`PROJECT_ROOT` is the project in which the agent will use ToolUniverse. The
+installer reports, but does not rewrite, stale `AGENTS.md`, `CLAUDE.md`, or
+`reasonix.toml` instructions that still reference retired route/combine/finalize
+workflows.
 
 Do not combine an upstream marketplace plugin with global fork Skill copies.
 The fork's exact-SHA MCP runtime and its Skills must be installed as one

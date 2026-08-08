@@ -1484,25 +1484,35 @@ class EuropePMCStructuredFullTextTool(BaseTool):
                 "retrieval_trace": fetch.get("trace") or [],
             }
 
-        # Truncate long section text
+        # Truncate long section text while preserving an explicit audit trail.
         sections = parsed.get("sections", {})
+        truncated_sections: list[str] = []
         for key, val in sections.items():
             if isinstance(val, str) and len(val) > max_chars:
                 sections[key] = val[:max_chars] + "... [truncated]"
+                truncated_sections.append(str(key))
             elif isinstance(val, list):
-                for entry in val:
+                for index, entry in enumerate(val):
                     if isinstance(entry, dict) and isinstance(entry.get("text"), str):
                         if len(entry["text"]) > max_chars:
                             entry["text"] = (
                                 entry["text"][:max_chars] + "... [truncated]"
                             )
+                            truncated_sections.append(f"{key}[{index}]")
 
         return {
             "status": "success",
             "data": parsed,
+            "source": fetch.get("source"),
+            "format": fetch.get("format"),
+            "url": fetch.get("url"),
+            "retrieval_trace": fetch.get("trace") or [],
+            "truncated": bool(truncated_sections),
+            "truncated_sections": truncated_sections,
             "metadata": {
                 "pmcid": pmcid_norm,
                 "source": fetch.get("source"),
                 "format": fetch.get("format"),
+                "url": fetch.get("url"),
             },
         }

@@ -963,6 +963,41 @@
         {
           "type": "object",
           "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success"]
+            },
+            "data": {
+              "type": "object",
+              "description": "Structured article title, abstract, sections, figures, tables, references, and counts."
+            },
+            "metadata": {
+              "type": "object",
+              "description": "Resolved PMCID and retrieval metadata."
+            },
+            "source": {
+              "type": ["string", "null"],
+              "description": "Actual full-text source used by the fallback chain."
+            },
+            "format": {
+              "type": ["string", "null"],
+              "description": "Retrieved document format."
+            },
+            "url": {
+              "type": ["string", "null"],
+              "description": "Actual URL that supplied the document."
+            },
+            "retrieval_trace": {
+              "type": "array",
+              "items": {"type": "object"}
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "truncated_sections": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
             "title": {
               "type": [
                 "string",
@@ -1117,7 +1152,8 @@
             }
           },
           "required": [
-            "title"
+            "status",
+            "data"
           ]
         },
         {

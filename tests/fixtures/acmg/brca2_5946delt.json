@@ -222,6 +222,20 @@
       "sections": {
         "mechanism": "BRCA2 NM_000059.4:c.5946delT is evaluated in a haploinsufficiency loss-of-function disease mechanism for MONDO:0011450 with autosomal dominant inheritance."
       }
+    },
+    "source": "Europe PMC structured XML",
+    "format": "xml",
+    "url": "https://europepmc.org/articles/PMC9999998",
+    "retrieval_trace": [
+      {"source": "Europe PMC structured XML", "status": "success"}
+    ],
+    "truncated": false,
+    "truncated_sections": [],
+    "metadata": {
+      "pmcid": "PMC9999998",
+      "source": "Europe PMC structured XML",
+      "format": "xml",
+      "url": "https://europepmc.org/articles/PMC9999998"
     }
   }
 }

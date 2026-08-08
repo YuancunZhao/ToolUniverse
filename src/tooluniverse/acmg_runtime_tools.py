@@ -8,7 +8,7 @@ from .acmg.clinical import clinical_evidence
 from .acmg.collector import ACMGEvidencePipeline
 from .acmg.computational import computational_evidence
 from .acmg.functional import functional_evidence
-from .acmg.guard import guard_acmg_answer
+from .acmg.guard import guard_acmg_answer, validate_guard_context
 from .acmg.literature import literature_evidence
 from .acmg.models import evidence_cards_to_result
 from .acmg.population import population_evidence
@@ -111,11 +111,39 @@ class ACMGGuardFinalAnswerTool(BaseTool):
         answer_text = str(arguments.get("final_answer_text") or "")
         cards = arguments.get("evidence_cards")
         collector_result = arguments.get("collector_result")
-        if cards is None and isinstance(collector_result, dict):
+        guard_context = arguments.get("guard_context")
+        trusted_ids: set[str] | None = None
+        known_ids: set[str] | None = None
+        if guard_context is not None:
+            context_valid, context_error = validate_guard_context(guard_context)
+            if not context_valid:
+                return {
+                    "status": "BLOCK",
+                    "blocking_reasons": ["guard_context_invalid"],
+                    "guard_context_error": context_error,
+                    "cards_used": [],
+                    "card_roles": [],
+                    "unsupported_codes": [],
+                    "message": "BLOCKED: guard_context_invalid",
+                }
+            assert isinstance(guard_context, dict)
+            cards = guard_context.get("cards", [])
+            trusted_ids = {
+                str(value)
+                for value in guard_context.get("trusted_source_fact_ids") or []
+                if value
+            }
+            known_ids = {
+                str(value)
+                for value in guard_context.get("known_source_fact_ids") or []
+                if value
+            }
+        elif cards is None and isinstance(collector_result, dict):
             cards = collector_result.get("evidence_cards", [])
         if not isinstance(cards, list):
             cards = []
-        trusted_ids, known_ids = _source_fact_ids(collector_result)
+        if guard_context is None:
+            trusted_ids, known_ids = _source_fact_ids(collector_result)
         return guard_acmg_answer(
             answer_text,
             cards,

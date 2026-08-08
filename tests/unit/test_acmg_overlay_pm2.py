@@ -70,6 +70,33 @@ def test_pm2_present_without_disease_threshold_is_indeterminate():
     assert card.strength == "indeterminate"
 
 
+def test_pm2_extremely_rare_observation_preserves_supporting_candidate():
+    card = _card(
+        population_evidence(
+            gnomad_af_global=4.1e-6,
+            gnomad_af_popmax=1.01e-4,
+            gnomad_ac=6,
+            gnomad_an=1_461_796,
+            callability_available=True,
+            population_details={"dataset": "gnomad_r4", "callset": "exome"},
+            callability_metrics={"median": 31, "over_20": 0.94},
+        ),
+        "PM2",
+    )
+
+    assert card.strength == "indeterminate"
+    assert card.suggested_criterion == "PM2"
+    assert card.suggested_strength == "PM2_Supporting"
+    assert card.proposal_status == "requires_user_review"
+    assert card.verification_status == "unresolved"
+    assert card.input_values["af_global"] == 4.1e-6
+    assert "maximum credible allele frequency" in card.caveats[0]
+    assert "not a deterministic ClinGen SVI PM2 threshold" in card.rule_basis
+    assert card.missing_requirements == [
+        "disease-specific maximum credible allele frequency"
+    ]
+
+
 def test_pm2_uses_general_svi_without_vcep():
     card = _card(
         population_evidence(

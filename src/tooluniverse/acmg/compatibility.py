@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import is_candidate_evidence
+from .models import is_candidate_evidence, is_source_backed_candidate
+
+
+COMPATIBILITY_POLICY_VERSION = "2026-08-07"
+
+
+def _criterion(row: dict[str, Any]) -> str:
+    return str(row.get("suggested_criterion") or row.get("criterion") or "")
 
 
 def _strength_rank(row: dict[str, Any]) -> int:
@@ -58,10 +65,7 @@ def _contract_exclusions(row: dict[str, Any]) -> set[str]:
 
 def _is_walker_bp4_bp7_pair(current: dict[str, Any], accepted: dict[str, Any]) -> bool:
     """Allow the explicit Walker BP4 -> BP7 decision-tree combination only."""
-    rows = {
-        str(current.get("criterion") or ""): current,
-        str(accepted.get("criterion") or ""): accepted,
-    }
+    rows = {_criterion(current): current, _criterion(accepted): accepted}
     if set(rows) != {"BP4", "BP7"}:
         return False
     return (
@@ -76,6 +80,9 @@ def resolve_evidence_compatibility(
     rows: list[dict[str, Any]],
     *,
     trusted_source_fact_ids: set[str] | None = None,
+    known_source_fact_ids: set[str] | None = None,
+    eligibility: str = "validated",
+    selection_field: str = "system_preview_included",
 ) -> dict[str, Any]:
     compatible: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
@@ -101,9 +108,16 @@ def resolve_evidence_compatibility(
         key=lambda item: (-_strength_rank(item[1]), item[0]),
     )
     for _index, row in ordered_rows:
-        if not is_candidate_evidence(
-            row, trusted_source_fact_ids=trusted_source_fact_ids
-        ):
+        eligible = (
+            is_source_backed_candidate(
+                row, known_source_fact_ids=known_source_fact_ids
+            )
+            if eligibility == "source_backed"
+            else is_candidate_evidence(
+                row, trusted_source_fact_ids=trusted_source_fact_ids
+            )
+        )
+        if not eligible:
             excluded.append({**row, "reason": "not_eligible_for_candidate_bayesian"})
             continue
         card_id = str(row.get("card_id") or "")
@@ -111,7 +125,7 @@ def resolve_evidence_compatibility(
             excluded.append({**row, "reason": "duplicate_card_id"})
             continue
 
-        criterion = str(row.get("criterion") or "")
+        criterion = _criterion(row)
         case_ids = {str(value) for value in row.get("source_case_ids", []) if value}
         assay_ids = _semantic_ids(row, "assay_instance_id")
         family_ids = _semantic_ids(row, "family_id")
@@ -124,7 +138,7 @@ def resolve_evidence_compatibility(
         }
         reason = ""
         for accepted in compatible:
-            accepted_criterion = str(accepted.get("criterion") or "")
+            accepted_criterion = _criterion(accepted)
             accepted_fact_ids = {
                 str(value) for value in accepted.get("source_fact_ids", []) if value
             }
@@ -232,29 +246,32 @@ def resolve_evidence_compatibility(
         if card_id:
             seen_ids.add(card_id)
 
-    criteria = {str(row.get("criterion") or "") for row in compatible}
+    criteria = {_criterion(row) for row in compatible}
     conflicting_pairs = ({"PP3", "BP4"}, {"PS3", "BS3"})
     for pair in conflicting_pairs:
         if not pair <= criteria:
             continue
         retained = []
         for row in compatible:
-            if str(row.get("criterion") or "") in pair:
+            if _criterion(row) in pair:
                 excluded.append({**row, "reason": "unresolved_directional_conflict"})
             else:
                 retained.append(row)
         compatible = retained
 
     for row in excluded:
-        row["system_preview_included"] = False
+        row[selection_field] = False
         row["exclusion_reason"] = row.get("reason") or row.get("exclusion_reason")
+        if selection_field == "system_preview_included":
+            row["preview_inclusion_basis"] = "excluded"
+            row["preview_exclusion_reason"] = row["exclusion_reason"]
     return {
         "compatible_evidence": compatible,
         "excluded_evidence": excluded,
         "decisions": [
             {
                 "card_id": row.get("card_id"),
-                "criterion": row.get("criterion"),
+                "criterion": _criterion(row),
                 "decision": "excluded",
                 "reason": row.get("reason"),
             }

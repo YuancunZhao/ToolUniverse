@@ -33,6 +33,35 @@ PROPOSAL_STATUSES = {
     "deprecated",
 }
 
+VERIFICATION_STATUSES = {
+    "verified",
+    "unresolved",
+    "source_unavailable",
+    "contradicted",
+    "identity_mismatch",
+    "not_required",
+}
+
+CANDIDATE_PREVIEW_POLICY_VERSION = "2026-08-07"
+SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES = frozenset(
+    {"suggested", "requires_user_review", "insufficient_information"}
+)
+SOURCE_BACKED_EXCLUDED_VERIFICATION_STATUSES = frozenset(
+    {"contradicted", "identity_mismatch"}
+)
+SOURCE_BACKED_EXCLUDED_MAPPING_STATUSES = frozenset({"unmapped"})
+SOURCE_BACKED_REQUIRES_KNOWN_SOURCE_FACTS = True
+SOURCE_BACKED_REQUIRES_VALID_STRENGTH = True
+STRICT_ALLOWED_PROPOSAL_STATUSES = frozenset(
+    {"suggested", "requires_user_review"}
+)
+STRICT_INFERRED_EXCLUDED_VERIFICATION_STATUSES = frozenset(
+    {"source_unavailable", "contradicted", "identity_mismatch"}
+)
+STRICT_EXPLICIT_EXCLUDED_VERIFICATION_STATUSES = frozenset(
+    {"unresolved", "source_unavailable", "contradicted", "identity_mismatch"}
+)
+
 
 @dataclass
 class EvidenceCard:
@@ -72,6 +101,10 @@ class EvidenceCard:
     effective_strength: str = ""
     user_selected_included: bool = False
     decision_reason: str = ""
+    verification_status: str = ""
+    preview_inclusion_basis: str = ""
+    preview_exclusion_reason: str = ""
+    validated_subset_included: bool = False
 
 
 @dataclass(frozen=True)
@@ -209,9 +242,10 @@ def is_candidate_evidence(
             proposal_status in {"suggested", "requires_user_review"}
             or (not proposal_status and row.get("assessment_status") == "met")
         )
-        and (
-            row.get("system_preview_included") is True
+        and row.get(
+            "validated_subset_included", row.get("system_preview_included")
         )
+        is True
         and row.get("overlay_validated") is True
         and _proposal_strength_supported(
             str(row.get("criterion") or ""),
@@ -231,11 +265,85 @@ def is_candidate_evidence(
     )
 
 
+def is_source_backed_candidate(
+    row: EvidenceCard | dict[str, Any],
+    *,
+    known_source_fact_ids: set[str] | None = None,
+) -> bool:
+    """Return whether a traceable suggestion may enter the broad preview."""
+    if known_source_fact_ids is None:
+        return False
+    known_ids = {value for value in known_source_fact_ids if value}
+    if isinstance(row, EvidenceCard):
+        source_fact_ids = _source_fact_ids(row.source_fact_ids)
+        criterion = row.suggested_criterion or row.criterion
+        strength = row.suggested_strength or row.effective_strength or row.strength
+        proposal_status = row.proposal_status or _default_proposal_status(
+            row.assessment_status
+        )
+        verification_status = row.verification_status or "unresolved"
+        mapping_status = row.rule_mapping_status
+        rule_id = row.rule_id
+        rule_version = row.rule_version
+    elif isinstance(row, dict):
+        source_fact_ids = _source_fact_ids(row.get("source_fact_ids"))
+        criterion = str(row.get("suggested_criterion") or row.get("criterion") or "")
+        strength = str(
+            row.get("effective_strength")
+            or row.get("suggested_strength")
+            or row.get("strength")
+            or ""
+        )
+        proposal_status = str(row.get("proposal_status") or "")
+        verification_status = str(row.get("verification_status") or "unresolved")
+        mapping_status = str(row.get("rule_mapping_status") or "")
+        rule_id = str(row.get("rule_id") or "")
+        rule_version = str(row.get("rule_version") or "")
+    else:
+        return False
+    has_known_sources = bool(source_fact_ids and source_fact_ids <= known_ids)
+    strength_supported = _proposal_strength_supported(
+        criterion,
+        strength,
+        rule_id=rule_id,
+        rule_version=rule_version,
+        allow_generic=True,
+    )
+    return bool(
+        (has_known_sources or not SOURCE_BACKED_REQUIRES_KNOWN_SOURCE_FACTS)
+        and proposal_status in SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES
+        and verification_status not in SOURCE_BACKED_EXCLUDED_VERIFICATION_STATUSES
+        and mapping_status not in SOURCE_BACKED_EXCLUDED_MAPPING_STATUSES
+        and (strength_supported or not SOURCE_BACKED_REQUIRES_VALID_STRENGTH)
+    )
+
+
+def _verification_status(card: EvidenceCard, *, strictly_validated: bool) -> str:
+    if card.verification_status in VERIFICATION_STATUSES:
+        return card.verification_status
+    values = card.input_values if isinstance(card.input_values, dict) else {}
+    anchor_status = str(values.get("anchor_status") or "")
+    semantic_status = str(values.get("semantic_status") or "")
+    if semantic_status == "contradicted":
+        return "contradicted"
+    if anchor_status == "mismatch":
+        return "identity_mismatch"
+    if strictly_validated:
+        return "verified"
+    if anchor_status == "unavailable":
+        return "source_unavailable"
+    if card.source_fact_ids:
+        return "unresolved"
+    return "not_required"
+
+
 def _stable_card_id(card: EvidenceCard, assessment_status: str) -> str:
     payload = {
         "variant_identity": card.variant_identity,
         "criterion": card.criterion,
         "strength": card.strength,
+        "suggested_criterion": card.suggested_criterion,
+        "suggested_strength": card.suggested_strength,
         "assessment_status": assessment_status,
         "input_source": card.input_source,
         "input_values": card.input_values,
@@ -259,6 +367,7 @@ def evidence_cards_to_result(
     *,
     variant_identity: dict[str, Any] | None = None,
     trusted_source_fact_ids: set[str] | None = None,
+    known_source_fact_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Serialize cards for system preview and user review."""
     serialized = []
@@ -281,9 +390,13 @@ def evidence_cards_to_result(
             assessment_status = "not_assessed"
         row = asdict(card)
         row["observed_facts"] = dict(card.observed_facts or card.input_values)
-        row["suggested_criterion"] = card.suggested_criterion or card.criterion
         row["suggested_strength"] = card.suggested_strength or (
-            card.strength if assessment_status == "met" else ""
+            card.strength
+            if _proposal_strength_supported(card.criterion, card.strength)
+            else ""
+        )
+        row["suggested_criterion"] = card.suggested_criterion or (
+            card.criterion if row["suggested_strength"] else ""
         )
         row["rule_basis"] = (
             card.rule_basis or card.rule_reference or card.clinvar_rule_applied
@@ -314,13 +427,20 @@ def evidence_cards_to_result(
             if row["rule_verification"] == "versioned_deterministic"
             else "llm_review_required"
             if row["proposal_origin"] in {"llm_literature", "llm_cspec"}
+            and bool(row["suggested_strength"])
+            else "deterministic_mapped"
+            if bool(row["suggested_strength"])
             else "unmapped"
         )
         row["llm_suggestion"] = dict(card.llm_suggestion)
         row["caveats"] = list(card.caveats)
         row["missing_requirements"] = list(card.missing_requirements)
         row["user_decision"] = card.user_decision or "pending"
-        row["effective_strength"] = card.effective_strength or card.strength
+        row["effective_strength"] = (
+            card.effective_strength
+            or row["suggested_strength"]
+            or card.strength
+        )
         row["user_selected_included"] = card.user_selected_included is True
         row["decision_reason"] = card.decision_reason
         row["card_id"] = _stable_card_id(card, assessment_status)
@@ -331,8 +451,16 @@ def evidence_cards_to_result(
         row["overlay_validated"] = (
             card.overlay_validated is True and has_trusted_sources
         )
-        row["system_preview_included"] = (
-            proposal_status in {"suggested", "requires_user_review"}
+        preliminary_verification_status = _verification_status(
+            card,
+            strictly_validated=False,
+        )
+        row["validated_subset_included"] = (
+            proposal_status in STRICT_ALLOWED_PROPOSAL_STATUSES
+            and preliminary_verification_status
+            not in STRICT_INFERRED_EXCLUDED_VERIFICATION_STATUSES
+            and card.verification_status
+            not in STRICT_EXPLICIT_EXCLUDED_VERIFICATION_STATUSES
             and row["overlay_validated"]
             and _proposal_strength_supported(
                 card.criterion,
@@ -350,12 +478,26 @@ def evidence_cards_to_result(
                 and row["rule_mapping_status"] != "unmapped",
             )
         )
-        if (
-            proposal_status in {"suggested", "requires_user_review"}
-            and not row["system_preview_included"]
-        ):
-            row["exclusion_reason"] = row.get("exclusion_reason") or (
-                "suggestion_not_eligible_for_candidate_bayesian"
+        row["verification_status"] = _verification_status(
+            card,
+            strictly_validated=row["validated_subset_included"],
+        )
+        row["system_preview_included"] = is_source_backed_candidate(
+            row,
+            known_source_fact_ids=(known_source_fact_ids or trusted_source_fact_ids),
+        )
+        row["preview_inclusion_basis"] = (
+            "validated_rule"
+            if row["validated_subset_included"]
+            else "source_backed_candidate"
+            if row["system_preview_included"]
+            else "excluded"
+        )
+        if not row["system_preview_included"]:
+            row["preview_exclusion_reason"] = (
+                card.preview_exclusion_reason
+                or row.get("exclusion_reason")
+                or "not_eligible_for_source_backed_preview"
             )
         serialized.append(row)
     return {"evidence_cards": serialized}
@@ -363,10 +505,21 @@ def evidence_cards_to_result(
 
 __all__ = [
     "ASSESSMENT_STATUSES",
+    "CANDIDATE_PREVIEW_POLICY_VERSION",
     "EvidenceCard",
     "PROPOSAL_STATUSES",
+    "SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES",
+    "SOURCE_BACKED_EXCLUDED_MAPPING_STATUSES",
+    "SOURCE_BACKED_EXCLUDED_VERIFICATION_STATUSES",
+    "SOURCE_BACKED_REQUIRES_KNOWN_SOURCE_FACTS",
+    "SOURCE_BACKED_REQUIRES_VALID_STRENGTH",
+    "STRICT_ALLOWED_PROPOSAL_STATUSES",
+    "STRICT_EXPLICIT_EXCLUDED_VERIFICATION_STATUSES",
+    "STRICT_INFERRED_EXCLUDED_VERIFICATION_STATUSES",
+    "VERIFICATION_STATUSES",
     "SourceFact",
     "assessment_status_for_strength",
     "evidence_cards_to_result",
     "is_candidate_evidence",
+    "is_source_backed_candidate",
 ]

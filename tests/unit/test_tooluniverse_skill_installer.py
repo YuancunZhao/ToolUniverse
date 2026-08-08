@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -46,6 +47,7 @@ def test_installer_copies_complete_profile_and_preserves_unrelated_skill(
     expected_names: set[str],
 ):
     destination = tmp_path / profile / "skills"
+    fake_home = tmp_path / "home"
     unrelated = destination / "user-private-workflow"
     unrelated.mkdir(parents=True)
     (unrelated / "SKILL.md").write_text("private\n", encoding="utf-8")
@@ -64,6 +66,7 @@ def test_installer_copies_complete_profile_and_preserves_unrelated_skill(
         check=False,
         capture_output=True,
         text=True,
+        env={**os.environ, "HOME": str(fake_home)},
     )
 
     assert run.returncode == 0, run.stderr
@@ -118,6 +121,78 @@ def test_installer_rejects_missing_or_invalid_profile(tmp_path: Path):
     assert missing.returncode == 2
     assert invalid.returncode == 2
     assert unsafe.returncode == 2
+
+
+def test_installer_cleans_known_global_and_project_roots_only(tmp_path: Path):
+    fake_home = tmp_path / "home"
+    project_root = tmp_path / "project"
+    destination = tmp_path / "destination"
+    roots = (
+        fake_home / ".claude" / "skills",
+        fake_home / ".agents" / "skills",
+        fake_home / ".codex" / "skills",
+        project_root / ".reasonix" / "skills",
+        project_root / ".agents" / "skills",
+        project_root / ".claude" / "skills",
+    )
+    for root in roots:
+        (root / "tooluniverse-acmg-overlay-routing-core").mkdir(parents=True)
+        (root / "tooluniverse-acmg-ps4-refinement").mkdir()
+        (root / "unrelated-skill").mkdir()
+
+    command = [
+        "bash",
+        str(INSTALLER),
+        "--client",
+        "generic",
+        "--dest",
+        str(destination),
+        "--project-root",
+        str(project_root),
+    ]
+    for _ in range(2):
+        run = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(fake_home)},
+        )
+        assert run.returncode == 0, run.stderr
+    for root in roots:
+        assert not (root / "tooluniverse-acmg-overlay-routing-core").exists()
+        assert not (root / "tooluniverse-acmg-ps4-refinement").exists()
+        assert (root / "unrelated-skill").is_dir()
+
+
+def test_installer_reports_retired_project_instruction_without_rewriting_it(
+    tmp_path: Path,
+):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    instruction = project_root / "AGENTS.md"
+    instruction.write_text("Call ACMG_route_overlays first.\n", encoding="utf-8")
+
+    run = subprocess.run(
+        [
+            "bash",
+            str(INSTALLER),
+            "--client",
+            "generic",
+            "--dest",
+            str(tmp_path / "skills"),
+            "--project-root",
+            str(project_root),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(tmp_path / "home")},
+    )
+
+    assert run.returncode == 1
+    assert "AGENTS.md:1" in run.stderr
+    assert instruction.read_text(encoding="utf-8") == "Call ACMG_route_overlays first.\n"
 
 
 def test_plugin_marketplace_and_mcp_manifests_follow_upstream_layout():

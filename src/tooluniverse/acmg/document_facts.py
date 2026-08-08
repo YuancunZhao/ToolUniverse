@@ -167,8 +167,14 @@ def _document_identity_matches(
     pmcid: str,
 ) -> bool:
     data = _payload(result)
-    returned_pmid = str(data.get("pmid") or data.get("PMID") or "").strip()
-    returned_pmcid = str(data.get("pmcid") or data.get("PMCID") or "").strip()
+    metadata = result.get("metadata") if isinstance(result, dict) else {}
+    metadata = metadata if isinstance(metadata, dict) else {}
+    returned_pmid = str(
+        data.get("pmid") or data.get("PMID") or metadata.get("pmid") or ""
+    ).strip()
+    returned_pmcid = str(
+        data.get("pmcid") or data.get("PMCID") or metadata.get("pmcid") or ""
+    ).strip()
     if pmid and returned_pmid and pmid != returned_pmid:
         return False
     if pmcid and returned_pmcid and pmcid.casefold() != returned_pmcid.casefold():
@@ -185,6 +191,12 @@ def document_text_for_locator(result: Any, locator: str) -> str:
     key = _norm(locator)
     if not key:
         return ""
+    unstructured_text = data.get("text") or data.get("content")
+    if isinstance(unstructured_text, str) and unstructured_text.strip():
+        # Plain-text/HTML fallbacks cannot expose stable section nodes.  The
+        # submitted locator remains auditable, while the excerpt is re-anchored
+        # against the complete normalized document text below.
+        return unstructured_text
     for container_name in ("sections", "tables", "figures"):
         container = data.get(container_name)
         if isinstance(container, dict):
@@ -206,6 +218,35 @@ def document_text_for_locator(result: Any, locator: str) -> str:
                 if _norm(name) == key:
                     return str(row.get("text") or row.get("caption") or "")
     return ""
+
+
+def document_content_hash(result: Any) -> str:
+    """Hash normalized document content independently of the retrieval route."""
+    data = _payload(result)
+    content = {
+        key: data.get(key)
+        for key in (
+            "title",
+            "abstract",
+            "sections",
+            "tables",
+            "figures",
+            "text",
+            "content",
+        )
+        if data.get(key) not in (None, "", [], {})
+    }
+    if not content:
+        return ""
+    normalized = json.dumps(
+        content,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+    normalized = " ".join(normalized.split())
+    return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 def _positive_int(value: Any) -> bool:
@@ -518,6 +559,7 @@ def verify_document_fact(
 
 __all__ = [
     "LITERATURE_FACT_CRITERIA",
+    "document_content_hash",
     "document_text_for_locator",
     "stable_document_fact_id",
     "verify_document_fact",

@@ -410,10 +410,12 @@ fetches the cited EuropePMC full text and verifies:
 The result separates `anchor_status` (`verified`, `unavailable`, `mismatch`)
 from `semantic_status` (`verified`, `unresolved`, `contradicted`). Numeric and
 enumerated submitted values are checked against their per-field excerpts.
-Explicit contradictions and failed anchors remain visible but are excluded
-from the system preview. A verified anchor whose semantics cannot be reliably
-machine parsed remains `requires_user_review`, with the LLM interpretation,
-confidence, extractor version, excerpt, and unresolved questions preserved.
+Explicit contradictions and identity-mismatched anchors remain visible but are
+excluded from every estimate. A source-unavailable or semantically unresolved
+proposal may remain a source-backed candidate in the broad system preview, but
+is excluded from the strictly validated subset. Its LLM interpretation,
+confidence, extractor version, excerpt, and unresolved questions remain
+visible.
 Literature mechanism facts may feed the deterministic PVS1 tree only when the
 mechanism is a controlled value and `semantic_status=verified`; unresolved
 mechanism text remains visible background. Deterministic PS2/PM6, PM3, and
@@ -440,12 +442,19 @@ on that one rule card rather than creating a second generic card.
 6. User `evidence_decisions` are a separate optional round used only to
    calculate the user-selected estimate.
 
-## System preview and user-selected estimate
+## Broad preview, validated subset, and user-selected estimate
 
-`system_preview_bayesian` includes compatible deterministic suggestions and
-qualified review-required LLM proposals. Exact versioned rules use catalogued odds; other
-legal strengths use generic Tavtigian odds with `odds_source` recorded. BA1 and
-other non-multiplicative special criteria appear in `special_criteria`.
+`system_preview_bayesian` uses `estimate_policy=source_backed_candidates` and
+includes compatible legal suggestions with traceable sources, identity/build
+consistency, and no explicit contradiction. `validated_subset_bayesian` uses
+the stricter overlay-validated rule and source contract. A truncated document
+forces `reading_manifest.status=partial`; its actual retrieval source, format,
+URL, trace, and truncated sections remain auditable. It can support a labeled
+broad candidate but never the validated subset. Both estimates retain
+verification-state counts and included card IDs. Exact versioned rules use
+catalogued odds; other legal strengths use generic Tavtigian odds with
+`odds_source` recorded. BA1 and other non-multiplicative special criteria
+appear in `special_criteria`.
 
 To record review decisions, call the collector again with
 `evidence_decisions`. A decision has `card_id`, `decision=accept|reject`, and
@@ -453,8 +462,23 @@ optional `strength_override`; every override requires a reason and must retain
 the criterion's direction. The collector recollects current data and applies
 only decisions whose stable card IDs still match. Stale IDs appear in
 `decision_report.unmatched_decisions`. `user_selected_bayesian` includes only
-accepted, compatible cards. Neither estimate maps to a five-tier
+accepted, compatible source-backed cards; hard-error cards cannot be accepted.
+None of the estimates maps to a five-tier
 classification.
+
+The fork's PM2 review-only candidate filter is versioned separately from
+ClinGen SVI: global AF must be <=0.0001, popmax AF must be absent or <=0.001,
+AC must be >0, and no disease-specific MCAF may be available. These values only
+screen an extremely rare source-backed candidate; they are not a deterministic
+PM2 rule. The candidate remains `unresolved`, carries this caveat, and is
+excluded from `validated_subset_bayesian`.
+
+`guard_context` contains `schema_version`, `variant_identity_hash`,
+`ruleset_hash`, compact cards, known/trusted SourceFact IDs, and
+`context_hash`. The checksum is SHA-256 over canonical JSON for those fields.
+Guard recomputes it and returns `guard_context_invalid` if the compact context
+is missing, malformed, truncated, or altered. The checksum detects accidental
+transport changes; it is not a digital signature.
 
 ## Interface migration
 

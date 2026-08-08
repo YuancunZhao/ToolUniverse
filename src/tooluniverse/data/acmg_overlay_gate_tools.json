@@ -234,6 +234,10 @@
           "type": "object",
           "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
         },
+        "guard_context": {
+          "type": "object",
+          "description": "Compact self-checking EvidenceCard and SourceFact provenance contract for ACMG_guard_final_answer. context_hash detects truncation or accidental mutation; it is not a digital signature."
+        },
         "coverage_summary": {
           "type": "array",
           "items": {
@@ -294,6 +298,7 @@
         },
         "compatibility_report": {"type": "object"},
         "system_preview_bayesian": {"type": "object"},
+        "validated_subset_bayesian": {"type": "object"},
         "user_selected_bayesian": {"type": "object"},
         "decision_report": {"type": "object"},
         "limitations": {
@@ -317,6 +322,7 @@
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
+        "guard_context",
         "coverage_summary",
         "source_facts",
         "source_assertions",
@@ -333,6 +339,7 @@
         "conflict_report",
         "compatibility_report",
         "system_preview_bayesian",
+        "validated_subset_bayesian",
         "user_selected_bayesian",
         "decision_report",
         "limitations",
@@ -562,6 +569,10 @@
           "type": "object",
           "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
         },
+        "guard_context": {
+          "type": "object",
+          "description": "Compact self-checking EvidenceCard and SourceFact provenance contract for ACMG_guard_final_answer. context_hash detects truncation or accidental mutation; it is not a digital signature."
+        },
         "coverage_summary": {"type": "array", "items": {"type": "object"}},
         "source_facts": {
           "type": "array",
@@ -610,6 +621,7 @@
         "compatibility_report": {"type": "object"},
         "conflict_report": {"type": "object"},
         "system_preview_bayesian": {"type": "object"},
+        "validated_subset_bayesian": {"type": "object"},
         "user_selected_bayesian": {"type": "object"},
         "decision_report": {"type": "object"},
         "limitations": {"type": "array", "items": {"type": "string"}},
@@ -625,6 +637,7 @@
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
+        "guard_context",
         "coverage_summary",
         "source_facts",
         "source_assertions",
@@ -641,6 +654,7 @@
         "conflict_report",
         "compatibility_report",
         "system_preview_bayesian",
+        "validated_subset_bayesian",
         "user_selected_bayesian",
         "decision_report",
         "limitations",
@@ -1014,6 +1028,10 @@
         },
         "collector_result": {
           "type": "object"
+        },
+        "guard_context": {
+          "type": "object",
+          "description": "Compact self-checking guard_context returned by ACMG_evidence_collector. Invalid or modified contexts fail closed."
         }
       },
       "required": [

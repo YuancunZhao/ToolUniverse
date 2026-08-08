@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install_tooluniverse_skills.sh --client codex|claude|generic --dest PATH
+Usage: install_tooluniverse_skills.sh --client codex|claude|generic --dest PATH [--project-root PATH]
 
 Install the full user-facing ToolUniverse Skill bundle from this exact checkout.
 Existing unrelated Skills are preserved. Current ToolUniverse Skills are
@@ -13,6 +13,7 @@ EOF
 
 client=""
 dest=""
+project_root=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --client)
@@ -21,6 +22,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --dest)
       dest="${2:-}"
+      shift 2
+      ;;
+    --project-root)
+      project_root="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -67,6 +72,53 @@ case "$dest" in
 esac
 
 mkdir -p "$dest"
+
+if [ -n "$project_root" ]; then
+  if [ ! -d "$project_root" ]; then
+    echo "--project-root must be an existing directory" >&2
+    exit 2
+  fi
+  project_root="$(cd "$project_root" && pwd)"
+  for instruction_file in AGENTS.md CLAUDE.md reasonix.toml; do
+    instruction_path="$project_root/$instruction_file"
+    [ -f "$instruction_path" ] || continue
+    if grep -nHE 'ACMG_route_overlays|ACMG_combine_criteria|ACMG_(finalize|finalizer)' \
+      "$instruction_path" >&2; then
+      echo "Retired ACMG workflow instruction found in $instruction_path" >&2
+      exit 1
+    fi
+  done
+fi
+
+cleanup_retired_skills() {
+  skills_root="$1"
+  [ -d "$skills_root" ] || return 0
+  rm -rf "$skills_root/tooluniverse-acmg-overlay-routing-core"
+  for retired_dir in "$skills_root"/tooluniverse-acmg-*refinement; do
+    [ -e "$retired_dir" ] || continue
+    rm -rf "$retired_dir"
+  done
+  printf 'Retired ACMG Skill cleanup checked: %s\n' "$skills_root"
+}
+
+declare -a cleanup_roots=("$dest")
+if [ -n "$home_dir" ]; then
+  cleanup_roots+=(
+    "$home_dir/.claude/skills"
+    "$home_dir/.agents/skills"
+    "$home_dir/.codex/skills"
+  )
+fi
+if [ -n "$project_root" ]; then
+  cleanup_roots+=(
+    "$project_root/.reasonix/skills"
+    "$project_root/.agents/skills"
+    "$project_root/.claude/skills"
+  )
+fi
+for skills_root in "${cleanup_roots[@]}"; do
+  cleanup_retired_skills "$skills_root"
+done
 
 declare -a source_dirs=()
 if [ "$client" = "codex" ]; then
@@ -118,12 +170,6 @@ for skill_dir in "${source_dirs[@]}"; do
   else
     cp -R "$skill_dir" "$dest/$skill_name"
   fi
-done
-
-rm -rf "$dest/tooluniverse-acmg-overlay-routing-core"
-for retired_dir in "$dest"/tooluniverse-acmg-*refinement; do
-  [ -e "$retired_dir" ] || continue
-  rm -rf "$retired_dir"
 done
 
 printf 'Installed %d ToolUniverse Skills for %s into %s\n' \
