@@ -168,6 +168,27 @@ Try the `MP_<PHENOTYPE>` MSigDB set first (above): it answers in one call per op
 
 ## Computational procedures (when the answer is COMPUTED, not looked up)
 
+### Genomic windows — count the anchor base
+
+A window described as "N bp upstream plus M bp downstream of X" spans
+**N + M + 1** bases, because the anchor base X is itself included. Asking for
+100 up and 100 down around a TSS is 201 nt, not 200. Off-by-one here is the
+single most common way a sequence answer is wrong while looking right.
+
+The same care applies to the coordinate convention of whichever tool you call:
+
+| convention | span of `start`..`end` | used by |
+|---|---|---|
+| 1-based inclusive | `end - start + 1` | Ensembl `region`, UCSC browser text, IGV, samtools |
+| 0-based half-open | `end - start` | UCSC REST API, BED |
+
+`UCSC_get_sequence` takes a written locus via `region` (1-based inclusive) or
+explicit `chrom`/`start`/`end` with `coordinate_system`; it echoes
+`region_1based` and `requested_length` so the span is checkable. **Always check
+the returned length against what the question asked for** before answering — a
+sequence of the wrong length is wrong even when every base you kept is right.
+
+
 Any question with a **single deterministic numeric/combinatorial answer** must be obtained by **RUNNING code**, never by estimating or doing it in your head. This covers sequence questions (ORF counts, restriction fragments/sizes, GC content, translation) **and** any other exactly-computable question — e.g. **genetics segregation / Mendelian or polyploid gamete ratios, combinatorial probabilities, stoichiometry, dosage/PK arithmetic, counting problems**. Mental arithmetic on these is the #1 avoidable error: the model reliably mis-counts or mis-multiplies. If a question reduces to "enumerate the cases / multiply the probabilities / count the objects", **write a short Python snippet, execute it, and report exactly what it returns** — even when the topic looks like a biology "reasoning" question, if the answer is a definite number, compute it rather than reason it out. Match the question's wording for conventions (which strand; linear vs circular; which cross/segregation model) and **state the convention you used** so the answer is auditable.
 
 **Final-answer discipline (avoid "computed right, answered wrong").** After the code returns the value, map it back to the option letters **carefully and explicitly**: quote the computed value, then find the option that matches it exactly (for a set of fragment sizes, match the whole multiset; for a count, match the integer). A surprising number of misses are cases where the computation was correct but the wrong letter was selected — do not let this happen; re-read each option against the computed result before emitting `[ANSWER]`.

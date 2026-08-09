@@ -171,9 +171,48 @@ class STRINGRESTTool(BaseTool):
 
                 rows = sorted(rows, key=_score, reverse=True)[:limit]
                 metadata["truncated_to_limit"] = limit
+            if isinstance(rows, list):
+                rows = self._label_partners(rows, arguments)
+                metadata["partner_note"] = (
+                    "STRING returns each edge as an A/B pair and the queried "
+                    "protein appears on either side, so `partner` names the "
+                    "other end of each edge. Collect partners from `partner`, "
+                    "not from preferredName_B alone."
+                )
             return {
                 "status": "success",
                 "data": rows,
                 "metadata": metadata,
             }
         return {"status": "success", "data": api_response}
+
+    @staticmethod
+    def _label_partners(rows, arguments):
+        """Name the non-queried end of each edge.
+
+        STRING orders every edge as A/B by internal ID, not by what was asked
+        for, so the queried protein turns up as `preferredName_A` on some rows
+        and `preferredName_B` on others. Reading `preferredName_B` alone -- the
+        obvious thing to do -- silently drops every edge where the query landed
+        in the A column, which is roughly half of them.
+        """
+        queried = arguments.get("protein_ids") or arguments.get("identifiers") or []
+        if isinstance(queried, str):
+            queried = [
+                q.strip() for q in queried.replace("%0d", "\n").split() if q.strip()
+            ]
+        wanted = {str(q).strip().upper() for q in queried if str(q).strip()}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            a = str(row.get("preferredName_A") or "")
+            b = str(row.get("preferredName_B") or "")
+            if wanted and a.upper() in wanted and b.upper() not in wanted:
+                row["partner"] = b
+            elif wanted and b.upper() in wanted and a.upper() not in wanted:
+                row["partner"] = a
+            else:
+                # Self-edge, or neither side matched (alias/ID mismatch): leave
+                # the caller both names rather than guessing one.
+                row["partner"] = None
+        return rows
