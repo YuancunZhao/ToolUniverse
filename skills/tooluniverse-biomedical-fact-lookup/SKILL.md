@@ -41,6 +41,9 @@ Most of these questions are MCQ with an "Insufficient information to answer the 
 
 | **brain region** in the Allen Mouse/Human Brain Atlas | `AllenBrain_search_structures` (`name` or `acronym`), `AllenBrain_get_structure` | reference-atlas regions are **colour-coded**: the result carries `color_hex_triplet`, so "the region shown in red" is answerable — see below |
 | **regulatory element / cCRE** near a gene (ENCODE SCREEN) | `SCREEN_search_cCREs_by_region` | filter on `element_type` (**PLS** and **pELS** are TSS-proximal, **dELS** distal) and read `dnase_zscore` |
+| **which variant is at / overlaps** a genomic region (ClinVar) | `ClinVar_search_by_region` | **not** `ClinVar_search_variants` — Entrez matches a variant's START, so a narrow window misses a CNV that spans the region but begins megabases upstream. Returns true overlaps, smallest span first |
+| **how many peaks / which datasets** for a TF experiment (ReMap) | `ReMap_list_datasets_for_target` | one GEO series can hold several datasets (GSE23852/FOXA1 = 2, with 60,158 and 67,736 peaks) — report them separately unless a total is asked for; `count_peaks: true` to get counts |
+| **protein interaction partners** (STRING) | `STRING_get_protein_interactions` | read the **`partner`** field, not `preferredName_B`: edges are ordered A/B by internal ID, so the queried protein sits in column A on about half of them |
 
 When unsure which tool wraps a database, search the catalog by the *relation* (e.g. "gene disease association", "gene set members"), not the brand name — ToolUniverse usually already has it.
 
