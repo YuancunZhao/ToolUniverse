@@ -1,9 +1,23 @@
+import re
 import os
 import copy
 import requests
 import urllib.parse
 from .base_tool import BaseTool
 from .tool_registry import register_tool
+
+
+def _is_range(value):
+    """True for a Lucene range such as "[20141001 TO 20141231]".
+
+    These carry spaces yet must be sent unquoted; quoting turns the range into a
+    literal term and the query matches nothing.
+    """
+    return bool(
+        isinstance(value, str)
+        and re.match(r"^\s*[\[\{].+\sTO\s.+[\]\}]\s*$", value, re.IGNORECASE)
+    )
+
 
 # ---- Helper: human readable -> openFDA code mapping ----
 HUMAN_TO_FDA_MAP = {
@@ -193,7 +207,13 @@ class FDADrugAdverseEventTool(BaseTool):
                 # Multiple fields for same parameter - use OR
                 field_parts = []
                 for fda_field_name in fda_fields:
-                    if isinstance(mapped_value, str) and " " in mapped_value:
+                    if _is_range(mapped_value):
+                        # A Lucene range ("[20141001 TO 20141231]") contains
+                        # spaces but must NOT be quoted -- quoting makes openFDA
+                        # match it as a literal string and return nothing, so a
+                        # date-bounded query silently came back empty.
+                        field_parts.append(f"{fda_field_name}:{mapped_value}")
+                    elif isinstance(mapped_value, str) and " " in mapped_value:
                         field_parts.append(f'{fda_field_name}:"{mapped_value}"')
                     else:
                         field_parts.append(f"{fda_field_name}:{mapped_value}")
@@ -466,7 +486,13 @@ class FDADrugAdverseEventDetailTool(BaseTool):
                 # Multiple fields for same parameter - use OR
                 field_parts = []
                 for fda_field_name in fda_fields:
-                    if isinstance(mapped_value, str) and " " in mapped_value:
+                    if _is_range(mapped_value):
+                        # A Lucene range ("[20141001 TO 20141231]") contains
+                        # spaces but must NOT be quoted -- quoting makes openFDA
+                        # match it as a literal string and return nothing, so a
+                        # date-bounded query silently came back empty.
+                        field_parts.append(f"{fda_field_name}:{mapped_value}")
+                    elif isinstance(mapped_value, str) and " " in mapped_value:
                         field_parts.append(f'{fda_field_name}:"{mapped_value}"')
                     else:
                         field_parts.append(f"{fda_field_name}:{mapped_value}")

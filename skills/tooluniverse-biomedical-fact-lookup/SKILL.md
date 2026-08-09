@@ -168,6 +168,21 @@ Try the `MP_<PHENOTYPE>` MSigDB set first (above): it answers in one call per op
 
 ## Computational procedures (when the answer is COMPUTED, not looked up)
 
+### GWAS "highest p-value" means most significant
+
+In GWAS writing, "the highest p-value", "the top hit" and "the strongest
+association" all mean the **most significant** result — the *smallest* numeric
+p-value. Read literally, "highest" picks the weakest association in the study
+and is almost never what was meant.
+
+For GCST005528 the literal reading gives `rs2476491-?` at p = 1e-06; the
+intended answer is `rs7775055-G` at p = 3e-174.
+
+Sort ascending by p-value and report that hit. If the phrasing genuinely could
+go either way, give the most significant one and say in a clause that the
+numerically largest p-value is a different SNP — do not silently pick the
+literal reading.
+
 ### Genomic windows — count the anchor base
 
 A window described as "N bp upstream plus M bp downstream of X" spans
