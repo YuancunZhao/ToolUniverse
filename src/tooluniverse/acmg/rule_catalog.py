@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 
+CSPEC_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
+USER_DECISION_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
+
+
 ACMG_CRITERIA = (
     "PVS1",
     "PS1",
@@ -268,18 +272,43 @@ RULE_CATALOG = {
         },
     ),
     "PP1": _rule(
-        "clingen-segregation",
-        "1.0",
-        "family segregation evidence",
-        ["inheritance mode", "penetrance", "informative meioses", "phenotype"],
-        "Jarvik and Browning 2016, PMID:26742077",
+        "clingen-svi-pp1-pp4-bs4",
+        "2023.1",
+        "coupled phenotype-specificity and family co-segregation evidence",
+        [
+            "inheritance mode",
+            "penetrance and phenocopy context",
+            "affected/unaffected co-segregations",
+            "phenotype diagnostic yield",
+        ],
+        "Biesecker et al. 2024, PMID:38103548",
+        combined_pathogenic_point_cap=5.0,
+        countable_strengths=["PP1_Supporting", "PP1_Moderate", "PP1_Strong"],
+        bayesian_odds={
+            "PP1_Supporting": 2.08,
+            "PP1_Moderate": 4.3,
+            "PP1_Strong": 18.7,
+        },
     ),
     "PP4": _rule(
-        "acmg-pp4-disease-specific",
-        "2015",
-        "phenotype specificity evidence",
-        ["disease context", "inheritance mode", "penetrance", "phenotype specificity"],
-        "Richards et al. 2015, PMID:25741868",
+        "clingen-svi-pp1-pp4-bs4",
+        "2023.1",
+        "diagnostic-yield phenotype specificity coupled to co-segregation",
+        [
+            "gene-phenotype dyad",
+            "testing-method diagnostic yield",
+            "locus heterogeneity",
+            "variants per allele",
+        ],
+        "Biesecker et al. 2024, PMID:38103548",
+        minimum_diagnostic_yield=0.191,
+        combined_pathogenic_point_cap=5.0,
+        countable_strengths=["PP4_Supporting", "PP4_Moderate", "PP4_Strong"],
+        bayesian_odds={
+            "PP4_Supporting": 2.08,
+            "PP4_Moderate": 4.3,
+            "PP4_Strong": 18.7,
+        },
     ),
     "PM3": _rule(
         "clingen-svi-pm3",
@@ -355,6 +384,20 @@ RULE_CATALOG = {
         "Brnich et al. 2019, PMID:31892348",
         countable_strengths=["BS3_Supporting", "BS3_Moderate", "BS3"],
         bayesian_odds={"BS3_Supporting": 0.48, "BS3_Moderate": 0.23, "BS3": 0.053},
+    ),
+    "BS4": _rule(
+        "clingen-svi-pp1-pp4-bs4",
+        "2023.1",
+        "lack of segregation in an applicable family configuration",
+        [
+            "affected non-carrier",
+            "confirmed phenotype",
+            "penetrance and phenocopy context",
+            "inheritance configuration",
+        ],
+        "Biesecker et al. 2024, PMID:38103548",
+        countable_strengths=["BS4"],
+        bayesian_odds={"BS4": 0.053},
     ),
     "PM4": _rule(
         "acmg-pm4",
@@ -564,6 +607,70 @@ _REQUIRED_CONTEXT: dict[str, tuple[str, ...]] = {
 }
 
 
+CANDIDATE_POLICY_ID = "tooluniverse-acmg-source-backed-candidates"
+CANDIDATE_POLICY_VERSION = "2026-08-08-v3"
+VERIFIED_POLICY_ID = "tooluniverse-acmg-verified-evidence"
+VERIFIED_POLICY_VERSION = "2026-08-08-v3"
+
+_DEFAULT_CANDIDATE_STRENGTHS: dict[str, str] = {
+    "PVS1": "PVS1",
+    **{criterion: criterion for criterion in ("PS1", "PS2", "PS3", "PS4")},
+    **{
+        criterion: criterion for criterion in ("PM1", "PM2", "PM3", "PM4", "PM5", "PM6")
+    },
+    **{criterion: criterion for criterion in ("PP1", "PP2", "PP3", "PP4")},
+    "BA1": "BA1",
+    **{criterion: criterion for criterion in ("BS1", "BS2", "BS3", "BS4")},
+    **{
+        criterion: criterion for criterion in ("BP1", "BP2", "BP3", "BP4", "BP5", "BP7")
+    },
+}
+
+# Criteria with a dedicated core definition cannot be created merely because a
+# source mentions the criterion. Their normal calculators must first establish
+# the minimum scientific facts. PP5/BP6 remain deprecated.
+_SPECIAL_CORE_CRITERIA = frozenset({"PVS1", "PS3", "BS3", "BA1", "PP3", "BP4", "BP7"})
+
+_CORRELATION_KEYS: dict[str, tuple[str, ...]] = {
+    "PS1": ("prior_variant_id", "protein_residue"),
+    "PM5": ("prior_variant_id", "protein_residue"),
+    "PS2": ("proband_id", "family_id"),
+    "PM6": ("proband_id", "family_id"),
+    "PS3": ("assay_instance_id", "experiment_id"),
+    "BS3": ("assay_instance_id", "experiment_id"),
+    "PS4": ("case_id", "cohort_id"),
+    "PM3": ("proband_id", "family_id", "second_allele_id"),
+    "PP1": ("family_id", "meiosis_id"),
+    "BS4": ("family_id", "meiosis_id"),
+    "PP4": ("case_id", "family_id"),
+    "BS2": ("individual_id", "cohort_id"),
+    "BP2": ("case_id", "family_id", "cooccurring_variant_id"),
+    "BP5": ("case_id", "alternative_cause_id"),
+}
+
+_MUTUALLY_EXCLUSIVE_CRITERIA: dict[str, tuple[str, ...]] = {
+    "PP3": ("BP4",),
+    "BP4": ("PP3",),
+    "PS3": ("BS3",),
+    "BS3": ("PS3",),
+    "PP1": ("BS4",),
+    "BS4": ("PP1",),
+}
+
+_HARD_EXCLUSIONS = (
+    "allele_identity_conflict",
+    "gene_identity_conflict",
+    "build_identity_conflict",
+    "transcript_identity_conflict_when_required",
+    "semantic_contradiction",
+    "illegal_criterion_strength_direction",
+    "missing_traceable_source",
+    "confirmed_duplicate_or_hard_conflict",
+    "cspec_not_applicable",
+    "deprecated_criterion",
+)
+
+
 def _criterion_direction(criterion: str) -> str:
     normalized = str(criterion or "").split("/", 1)[0].upper()
     return "benign" if normalized.startswith("B") else "pathogenic"
@@ -621,7 +728,7 @@ def is_valid_strength_for_criterion(criterion: str, strength: str) -> bool:
 
 
 def criterion_use_matrix() -> dict[str, dict[str, Any]]:
-    """Return the complete review/automation contract for all 28 criteria."""
+    """Return the single v3 evidence contract for all 28 criteria."""
     matrix: dict[str, dict[str, Any]] = {}
     directional_conflicts = {
         "PP3": ["BP4"],
@@ -655,6 +762,35 @@ def criterion_use_matrix() -> dict[str, dict[str, Any]]:
             "provider_routes": list(_PROVIDER_ROUTES.get(criterion, ())),
             "literature_fact_types": list(_LITERATURE_FACT_TYPES.get(criterion, ())),
             "required_context": list(_REQUIRED_CONTEXT.get(criterion, ())),
+            "minimum_candidate_facts": list(rule.get("required_inputs") or []),
+            "strict_validation_facts": list(rule.get("required_inputs") or []),
+            "default_candidate_strength": _DEFAULT_CANDIDATE_STRENGTHS.get(
+                criterion, ""
+            ),
+            "default_candidate_allowed": criterion
+            not in _SPECIAL_CORE_CRITERIA | _DEPRECATED_CRITERIA,
+            "special_core_definition_required": criterion in _SPECIAL_CORE_CRITERIA,
+            "candidate_policy": {
+                "policy_id": CANDIDATE_POLICY_ID,
+                "version": CANDIDATE_POLICY_VERSION,
+                "scope": "source-backed candidate; not a ClinGen deterministic rule",
+            },
+            "verified_policy": {
+                "policy_id": VERIFIED_POLICY_ID,
+                "version": VERIFIED_POLICY_VERSION,
+            },
+            "rule_priority": [
+                "exact_released_vcep_assertion",
+                "exact_released_cspec",
+                "versioned_clingen_svi",
+                "generic_acmg_candidate",
+            ],
+            "hard_exclusions": list(_HARD_EXCLUSIONS),
+            "correlation_keys": list(_CORRELATION_KEYS.get(criterion, ())),
+            "mutually_exclusive_with": list(
+                _MUTUALLY_EXCLUSIVE_CRITERIA.get(criterion, ())
+            ),
+            "scenario_isolation_required": True,
         }
     return matrix
 
@@ -708,14 +844,14 @@ def rule_for_output(
     return rule_for_criterion(criterion)
 
 
-def rule_allows_system_preview_strength(
+def rule_allows_verified_strength(
     criterion: str,
     strength: str,
     *,
     rule_id: str = "",
     rule_version: str = "",
 ) -> bool:
-    """Return whether a serialized card exactly matches an active rule output."""
+    """Return whether a card exactly matches an active versioned rule output."""
     rule = rule_for_output(
         criterion,
         rule_id=rule_id,
@@ -750,6 +886,8 @@ def bayesian_odds_for_output(
 
 __all__ = [
     "ACMG_CRITERIA",
+    "CANDIDATE_POLICY_ID",
+    "CANDIDATE_POLICY_VERSION",
     "CSPEC_RULE_CATALOG",
     "CONSEQUENCE_POLICIES",
     "RULE_CATALOG",
@@ -759,8 +897,10 @@ __all__ = [
     "consequence_policy_for",
     "generic_bayesian_odds_for",
     "is_valid_strength_for_criterion",
-    "rule_allows_system_preview_strength",
+    "rule_allows_verified_strength",
     "rule_for_criterion",
     "rule_for_output",
     "strength_level_for",
+    "VERIFIED_POLICY_ID",
+    "VERIFIED_POLICY_VERSION",
 ]

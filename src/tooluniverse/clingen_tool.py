@@ -575,9 +575,7 @@ class ClinGenTool(BaseTool):
 
     @staticmethod
     def _flatten_classification(item: Dict[str, Any]) -> Dict[str, Any]:
-        """Map one classifications?gene=/variant= JSON record to the tool's
-        declared 7-field return_schema (Variation, ClinVar Variation Id,
-        HGNC Gene Symbol, Disease, Mondo Id, Assertion, Expert Panel)."""
+        """Preserve the complete released VCEP assertion in a stable envelope."""
         hgvs = item.get("hgvs") or []
         gene = item.get("gene") or {}
         condition = item.get("condition") or {}
@@ -585,6 +583,27 @@ class ClinGenTool(BaseTool):
         first_guideline = guidelines[0] if guidelines else {}
         agents = first_guideline.get("agents") or []
         first_agent = agents[0] if agents else {}
+        evidence_summaries = [
+            value
+            for guideline in guidelines
+            if isinstance(guideline, dict)
+            for key in ("evidenceSummary", "evidence_summary", "description")
+            for value in [guideline.get(key)]
+            if value not in (None, "", [], {})
+        ]
+        criteria = [
+            value
+            for guideline in guidelines
+            if isinstance(guideline, dict)
+            for key in (
+                "criteria",
+                "appliedCriteria",
+                "evidenceCriteria",
+                "classificationContributions",
+            )
+            for value in [guideline.get(key)]
+            if value not in (None, "", [], {})
+        ]
         return {
             # The last hgvs entry is the gene-and-protein-notation form,
             # e.g. "NM_000277.2(PAH):c.1A>G (p.Met1Val)" -- matches the old
@@ -596,6 +615,20 @@ class ClinGenTool(BaseTool):
             "Mondo Id": condition.get("@id"),
             "Assertion": (first_guideline.get("outcome") or {}).get("label"),
             "Expert Panel": first_agent.get("affiliation"),
+            "CAID": item.get("caid"),
+            "HGVS": list(hgvs),
+            "MOI": condition.get("modeOfInheritance") or item.get("modeOfInheritance"),
+            "Version": item.get("version") or first_guideline.get("version"),
+            "Release Date": item.get("releaseDate")
+            or item.get("date")
+            or first_guideline.get("date"),
+            "Status": item.get("status") or first_guideline.get("status") or "released",
+            "Evidence Summaries": evidence_summaries,
+            "Applied Criteria": criteria,
+            "Guidelines": [
+                dict(value) for value in guidelines if isinstance(value, dict)
+            ],
+            "Source Record": dict(item),
         }
 
     def _get_variant_classifications(self, arguments: Dict[str, Any]) -> Dict[str, Any]:

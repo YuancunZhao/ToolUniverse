@@ -308,7 +308,17 @@
           "Disease": {"type": ["string", "null"]},
           "Mondo Id": {"type": ["string", "null"]},
           "Assertion": {"type": ["string", "null"]},
-          "Expert Panel": {"type": ["string", "null"]}
+          "Expert Panel": {"type": ["string", "null"]},
+          "CAID": {"type": ["string", "null"]},
+          "HGVS": {"type": "array", "items": {"type": "string"}},
+          "MOI": {},
+          "Version": {},
+          "Release Date": {},
+          "Status": {},
+          "Evidence Summaries": {"type": "array"},
+          "Applied Criteria": {"type": "array"},
+          "Guidelines": {"type": "array"},
+          "Source Record": {"type": "object"}
         }
       }
     },

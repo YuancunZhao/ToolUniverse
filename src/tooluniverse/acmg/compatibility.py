@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import is_candidate_evidence, is_source_backed_candidate
+from .models import is_automatic_evidence, is_verified_evidence
 
 
-COMPATIBILITY_POLICY_VERSION = "2026-08-07"
+COMPATIBILITY_POLICY_VERSION = "2026-08-08-v3"
 
 
 def _criterion(row: dict[str, Any]) -> str:
-    return str(row.get("suggested_criterion") or row.get("criterion") or "")
+    return str(row.get("criterion") or "")
 
 
 def _strength_rank(row: dict[str, Any]) -> int:
-    strength = str(row.get("effective_strength") or row.get("strength") or "")
+    strength = str(row.get("strength") or "")
     if "VeryStrong" in strength or strength in {"PVS1", "BA1"}:
         return 4
     if "Strong" in strength:
@@ -31,6 +31,14 @@ def _strength_rank(row: dict[str, Any]) -> int:
     if strength.startswith(("PP", "BP")):
         return 1
     return 0
+
+
+def _evidence_priority(row: dict[str, Any]) -> int:
+    return {
+        "expert_panel_applied": 3,
+        "rule_mapped": 2,
+        "source_backed_candidate": 1,
+    }.get(str(row.get("evidence_status") or ""), 0)
 
 
 def _semantic_ids(row: dict[str, Any], key: str) -> set[str]:
@@ -79,10 +87,11 @@ def _is_walker_bp4_bp7_pair(current: dict[str, Any], accepted: dict[str, Any]) -
 def resolve_evidence_compatibility(
     rows: list[dict[str, Any]],
     *,
-    trusted_source_fact_ids: set[str] | None = None,
+    verified_source_fact_ids: set[str] | None = None,
     known_source_fact_ids: set[str] | None = None,
-    eligibility: str = "validated",
-    selection_field: str = "system_preview_included",
+    eligibility: str = "verified",
+    calculation_role: str = "automatic",
+    scenario_id: str | None = None,
 ) -> dict[str, Any]:
     compatible: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
@@ -105,16 +114,31 @@ def resolve_evidence_compatibility(
 
     ordered_rows = sorted(
         enumerate(rows),
-        key=lambda item: (-_strength_rank(item[1]), item[0]),
+        key=lambda item: (
+            -_evidence_priority(item[1]),
+            -_strength_rank(item[1]),
+            item[0],
+        ),
     )
+    accepted_non_generic_scenarios: set[str] = set()
     for _index, row in ordered_rows:
+        row_scenario = str(row.get("scenario_id") or "generic-svi")
+        if scenario_id is not None and row_scenario != scenario_id:
+            excluded.append({**row, "reason": "different_rule_scenario"})
+            continue
+        if (
+            scenario_id is None
+            and row_scenario != "generic-svi"
+            and accepted_non_generic_scenarios
+            and row_scenario not in accepted_non_generic_scenarios
+        ):
+            excluded.append({**row, "reason": "cross_scenario_rule_mix"})
+            continue
         eligible = (
-            is_source_backed_candidate(
-                row, known_source_fact_ids=known_source_fact_ids
-            )
-            if eligibility == "source_backed"
-            else is_candidate_evidence(
-                row, trusted_source_fact_ids=trusted_source_fact_ids
+            is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids)
+            if eligibility == "automatic"
+            else is_verified_evidence(
+                row, verified_source_fact_ids=verified_source_fact_ids
             )
         )
         if not eligible:
@@ -242,6 +266,8 @@ def resolve_evidence_compatibility(
             )
             continue
         compatible.append(row)
+        if row_scenario != "generic-svi":
+            accepted_non_generic_scenarios.add(row_scenario)
         accepted_criteria.add(criterion)
         if card_id:
             seen_ids.add(card_id)
@@ -260,11 +286,11 @@ def resolve_evidence_compatibility(
         compatible = retained
 
     for row in excluded:
-        row[selection_field] = False
+        roles = row.get("calculation_roles")
+        roles = dict(roles) if isinstance(roles, dict) else {}
+        roles[calculation_role] = False
+        row["calculation_roles"] = roles
         row["exclusion_reason"] = row.get("reason") or row.get("exclusion_reason")
-        if selection_field == "system_preview_included":
-            row["preview_inclusion_basis"] = "excluded"
-            row["preview_exclusion_reason"] = row["exclusion_reason"]
     return {
         "compatible_evidence": compatible,
         "excluded_evidence": excluded,

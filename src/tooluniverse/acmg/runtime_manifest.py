@@ -7,11 +7,20 @@ from importlib import metadata
 import json
 from typing import Any
 
-from . import compatibility, models, population, pvs1, rule_catalog
+from . import (
+    compatibility,
+    cspec,
+    literature_extractor,
+    models,
+    population,
+    pvs1,
+    rule_catalog,
+    vcep,
+)
 
 
-ACMG_RUNTIME_VERSION = "evidence-only-2"
-COLLECTOR_SCHEMA_VERSION = "2026-08-07"
+ACMG_RUNTIME_VERSION = "evidence-automation-3"
+COLLECTOR_SCHEMA_VERSION = "2026-08-09-v3"
 UPSTREAM_BASE_COMMIT = "089eb8e6308fc64ae5af3de4bfbec32b5cf07b61"
 BAYESIAN_PRIOR = 0.1
 
@@ -61,45 +70,24 @@ def _ruleset_payload() -> dict[str, Any]:
         },
         "generic_tavtigian_odds": generic_odds,
         "bayesian_prior": BAYESIAN_PRIOR,
-        "preview_policy": {
-            "version": models.CANDIDATE_PREVIEW_POLICY_VERSION,
-            "system_preview": "source_backed_candidates",
-            "validated_subset": "identity_bound_validated_rules",
-            "source_backed": {
-                "allowed_proposal_statuses": sorted(
-                    models.SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES
-                ),
-                "excluded_verification_statuses": sorted(
-                    models.SOURCE_BACKED_EXCLUDED_VERIFICATION_STATUSES
-                ),
-                "excluded_mapping_statuses": sorted(
-                    models.SOURCE_BACKED_EXCLUDED_MAPPING_STATUSES
-                ),
-                "requires_known_source_facts": (
-                    models.SOURCE_BACKED_REQUIRES_KNOWN_SOURCE_FACTS
-                ),
-                "requires_valid_criterion_strength": (
-                    models.SOURCE_BACKED_REQUIRES_VALID_STRENGTH
-                ),
+        "evidence_calculation_policy": {
+            "automatic_policy_version": models.AUTOMATIC_EVIDENCE_POLICY_VERSION,
+            "verified_policy_version": models.VERIFIED_EVIDENCE_POLICY_VERSION,
+            "automatic_evidence_statuses": sorted(models.AUTOMATIC_EVIDENCE_STATUSES),
+            "verified_evidence_statuses": sorted(models.VERIFIED_EVIDENCE_STATUSES),
+            "hard_exclusion_dimensions": {
+                key: sorted(values)
+                for key, values in sorted(models.HARD_EXCLUSION_DIMENSIONS.items())
             },
-            "validated_subset_policy": {
-                "allowed_proposal_statuses": sorted(
-                    models.STRICT_ALLOWED_PROPOSAL_STATUSES
-                ),
-                "inferred_excluded_verification_statuses": sorted(
-                    models.STRICT_INFERRED_EXCLUDED_VERIFICATION_STATUSES
-                ),
-                "explicit_excluded_verification_statuses": sorted(
-                    models.STRICT_EXPLICIT_EXCLUDED_VERIFICATION_STATUSES
-                ),
-            },
+            "automatic_requires_known_source_facts": True,
+            "verified_requires_strict_source_facts": True,
+            "requires_valid_criterion_strength": True,
             "compatibility_policy_version": (
                 compatibility.COMPATIBILITY_POLICY_VERSION
             ),
             "pm2_rare_observed_candidate": {
-                "version": (
-                    population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION
-                ),
+                "policy_id": population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID,
+                "version": (population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION),
                 "requires_ac_greater_than": 0,
                 "global_af_max": population.PM2_RARE_OBSERVED_GLOBAL_AF_MAX,
                 "popmax_af_max_or_missing": (
@@ -108,13 +96,42 @@ def _ruleset_payload() -> dict[str, Any]:
                 "requires_missing_disease_specific_mcaf": True,
                 "deterministic_svi_threshold": False,
             },
-            "hard_exclusions": [
-                "identity_mismatch",
-                "contradicted",
-                "missing_source",
-                "illegal_criterion_or_strength",
-                "duplicate_or_hard_conflict",
-            ],
+            "literature_extractor": {
+                "id": literature_extractor.EXTRACTOR_ID,
+                "version": literature_extractor.EXTRACTOR_VERSION,
+                "target_link_policy_version": (
+                    literature_extractor.TARGET_LINK_POLICY_VERSION
+                ),
+                "minimum_fact_requirements": (
+                    literature_extractor.MINIMUM_FACT_REQUIREMENTS
+                ),
+            },
+            "cspec_rule_parser_version": cspec.CSPEC_RULE_PARSER_VERSION,
+            "cspec_scenario_policy_version": (
+                rule_catalog.CSPEC_SCENARIO_POLICY_VERSION
+            ),
+            "user_decision_scenario_policy_version": (
+                rule_catalog.USER_DECISION_SCENARIO_POLICY_VERSION
+            ),
+            "vcep_assertion_parser_version": vcep.VCEP_ASSERTION_PARSER_VERSION,
+            "vcep_allele_match_policy": {
+                "version": vcep.VCEP_ALLELE_MATCH_POLICY_VERSION,
+                "exact_match_tiers": vcep.VCEP_ALLELE_MATCH_TIERS,
+                "rsid_alone": "lead_only",
+                "protein_hgvs_alone": "lead_only",
+            },
+            "vcep_moi_policy": {
+                "version": vcep.VCEP_MOI_POLICY_VERSION,
+                "aliases": {
+                    key: sorted(values)
+                    for key, values in sorted(vcep.VCEP_MOI_ALIASES.items())
+                },
+            },
+            "vcep_applied_criterion_policy": {
+                "structured_applied_criteria_only": True,
+                "negative_statuses": sorted(vcep.VCEP_NEGATIVE_APPLIED_STATUSES),
+                "free_text_mentions_are_leads_only": True,
+            },
         },
     }
 

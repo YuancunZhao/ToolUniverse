@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .rule_catalog import (
@@ -20,6 +21,7 @@ from .rule_catalog import (
 
 
 _APPLICABLE = {"applicable", "apply", "yes", "true"}
+CSPEC_RULE_PARSER_VERSION = "2026-08-09-v3"
 _SAFE_INTERPRETATION_FIELDS = {
     "alternative_in_frame_start",
     "ba1_exception",
@@ -33,9 +35,13 @@ _SAFE_INTERPRETATION_FIELDS = {
     "maximum_credible_af",
     "mutually_exclusive_with",
     "operator",
+    "case_count_threshold",
+    "condition_logic",
+    "point_table",
     "pathogenic_upstream_of_alternative_start",
     "predicted_frame_outcome",
     "predictor",
+    "predictor_rules",
     "protein_accession",
     "regions",
     "rescue_transcript_known",
@@ -46,6 +52,221 @@ _SAFE_INTERPRETATION_FIELDS = {
     "transcript",
     "variant_types",
 }
+
+
+_PREDICTORS = ("REVEL", "SpliceAI", "CADD", "AlphaMissense")
+_OPERATOR_ALIASES = {
+    ">=": ">=",
+    "≥": ">=",
+    "=>": ">=",
+    "<=": "<=",
+    "≤": "<=",
+    "=<": "<=",
+    ">": ">",
+    "<": "<",
+}
+
+
+def _deterministic_text_contract(
+    criterion: str, source_text: str
+) -> tuple[dict[str, Any], list[str]]:
+    """Parse a deliberately small, auditable subset of CSpec prose.
+
+    Unrecognized prose remains visible and does not block the general rule
+    scenario.  Parsed values are never inferred from a search query.
+    """
+    parsed: dict[str, Any] = {"parser_version": CSPEC_RULE_PARSER_VERSION}
+    unparsed: list[str] = []
+    normalized = " ".join(source_text.split())
+    if not normalized:
+        return {}, []
+
+    predictor_rules: list[dict[str, Any]] = []
+    predictor_pattern = re.compile(
+        rf"\b({'|'.join(re.escape(value) for value in _PREDICTORS)})\b"
+        r"(?:\s+(?:score|value))?\s*(>=|<=|=>|=<|≥|≤|>|<)\s*"
+        r"(\d+(?:\.\d+)?)",
+        re.IGNORECASE,
+    )
+    for match in predictor_pattern.finditer(normalized):
+        predictor_rules.append(
+            {
+                "predictor": match.group(1),
+                "operator": _OPERATOR_ALIASES[match.group(2)],
+                "threshold": float(match.group(3)),
+            }
+        )
+    if len(predictor_rules) == 1:
+        parsed.update(predictor_rules[0])
+    elif predictor_rules:
+        parsed["predictor_rules"] = predictor_rules
+
+    mcaf_match = re.search(
+        r"\b(?:maximum\s+credible\s+(?:allele\s+)?frequency|MCAF)\b"
+        r"\s*(?:is|of|[:=]|<=|=<|≤)?\s*"
+        r"(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if mcaf_match:
+        parsed["maximum_credible_af"] = float(mcaf_match.group(1))
+
+    case_match = re.search(
+        r"(>=|<=|=>|=<|≥|≤|>|<|at least|no more than)\s*(\d+)\s*"
+        r"(?:independent\s+)?(?:probands?|cases?|families)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if case_match:
+        operator = case_match.group(1).casefold()
+        parsed["operator"] = {
+            "at least": ">=",
+            "no more than": "<=",
+        }.get(operator, _OPERATOR_ALIASES.get(operator, operator))
+        parsed["case_count_threshold"] = int(case_match.group(2))
+
+    point_rows: list[dict[str, Any]] = []
+    point_pattern = re.compile(
+        r"(\d+(?:\.\d+)?)\s*(?:points?|pts?)\s*(?:=|corresponds? to|supports?)\s*"
+        r"(Very\s*Strong|Strong|Moderate|Supporting)",
+        re.IGNORECASE,
+    )
+    for match in point_pattern.finditer(normalized):
+        strength = _strength_code(criterion, match.group(2))
+        if strength:
+            point_rows.append(
+                {"minimum_points": float(match.group(1)), "strength": strength}
+            )
+    if point_rows:
+        parsed["point_table"] = sorted(
+            point_rows, key=lambda row: float(row["minimum_points"]), reverse=True
+        )
+
+    residue_values: set[int] = set()
+    regions: list[dict[str, int]] = []
+    if re.search(r"\b(?:residue|codon|amino acid|region)\b", normalized, re.I):
+        for start, end in re.findall(r"\b(\d{1,5})\s*[-–]\s*(\d{1,5})\b", normalized):
+            start_value, end_value = int(start), int(end)
+            if start_value <= end_value:
+                regions.append({"start": start_value, "end": end_value})
+        for value in re.findall(r"\b(?:residue|codon)\s*(\d{1,5})\b", normalized, re.I):
+            residue_values.add(int(value))
+    if residue_values:
+        parsed["residues"] = sorted(residue_values)
+    if regions:
+        parsed["regions"] = regions
+
+    variant_type_match = re.search(
+        r"\b(?:applies?\s+to|applicable\s+to|variant\s+types?\s*[:=])\s*"
+        r"([^.;]{1,160})",
+        normalized,
+        re.IGNORECASE,
+    )
+    if variant_type_match:
+        variant_aliases = {
+            "missense": "missense",
+            "nonsense": "stop_gained",
+            "stop gained": "stop_gained",
+            "frameshift": "frameshift",
+            "splice": "splice",
+            "in-frame deletion": "inframe_deletion",
+            "in frame deletion": "inframe_deletion",
+            "in-frame insertion": "inframe_insertion",
+            "in frame insertion": "inframe_insertion",
+            "synonymous": "synonymous",
+        }
+        variant_text = variant_type_match.group(1).casefold()
+        variant_types = sorted(
+            {
+                normalized_type
+                for token, normalized_type in variant_aliases.items()
+                if token in variant_text
+            }
+        )
+        if variant_types:
+            parsed["variant_types"] = variant_types
+
+    mutually_exclusive = {
+        value.upper()
+        for match in re.finditer(
+            r"\b(?:mutually\s+exclusive\s+with|do\s+not\s+use\s+with|"
+            r"must\s+not\s+be\s+combined\s+with)\s+"
+            r"((?:PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])"
+            r"(?:\s*(?:,|/|and|or)\s*(?:PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7]))*)",
+            normalized,
+            re.IGNORECASE,
+        )
+        for value in re.findall(
+            r"PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7]",
+            match.group(1),
+            re.IGNORECASE,
+        )
+        if value.upper() != criterion
+    }
+    if mutually_exclusive:
+        parsed["mutually_exclusive_with"] = sorted(mutually_exclusive)
+
+    ceiling_match = re.search(
+        r"\b(?:maximum(?:\s+strength)?|maximal\s+strength|strength\s+ceiling|"
+        r"capped\s+at|must\s+not\s+exceed|not\s+to\s+exceed)\s*"
+        r"(?:is|of|[:=]|at)?\s*(Very\s*Strong|Strong|Moderate|Supporting)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+    if ceiling_match:
+        ceiling = _strength_code(criterion, ceiling_match.group(1))
+        if ceiling:
+            parsed["strength_ceiling"] = ceiling
+
+    applied_strength_match = re.search(
+        r"\b(?:apply|applied|use|award|assign)(?:\s+the\s+criterion)?\s+"
+        r"(?:at|as)\s+(Very\s*Strong|Strong|Moderate|Supporting)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+    if applied_strength_match:
+        strength = _strength_code(criterion, applied_strength_match.group(1))
+        if strength:
+            parsed["strength"] = strength
+
+    condition_groups = sum(
+        bool(parsed.get(key))
+        for key in (
+            "predictor",
+            "predictor_rules",
+            "maximum_credible_af",
+            "case_count_threshold",
+            "point_table",
+            "residues",
+            "regions",
+            "variant_types",
+        )
+    )
+    if condition_groups > 1:
+        has_any = bool(re.search(r"\b(?:or|either)\b", normalized, re.I))
+        has_all = bool(re.search(r"\b(?:and|all\s+of)\b", normalized, re.I))
+        if has_any != has_all:
+            parsed["condition_logic"] = "any" if has_any else "all"
+        else:
+            unparsed.append("multi_condition_logic_ambiguous")
+
+    # A recognized number does not make an entire paragraph executable when
+    # uncaptured exceptions or conditional clauses remain.  Parsed fields stay
+    # visible, while the scenario falls back to a source-backed candidate.
+    unsupported_condition = re.search(
+        r"\b(?:except(?:ion)?|unless|provided\s+that|only\s+(?:if|when)|"
+        r"subject\s+to|on\s+the\s+condition\s+that)\b",
+        normalized,
+        re.IGNORECASE,
+    )
+    if unsupported_condition:
+        unparsed.append("unsupported_conditional_or_exception_clause")
+
+    recognized_content = set(parsed) - {"parser_version"}
+    if not recognized_content:
+        unparsed.append("no_supported_numeric_or_enumerated_rule_detected")
+        return {}, unparsed
+    return parsed, unparsed
 
 
 def cspec_content_hash(candidate: dict[str, Any]) -> str:
@@ -133,7 +354,10 @@ def _structured_criterion(modification: dict[str, Any]) -> tuple[str, dict[str, 
         ).strip()
         if descriptor_applicability:
             descriptor_applicability_values.append(descriptor_applicability)
-        if descriptor_applicability and descriptor_applicability.casefold() not in _APPLICABLE:
+        if (
+            descriptor_applicability
+            and descriptor_applicability.casefold() not in _APPLICABLE
+        ):
             continue
         strength = _strength_code(criterion, descriptor.get("strength"))
         if strength and strength not in strengths:
@@ -162,6 +386,13 @@ def _structured_criterion(modification: dict[str, Any]) -> tuple[str, dict[str, 
         "rule_applicable": not explicitly_not_applicable,
         "verification": "dynamic_cspec_structured",
     }
+    parsed, parse_gaps = _deterministic_text_contract(criterion, source_text)
+    if parsed:
+        result.update(parsed)
+        result["deterministic_parse_status"] = "partial" if parse_gaps else "parsed"
+    else:
+        result["deterministic_parse_status"] = "unresolved"
+    result["deterministic_parse_gaps"] = parse_gaps
     if len(strengths) == 1:
         result["strength"] = strengths[0]
     return criterion, result
@@ -197,8 +428,10 @@ def _proposal_report(
     if not excerpt or excerpt.casefold() not in source_text.casefold():
         errors.append("cspec_excerpt_not_found")
     extractor = proposal.get("extractor")
-    if not isinstance(extractor, dict) or not extractor.get("name") or not extractor.get(
-        "version"
+    if (
+        not isinstance(extractor, dict)
+        or not extractor.get("name")
+        or not extractor.get("version")
     ):
         errors.append("extractor_version_missing")
     strength = _strength_code(criterion, proposal.get("suggested_strength"))
@@ -267,7 +500,10 @@ def build_dynamic_cspec_contract(
         if not criterion:
             continue
         criteria[criterion] = normalized
-        if normalized.get("source_text"):
+        if (
+            normalized.get("source_text")
+            and normalized.get("deterministic_parse_status") != "parsed"
+        ):
             review_requests.append(
                 {
                     "specification_id": candidate.get("specification_id"),
@@ -276,7 +512,7 @@ def build_dynamic_cspec_contract(
                     "criterion": criterion,
                     "locator": modification.get("criterion_id") or criterion,
                     "text": normalized["source_text"],
-                    "reason": "natural_language_cspec_rule_requires_llm_review",
+                    "reason": "natural_language_cspec_rule_not_fully_parsed",
                 }
             )
 
@@ -330,19 +566,13 @@ def build_dynamic_cspec_contract(
     bayesian_odds = {
         strength: odds
         for strength in countable_strengths
-        if (
-            odds := generic_bayesian_odds_for(
-                strength.split("_", 1)[0], strength
-            )
-        )
+        if (odds := generic_bayesian_odds_for(strength.split("_", 1)[0], strength))
         is not None
     }
     spec_id = str(candidate.get("specification_id") or "")
     primary_reference = candidate.get("url")
     if not primary_reference and spec_id:
-        primary_reference = (
-            "https://cspec.genome.network/cspec/ui/svi/doc/" f"{spec_id}"
-        )
+        primary_reference = f"https://cspec.genome.network/cspec/ui/svi/doc/{spec_id}"
     version = str(candidate.get("version") or "")
     return {
         "specification_id": spec_id,
@@ -363,4 +593,8 @@ def build_dynamic_cspec_contract(
     }
 
 
-__all__ = ["build_dynamic_cspec_contract", "cspec_content_hash"]
+__all__ = [
+    "CSPEC_RULE_PARSER_VERSION",
+    "build_dynamic_cspec_contract",
+    "cspec_content_hash",
+]
