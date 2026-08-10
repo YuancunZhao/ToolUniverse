@@ -59,3 +59,6 @@ def test_embedded_online_gate_is_syntax_valid_and_covers_required_sources():
         "ACMG_evidence_collector",
     ):
         assert name in module.ONLINE_CHECKS_PROGRAM
+    assert 'result.get("status") in {"success", "degraded"}' in (
+        module.ONLINE_CHECKS_PROGRAM
+    )

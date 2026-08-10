@@ -584,7 +584,8 @@ def _validate_collector(result):
         or {}
     )
     contract_ok = (
-        result.get("final_classification_allowed") is False
+        result.get("status") in {"success", "degraded"}
+        and result.get("final_classification_allowed") is False
         and isinstance(facts, list)
         and bool(facts)
         and bool(coverage)
@@ -601,7 +602,8 @@ def _validate_collector(result):
         for fact in facts
     ) or bool(result.get("limitations"))
     return contract_ok and failures_visible, (
-        f"contract={contract_ok} facts={len(facts)} failures_visible={failures_visible}"
+        f"status={result.get('status')} contract={contract_ok} "
+        f"facts={len(facts)} failures_visible={failures_visible}"
     )
 
 
