@@ -32,6 +32,12 @@ The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
+The branch documentation below describes the v3 candidate interface. Until
+the validated block is advanced by a dedicated pin-only commit, production
+installers must continue to use the exact SHA above. Candidate maintainers use
+the pushed candidate SHA directly for the offline and online gates; they must
+not replace this block with an unverified worktree revision.
+
 ## One-line installation prompt
 
 Copy this sentence into another AI agent:
@@ -154,6 +160,8 @@ The collector accepts:
 - optional `gene`, `transcript`, `disease`, `inheritance`, and `genome_build`
 - optional `protein_accession`
 - optional `clinical_context`, including `hpo_terms`
+- optional `clinical_observations` for structured case, family, phase,
+  phenotype, assay, case-control, and case-series facts
 - optional `source_outputs_or_leads`
 - optional `literature_proposals`
 - optional `cspec_proposals`
@@ -171,29 +179,28 @@ The principal outputs are:
 - `predictor_scores`
 - `literature_candidates`
 - `literature_review`
-- `recoverable_gaps`
-- `workflow_status`
-- `next_actions`
 - `rule_context`
 - `runtime_manifest`
 - `criterion_reviews`
 - `evidence_cards`
 - `compatibility_report` and `conflict_report`
-- `system_preview_bayesian`
-- `validated_subset_bayesian`
+- `vcep_context`, `vcep_assertions`, and `rule_scenarios`
+- `automatic_bayesian`
+- `verified_bayesian`
+- `scenario_estimates`
 - `user_selected_bayesian`
+- `automation_report`
 - `guard_context`
 - `decision_report`
 - `limitations`
 
-Evidence-card inclusion is represented by `system_preview_included`,
-`validated_subset_included`, and `user_selected_included`. The removed output fields `counted`,
-`included_in_candidate_bayesian`, `counted_criteria`, and
-`bayesian_estimate` must not appear.
+Evidence-card inclusion is represented by
+`calculation_roles.automatic|verified|user_selected`. v3 does not dual-write
+the retired preview/counting fields.
 
 `guard_context` is a compact self-checking contract. Its `context_hash` covers
 the schema version, variant identity hash, ruleset hash, cards, and known and
-trusted SourceFact ID sets. Guard recomputes the checksum and fails closed if
+verified SourceFact ID sets. Guard recomputes the checksum and fails closed if
 the context was truncated or accidentally modified. It is not a digital
 signature and does not authenticate a malicious sender.
 
@@ -231,8 +238,9 @@ remains visible with its reason. One provider failure must not suppress the
 other sources.
 
 Database classifications, actionability, constraint metrics, phenotype
-matches, and uncalibrated predictor outputs are review-only source leads. They
-are not automatically converted into EvidenceCards.
+matches, and uncalibrated predictor outputs remain visible source assertions.
+Only their underlying facts can become EvidenceCards through the v3 criterion
+matrix; PP5/BP6 remain deprecated.
 
 Provider contracts worth checking:
 
@@ -252,8 +260,7 @@ Provider contracts worth checking:
   supplies full text when available; LitVar contributes variant-linked
   publications. If full text is unavailable, the runtime must not claim it was
   read. Source-located abstracts, snippets, and provider-linked facts may form
-  explicitly `source_unavailable` or `unresolved` broad candidates, but never
-  validated-subset evidence.
+  explicitly limited source-backed candidates, but never verified evidence.
 - UniProt preserves entry status, names, function, disease comments, catalytic
   activity, cofactors, PTMs, domains, sequence length, cross-references, and
   references. Inactive or deleted entries remain visible with their reason.
@@ -264,40 +271,40 @@ coverage without embedding large raw responses, full articles, or full CSpec
 documents. `response_detail="full"` retains the complete normalized audit
 structure, excerpts, locators, CSpec content, and raw-result hashes.
 
-### 2. Review CSpec and literature requests
+### 2. Automatic CSpec, VCEP, and literature processing
 
 ClinGen CSpec discovery is online-first after gene identity verification. A
 released specification is applied only when disease and inheritance identify a
 unique match. Structured rules can be used directly. Natural-language rule
-requirements are returned in `rule_context.cspec_review_requests` for host-LLM
-interpretation.
+requirements are preserved with parser limitations. Deterministic parsing is
+attempted first; optional `cspec_proposals` may supplement unresolved prose.
 
 The collector merges LitVar, PubMed, and Europe PMC candidates by PMID, PMCID,
 DOI, or stable title while preserving all source hits. Full text is preferred;
-abstract-only records can support a labeled broad candidate when their source
-and identity are traceable, but cannot enter the validated subset.
+abstract-only records can support a labeled automatic candidate when their
+source and identity are traceable, but cannot enter the verified estimate.
 
-The host LLM may interpret CSpec prose and literature, but it must return
-anchored structured proposals:
+The collector performs deterministic literature fact extraction and scoring
+without requiring a host LLM. Optional supplemental inputs are:
 
 - `cspec_proposals` for natural-language CSpec rules;
 - `literature_proposals` for case-control, case-series, de novo, PM3,
   functional, segregation, phenotype, healthy-adult, phase/co-occurrence,
   alternative-cause, prior-variant, mechanism, region, or protein-length facts.
 
-ToolUniverse re-fetches the source and verifies document identity, variant and
+When supplied, ToolUniverse re-fetches the source and verifies document identity, variant and
 gene context, locator, excerpt, per-field excerpts, version/hash, schema, and
 deduplication identity. The LLM suggestion cannot map an unrelated fact type to
 an arbitrary criterion.
 
-### 3. Review the system preview
+### 3. Review automatic, verified, and scenario estimates
 
-`system_preview_bayesian` is a reproducible broad review estimate, not a
-clinical classification. It includes eligible, identity-bound, source-backed
-and compatible candidates, including explicitly unresolved candidates.
-`validated_subset_bayesian` is the stricter comparison and excludes truncated,
-source-unavailable, unresolved, contradicted, and identity-mismatched material.
-Excluded cards remain visible with reasons.
+`automatic_bayesian` includes eligible, identity-bound, source-backed and
+compatible candidates, including explicitly limited candidates.
+`verified_bayesian` is the stricter comparison for VCEP, exact CSpec,
+versioned SVI, and strictly anchored facts. `scenario_estimates` keeps multiple
+possibly applicable VCEP/CSpec policies isolated. All are review estimates,
+not clinical classifications; excluded cards remain visible with reasons.
 
 Conflict handling checks duplicate criteria and shared cases, families,
 cohorts, assays, publications, prior variants, CSpec rules, computational
@@ -324,6 +331,8 @@ The user may `accept` or `reject` a card. A `strength_override` must preserve
 criterion direction and include a reason. Only regenerated, exactly matching
 card IDs are applied. Stale or unmatched IDs are reported without affecting
 other cards. Accepted compatible cards produce `user_selected_bayesian`.
+All accepted cards must share one `scenario_id`; cross-scenario selections are
+reported and excluded rather than mixed.
 
 Neither Bayesian result maps to a five-tier classification. The prior
 probability remains 0.1 and the output identifies the odds source for every
@@ -345,7 +354,8 @@ REF/ALT scores. Report all four channels and the triggering channel.
 
 PVS1 continues to use the deterministic ClinGen/SVI decision tree and
 versioned splice thresholds. Missing or unverifiable splice facts remain
-`not_assessed`; caller booleans cannot complete the decision tree.
+visible as missing requirements in `criterion_reviews`; no positive PVS1 card
+is emitted, and caller booleans cannot complete the decision tree.
 
 ## Installation verification
 
@@ -375,6 +385,25 @@ After restarting the client:
 Network-dependent providers may produce a degraded or partial result. That is
 acceptable only when the failed/no-result sources and reasons remain visible;
 it is not acceptable to replace them with unverified manual evidence.
+
+Release-candidate maintainers must also run the opt-in live provider gate
+against the pushed 40-character candidate SHA:
+
+```bash
+python scripts/verify_acmg_install_smoke.py \
+  --source git-ref \
+  --git-ref "<candidate-40-character-sha>" \
+  --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
+  --expected-version 1.4.0+acmg.3 \
+  --online-providers
+```
+
+This gate retries CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and the
+live BRCA2 collector once. It validates stable identity and response structure,
+records URLs, elapsed time, and errors, and exits nonzero if any required
+source still fails. It deliberately does not pin mutable scores or record
+counts. The fork-only `ACMG v3 release candidate` GitHub Actions workflow runs
+the same exact-SHA gate when manually dispatched with `run_online_smoke=true`.
 
 If `execute_tool`, `get_tool_info`, or `list_tools` is unavailable, stop the
 ACMG assessment and report `ToolUniverse MCP execution unavailable`. Do not

@@ -18,7 +18,9 @@ installed files:
 
 The default local-source mode is offline. Git-ref mode uses the network only to
 install the explicitly requested repository revision; behavior checks remain
-offline and never use a provider fallback.
+offline unless ``--online-providers`` is supplied. The optional online gate
+retries each required provider once and validates stable identity/shape
+contracts rather than mutable scores or result counts.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-CHECKS_PROGRAM = r'''
+CHECKS_PROGRAM = r"""
 import hashlib
 import inspect
 from importlib import metadata
@@ -118,6 +120,8 @@ from tooluniverse import tools as tool_wrappers
 ignored = {"stream_callback", "use_cache", "validate"}
 schema_gaps = []
 for name in (
+    "ACMG_evidence_collector",
+    "ACMG_overlay_gate_assess_variant",
     "ACMG_population_evidence",
     "ACMG_computational_evidence",
     "ACMG_clinical_evidence",
@@ -153,6 +157,8 @@ removed_outputs = {
     "included_in_candidate_bayesian",
     "counted_criteria",
     "bayesian_estimate",
+    "system_preview_bayesian",
+    "validated_subset_bayesian",
 }
 check(
     "collector_alias_parameter_fields_converged",
@@ -181,17 +187,43 @@ check(
     and "runtime_manifest" in alias_required,
     "",
 )
+v3_outputs = {
+    "vcep_context",
+    "vcep_assertions",
+    "rule_scenarios",
+    "automatic_bayesian",
+    "verified_bayesian",
+    "user_selected_bayesian",
+    "scenario_estimates",
+    "automation_report",
+}
+check(
+    "v3_output_contract_declared",
+    v3_outputs <= collector_outputs and v3_outputs <= alias_outputs,
+    "missing: " + ",".join(sorted(v3_outputs - collector_outputs)),
+)
+check(
+    "clinical_observations_declared",
+    "clinical_observations" in collector_parameters,
+    "",
+)
 
-from tooluniverse.acmg.guard import guard_context_hash
-from tooluniverse.acmg.runtime_manifest import ruleset_hash
+from tooluniverse.acmg.guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_hash
+from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_hash
+
+check(
+    "v3_runtime_version",
+    ACMG_RUNTIME_VERSION == "evidence-automation-3",
+    ACMG_RUNTIME_VERSION,
+)
 
 guard_context = {
-    "schema_version": "2026-08-07",
+    "schema_version": GUARD_CONTEXT_SCHEMA_VERSION,
     "variant_identity_hash": "a" * 64,
     "ruleset_hash": ruleset_hash(),
     "cards": [],
     "known_source_fact_ids": [],
-    "trusted_source_fact_ids": [],
+    "verified_source_fact_ids": [],
 }
 guard_context["context_hash"] = guard_context_hash(guard_context)
 guard = tu.run_one_function(
@@ -337,7 +369,297 @@ print(
     )
 )
 print("SMOKE OK")
-'''
+"""
+
+ONLINE_CHECKS_PROGRAM = r"""
+import json
+import sys
+import time
+
+install_dir = sys.argv[1]
+report = []
+
+
+def _urls(value):
+    found = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key.lower() in {"url", "source_url", "request_url"} and isinstance(item, str):
+                if item.startswith(("http://", "https://")):
+                    found.add(item)
+            found.update(_urls(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.update(_urls(item))
+    return sorted(found)
+
+
+def _nonempty(value):
+    return value not in (None, "", [], {})
+
+
+def _walk_key_values(value, path=""):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            current = f"{path}.{key}" if path else str(key)
+            yield current, item
+            yield from _walk_key_values(item, current)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _walk_key_values(item, f"{path}[{index}]")
+
+
+def _run_check(name, tool_name, arguments, validator):
+    attempts = []
+    final_result = None
+    final_detail = ""
+    for attempt in range(1, 3):
+        started = time.monotonic()
+        try:
+            result = tu.run_one_function(
+                {"name": tool_name, "arguments": arguments},
+                use_cache=False,
+            )
+            ok, detail = validator(result)
+            error = ""
+            if isinstance(result, dict):
+                error = str(result.get("error") or result.get("reason") or "")
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "status": "pass" if ok else "fail",
+                    "provider_status": result.get("status") if isinstance(result, dict) else None,
+                    "elapsed_seconds": round(time.monotonic() - started, 3),
+                    "urls": _urls(result),
+                    "detail": detail,
+                    "error": error[:500],
+                }
+            )
+            final_result = result
+            final_detail = detail
+            if ok:
+                report.append({"name": name, "status": "pass", "attempts": attempts})
+                print(f"PASS: online_{name}")
+                return True, result
+        except Exception as exc:
+            attempts.append(
+                {
+                    "attempt": attempt,
+                    "status": "error",
+                    "elapsed_seconds": round(time.monotonic() - started, 3),
+                    "urls": [],
+                    "detail": "provider call raised",
+                    "error": f"{type(exc).__name__}: {exc}"[:500],
+                }
+            )
+            final_detail = str(exc)
+        if attempt == 1:
+            time.sleep(1)
+    report.append(
+        {
+            "name": name,
+            "status": "fail",
+            "attempts": attempts,
+            "final_detail": final_detail,
+        }
+    )
+    print(f"FAIL: online_{name} ({final_detail})")
+    return False, final_result
+
+
+def _validate_cspec(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    rows = result.get("data") or []
+    valid = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and str(row.get("gene") or "").upper() == "BRCA2"
+        and str(row.get("status") or "").casefold() == "released"
+        and _nonempty(row.get("specification_id"))
+        and _nonempty(row.get("version"))
+        and str(row.get("url") or "").startswith("http")
+        and bool(row.get("criterion_modifications"))
+    ]
+    return bool(valid), f"released_structured_records={len(valid)}"
+
+
+def _validate_erepo(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    rows = result.get("data") or []
+    exact = [
+        row
+        for row in rows
+        if isinstance(row, dict)
+        and str(row.get("CAID") or "").upper() == "CA114360"
+        and str(row.get("Status") or "released").casefold() == "released"
+    ]
+    structured = [row for row in exact if bool(row.get("Applied Criteria"))]
+    return bool(structured), f"exact={len(exact)} structured={len(structured)}"
+
+
+def _validate_clinvar(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    search = (result.get("data") or {}).get("esearchresult") or {}
+    params = result.get("search_params") or {}
+    translation = str(search.get("querytranslation") or "").upper()
+    ids = search.get("idlist") or []
+    gene_ok = str(params.get("gene") or "").upper() == "HBB" or "HBB" in translation
+    variant_ok = "C.20A>T" in translation.replace(" ", "") or "C.20A>T" in str(
+        params.get("variant_name") or ""
+    ).upper().replace(" ", "")
+    return bool(ids and gene_ok and variant_ok), f"ids={len(ids)} gene={gene_ok} variant={variant_ok}"
+
+
+def _validate_gnomad(result):
+    if not isinstance(result, dict):
+        return False, "provider result is not an object"
+    variant = result.get("variant") or (result.get("data") or {}).get("variant") or {}
+    allele_ok = (
+        str(variant.get("variant_id") or "") == "19-44908822-C-T"
+        and str(variant.get("chrom") or "") == "19"
+        and int(variant.get("pos") or 0) == 44908822
+        and str(variant.get("ref") or "").upper() == "C"
+        and str(variant.get("alt") or "").upper() == "T"
+    )
+    callsets = [value for value in (variant.get("genome"), variant.get("exome")) if isinstance(value, dict)]
+    frequency_ok = any(all(key in callset for key in ("ac", "an", "af")) for callset in callsets)
+    return allele_ok and frequency_ok, f"allele={allele_ok} frequency_shape={frequency_ok}"
+
+
+def _validate_myvariant(result):
+    if not isinstance(result, dict) or not isinstance(result.get("data"), dict):
+        return False, "provider did not return data object"
+    data = result["data"]
+    dbnsfp_present = any(path.casefold().endswith("dbnsfp") for path, _ in _walk_key_values(data))
+    predictor_tokens = (
+        "revel",
+        "cadd",
+        "alphamissense",
+        "sift",
+        "polyphen",
+        "metarnn",
+        "vest4",
+        "mutationtaster",
+    )
+    predictor_values = [
+        path
+        for path, value in _walk_key_values(data)
+        if any(token in path.casefold() for token in predictor_tokens) and _nonempty(value)
+    ]
+    return dbnsfp_present and bool(predictor_values), f"predictor_values={len(predictor_values)}"
+
+
+def _validate_full_text(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    data = result.get("data") or {}
+    text_values = [
+        value
+        for path, value in _walk_key_values(data)
+        if isinstance(value, str)
+        and any(token in path.casefold() for token in ("title", "abstract", "section", "text"))
+    ]
+    provenance_ok = (
+        _nonempty(result.get("source"))
+        and _nonempty(result.get("format"))
+        and str(result.get("url") or "").startswith("http")
+        and bool(result.get("retrieval_trace"))
+    )
+    return bool("".join(text_values).strip()) and provenance_ok, (
+        f"text_chars={sum(len(value) for value in text_values)} provenance={provenance_ok}"
+    )
+
+
+def _validate_collector(result):
+    if not isinstance(result, dict):
+        return False, "collector result is not an object"
+    facts = result.get("source_facts") or []
+    coverage = result.get("coverage") or result.get("source_manifest") or {}
+    contract_ok = (
+        result.get("final_classification_allowed") is False
+        and isinstance(facts, list)
+        and bool(facts)
+        and bool(coverage)
+        and "automatic_bayesian" in result
+        and "verified_bayesian" in result
+    )
+    failures_visible = any(
+        isinstance(fact, dict)
+        and (
+            fact.get("source_status") in {"failed", "unavailable"}
+            or fact.get("status") in {"failed", "unavailable", "error"}
+            or bool(fact.get("limitations"))
+        )
+        for fact in facts
+    ) or bool(result.get("limitations"))
+    return contract_ok and failures_visible, (
+        f"contract={contract_ok} facts={len(facts)} failures_visible={failures_visible}"
+    )
+
+
+from tooluniverse import ToolUniverse
+
+tu = ToolUniverse()
+tu.load_tools()
+checks = [
+    ("cspec", "ClinGen_search_cspec", {"gene": "BRCA2"}, _validate_cspec),
+    (
+        "erepo",
+        "ClinGen_get_variant_classifications",
+        {"variant": "CA114360"},
+        _validate_erepo,
+    ),
+    (
+        "clinvar",
+        "ClinVar_search_variants",
+        {"gene": "HBB", "variant_name": "NM_000518.5:c.20A>T", "max_results": 20},
+        _validate_clinvar,
+    ),
+    (
+        "gnomad",
+        "gnomad_get_variant",
+        {"variant_id": "19-44908822-C-T", "dataset": "gnomad_r3"},
+        _validate_gnomad,
+    ),
+    (
+        "myvariant",
+        "MyVariant_get_pathogenicity_scores",
+        {"variant_id": "rs45478192"},
+        _validate_myvariant,
+    ),
+    (
+        "europe_pmc",
+        "EuropePMC_get_full_text",
+        {"pmcid": "PMC7096075", "max_section_chars": 500000},
+        _validate_full_text,
+    ),
+    (
+        "collector",
+        "ACMG_evidence_collector",
+        {
+            "variant": "NM_000059.4:c.5946delT",
+            "gene": "BRCA2",
+            "transcript": "NM_000059.4",
+            "genome_build": "GRCh38",
+            "response_detail": "summary",
+        },
+        _validate_collector,
+    ),
+]
+all_ok = True
+for item in checks:
+    ok, _ = _run_check(*item)
+    all_ok = all_ok and ok
+
+print("ONLINE_PROVIDER_REPORT: " + json.dumps(report, ensure_ascii=False, sort_keys=True))
+if not all_ok:
+    sys.exit(1)
+print("ONLINE PROVIDER SMOKE OK")
+"""
 
 
 def _expected_version() -> str:
@@ -380,6 +702,14 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="Expected installed version; defaults to this checkout's pyproject.",
     )
+    parser.add_argument(
+        "--online-providers",
+        action="store_true",
+        help=(
+            "After offline checks, call the required live ACMG providers and "
+            "collector. Each check is attempted at most twice."
+        ),
+    )
     args = parser.parse_args()
     if args.source == "git-ref" and not args.git_ref:
         parser.error("--git-ref is required when --source=git-ref")
@@ -392,9 +722,7 @@ def main() -> int:
     args = _parse_args()
     expected = args.expected_version or _expected_version()
     install_source = (
-        str(ROOT)
-        if args.source == "local"
-        else f"git+{args.repo_url}@{args.git_ref}"
+        str(ROOT) if args.source == "local" else f"git+{args.repo_url}@{args.git_ref}"
     )
     with tempfile.TemporaryDirectory(prefix="acmg_smoke_") as tmp:
         install_dir = str(Path(tmp) / "install")
@@ -444,9 +772,23 @@ def main() -> int:
             cwd=tmp,
         )
         sys.stdout.write(run.stdout)
-        if run.returncode != 0 and run.stderr:
-            sys.stderr.write(run.stderr[-3000:])
-        return run.returncode
+        if run.returncode != 0:
+            if run.stderr:
+                sys.stderr.write(run.stderr[-3000:])
+            return run.returncode
+        if not args.online_providers:
+            return 0
+        online = subprocess.run(
+            [sys.executable, "-c", ONLINE_CHECKS_PROGRAM, install_dir],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=tmp,
+        )
+        sys.stdout.write(online.stdout)
+        if online.returncode != 0 and online.stderr:
+            sys.stderr.write(online.stderr[-3000:])
+        return online.returncode
 
 
 if __name__ == "__main__":

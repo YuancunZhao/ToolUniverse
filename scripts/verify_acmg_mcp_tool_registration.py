@@ -24,24 +24,45 @@ REQUIRED_COLLECTOR_RETURN_FIELDS = {
     "coverage_status",
     "variant",
     "variant_identity",
+    "variant_scope",
+    "consequence_profile",
     "rule_context",
+    "runtime_manifest",
+    "guard_context",
     "coverage_summary",
     "source_facts",
     "source_assertions",
+    "prior_variant_candidates",
     "literature_candidates",
+    "literature_review",
+    "recoverable_gaps",
+    "workflow_status",
+    "review_readiness",
+    "next_actions",
     "predictor_scores",
     "criterion_reviews",
     "evidence_cards",
     "compatibility_report",
     "conflict_report",
-    "system_preview_bayesian",
+    "vcep_context",
+    "vcep_assertions",
+    "rule_scenarios",
+    "automatic_bayesian",
+    "verified_bayesian",
+    "scenario_estimates",
+    "automation_report",
     "user_selected_bayesian",
     "decision_report",
     "limitations",
     "final_classification_allowed",
 }
 
-PY_TO_JSON_TYPE = {"float": "number", "int": "integer", "str": "string", "bool": "boolean"}
+PY_TO_JSON_TYPE = {
+    "float": "number",
+    "int": "integer",
+    "str": "string",
+    "bool": "boolean",
+}
 SKIP_PARAMS = {"stream_callback", "use_cache", "validate"}
 
 

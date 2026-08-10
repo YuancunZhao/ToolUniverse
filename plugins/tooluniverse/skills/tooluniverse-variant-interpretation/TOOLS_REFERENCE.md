@@ -211,10 +211,10 @@ Preserve all four delta scores and positions, model/annotation versions,
 transcript, gene, run settings, and input coordinates. The collector explicitly
 uses raw, unmasked distance-500 scores and binds one row to the verified MANE
 Select context. Under the general Walker rule, max delta >=0.2 is
-PP3_Supporting and <=0.1 is BP4_Supporting; missing run provenance is
-`not_assessed`. After strict BP4, synonymous variants or intronic variants
-outside +7/-21 may also suggest BP7_Supporting. Direct RNA-splicing readouts do
-not enter PS3/BS3.
+PP3_Supporting and <=0.1 is BP4_Supporting; missing run provenance prevents a
+positive calibrated card but does not hide available scores. After strict BP4,
+synonymous variants or intronic variants outside +7/-21 may also suggest
+BP7_Supporting. Direct RNA-splicing readouts do not enter PS3/BS3.
 
 **When to Use**:
 - Intronic variants within ±50bp of splice sites
@@ -903,8 +903,8 @@ def structural_analysis_for_vus(tu, gene, genomic_hgvs, uniprot_id, residue_posi
         'protein_mapping': protein_mapping,
         'interpro_inventory': interpro_inventory,
         'functional_sites': find_nearby_sites(functions, residue_position),
-        # Generic domain context remains indeterminate. Only the collector can
-        # match it to an exact online-bound CSpec PM1 region contract.
+        # Generic domain context is a limited source fact. Only the collector
+        # can separate automatic candidates from verified CSpec applications.
         'pm1_domain_context_only': True
     }
 
@@ -961,28 +961,28 @@ audit, Evidence Compatibility Resolution, and Bayesian review estimation.
 ### Pathogenic/Context Candidate Routes
 | Candidate | Trigger | Required route |
 |------|----------|---------|
-| PVS1 | Predicted LoF, canonical splice, start-loss, exon deletion/duplication, or whole-gene deletion | Collector route context only; remains `not_assessed` until the complete ClinGen decision contract is available |
+| PVS1 | Predicted LoF, canonical splice, start-loss, exon deletion/duplication, or whole-gene deletion | Collector executes the full decision tree; missing facts remain criterion-review requirements and do not create a positive card |
 | PS1/PM5 | Same amino acid or same residue comparison variant | `ACMG_evidence_collector`; source labels are leads only |
 | PS1-splicing | Same predicted splice event as an independent P/LP comparison variant | `ACMG_evidence_collector` |
 | PS2/PM6 | De novo or trio evidence | `ACMG_clinical_evidence` |
 | PS3/BS3 | Functional assay or structured functional database hit | `ACMG_functional_evidence` |
 | PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment evidence | `ACMG_literature_evidence` |
-| PM1 | Hotspot or critical functional region | Collector uses `EBIProteins_get_variation_by_hgvs`, `EBIProteins_get_features`, and `InterPro_get_entries_for_protein`; generic overlap is `indeterminate`, exact reviewed CSpec contract may produce a candidate |
-| PP2/BP1 | Regional missense constraint or missense mechanism context | Collector route context only; no current automatic count |
-| PM2 | Absent or rare population frequency | `ACMG_population_evidence`; review-only without a validated coverage contract |
+| PM1 | Hotspot or critical functional region | Collector uses protein features, CSpec/VCEP and target-linked literature; generic overlap may be an automatic candidate, while verified use requires the strict contract |
+| PP2/BP1 | Regional missense constraint or missense mechanism context | Source-backed mechanism candidates are visible; verified use requires the strict VCEP/CSpec or literature contract |
+| PM2 | Absent or rare population frequency | `ACMG_population_evidence`; incomplete coverage/MCAF facts may support an explicitly limited automatic candidate but not verified evidence |
 | PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous evidence | `ACMG_clinical_evidence` |
-| PM4/BP3 | In-frame indel, stop-loss, altered product, repeat/low-complexity region | Collector route context only; no current automatic count |
+| PM4/BP3 | In-frame indel, stop-loss, altered product, repeat/low-complexity region | Unique protein mapping can create an automatic candidate; verified use requires strict region and altered-product facts |
 | PP1/BS4/PP4 | Segregation, non-segregation, family, pedigree, phenotype-locus evidence | `ACMG_clinical_evidence` and phenotype-dependent intake when needed |
 | PP3/BP4 | Computational prediction evidence | `ACMG_computational_evidence` or VCEP; no local predictor voting |
-| PP5/BP6 | Reputable-source assertion | `ACMG_evidence_collector`; deprecated and excluded from system preview |
+| PP5/BP6 | Reputable-source assertion | `ACMG_evidence_collector`; deprecated and excluded from all calculations |
 
 ### Benign/Frequency Candidate Routes
 | Candidate | Trigger | Required route |
 |------|----------|---------|
 | BA1 | AF >0.05 candidate or stand-alone benign frequency claim | `ACMG_population_evidence` before benign classification |
-| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, cis/trans context, or alternate diagnosis | `ACMG_population_evidence`; route/review-only until the matching contract exists |
+| BS1/BS2/BP2/BP5 | High disease-specific frequency, healthy carriers, cis/trans context, or alternate diagnosis | Collector exposes source-backed candidates and separates them from strictly verified rule applications |
 | RNA no-splicing-impact evidence | Synonymous/intronic variant with direct RNA or appropriate splicing no-impact evidence | Collector route context only; prediction-only scores remain non-countable context |
-| Evidence compatibility | Counted EvidenceCards | Collector compatibility resolver removes duplicate and correlated evidence before Bayesian review; no final classifier is emitted |
+| Evidence compatibility | Eligible EvidenceCards | Collector compatibility resolver removes duplicate and correlated evidence before automatic, verified, or user Bayesian review; no final classifier is emitted |
 
 ---
 

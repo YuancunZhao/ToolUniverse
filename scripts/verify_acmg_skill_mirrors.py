@@ -49,11 +49,7 @@ def _published_skill_names() -> set[str]:
         for path in CANONICAL_ROOT.glob("tooluniverse-*")
         if (path / "SKILL.md").is_file()
     )
-    return {
-        name
-        for name in names
-        if (CANONICAL_ROOT / name / "SKILL.md").is_file()
-    }
+    return {name for name in names if (CANONICAL_ROOT / name / "SKILL.md").is_file()}
 
 
 def _is_published_file(path: Path, skill_root: Path) -> bool:
@@ -72,11 +68,11 @@ def _is_published_file(path: Path, skill_root: Path) -> bool:
     )
 
 
-def _file_set(skill_root: Path, *, canonical: bool) -> set[Path]:
+def _file_set(skill_root: Path) -> set[Path]:
     return {
         path.relative_to(skill_root)
         for path in skill_root.rglob("*")
-        if path.is_file() and (not canonical or _is_published_file(path, skill_root))
+        if path.is_file() and _is_published_file(path, skill_root)
     }
 
 
@@ -106,8 +102,8 @@ def main() -> int:
         for skill in sorted(expected_names):
             source_dir = CANONICAL_ROOT / skill
             mirror_dir = mirror_root / skill
-            source_files = _file_set(source_dir, canonical=True)
-            mirror_files = _file_set(mirror_dir, canonical=False)
+            source_files = _file_set(source_dir)
+            mirror_files = _file_set(mirror_dir)
             if source_files != mirror_files:
                 errors.append(f"file set differs: {mirror_dir}")
                 continue

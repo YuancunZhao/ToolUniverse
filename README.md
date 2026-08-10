@@ -71,10 +71,11 @@ This branch preserves the complete ToolUniverse 1.4.0 scientific toolkit and
 adds an evidence-only workflow for germline small-variant ACMG review. It
 collects auditable provider facts and predictor scores, applies versioned
 ClinGen/SVI or uniquely matched CSpec rules, reports compatibility/conflicts,
-and calculates system-preview and user-selected Bayesian estimates. It never
-returns a five-tier final classification.
+and calculates automatic, verified, per-scenario, and user-selected Bayesian
+review estimates. It never returns ToolUniverse's own five-tier final
+classification.
 
-The fork version is `1.4.0+acmg.2`, based on upstream commit
+The fork version is `1.4.0+acmg.3`, based on upstream commit
 `089eb8e6308fc64ae5af3de4bfbec32b5cf07b61`. Ordinary users should keep using
 the upstream installation commands above. Enhanced ACMG deployments must use
 the exact validated Git SHA and matching Skill bundle documented in

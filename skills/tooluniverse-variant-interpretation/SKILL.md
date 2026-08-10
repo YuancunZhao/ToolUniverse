@@ -46,7 +46,11 @@ Guard. Do not stop to ask whether the user wants these read-only steps.
 
 ## LOOK UP, DON'T GUESS
 
-When asked about a variant's significance, call `ACMG_evidence_collector`; use ClinVar/gnomAD/CIViC results as visible intake facts and leads. Never present a source label or free-form model inference as a final germline ACMG classification. Distinguish observed facts, suggested criteria, compatibility exclusions, system-preview inclusion, and user-selected inclusion.
+When asked about a variant's significance, call `ACMG_evidence_collector`; use
+ClinVar/gnomAD/CIViC results as visible intake facts and leads. Never present a
+source label or free-form model inference as a final germline ACMG
+classification. Distinguish observed facts, source-backed candidates, verified
+applications, compatibility exclusions, scenarios, and user selections.
 
 ---
 
@@ -157,7 +161,9 @@ variant.
 3. `AlphaMissense_get_variant_score` (0-1, needs UniProt ID) — missense only
 4. `EVE_get_variant_score` (0-1) — missense only
 5. `EnsemblVEP_annotate_hgvs` (VEP with colocated variants) — includes SIFT/PolyPhen
-6. If REVEL is unavailable, record PP3/BP4 as `not_assessed`; do not substitute CADD, AlphaMissense, or an unregistered predictor.
+6. If REVEL is unavailable, preserve every other predictor value but leave
+   PP3/BP4 without a positive card; do not substitute CADD, AlphaMissense, or
+   an unregistered predictor.
 
 Do not assign PP3/BP4 by local predictor voting. For missense variants, route predictor evidence through `ACMG_computational_evidence`, which currently applies the versioned REVEL thresholds from Pejaver et al. 2022. CADD, AlphaMissense, EVE, SIFT, and PolyPhen may be retained as audit context, but cannot replace REVEL or vote toward a criterion.
 
@@ -212,18 +218,26 @@ Tools: `PubMed_search_articles`, `EuropePMC_search_articles`, `BioRxiv_list_rece
 
 Always flag preprints as NOT peer-reviewed.
 
-For a germline ACMG task, do not run an independent optional literature phase.
-Consume `literature_review.review_requests` from the collector. Automatically
-retrieve and read every exact/equivalent full text, submit source-located
-`literature_proposals` with a reading manifest, and call the collector again.
-An abstract, `inEPMC`, snippet, or text-mining annotation is not a verified
-full-text evidence source.
+For a germline ACMG task, do not run an independent manual literature phase.
+The v3 collector performs literature retrieval, target-linked deterministic
+fact extraction, and criterion mapping itself. Optional source-located
+`literature_proposals` supplement only unresolved prose; they are not required
+for normal completion. An abstract, `inEPMC`, snippet, or text-mining
+annotation is not a verified full-text evidence source, but a target-linked
+fact from it may remain a clearly limited automatic candidate.
 
 ## Phase 6: ACMG Intake Only
 
-This phase is evidence collection and review only. Do not emit a five-tier classification from this skill. Use `ACMG_evidence_collector`; it delegates to the five deterministic evidence group tools and returns observed facts, criterion suggestions, exclusions, and a system-preview Bayesian estimate. Secondary source assertions remain leads, and PP5/BP6 are deprecated.
+This phase is evidence collection and review only. Do not emit a five-tier
+classification from this skill. Use `ACMG_evidence_collector`; it delegates to
+the five evidence group tools and returns observed facts, automatic and
+verified criterion cards, scenario-isolated estimates, and exclusions.
+Secondary source assertions remain attributed leads, and PP5/BP6 are
+deprecated.
 
-Any interpretation report remains evidence-only. Criterion wording requires a matching overlay-validated EvidenceCard and `ACMG_guard_final_answer`; five-tier labels are blocked.
+Any interpretation report remains evidence-only. Criterion wording requires a
+matching v3 EvidenceCard and `ACMG_guard_final_answer`; five-tier labels are
+blocked.
 
 ### Gene-Specific Population Frequency Thresholds
 
@@ -244,7 +258,17 @@ Do not calculate the final ACMG classification inside this variant-interpretatio
 
 ### Gene-Specific VCEP Criteria
 
-ClinGen Variant Curation Expert Panels (VCEPs) publish gene- and disease-specific ACMG modifications. The collector calls `ClinGen_search_cspec` immediately after gene identity is verified, then requires a unique released gene, MONDO disease, and inheritance match. Gene Validity does not imply that a VCEP specification exists. Explicit structured applicability and strength fields are normalized from the online document. Natural-language conditions are returned as `cspec_review_requests`; a host-LLM `cspec_proposals` interpretation is used only after the collector re-fetches and verifies the specification ID, version, content hash, criterion, and excerpt. Local contracts are exact-hash caches or fixtures, not a whitelist. Missing context, no match, ambiguity, or network failure falls back to general SVI without blocking evidence collection.
+ClinGen Variant Curation Expert Panels (VCEPs) publish gene- and
+disease-specific ACMG modifications. The collector queries CSpec and the
+Evidence Repository after gene identity is verified, executes supported
+structured and finite natural-language conditions, and isolates each disease
+and inheritance policy in a separate scenario. A uniquely matched released
+scenario may supply verified rule applications; candidate or mismatched
+scenarios are never mixed into the generic result. Optional `cspec_proposals`
+supplement parser gaps only after specification ID, version, content hash,
+criterion, and excerpt are revalidated. Local contracts are exact-hash caches
+or fixtures, not a whitelist. Missing context, no match, ambiguity, or network
+failure falls back to general SVI without blocking evidence collection.
 
 ### Predictor Weighting
 
@@ -256,9 +280,9 @@ small variants, retain all SpliceAI delta scores and positions; compatibility
 review handles overlap with PVS1 or RNA evidence. The general Walker rule uses
 PP3_Supporting at raw max delta >=0.2 and BP4_Supporting at <=0.1; the Moderate
 label describes calibration performance, not the applied code weight. Missing
-1.3.1/MANE/raw/unmasked/distance-500 provenance remains `not_assessed`. After
-strict BP4, synonymous variants and intronic variants outside +7/-21 may also
-suggest BP7_Supporting.
+1.3.1/MANE/raw/unmasked/distance-500 provenance prevents a positive calibrated
+card while retaining the available scores. After strict BP4, synonymous
+variants and intronic variants outside +7/-21 may also suggest BP7_Supporting.
 
 ### Tool Failure Fallbacks
 
@@ -272,13 +296,17 @@ If a primary tool fails, use these alternatives:
 
 ## Special Scenarios
 
-**Novel Missense Variant**: Check comparison variants and protein-region context as review leads. PP3/BP4 uses the versioned REVEL policy. PM1 protein mapping and domain/site overlap are collected through EBI Proteins and InterPro, but ordinary overlap remains `indeterminate`; only an exact online-bound CSpec PM1 region contract may become a candidate. Anchored literature facts may produce review-required PS1/PM5 and PP2/BP1 proposals through the fixed fact-type mapping.
+**Novel Missense Variant**: Check comparison variants and protein-region
+context as source facts. PP3/BP4 uses the versioned REVEL policy. EBI
+Proteins/InterPro overlap or target-linked literature may create a clearly
+limited PM1, PS1/PM5, or PP2/BP1 source-backed candidate; verified inclusion
+requires the applicable strict SVI/VCEP/CSpec contract.
 
 **Truncating Variant**: The collector runs the implemented ClinGen PVS1
 decision tree. A uniquely resolved consequence is only its entry point; exon
 structure, PTC/NMD facts, disease mechanism, and downgrade factors must be
-provider- or document-backed. Missing facts keep PVS1 `not_assessed`; never
-fill exon rank or NMD from model memory.
+provider- or document-backed. Missing facts remain explicit requirements and
+produce no positive PVS1 card; never fill exon rank or NMD from model memory.
 
 **Splice Variant**: Run SpliceAI for supported normalized small variants. The versioned Walker rule may suggest Supporting PP3/BP4 only when its strict run and selected-row contract is verified; canonical +/-1/2 variants remain PVS1 route context. Prediction, PVS1, and RNA facts remain separate. Direct RNA-splicing readouts are not PS3/BS3 evidence.
 

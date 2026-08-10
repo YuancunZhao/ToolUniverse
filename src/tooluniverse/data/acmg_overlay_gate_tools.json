@@ -33,12 +33,12 @@
         },
         "source_outputs_or_leads": {
           "type": "array",
-          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as source leads, not automatically included in the system preview.",
+          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as traceable source leads; only identity-consistent, criterion-valid source-backed candidates may enter automatic Bayesian review, while verified Bayesian review remains stricter.",
           "items": {}
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Preferred host-LLM literature proposal input generated after executing literature_review requests. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, unresolved questions, and a section/table/figure-aware reading manifest. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "description": "Optional supplemental literature facts or reproducibility input. The collector normally retrieves and extracts source-backed candidates itself; submitted proposals are re-anchored to the cited document and cannot override fact-type or strength rules.",
           "items": {
             "type": "object",
             "properties": {
@@ -94,7 +94,7 @@
         },
         "cspec_proposals": {
           "type": "array",
-          "description": "Host-LLM interpretations of natural-language rules from the uniquely matched online ClinGen CSpec. ToolUniverse re-fetches the specification and verifies ID, version, content hash, criterion and excerpt before use.",
+          "description": "Optional supplemental interpretations of unresolved natural-language rules from an online ClinGen CSpec. ToolUniverse normally executes its finite condition evaluator first, then re-fetches and verifies the specification ID, version, content hash, criterion, and excerpt for any submitted proposal.",
           "items": {
             "type": "object",
             "properties": {
@@ -158,6 +158,24 @@
             }
           },
           "additionalProperties": true
+        },
+        "clinical_observations": {
+          "type": "array",
+          "description": "Structured caller-supplied case, family, phase, phenotype, assay, case-control, or case-series observations. These may create automatic source-backed candidates but enter the verified estimate only when independently re-anchored to a retrievable provider or document fact.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "observation_id": {"type": "string", "minLength": 1},
+              "observation_type": {"type": "string", "enum": ["de_novo", "recessive_case", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "functional_assay", "case_control", "case_series"]},
+              "source_type": {"type": "string", "enum": ["user_report", "lab_report", "pedigree", "publication", "external_database", "other"]},
+              "source_id": {"type": "string", "minLength": 1},
+              "locator": {"type": "string"},
+              "excerpt": {"type": "string"},
+              "values": {"type": "object"}
+            },
+            "required": ["observation_id", "observation_type", "source_type", "source_id", "values"],
+            "additionalProperties": false
+          }
         },
         "response_detail": {
           "type": "string",
@@ -246,7 +264,7 @@
         },
         "source_facts": {
           "type": "array",
-          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and system-preview inclusion.",
+          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
           "items": {"type": "object"}
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
@@ -262,7 +280,7 @@
         },
         "literature_review": {
           "type": "object",
-          "description": "Deduplicated candidates, verified full-text state, executable host-LLM review requests, reading manifests, and proposal validation status."
+          "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
         },
         "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
         "workflow_status": {
@@ -290,15 +308,36 @@
         "evidence_cards": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "card_id": {"type": "string"},
+              "criterion": {"type": "string"},
+              "strength": {"type": "string"},
+              "evidence_status": {"type": "string", "enum": ["expert_panel_applied", "rule_mapped", "source_backed_candidate", "not_met", "excluded", "deprecated"]},
+              "strength_source": {"type": "string"},
+              "rule_source": {"type": "object"},
+              "verification_dimensions": {"type": "object"},
+              "calculation_roles": {"type": "object"},
+              "correlation_keys": {"type": "object"},
+              "scenario_id": {"type": "string"},
+              "source_fact_ids": {"type": "array", "items": {"type": "string"}},
+              "caveats": {"type": "array", "items": {"type": "string"}},
+              "missing_requirements": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["card_id", "criterion", "strength", "evidence_status", "scenario_id", "source_fact_ids"]
           }
         },
         "conflict_report": {
           "type": "object"
         },
         "compatibility_report": {"type": "object"},
-        "system_preview_bayesian": {"type": "object"},
-        "validated_subset_bayesian": {"type": "object"},
+        "vcep_context": {"type": "object"},
+        "vcep_assertions": {"type": "array", "items": {"type": "object"}},
+        "rule_scenarios": {"type": "array", "items": {"type": "object"}},
+        "automatic_bayesian": {"type": "object"},
+        "verified_bayesian": {"type": "object"},
+        "scenario_estimates": {"type": "array", "items": {"type": "object"}},
+        "automation_report": {"type": "object"},
         "user_selected_bayesian": {"type": "object"},
         "decision_report": {"type": "object"},
         "limitations": {
@@ -338,8 +377,13 @@
         "evidence_cards",
         "conflict_report",
         "compatibility_report",
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "vcep_context",
+        "vcep_assertions",
+        "rule_scenarios",
+        "automatic_bayesian",
+        "verified_bayesian",
+        "scenario_estimates",
+        "automation_report",
         "user_selected_bayesian",
         "decision_report",
         "limitations",
@@ -381,12 +425,12 @@
         },
         "source_outputs_or_leads": {
           "type": "array",
-          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as source leads, not automatically included in the system preview.",
+          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as traceable source leads; only identity-consistent, criterion-valid source-backed candidates may enter automatic Bayesian review, while verified Bayesian review remains stricter.",
           "items": {}
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Preferred host-LLM literature proposal input generated after executing literature_review requests. Each proposal includes a fact type, full-text locator and excerpt, structured facts, interpretation, confidence, extractor version, unresolved questions, and a section/table/figure-aware reading manifest. Criterion and strength are optional LLM suggestions; ToolUniverse independently enforces the fact-type mapping after re-fetching and verifying the document.",
+          "description": "Optional supplemental literature facts or reproducibility input. The collector normally retrieves and extracts source-backed candidates itself; submitted proposals are re-anchored to the cited document and cannot override fact-type or strength rules.",
           "items": {
             "type": "object",
             "properties": {
@@ -439,7 +483,7 @@
         },
         "cspec_proposals": {
           "type": "array",
-          "description": "Host-LLM interpretations of natural-language rules from the uniquely matched online ClinGen CSpec. ToolUniverse re-fetches the specification and verifies ID, version, content hash, criterion and excerpt before use.",
+          "description": "Optional supplemental interpretations of unresolved natural-language rules from an online ClinGen CSpec. ToolUniverse normally executes its finite condition evaluator first, then re-fetches and verifies the specification ID, version, content hash, criterion, and excerpt for any submitted proposal.",
           "items": {
             "type": "object",
             "properties": {
@@ -503,6 +547,24 @@
             }
           },
           "additionalProperties": true
+        },
+        "clinical_observations": {
+          "type": "array",
+          "description": "Structured caller-supplied case, family, phase, phenotype, assay, case-control, or case-series observations. These may create automatic source-backed candidates but enter the verified estimate only when independently re-anchored to a retrievable provider or document fact.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "observation_id": {"type": "string", "minLength": 1},
+              "observation_type": {"type": "string", "enum": ["de_novo", "recessive_case", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "functional_assay", "case_control", "case_series"]},
+              "source_type": {"type": "string", "enum": ["user_report", "lab_report", "pedigree", "publication", "external_database", "other"]},
+              "source_id": {"type": "string", "minLength": 1},
+              "locator": {"type": "string"},
+              "excerpt": {"type": "string"},
+              "values": {"type": "object"}
+            },
+            "required": ["observation_id", "observation_type", "source_type", "source_id", "values"],
+            "additionalProperties": false
+          }
         },
         "response_detail": {
           "type": "string",
@@ -576,7 +638,7 @@
         "coverage_summary": {"type": "array", "items": {"type": "object"}},
         "source_facts": {
           "type": "array",
-          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and system-preview inclusion.",
+          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
           "items": {"type": "object"}
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
@@ -592,7 +654,7 @@
         },
         "literature_review": {
           "type": "object",
-          "description": "Deduplicated candidates, verified full-text state, executable host-LLM review requests, reading manifests, and proposal validation status."
+          "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
         },
         "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
         "workflow_status": {
@@ -617,11 +679,37 @@
             }
           }
         },
-        "evidence_cards": {"type": "array", "items": {"type": "object"}},
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "card_id": {"type": "string"},
+              "criterion": {"type": "string"},
+              "strength": {"type": "string"},
+              "evidence_status": {"type": "string", "enum": ["expert_panel_applied", "rule_mapped", "source_backed_candidate", "not_met", "excluded", "deprecated"]},
+              "strength_source": {"type": "string"},
+              "rule_source": {"type": "object"},
+              "verification_dimensions": {"type": "object"},
+              "calculation_roles": {"type": "object"},
+              "correlation_keys": {"type": "object"},
+              "scenario_id": {"type": "string"},
+              "source_fact_ids": {"type": "array", "items": {"type": "string"}},
+              "caveats": {"type": "array", "items": {"type": "string"}},
+              "missing_requirements": {"type": "array", "items": {"type": "string"}}
+            },
+            "required": ["card_id", "criterion", "strength", "evidence_status", "scenario_id", "source_fact_ids"]
+          }
+        },
         "compatibility_report": {"type": "object"},
         "conflict_report": {"type": "object"},
-        "system_preview_bayesian": {"type": "object"},
-        "validated_subset_bayesian": {"type": "object"},
+        "vcep_context": {"type": "object"},
+        "vcep_assertions": {"type": "array", "items": {"type": "object"}},
+        "rule_scenarios": {"type": "array", "items": {"type": "object"}},
+        "automatic_bayesian": {"type": "object"},
+        "verified_bayesian": {"type": "object"},
+        "scenario_estimates": {"type": "array", "items": {"type": "object"}},
+        "automation_report": {"type": "object"},
         "user_selected_bayesian": {"type": "object"},
         "decision_report": {"type": "object"},
         "limitations": {"type": "array", "items": {"type": "string"}},
@@ -653,8 +741,13 @@
         "evidence_cards",
         "conflict_report",
         "compatibility_report",
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "vcep_context",
+        "vcep_assertions",
+        "rule_scenarios",
+        "automatic_bayesian",
+        "verified_bayesian",
+        "scenario_estimates",
+        "automation_report",
         "user_selected_bayesian",
         "decision_report",
         "limitations",
@@ -742,7 +835,7 @@
         },
         "spliceai_run_metadata": {
           "type": "object",
-          "description": "Walker 2023 run provenance. Missing or incomplete metadata keeps SpliceAI PP3/BP4 not_assessed."
+          "description": "Walker 2023 run provenance. Missing or incomplete metadata prevents a positive PP3/BP4 EvidenceCard while all available scores remain visible."
         },
         "predictor_scores": {"type": "object"},
         "variant_type": {
@@ -935,7 +1028,7 @@
         },
         "protein_context": {
           "type": "object",
-          "description": "Review-only protein mapping and domain/site facts. Collector-verified SourceFacts are required for system-preview inclusion."
+          "description": "Review-only protein mapping and domain/site facts. Collector-normalized SourceFacts are required for automatic or verified calculation roles."
         },
         "pvs1_facts": {
           "type": "object",
@@ -957,7 +1050,7 @@
       "properties": {
         "case_control_facts": {
           "type": "array",
-          "description": "Standalone review facts. They remain outside the system preview until collector full-text verification.",
+          "description": "Standalone review facts. The collector must normalize their identity, source, target link, and minimum fields before automatic or verified calculation.",
           "items": {
             "type": "object",
             "properties": {
@@ -1012,7 +1105,7 @@
   },
   {
     "name": "ACMG_guard_final_answer",
-    "description": "Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serialized EvidenceCard, including excluded or review-required proposals; returned card_roles distinguish system-preview and user-decision state. Final five-tier ACMG labels are always blocked.",
+    "description": "Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serialized EvidenceCard; returned card roles distinguish automatic, verified, excluded, and user-selected use. Final five-tier ToolUniverse classifications are always blocked.",
     "type": "ACMGGuardFinalAnswerTool",
     "parameter": {
       "type": "object",

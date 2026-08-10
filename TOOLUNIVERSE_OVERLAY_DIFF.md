@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@089eb8e6308fc64ae5af3de4bfbec32b5cf07b61` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.0+acmg.2`. Files unrelated to the ACMG runtime,
+The package version is `1.4.0+acmg.3`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -83,30 +83,35 @@ but is not sufficient for PM1; an exact CSpec protein-region contract must bind
 to the current online document. `ClinGen_search_cspec` runs immediately after
 gene identity is verified. A released specification applies only after a
 unique gene, MONDO disease, and inheritance match. Explicit structured
-applicability and strength fields are normalized directly; natural-language
-conditions become `cspec_review_requests` for host-LLM interpretation.
-`cspec_proposals` are revalidated against the online specification ID, version,
-content hash, criterion, and excerpt. Local compiled contracts are optional
+applicability and strength fields are normalized directly. The v3 finite
+condition evaluator executes supported predictor, AF/MCAF, case-count, point,
+residue/region, variant-type, ceiling, and mutual-exclusion rules. Partial or
+ambiguous natural-language rules remain visible as unresolved source-backed
+candidates and cannot enter the verified estimate. Optional `cspec_proposals`
+are revalidated against the online specification ID, version, content hash,
+criterion, and excerpt. Local compiled contracts are optional
 exact-hash caches or fixtures, not a whitelist. Missing context, ambiguity, or
 network failure remains visible and falls back without blocking evidence.
 Under that fallback, AC=0 with auditable callability may suggest
 PM2_Supporting; the fork's review-only candidate filter requires global AF <=
 0.0001, absent or <=0.001 popmax AF, AC > 0, and no disease-specific MCAF. This
 is not a deterministic ClinGen SVI PM2 threshold and the card says so. When no
-versioned coverage-adequacy policy is available the suggestion is explicitly
-`requires_user_review`. BS1, BA1 exceptions, and PS4
+versioned coverage-adequacy policy is available it remains an unresolved
+source-backed candidate. BS1, BA1 exceptions, and PS4
 use applicable disease-specific contracts when available. Without a CSpec,
 anchored PS4 case-control or independent case-series facts still produce a
-general-SVI review proposal. PM3 is now a formal proposal when its structured
-source facts pass validation. Document-backed host-LLM proposals can enter the
-system preview after ToolUniverse full-text identity, locator, field-excerpt,
-and semantic checks; unresolved semantics remain review-required while
-explicit contradictions are retained but excluded. The fixed literature fact
+general-SVI candidate. PM3 is now a formal card when its structured source
+facts pass validation. ToolUniverse performs deterministic target-linked
+sentence and table-row extraction before criterion mapping; optional host-LLM
+proposals supplement unresolved passages. Abstract or snippet facts may enter
+the automatic estimate as unresolved candidates, while complete, untruncated,
+target-linked facts are required for the verified estimate. Explicit
+contradictions are retained but excluded. The fixed literature fact
 mapping also covers PP1/BS4, PP4, BS2, BP2, BP5, PS1/PM5, mechanism context,
 PM1, and PM4/BP3. Full-text retrieval records the actual source, format, URL,
 retrieval trace, and truncation state. Truncated, abstract-only, or unavailable
 material may remain an explicitly unresolved broad candidate when it is
-source-located, but it cannot enter the validated subset and must never be
+source-located, but it cannot enter the verified estimate and must never be
 described as fully read. Criterion-specific PS2/PM6, PM3, and PS3/BS3 engines retain
 the LLM explanation on one rule card rather than emitting a duplicate generic
 card.
@@ -149,8 +154,8 @@ structured CSpec rules or re-anchored CSpec proposals without being
 pre-registered in the local catalog.
 
 PVS1 is assessed by a deterministic ClinGen SVI decision tree in
-`acmg/pvs1.py` (Abou Tayoun 2018, PMID:30192042) instead of the former
-`not_assessed` placeholders. The tree consumes only machine-verifiable facts,
+`acmg/pvs1.py` (Abou Tayoun 2018, PMID:30192042). The tree consumes only
+machine-verifiable facts,
 never caller booleans: LoF disease mechanism (CSpec contract or
 document-verified `gene_disease_mechanism`), VEP `biotype` and `exon` position
 for the identity-selected transcript (the upstream VEP tool and adapter now
@@ -167,29 +172,30 @@ LoF carrier, CSpec-overridable). Splice routes follow the official frame
 branches with a conservative PVS1_Strong default when the frame outcome is
 unverifiable. Canonical duplications and insertions no longer stop before
 SpliceAI: a selected-transcript, threshold-passing native Loss DS/DP bound to
-the exact exon boundary enters the same frame/NMD tree. They remain
-`not_assessed` when functional native-site
-loss cannot be established; verified RNA or an exact-hash operation-specific
+the exact exon boundary enters the same frame/NMD tree. When functional
+native-site loss cannot be established, no positive PVS1 card is emitted and
+the missing facts remain in `criterion_reviews`; verified RNA or an exact-hash operation-specific
 CSpec frame contract may still resolve the outcome. Initiation-codon variants
 require a CSpec alternative-start
 contract. CSpec-documented rescue transcripts, biologically irrelevant exons,
-or exons with frequent population LoF make PVS1 `not_applicable` per the
-flowchart, and missing mechanism/biotype/exon facts keep PVS1 `not_assessed`.
-Promoted PVS1 cards are eligible for Tavtigian odds in the review estimate
+or exons with frequent population LoF record PVS1 as not applicable per the
+flowchart; missing mechanism, biotype, or exon facts produce no placeholder
+EvidenceCard.
+Promoted PVS1 cards are eligible for Tavtigian odds in the evidence estimates
 only.
 
-EvidenceCards separate observed facts, proposal origin/status, suggested
-criterion/strength, rule verification, caveats, system-preview inclusion, and
-user decision state. `system_preview_included` does not mean clinical
-approval. The collector returns a broad source-backed
-`system_preview_bayesian`, a strict `validated_subset_bayesian`, and a separate
+EvidenceCards use the v3 contract: tool-proposed `criterion` and `strength`,
+`evidence_status`, rule and strength provenance, verification dimensions,
+scenario identity, correlation keys, and automatic/verified/user calculation
+roles. The collector returns broad source-backed `automatic_bayesian`, strict
+`verified_bayesian`, per-VCEP/CSpec `scenario_estimates`, and a separate
 `user_selected_bayesian` after stable-card `evidence_decisions`.
 
 Collector output defaults to a compact `summary` shape (unified card index,
 clinically relevant normalized fact values, complete lead indexes, compatibility exclusions
 as `{card_id, criterion, reason}`, Bayesian included/excluded card IDs, and
 criterion-review decision fields without repeated observed facts). The
-representative compact UTF-8 JSON regression ceiling is 50 KB;
+representative compact UTF-8 JSON regression ceiling is 100 KB;
 `response_detail="full"` restores complete payloads. A review-only
 `clinical_context` (zygosity,
 parental origin, phase, phenotype, second-allele status) is echoed for human
@@ -202,16 +208,21 @@ verification uses a pushed exact commit SHA rather than a floating branch.
 Git-ref verification now requires a full 40-character commit SHA, disables pip
 cache reuse, isolates user site packages and the working directory, verifies
 the installed `direct_url.json` VCS revision, and reports the schema
-fingerprint and actual import path. The Guard smoke uses a complete
-`collector_result`, covering serialized known-SourceFact binding.
+fingerprint and actual import path. `--online-providers` adds an opt-in,
+two-attempt gate for CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and a
+live BRCA2 collector while asserting only stable identity and response shape.
+The Guard smoke uses a complete `collector_result`, covering serialized
+known-SourceFact binding. A fork-only candidate-branch workflow runs offline
+release gates on every candidate push and exposes the live gate through
+`workflow_dispatch`; it does not publish packages, tags, or releases.
 
 Collector results include a compact `runtime_manifest` with ToolUniverse
-version, evidence-only runtime version, collector schema version, a stable
+version, evidence-automation runtime version, collector schema version, a stable
 hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-07` adds broad/strict candidate policies and retains
+Collector schema `2026-08-09-v3` adds automatic/verified candidate policies and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
@@ -219,14 +230,14 @@ pending full-text request IDs, and missing requirements. Top-level
 classification readiness. Same-residue EBI protein variants are exposed as
 review-only `prior_variant_candidates` and automatically trigger literature
 requests; database labels alone cannot establish PS1/PM5. Unique
-identity-bound protein length/repeat context may generate review-required
-PM4/BP3 proposals. `clinical_context` remains caller background only; family,
-case, phase, health, phenotype, and alternative-cause evidence enters solely
-through re-anchored full-text `literature_proposals`.
+identity-bound protein length/repeat context may generate source-backed PM4/BP3
+cards. `clinical_context` remains caller background only; structured family,
+case, phase, health, phenotype, and alternative-cause facts enter through
+`clinical_observations` or automatically extracted document facts.
 
 An offline BRCA2 `NM_000059.4:c.5946delT` golden fixture now exercises initial
 collection, anchored literature interpretation, deterministic PVS1, stable
-user decisions, dual Bayesian estimates, Guard PASS/BLOCK behavior, and an
+user decisions, automatic/verified/user estimates, Guard PASS/BLOCK behavior, and an
 actual compact-MCP `execute_tool` call. Reviewer attribution remains optional
 and has no effect on inclusion or scoring.
 
@@ -249,7 +260,7 @@ selected/corroborating SourceFacts, failures, conflicts, resolution reason, and
 missing requirements. PVS1 can consume a uniquely resolved non-VEP
 consequence, but exon structure, PTC/NMD, and disease mechanism must still come
 from provider/document facts. All available provider and predictor values
-remain visible even when excluded from the system preview.
+remain visible even when excluded from automatic or verified calculation.
 
 The collector exposes one source-assertion list and one criterion-review list.
 Older duplicate `source_leads`, `route_candidates`, `candidate_criteria`, and
@@ -266,13 +277,14 @@ and optional-reviewer contracts now live in
 remain retired because scientific decisions live in shared pure rule functions
 and the machine-readable rule catalog.
 
-The consolidated Skill treats `workflow_status`, `recoverable_gaps`,
-`next_actions`, literature review requests, and CSpec requests as a mandatory
-automatic state machine. Read-only recovery and exact/equivalent full-text
-review proceed without asking the user to continue; the optional user decision
-round remains separate. Publication identifier-graph deduplication, verified
-full-text states, reading manifests, proposal/document hashes, and processed
-request IDs prevent duplicate counting and repeated review loops.
+The consolidated Skill invokes the collector once for normal operation. The
+collector itself performs read-only consequence recovery, literature retrieval,
+deterministic fact extraction, VCEP/CSpec discovery, scenario isolation, and
+evidence scoring. Optional proposal inputs supplement unresolved prose rather
+than drive the ordinary workflow; the optional user decision round remains
+separate. Publication identifier-graph deduplication, verified full-text states,
+reading manifests, document hashes, and stable fact IDs prevent duplicate
+counting.
 
 The branch installs the complete upstream user-facing ToolUniverse Skill
 surface—not only ACMG Skills—and adds the consolidated ACMG workflow within

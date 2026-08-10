@@ -12,18 +12,18 @@ inputs remain review-only and no five-tier classification is emitted.
 
 | Candidate | Evidence lead | Required route |
 |------|----------|-------------|
-| PVS1 | Null, canonical splice, start-loss, exon deletion/duplication, whole-gene deletion | `ACMG_evidence_collector` runs the deterministic ClinGen/SVI tree; complete verified facts may enter the system preview, while missing decision facts remain `not_assessed` |
+| PVS1 | Null, canonical splice, start-loss, exon deletion/duplication, whole-gene deletion | `ACMG_evidence_collector` runs the deterministic ClinGen/SVI tree; complete facts may create a card, while missing decision facts remain listed in `criterion_reviews` |
 | PS1/PM5 | Same amino-acid or same-residue comparison variant | `ACMG_evidence_collector`; comparison source labels are leads only |
 | PS3/BS3 | Functional assay evidence | `ACMG_functional_evidence` |
 | PS4 | Case-control, cohort, meta-analysis, or affected-case enrichment | `ACMG_literature_evidence` |
-| PM1 | Hotspot or critical functional-domain context | Collector maps verified genomic HGVS to UniProt and exact EBI feature ranges; generic overlap is `indeterminate`, while only an exact online-bound CSpec region contract can produce a candidate |
-| PP2/BP1 | Regional missense constraint or missense mechanism context | Collector route context only; no current automatic count |
+| PM1 | Hotspot or critical functional-domain context | Collector maps genomic HGVS to UniProt/EBI/InterPro and separates source-backed candidates from verified CSpec or literature applications |
+| PP2/BP1 | Regional missense constraint or missense mechanism context | Collector can produce source-backed candidates; verified use requires an applicable VCEP/CSpec or strictly anchored mechanism evidence |
 | PM2 | Absent/rare from controls after coverage and population checks | General SVI suggests PM2_Supporting for AC=0 with auditable callability; an applicable CSpec takes precedence |
 | PM3 | Recessive biallelic, in-trans, phase-unknown, or homozygous observations | `ACMG_clinical_evidence` |
-| PM4/BP3 | Protein length change, in-frame indel, stop-loss, repeat/low-complexity region | Collector route context only; no current automatic count |
+| PM4/BP3 | Protein length change, in-frame indel, stop-loss, repeat/low-complexity region | Collector can produce source-backed candidates from unique protein mapping and feature overlap; verified use requires the strict rule facts |
 | PP1/BS4/PP4 | Segregation, non-segregation, phenotype-locus evidence | `ACMG_clinical_evidence` and phenotype-dependent intake when needed |
 | PP3/BP4 | Calibrated computational prediction evidence | `ACMG_computational_evidence` or VCEP; no local predictor voting |
-| PP5/BP6 | Reputable-source assertion | `ACMG_evidence_collector`; deprecated and excluded from system preview |
+| PP5/BP6 | Reputable-source assertion | `ACMG_evidence_collector`; deprecated and excluded from all calculations |
 
 ### Benign/Frequency Candidate Routes
 
@@ -35,7 +35,10 @@ inputs remain review-only and no five-tier classification is emitted.
 
 ## Evidence Assessment Contract
 
-Do not use this reference as an independent classifier. The current runtime ends after validated EvidenceCards, compatibility/conflict handling, and a Bayesian review estimate. A qualified human reviewer remains responsible for any final classification.
+Do not use this reference as an independent classifier. The current runtime
+ends after source-backed and verified EvidenceCards, compatibility/conflict
+handling, and Bayesian review estimates. A qualified human reviewer remains
+responsible for any final classification.
 
 ## Source Assertions
 
@@ -117,9 +120,17 @@ Only the versioned computational rule catalog may suggest PP3/BP4.
 
 ## PS4 and Phenotype-Dependent Evidence
 
-Use `ACMG_literature_evidence` for case-control evidence, odds ratio/confidence interval interpretation, unrelated affected case counts, ancestry matching, gnomAD control caveats, and PS4 review. An applicable online CSpec policy takes precedence; without one, verified case-control or independent case-series facts produce a general-SVI `requires_user_review` proposal. Recessive biallelic affected-proband observations route to PM3 rather than PS4.
+Use `ACMG_evidence_collector` for case-control evidence, odds ratio/confidence
+interval interpretation, unrelated affected case counts, ancestry matching,
+gnomAD control caveats, and PS4 processing. The collector applies an exact
+online CSpec first; without one, case-control facts use the general SVI route
+and case-series facts may form versioned source-backed candidates. Recessive
+biallelic affected-proband observations route to PM3 rather than PS4.
 
-Use `ACMG_clinical_evidence` for structured review of PP4, PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 inputs. Unsupported phenotype, segregation, and biallelic contracts remain review candidates outside the system preview.
+Use `clinical_observations` on `ACMG_evidence_collector` for structured PP4,
+PS4, PP1/BS4, PM3, BP5, BS2, or PS2/PM6 inputs. Source-backed but unverified
+records may enter `automatic_bayesian`; only strictly anchored records enter
+`verified_bayesian`.
 
 ## SpliceAI Prediction Context
 
@@ -135,7 +146,7 @@ not infer a splice criterion from this index.
 |----------|-----------|--------|
 | Functional study (null) | PS3/BS3 route | Assay strength requires the structured functional-assay contract |
 | Functional study (reduced) | PS3/BS3 route | Assay strength requires the structured functional-assay contract |
-| Case reports with segregation | PP1/PP4 route | Current runtime keeps these criteria review-only; avoid double counting during human review |
+| Case reports with segregation | PP1/PP4 route | Target-linked facts may create source-backed candidates; verified inclusion requires the strict family/phenotype contract and deduplication |
 | Co-occurrence with pathogenic | Benign-context overlay | BP2 requires inheritance and cis/trans context |
 
 ## Regulatory Impact Categories
@@ -152,7 +163,8 @@ Call `ACMG_evidence_collector`. It runs the versioned ClinGen/SVI PVS1 decision
 tree using provider-verified mechanism, selected-transcript consequence,
 biotype, exon/frame/NMD, rescue-transcript, critical-region, population-LoF,
 protein-length, SpliceAI, RNA, and exact CSpec facts as applicable. A complete
-fact path may generate a PVS1 EvidenceCard eligible for the system-preview
-estimate. Missing or unverifiable decision points remain `not_assessed` or
-downgrade conservatively. The `tooluniverse-acmg-variant-classification` Skill
-is the normative description of this behavior.
+fact path may generate a PVS1 EvidenceCard eligible for automatic and, when
+strictly verified, verified estimates. Missing or unverifiable decision points
+remain listed in `criterion_reviews` without creating a positive placeholder
+card. The `tooluniverse-acmg-variant-classification` Skill is the normative
+description of this behavior.

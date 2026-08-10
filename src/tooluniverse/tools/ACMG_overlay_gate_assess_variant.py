@@ -21,6 +21,7 @@ def ACMG_overlay_gate_assess_variant(
     evidence_decisions: Optional[list[Any]] = None,
     protein_accession: Optional[str] = None,
     clinical_context: Optional[dict[str, Any]] = None,
+    clinical_observations: Optional[list[Any]] = None,
     response_detail: Optional[str] = 'summary',
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
@@ -43,19 +44,21 @@ def ACMG_overlay_gate_assess_variant(
     inheritance : str
         Inheritance mode used to match an applicable ClinGen CSpec.
     genome_build : str
-        
+        Genome assembly. hg19/hg38 normalize to GRCh37/GRCh38; coordinate inputs with...
     source_outputs_or_leads : list[Any]
         Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant...
     literature_proposals : list[Any]
-        Preferred host-LLM literature proposal input. Each proposal includes a fact t...
+        Optional supplemental literature facts or reproducibility input. The collecto...
     cspec_proposals : list[Any]
-        Host-LLM interpretations of natural-language rules from the uniquely matched ...
+        Optional supplemental interpretations of unresolved natural-language rules fr...
     evidence_decisions : list[Any]
         User decisions applied only to stable card IDs regenerated in this call. Acce...
     protein_accession : str
         
     clinical_context : dict[str, Any]
         Review-only clinical context. Explicit HPO terms trigger term/gene/disease lo...
+    clinical_observations : list[Any]
+        Structured caller-supplied case, family, phase, phenotype, assay, case-contro...
     response_detail : str
         Output detail level. 'summary' (default) returns compact source-fact/evidence...
     stream_callback : Callable, optional
@@ -85,6 +88,7 @@ def ACMG_overlay_gate_assess_variant(
                 "evidence_decisions": evidence_decisions,
                 "protein_accession": protein_accession,
                 "clinical_context": clinical_context,
+                "clinical_observations": clinical_observations,
                 "response_detail": response_detail
     }.items() if v is not None}
     return get_shared_client().run_one_function(

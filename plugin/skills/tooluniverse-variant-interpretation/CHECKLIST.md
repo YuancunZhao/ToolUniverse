@@ -61,7 +61,7 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] Domain/functional site proximity
 - [ ] UniProt accession and residue mapping verified against genomic HGVS
 - [ ] Exact EBI feature overlap separated from coordinate-free InterPro inventory
-- [ ] Generic domain overlap kept `indeterminate`; PM1 candidate requires an exact reviewed CSpec region contract
+- [ ] Generic domain overlap is labeled as a limited source-backed candidate; verified PM1 requires the strict VCEP/CSpec or literature contract
 
 ### Phase 6: Literature Evidence
 - [ ] PubMed searched with ≥2 strategies
@@ -76,7 +76,7 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] Each suggestion includes rule ID, version, basis, and SourceFact IDs
 - [ ] CSpec candidates, applicability decision, and general-SVI fallback are shown
 - [ ] Five-tier classification is explicitly withheld by the evidence-only runtime
-- [ ] Compatibility exclusions, conflicts, and system-preview Bayesian estimate are reported
+- [ ] Compatibility exclusions, conflicts, and automatic/verified Bayesian estimates are reported
 
 ### Phase 8: Human Review Boundary
 - [ ] Candidate evidence is not described as clinically approved evidence
@@ -137,7 +137,8 @@ Pre-delivery verification checklist for variant interpretation reports.
 | Final classification | Not produced in the current evidence-only runtime |
 
 ### External-Agent Evidence Audit
-- [ ] Every Bayesian-included candidate has `assessment_status=met`, `overlay_validated=true`, and trusted SourceFact IDs
+- [ ] Every automatic Bayesian candidate has traceable SourceFact IDs, legal criterion/strength direction, compatible correlation keys, and no identity conflict or contradiction
+- [ ] Every verified Bayesian card additionally satisfies the versioned-rule and strict source-verification contract
 - [ ] Source assertions from ClinVar, HGMD, LOVD, expert panels, lab reports, or published ACMG classifications remain source leads and are not converted to criteria
 - [ ] Failed tool calls are retried or marked as missing; manual summaries are not used to replace required verified evidence
 - [ ] Literature-derived facts are routed to the correct group rule: functional assay -> PS3/BS3, segregation -> PP1/BS4, case enrichment -> PS4, biallelic recessive proband -> PM3, de novo -> PS2/PM6
