@@ -77,8 +77,68 @@ def test_clinvar_variant_name_normalizes_transcript_hgvs():
         )
     term = request.call_args_list[0].args[1]["term"]
     assert "HBB[gene]" in term
-    assert "20A>T[Variant name]" in term
+    assert "c.20A>T[Variant name]" in term
     assert "Glu7Val[Variant name]" in term
+
+
+def test_clingen_flattens_current_erepo_evidence_codes():
+    row = {
+        "caid": "CAR:CA114360",
+        "variationId": "586",
+        "hgvs": ["NM_000277.2:c.1A>G"],
+        "gene": {"label": "PAH"},
+        "condition": {"label": "PKU", "@id": "MONDO:0009861"},
+        "guidelines": [
+            {
+                "outcome": {"label": "Pathogenic"},
+                "agents": [
+                    {
+                        "affiliation": "PAH VCEP",
+                        "evidenceCodes": [
+                            {"label": "PM2", "status": "Met", "@id": "pm2"},
+                            {
+                                "label": "PP4_Moderate",
+                                "status": "Met",
+                                "@id": "pp4",
+                            },
+                            {"label": "PVS1", "status": "Not Met", "@id": "pvs1"},
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    flattened = ClinGenTool._flatten_classification(row)
+    assert flattened["Applied Criteria"] == [
+        {
+            "criterion": "PM2",
+            "strength": "",
+            "status": "Met",
+            "evidenceSummary": None,
+            "pmids": [],
+            "source_id": "pm2",
+            "source_label": "PM2",
+        },
+        {
+            "criterion": "PP4",
+            "strength": "Moderate",
+            "status": "Met",
+            "evidenceSummary": None,
+            "pmids": [],
+            "source_id": "pp4",
+            "source_label": "PP4_Moderate",
+        },
+        {
+            "criterion": "PVS1",
+            "strength": "",
+            "status": "Not Met",
+            "evidenceSummary": None,
+            "pmids": [],
+            "source_id": "pvs1",
+            "source_label": "PVS1",
+        },
+    ]
 
 
 def test_clinvar_preserves_official_hyphen_and_falls_back_only_on_zero_hits():

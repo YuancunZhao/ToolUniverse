@@ -34,11 +34,18 @@ def test_hgvs_protein_prefix_stripped():
     assert "p0x2e" not in term
 
 
-@pytest.mark.parametrize("prefix", ["p.", "c.", "g.", "m.", "n.", "P.", "C."])
-def test_all_reference_prefixes_stripped(prefix):
-    term = _term_for({"variant_name": f"{prefix}Glu342Lys"})
-    assert "Glu342Lys[Variant name]" in term
-    assert prefix not in term
+@pytest.mark.parametrize("prefix", ["c.", "g.", "m.", "n.", "r.", "C."])
+def test_nucleotide_reference_prefixes_are_preserved(prefix):
+    term = _term_for({"variant_name": f"{prefix}20A>T"})
+    assert f"{prefix}20A>T[Variant name]" in term
+
+
+def test_transcript_accession_is_removed_but_coding_prefix_is_preserved():
+    term = _term_for(
+        {"gene": "HBB", "variant_name": "NM_000518.5:c.20A>T"}
+    )
+    assert "c.20A>T[Variant name]" in term
+    assert "NM_000518.5" not in term
 
 
 def test_rsid_as_variant_name_becomes_bare_term():

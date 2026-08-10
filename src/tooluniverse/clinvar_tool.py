@@ -300,12 +300,31 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             names = arguments["variant_name"]
             names = names if isinstance(names, list) else [names]
             names = [str(n).strip() for n in names if str(n).strip()]
+            # ClinVar's Variant name index accepts the HGVS expression after
+            # the accession (for example c.20A>T), but not the complete
+            # ``NM_...:c.`` form. Keep the reference-type prefix because NCBI
+            # indexes c./g./n. notation with it; only protein ``p.`` is
+            # stripped below for the documented p0x2e false-empty behavior.
+            names = [
+                (
+                    match.group("hgvs")
+                    if (
+                        match := re.match(
+                            r"(?i)^[A-Z]{1,4}_\d+(?:\.\d+)?(?:\([^)]+\))?"
+                            r":(?P<hgvs>[cgmnrpo]\..+)$",
+                            name,
+                        )
+                    )
+                    else name
+                )
+                for name in names
+            ]
             # NCBI's [Variant name] index mangles the '.' in an HGVS reference
             # prefix ('p.Glu342Lys' -> 'p0x2eGlu342Lys') and matches nothing, so a
             # clinician typing standard HGVS got a silent false-empty. Strip the
             # leading reference-type prefix so 'p.Glu342Lys' -> 'Glu342Lys' (which
             # matches). Verified live: SERPINA1 p.Glu342Lys 0 -> 2 hits (Z-allele).
-            names = [re.sub(r"(?i)^[pcgmnor]\.", "", n) for n in names]
+            names = [re.sub(r"(?i)^p\.", "", n) for n in names]
             # An rsID passed as variant_name (e.g. rs776746) belongs in a bare
             # free-text search, not the [Variant name] field, which returns 0 for
             # it -- route it like the rsid param instead of a false-empty.
@@ -483,6 +502,7 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 "gene": arguments.get("gene"),
                 "condition": arguments.get("condition"),
                 "variant_id": arguments.get("variant_id"),
+                "variant_name": arguments.get("variant_name"),
                 "clinical_significance": arguments.get("clinical_significance"),
             }.items()
             if v is not None

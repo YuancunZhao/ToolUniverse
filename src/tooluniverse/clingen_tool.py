@@ -591,19 +591,53 @@ class ClinGenTool(BaseTool):
             for value in [guideline.get(key)]
             if value not in (None, "", [], {})
         ]
-        criteria = [
-            value
-            for guideline in guidelines
-            if isinstance(guideline, dict)
+        criteria: List[Dict[str, Any]] = []
+        criterion_pattern = re.compile(
+            r"^(PVS1|PS[1-4]|PM[1-6]|PP[1-5]|BA1|BS[1-4]|BP[1-7])"
+            r"(?:[_\s-]*(Very\s*Strong|Strong|Moderate|Supporting))?$",
+            re.IGNORECASE,
+        )
+        for guideline in guidelines:
+            if not isinstance(guideline, dict):
+                continue
             for key in (
                 "criteria",
                 "appliedCriteria",
                 "evidenceCriteria",
                 "classificationContributions",
-            )
-            for value in [guideline.get(key)]
-            if value not in (None, "", [], {})
-        ]
+            ):
+                values = guideline.get(key)
+                values = values if isinstance(values, list) else [values]
+                criteria.extend(value for value in values if isinstance(value, dict))
+
+            # Current ERepo records expose the actual applied criteria under
+            # guideline.agents[].evidenceCodes rather than the older
+            # guideline-level keys. Preserve both met and negative rows here;
+            # the ACMG VCEP parser is responsible for excluding Not Met / N/A.
+            for agent in guideline.get("agents") or []:
+                if not isinstance(agent, dict):
+                    continue
+                for code in agent.get("evidenceCodes") or []:
+                    if not isinstance(code, dict):
+                        continue
+                    label = str(code.get("label") or code.get("code") or "").strip()
+                    match = criterion_pattern.fullmatch(label)
+                    if not match:
+                        continue
+                    criteria.append(
+                        {
+                            "criterion": match.group(1).upper(),
+                            "strength": "".join((match.group(2) or "").split()),
+                            "status": code.get("status"),
+                            "evidenceSummary": code.get("evidenceSummary")
+                            or code.get("description"),
+                            "pmids": code.get("pmids")
+                            or code.get("publications")
+                            or [],
+                            "source_id": code.get("@id"),
+                            "source_label": label,
+                        }
+                    )
         return {
             # The last hgvs entry is the gene-and-protein-notation form,
             # e.g. "NM_000277.2(PAH):c.1A>G (p.Met1Val)" -- matches the old

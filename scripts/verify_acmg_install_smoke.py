@@ -493,7 +493,7 @@ def _validate_erepo(result):
         row
         for row in rows
         if isinstance(row, dict)
-        and str(row.get("CAID") or "").upper() == "CA114360"
+        and str(row.get("CAID") or "").upper().removeprefix("CAR:") == "CA114360"
         and str(row.get("Status") or "released").casefold() == "released"
     ]
     structured = [row for row in exact if bool(row.get("Applied Criteria"))]
@@ -503,14 +503,13 @@ def _validate_erepo(result):
 def _validate_clinvar(result):
     if not isinstance(result, dict) or result.get("status") != "success":
         return False, "provider did not return success"
-    search = (result.get("data") or {}).get("esearchresult") or {}
-    params = result.get("search_params") or {}
-    translation = str(search.get("querytranslation") or "").upper()
-    ids = search.get("idlist") or []
-    gene_ok = str(params.get("gene") or "").upper() == "HBB" or "HBB" in translation
-    variant_ok = "C.20A>T" in translation.replace(" ", "") or "C.20A>T" in str(
-        params.get("variant_name") or ""
-    ).upper().replace(" ", "")
+    data = result.get("data") or {}
+    params = data.get("search_params") or {}
+    ids = data.get("variant_ids") or []
+    variants = data.get("variants") or []
+    returned_text = json.dumps(variants, ensure_ascii=False).upper().replace(" ", "")
+    gene_ok = str(params.get("gene") or "").upper() == "HBB" and "HBB" in returned_text
+    variant_ok = "C.20A>T" in returned_text or "P.GLU7VAL" in returned_text
     return bool(ids and gene_ok and variant_ok), f"ids={len(ids)} gene={gene_ok} variant={variant_ok}"
 
 
@@ -578,7 +577,12 @@ def _validate_collector(result):
     if not isinstance(result, dict):
         return False, "collector result is not an object"
     facts = result.get("source_facts") or []
-    coverage = result.get("coverage") or result.get("source_manifest") or {}
+    coverage = (
+        result.get("coverage_summary")
+        or result.get("coverage")
+        or result.get("source_manifest")
+        or {}
+    )
     contract_ok = (
         result.get("final_classification_allowed") is False
         and isinstance(facts, list)

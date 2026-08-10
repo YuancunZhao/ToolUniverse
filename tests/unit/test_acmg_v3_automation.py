@@ -226,6 +226,22 @@ def test_vcep_accepts_only_allele_level_identifiers_and_verified_aliases():
     assert assertions[0]["identity_match_basis"] == "clinvar_variation_id"
     assert cards
 
+    car_prefixed = deepcopy(row)
+    car_prefixed["CAID"] = "CAR:CA123"
+    source = _fact(
+        "vcep-car-prefixed",
+        tool_name="ClinGen_get_variant_classifications",
+        features={"variant_classifications": [car_prefixed]},
+    )
+    _context, assertions, cards = parse_vcep_assertions(
+        {source.fact_id: source},
+        identity={"caid": "CA123"},
+        disease="MONDO:0000001",
+        inheritance="autosomal dominant",
+    )
+    assert assertions[0]["identity_match_basis"] == "caid"
+    assert cards
+
     _context, assertions, cards = parse_vcep_assertions(
         {source.fact_id: source},
         identity={

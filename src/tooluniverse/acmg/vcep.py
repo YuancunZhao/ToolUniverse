@@ -177,13 +177,17 @@ def _identity_match(row: dict[str, Any], identity: dict[str, Any]) -> dict[str, 
             "rejection_reasons": [],
         }
 
+    def normalized_caid(value: Any) -> str:
+        token = str(value or "").strip().casefold()
+        return token.split(":", 1)[1] if token.startswith(("car:", "caid:")) else token
+
     expected_caids = {
-        str(value).strip().casefold()
+        normalized_caid(value)
         for value in _values(identity.get("caid"))
         if str(value).strip()
     }
     observed_caid = str(row.get("CAID") or "").strip()
-    if observed_caid and observed_caid.casefold() in expected_caids:
+    if observed_caid and normalized_caid(observed_caid) in expected_caids:
         return {
             "status": "matched",
             "basis": "caid",
