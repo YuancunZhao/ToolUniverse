@@ -37,8 +37,58 @@ Most of these questions are MCQ with an "Insufficient information to answer the 
 | **drug / compound** target, MoA, approval | `ChEMBL_*`, `OpenFDA_*`, `GtoPdb_*`, `PubChem_*` | resolve drug, query the relation |
 | **which drug for this patient** (clinical vignette naming a modifier) | `FDA_*_by_drug_name` — pick the section by modifier | see "Drug choice for a described patient" below |
 | **protein** function / domain / sequence | `UniProt_*` | resolve accession, read annotation |
+| **protein localization / expression** "according to the Human Protein Atlas" | `HPA_get_subcellular_location`, `HPA_get_rna_expression_by_source`, `HPA_get_comprehensive_gene_details_by_ensembl_id` | pass the gene symbol — an **antibody ID such as `HPA073143` also works** and resolves to its target gene. **Report main *and* additional locations** — see below |
+
+| **brain region** in the Allen Mouse/Human Brain Atlas | `AllenBrain_search_structures` (`name` or `acronym`), `AllenBrain_get_structure` | reference-atlas regions are **colour-coded**: the result carries `color_hex_triplet`, so "the region shown in red" is answerable — see below |
+| **regulatory element / cCRE** near a gene (ENCODE SCREEN) | `SCREEN_search_cCREs_by_region` | filter on `element_type` (**PLS** and **pELS** are TSS-proximal, **dELS** distal) and read `dnase_zscore` |
+| **which variant is at / overlaps** a genomic region (ClinVar) | `ClinVar_search_by_region` | **not** `ClinVar_search_variants` — Entrez matches a variant's START, so a narrow window misses a CNV that spans the region but begins megabases upstream. Returns true overlaps, smallest span first |
+| **how many peaks / which datasets** for a TF experiment (ReMap) | `ReMap_list_datasets_for_target` | one GEO series can hold several datasets (GSE23852/FOXA1 = 2, with 60,158 and 67,736 peaks) — report them separately unless a total is asked for; `count_peaks: true` to get counts |
+| **protein interaction partners** (STRING) | `STRING_get_protein_interactions` | read the **`partner`** field, not `preferredName_B`: edges are ordered A/B by internal ID, so the queried protein sits in column A on about half of them |
 
 When unsure which tool wraps a database, search the catalog by the *relation* (e.g. "gene disease association", "gene set members"), not the brand name — ToolUniverse usually already has it.
+
+### Allen Brain Atlas — answer with the specific structure, not its parent
+
+The reference atlas colours every structure, and `AllenBrain_search_structures`
+returns `color_hex_triplet`. A question naming a colour ("which region is
+annotated in red at coronal position 181") is asking which **leaf structure**
+carries that colour, e.g. `Lateral preoptic area` = `#F2483B`.
+
+Answering with the enclosing region ("Hypothalamus") is wrong even though it
+contains the right area: the atlas colours the specific structure, and the
+parent has its own different colour. Search by name or acronym, compare
+`color_hex_triplet`, and give the structure whose colour matches. Note the same
+acronym can return several rows (hemisphere-specific and ontology-version
+entries) with different colours — prefer the row whose `name` matches the
+question's wording.
+
+### Human Protein Atlas — report both location fields
+
+`HPA_get_subcellular_location` splits its answer in two, and the split is not
+significance ranking:
+
+```
+main_locations       : ['Nucleoplasm']
+additional_locations : ['Primary cilium', ..., 'Cytosol']
+```
+
+A question asking "what localization does this antibody show" wants the
+locations HPA reports, which is **both lists** — answering from `main_locations`
+alone drops real localizations and is a common way to be half-right (e.g.
+answering "Nucleoplasm" where HPA reports "Nucleoplasm, Cytosol"). Use
+`location_summary`, which already joins them, or read both fields.
+
+Two further cautions:
+
+- **Locations aggregate over cell lines.** HPA pools immunofluorescence across
+  every line an antibody was tested in. If the question names one line (HEK293,
+  U-2 OS), treat the list as the candidate set and say which line you are
+  reporting for, rather than implying the aggregate is line-specific.
+- **Per-cell-type RNA values are only published for enriched cell types.** HPA's
+  machine-readable fields give specificity plus nTPM/nCPM for the cell types a
+  gene is enriched in; a value for an arbitrary cell type is not exposed. If a
+  question asks for one that is absent, say so instead of substituting the
+  nearest available number — those differ by an order of magnitude.
 
 ## MSigDB set-name conventions (the most common LAB-Bench pattern)
 
@@ -120,6 +170,42 @@ Try the `MP_<PHENOTYPE>` MSigDB set first (above): it answers in one call per op
 `MGI_get_phenotypes` returns a list of `phenotype_statement` strings per gene, **paginated** — a gene's matching statement is often on a later page, so a single page is not evidence of absence. To answer "which gene is annotated to phenotype P", query each candidate gene and pick the one whose statements include a phrase matching P (the statements are human-readable, e.g. "increased incidence of carcinoma", "tumor"). Match on the phenotype concept, not an exact MP id string. If several match, prefer the most specific statement.
 
 ## Computational procedures (when the answer is COMPUTED, not looked up)
+
+### GWAS "highest p-value" means most significant
+
+In GWAS writing, "the highest p-value", "the top hit" and "the strongest
+association" all mean the **most significant** result — the *smallest* numeric
+p-value. Read literally, "highest" picks the weakest association in the study
+and is almost never what was meant.
+
+For GCST005528 the literal reading gives `rs2476491-?` at p = 1e-06; the
+intended answer is `rs7775055-G` at p = 3e-174.
+
+Sort ascending by p-value and report that hit. If the phrasing genuinely could
+go either way, give the most significant one and say in a clause that the
+numerically largest p-value is a different SNP — do not silently pick the
+literal reading.
+
+### Genomic windows — count the anchor base
+
+A window described as "N bp upstream plus M bp downstream of X" spans
+**N + M + 1** bases, because the anchor base X is itself included. Asking for
+100 up and 100 down around a TSS is 201 nt, not 200. Off-by-one here is the
+single most common way a sequence answer is wrong while looking right.
+
+The same care applies to the coordinate convention of whichever tool you call:
+
+| convention | span of `start`..`end` | used by |
+|---|---|---|
+| 1-based inclusive | `end - start + 1` | Ensembl `region`, UCSC browser text, IGV, samtools |
+| 0-based half-open | `end - start` | UCSC REST API, BED |
+
+`UCSC_get_sequence` takes a written locus via `region` (1-based inclusive) or
+explicit `chrom`/`start`/`end` with `coordinate_system`; it echoes
+`region_1based` and `requested_length` so the span is checkable. **Always check
+the returned length against what the question asked for** before answering — a
+sequence of the wrong length is wrong even when every base you kept is right.
+
 
 Any question with a **single deterministic numeric/combinatorial answer** must be obtained by **RUNNING code**, never by estimating or doing it in your head. This covers sequence questions (ORF counts, restriction fragments/sizes, GC content, translation) **and** any other exactly-computable question — e.g. **genetics segregation / Mendelian or polyploid gamete ratios, combinatorial probabilities, stoichiometry, dosage/PK arithmetic, counting problems**. Mental arithmetic on these is the #1 avoidable error: the model reliably mis-counts or mis-multiplies. If a question reduces to "enumerate the cases / multiply the probabilities / count the objects", **write a short Python snippet, execute it, and report exactly what it returns** — even when the topic looks like a biology "reasoning" question, if the answer is a definite number, compute it rather than reason it out. Match the question's wording for conventions (which strand; linear vs circular; which cross/segregation model) and **state the convention you used** so the answer is auditable.
 
@@ -213,5 +299,19 @@ Interpretation: report the **exact value the code returns** (ORF count; fragment
 ## Limitations (honest)
 
 - **Key-gated sources**: `DisGeNET_*` and OMIM tools need `DISGENET_API_KEY` / OMIM key. Without a key, fall back to `OpenTargets_*` / `MyDisease_*` (keyless) and state the source used. If no keyless source can answer and the question is database-specific, this is a genuine "Insufficient information" case — say so.
-- **Release mismatch**: a tool's snapshot of a database may differ slightly from the exact release a question cites; report the source and version when it matters.
+- **Release mismatch**: a tool's snapshot of a database may differ from the exact
+  release a question cites — and for some quantities the difference is not
+  slight. Derived scores get recomputed between releases, so the *same gene* can
+  differ by an order of magnitude. gnomAD pLI, via `gnomad_get_constraint`:
+
+  | gene | gnomAD r4 | gnomAD r2.1 |
+  |---|---|---|
+  | APOC2 | 0.046875 | 0.401638 |
+  | APOC1 | 0.086323 | 0.216848 |
+
+  Where a tool exposes a `dataset`/release parameter, set it to the release the
+  question names and **say which release you used**. If the question names one
+  the tool cannot serve, report the release you did use rather than presenting
+  the number as if it were release-independent — a bare pLI value is ambiguous
+  by a factor of eight here.
 - This skill grounds *factual* lookups. For computing over user data files, use the data-analysis router skills instead.

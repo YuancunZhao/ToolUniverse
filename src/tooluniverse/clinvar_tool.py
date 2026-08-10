@@ -200,6 +200,13 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         ):
             arguments = dict(arguments, rsid=_rsid_src.strip())
             arguments.pop("query", None)
+        # A `query` carrying Entrez field tags ("7[chr] AND 1000:2000[chrpos37]")
+        # is a search expression, not a disease name. Aliasing it to `condition`
+        # wrapped the whole string in [dis] and returned 0 with no hint why.
+        _q = arguments.get("query")
+        if isinstance(_q, str) and re.search(r"\[[a-z0-9]+\]", _q, re.IGNORECASE):
+            arguments = dict(arguments, raw_term=_q)
+            arguments.pop("query", None)
         if not arguments.get("condition") and arguments.get("query"):
             arguments = dict(arguments, condition=arguments["query"])
         # `variant` is the intuitive name for the variant filter (the schema
@@ -220,6 +227,10 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # Build search query
         query_parts = []
         compound_clnsig = False
+
+        # An expression the caller wrote themselves goes to Entrez untouched.
+        if arguments.get("raw_term"):
+            query_parts.append(str(arguments["raw_term"]))
 
         gene_hyphen_variant = None
         if "gene" in arguments:
@@ -717,3 +728,143 @@ class ClinVarGetClinicalSignificance(ClinVarRESTTool):
         }
 
         return result
+
+
+def clinvar_variants_overlapping(
+    session,
+    chrom,
+    start,
+    end,
+    assembly="GRCh37",
+    margin=2_000_000,
+    significance=None,
+    max_results=50,
+    timeout=60,
+):
+    """ClinVar variants whose span OVERLAPS a region.
+
+    Entrez `chrpos37`/`chrpos38` match a variant's START position, so a narrow
+    window finds nothing that begins upstream of it -- and a pathogenic CNV can
+    begin megabases away while still covering the region asked about. Searching
+    an 11 bp window for chr7:155593770-155593780 returns 0 hits even though a
+    1.5 Mb copy-number loss (Variation 1703527, chr7:154831466-156356088)
+    covers it.
+
+    So: search a window widened by `margin` to catch variants that start
+    earlier, then keep only those whose [start, stop] genuinely overlaps the
+    requested region. `margin` bounds how large a spanning variant can be found.
+    """
+    tag = "chrpos38" if str(assembly).upper() in ("GRCH38", "HG38") else "chrpos37"
+    lo = max(1, int(start) - int(margin))
+    hi = int(end) + int(margin)
+    term = f"{chrom}[chr] AND {lo}:{hi}[{tag}]"
+    if significance:
+        term += f' AND "{significance}"[clinsig]'
+
+    es = session.get(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+        params={"db": "clinvar", "term": term, "retmax": 500, "retmode": "json"},
+        timeout=timeout,
+    ).json()
+    ids = (es.get("esearchresult") or {}).get("idlist") or []
+    if not ids:
+        return {"term": term, "n_candidates": 0, "variants": []}
+
+    out = []
+    for chunk_start in range(0, len(ids), 200):
+        chunk = ids[chunk_start : chunk_start + 200]
+        summ = (
+            session.get(
+                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+                params={"db": "clinvar", "id": ",".join(chunk), "retmode": "json"},
+                timeout=timeout,
+            )
+            .json()
+            .get("result", {})
+        )
+        for vid in chunk:
+            rec = summ.get(vid) or {}
+            for vset in rec.get("variation_set") or []:
+                for loc in vset.get("variation_loc") or []:
+                    if (
+                        str(loc.get("assembly_name", "")).upper()
+                        != str(assembly).upper()
+                    ):
+                        continue
+                    try:
+                        v_start, v_stop = int(loc.get("start")), int(loc.get("stop"))
+                    except (TypeError, ValueError):
+                        continue
+                    if v_start <= int(end) and v_stop >= int(start):
+                        out.append(
+                            {
+                                "variation_id": vid,
+                                "title": rec.get("title"),
+                                "obj_type": rec.get("obj_type"),
+                                "chr": loc.get("chr"),
+                                "start": v_start,
+                                "stop": v_stop,
+                                "span": v_stop - v_start + 1,
+                                "classification": (
+                                    rec.get("germline_classification") or {}
+                                ).get("description"),
+                            }
+                        )
+                    break
+    # Smallest span first: the most specific variant covering the region.
+    out.sort(key=lambda v: v["span"])
+    return {"term": term, "n_candidates": len(ids), "variants": out[:max_results]}
+
+
+@register_tool("ClinVarSearchByRegion")
+class ClinVarSearchByRegion(ClinVarRESTTool):
+    """ClinVar variants overlapping a genomic region, including spanning CNVs."""
+
+    def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        chrom = (
+            str(arguments.get("chrom") or arguments.get("chromosome") or "")
+            .replace("chr", "")
+            .strip()
+        )
+        start, end = arguments.get("start"), arguments.get("end")
+        region = arguments.get("region")
+        if region and (start is None or end is None):
+            m = re.match(
+                r"^\s*chr?([\w]+)\s*[:\s]\s*([\d,]+)\s*[-.]+\s*([\d,]+)", str(region)
+            )
+            if m:
+                chrom = chrom or m.group(1)
+                start, end = (
+                    int(m.group(2).replace(",", "")),
+                    int(m.group(3).replace(",", "")),
+                )
+        if not chrom or start is None or end is None:
+            return {
+                "status": "error",
+                "error": "Provide chrom/start/end, or region like 'chr7:155593770-155593780'.",
+            }
+        try:
+            result = clinvar_variants_overlapping(
+                self.session,
+                chrom,
+                int(start),
+                int(end),
+                assembly=arguments.get("assembly", "GRCh37"),
+                margin=int(arguments.get("margin", 2_000_000)),
+                significance=arguments.get("clinical_significance")
+                or arguments.get("significance"),
+                max_results=int(arguments.get("max_results", 50)),
+                timeout=self.timeout,
+            )
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"ClinVar region search failed: {str(e)[:200]}",
+            }
+        result["note"] = (
+            "Entrez matches a variant's START position, so this searches a widened "
+            "window and keeps only variants whose span actually overlaps the region. "
+            "Sorted smallest span first; a large CNV can overlap while starting "
+            "megabases away. Raise `margin` to catch larger spanning variants."
+        )
+        return {"status": "success", "data": result}

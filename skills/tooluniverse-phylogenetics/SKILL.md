@@ -345,6 +345,47 @@ tu run phykit_batch_analysis '{"operation":"gap_percentage","directory":"./align
 ```
 Do NOT run phykit manually in a loop — the tool handles all files and returns correct summary statistics.
 
+**The batch tool is parallel: ~250 trees finish in about 35 seconds.** A per-tree
+shell loop takes ~9 minutes for the same work and is the single most common way
+these questions end with no answer at all — the run hits its turn or time budget
+mid-loop and reports "I'll report when it finishes" instead of a number. If you
+find yourself writing `for f in *.treefile`, stop and call the batch tool.
+
+Supported `function` values include `treeness`, `saturation`, `dvmc`,
+`long_branch_score`, `total_tree_length`, `parsimony_informative`,
+`treeness_over_rcv` (alias `toverr`). `dvmc` and `long_branch_score` are
+covered — you do not need to loop for those.
+
+**Two-group comparisons (Mann-Whitney U, differences of medians).** Questions
+comparing fungi against animals need one batch call per group, then the test on
+the two value lists — not a per-tree loop over both groups:
+
+```bash
+tu run phykit_batch_analysis '{"operation":"batch","function":"dvmc","directory":"<fungi>","extension":".treefile"}'
+tu run phykit_batch_analysis '{"operation":"batch","function":"dvmc","directory":"<animals>","extension":".treefile"}'
+# then scipy.stats.mannwhitneyu(fungi_values, animal_values)
+```
+
+Ask for `values` in the result when you need the full list for a test; the batch
+tool returns them for sets up to 50 and summary statistics always. For larger
+sets, compute the statistic from the per-group summaries the tool returns rather
+than re-deriving every value by hand.
+
+### Commit the value you computed
+
+Two failures in this benchmark came from computing the right number and then
+answering a different one:
+
+- a tree-length ratio computed as **2.1775**, then answered as 1.9 after
+  re-reading "paired orthologs";
+- an average treeness that listed **19** among the alternatives, then committed 10.
+
+When a question is ambiguous, compute the reading you judge most literal, state
+the alternative in one clause, and **answer with the value you actually
+computed**. Do not replace a computed result with a re-derived one at the last
+step — if two readings are both defensible, give the computed number first and
+name the other, rather than silently switching.
+
 ### PhyKIT column-position cheat sheet (parse output carefully)
 
 When parsing PhyKIT stdout for batch metrics, the **column you want** depends on the metric:
