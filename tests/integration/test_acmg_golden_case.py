@@ -164,8 +164,8 @@ def test_brca2_golden_three_phase_evidence_workflow():
         "evidence_cards",
         "compatibility_report",
         "conflict_report",
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "automatic_bayesian",
+        "verified_bayesian",
         "user_selected_bayesian",
         "guard_context",
         "decision_report",
@@ -175,16 +175,34 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert initial["variant_identity"]["gene"] == "BRCA2"
     assert initial["variant_identity"]["transcript"] == "NM_000059.4"
     assert initial["consequence_profile"]["protein_effect"] == "lof"
-    assert initial["review_readiness"]["status"] == "incomplete"
-    assert initial["review_readiness"]["pending_request_ids"]
+    assert initial["review_readiness"]["status"] == "ready_for_evidence_review"
+    assert initial["review_readiness"]["pending_request_ids"] == []
     assert initial["final_classification_allowed"] is False
-    assert initial["runtime_manifest"]["acmg_runtime_version"] == "evidence-only-2"
+    assert initial["runtime_manifest"]["acmg_runtime_version"] == (
+        "evidence-automation-3"
+    )
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
     assert validate_guard_context(initial["guard_context"]) == (True, "")
-    assert initial["guard_context"]["ruleset_hash"] == initial["runtime_manifest"][
-        "ruleset_hash"
-    ]
-    assert len(json.dumps(initial, ensure_ascii=False, separators=(",", ":"))) < 50_000
+    assert (
+        initial["guard_context"]["ruleset_hash"]
+        == initial["runtime_manifest"]["ruleset_hash"]
+    )
+    assert len(json.dumps(initial, ensure_ascii=False, separators=(",", ":"))) < 100_000
+    forbidden_card_fields = {
+        "assessment_status",
+        "suggested_criterion",
+        "suggested_strength",
+        "effective_strength",
+    }
+    assert all(
+        forbidden_card_fields.isdisjoint(card) for card in initial["evidence_cards"]
+    )
+    assert initial["scenario_estimates"]
+    assert all(
+        "rule_execution_trace" not in scenario
+        and scenario["rule_execution_trace_in"] == "full response scenario_estimates"
+        for scenario in initial["scenario_estimates"]
+    )
 
     proposed = ACMGEvidencePipeline(fixture).run(
         {
@@ -193,13 +211,21 @@ def test_brca2_golden_three_phase_evidence_workflow():
             "literature_proposals": [MECHANISM_PROPOSAL],
         }
     )
-    pvs1 = next(row for row in proposed["evidence_cards"] if row["criterion"] == "PVS1")
-    assert pvs1["assessment_status"] == "met"
+    assert all(
+        "rule_execution_trace" in scenario
+        for scenario in proposed["scenario_estimates"]
+    )
+    pvs1 = next(
+        row
+        for row in proposed["evidence_cards"]
+        if row["criterion"] == "PVS1"
+        and row["card_id"] in proposed["automatic_bayesian"]["included_card_ids"]
+    )
     assert pvs1["strength"] == "PVS1"
-    assert pvs1["system_preview_included"] is True
-    assert pvs1["validated_subset_included"] is True
-    assert pvs1["card_id"] in proposed["system_preview_bayesian"]["included_card_ids"]
-    assert pvs1["card_id"] in proposed["validated_subset_bayesian"]["included_card_ids"]
+    assert pvs1["calculation_roles"]["automatic"] is True
+    assert pvs1["calculation_roles"]["verified"] is False
+    assert pvs1["card_id"] in proposed["automatic_bayesian"]["included_card_ids"]
+    assert pvs1["card_id"] not in proposed["verified_bayesian"]["included_card_ids"]
     assert proposed["review_readiness"]["status"] == "ready_for_evidence_review"
     assert proposed["review_readiness"]["pending_request_ids"] == []
     assert "compatibility_exclusions" in proposed["conflict_report"]
@@ -225,13 +251,13 @@ def test_brca2_golden_three_phase_evidence_workflow():
     passed = guard_acmg_answer(
         "PVS1 is a system suggestion supported by the collected facts.",
         reviewed["evidence_cards"],
-        trusted_source_fact_ids=trusted,
+        verified_source_fact_ids=trusted,
         known_source_fact_ids=trusted,
     )
     blocked = guard_acmg_answer(
         "This variant is likely_pathogenic.",
         reviewed["evidence_cards"],
-        trusted_source_fact_ids=trusted,
+        verified_source_fact_ids=trusted,
         known_source_fact_ids=trusted,
     )
     assert passed["status"] == "PASS"
@@ -274,5 +300,5 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
     payload = _mcp_payload(response)
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
-    assert payload["runtime_manifest"]["collector_schema_version"] == "2026-08-07"
+    assert payload["runtime_manifest"]["collector_schema_version"] == ("2026-08-09-v3")
     assert payload["final_classification_allowed"] is False

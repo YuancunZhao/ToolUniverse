@@ -184,7 +184,7 @@ def _pm1_card(
     profile: dict[str, Any],
     protein_context: dict[str, Any],
     rule_override: dict[str, Any] | None,
-) -> EvidenceCard:
+) -> EvidenceCard | None:
     contract, criterion_contract = _pm1_contract(rule_override)
     applicability = consequence_applicability(
         "PM1", profile, cspec_criterion=criterion_contract
@@ -194,25 +194,9 @@ def _pm1_card(
         "protein_context": dict(protein_context),
     }
     if applicability["status"] != "applicable":
-        return EvidenceCard(
-            criterion="PM1",
-            strength="not_applicable",
-            input_source="EBI Proteins / InterPro",
-            input_values=observed,
-            clinvar_rule_applied="ACMG/AMP 2015 PM1",
-            provenance_chain=[applicability["reason"]],
-        )
+        return None
     if protein_context.get("mapping_status") != "resolved":
-        return EvidenceCard(
-            criterion="PM1",
-            strength="not_assessed",
-            input_source="EBI Proteins / InterPro",
-            input_values=observed,
-            clinvar_rule_applied="ACMG/AMP 2015 PM1",
-            provenance_chain=[
-                "PM1: a unique gene-, allele-, and protein-position-matched UniProt mapping is required"
-            ],
-        )
+        return None
 
     selected = protein_context.get("selected_mapping")
     selected = selected if isinstance(selected, dict) else {}
@@ -220,16 +204,7 @@ def _pm1_card(
     accession = str(selected.get("protein_accession") or "")
     overlapping = list(protein_context.get("overlapping_features") or [])
     if not overlapping and criterion_contract is None:
-        return EvidenceCard(
-            criterion="PM1",
-            strength="not_assessed",
-            input_source="EBI Proteins / InterPro",
-            input_values=observed,
-            clinvar_rule_applied="ACMG/AMP 2015 PM1",
-            provenance_chain=[
-                "PM1: no position-overlapping UniProt domain/site annotation was returned"
-            ],
-        )
+        return None
 
     contract_complete = bool(
         isinstance(contract, dict)
@@ -257,6 +232,7 @@ def _pm1_card(
         return EvidenceCard(
             criterion="PM1",
             strength=strength,
+            evidence_status="rule_mapped",
             input_source="Verified ClinGen CSpec with EBI protein mapping",
             input_values={
                 **observed,
@@ -269,6 +245,13 @@ def _pm1_card(
             rule_id=str(contract.get("rule_id") or ""),
             rule_version=str(contract.get("version") or ""),
             rule_reference=str(contract.get("primary_reference") or ""),
+            strength_source="dynamic_cspec",
+            rule_source={
+                "type": "dynamic_cspec_structured",
+                "rule_id": str(contract.get("rule_id") or ""),
+                "version": str(contract.get("version") or ""),
+                "content_hash": str(contract.get("content_hash") or ""),
+            },
         )
 
     missing = [
@@ -278,12 +261,25 @@ def _pm1_card(
     ]
     return EvidenceCard(
         criterion="PM1",
-        strength="indeterminate",
+        strength="PM1",
+        evidence_status="source_backed_candidate",
         input_source="EBI Proteins / InterPro",
         input_values={**observed, "missing_requirements": missing},
-        clinvar_rule_applied="ACMG/AMP 2015 PM1",
+        clinvar_rule_applied="ACMG/AMP 2015 PM1 source-backed candidate policy",
+        strength_source="acmg_2015_default_candidate",
+        rule_source={
+            "type": "generic_acmg_candidate",
+            "rule_id": "tooluniverse-acmg-source-backed-candidates",
+            "version": "2026-08-08-v3",
+        },
+        missing_requirements=missing,
+        caveats=[
+            "A domain or site overlap is a source-backed PM1 candidate, not a "
+            "verified hotspot or benign-depleted region without a matching CSpec "
+            "or anchored mechanism literature."
+        ],
         provenance_chain=[
-            "PM1: domain/site overlap is reviewable context but is insufficient for automatic PM1"
+            "PM1: exact protein-position overlap generated a Moderate source-backed candidate"
         ],
     )
 
@@ -319,7 +315,9 @@ def functional_evidence(
             "splice_class": "none",
             "selected_transcript_terms": [normalized_type] if normalized_type else [],
         }
-    cards.append(_pm1_card(profile, dict(protein_context or {}), rule_override))
+    pm1_card = _pm1_card(profile, dict(protein_context or {}), rule_override)
+    if pm1_card is not None:
+        cards.append(pm1_card)
     if consequence_applicability("PVS1", profile)["status"] == "applicable":
         cards.append(
             assess_pvs1(

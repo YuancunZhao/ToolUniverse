@@ -80,7 +80,7 @@ def test_revel_neutral_interval_is_not_in_preview():
 
     assert card.strength == "not_met"
     assert all(
-        not row["system_preview_included"]
+        not row["calculation_roles"]["automatic"]
         for row in evidence_cards_to_result(cards)["evidence_cards"]
     )
 
@@ -98,11 +98,10 @@ def test_cadd_is_retained_as_audit_but_cannot_replace_revel():
         variant_type="missense_variant",
     )
 
-    assert all(not row["system_preview_included"] for row in result["evidence_cards"])
-    assert result["evidence_cards"][0]["overlay_validated"] is False
-    assert result["evidence_cards"][0]["criterion"] == "PP3/BP4"
-    assert result["evidence_cards"][0]["strength"] == "not_assessed"
-    assert result["evidence_cards"][0]["system_preview_included"] is False
+    assert result["evidence_cards"] == []
+    raw = _pp3_bp4_card(cadd_phred=26.0)
+    assert raw.input_values["cadd_phred"] == 26.0
+    assert raw.strength == "not_assessed"
 
 
 def test_unselected_non_revel_score_does_not_enter_preview():
@@ -111,7 +110,7 @@ def test_unselected_non_revel_score_does_not_enter_preview():
 
     assert card.strength == "not_assessed"
     assert all(
-        not row["system_preview_included"]
+        not row["calculation_roles"]["automatic"]
         for row in evidence_cards_to_result(cards)["evidence_cards"]
     )
 
@@ -220,9 +219,7 @@ def test_spliceai_scalar_only_is_audit_only_and_conflicts_fail_closed():
         variant_type="intron_variant",
     )
 
-    scalar_card = next(
-        card for card in scalar_only if card.input_source == "SpliceAI"
-    )
+    scalar_card = next(card for card in scalar_only if card.input_source == "SpliceAI")
     conflict_card = next(
         card for card in conflicting if card.input_source == "SpliceAI"
     )

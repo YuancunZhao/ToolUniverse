@@ -297,33 +297,29 @@ def _splice_prediction_cards(
             variant_type="splicing",
             rule_override=rule_override,
         )
-    if not splice_prediction_applicable:
-        pass
-    elif spliceai_profile.get("status") != "resolved":
-        pass
-    elif score is None:
-        pass
-    elif not walker_run_metadata_ready(spliceai_run_metadata, score):
-        pass
-    elif cspec_decision is not None:
-        strength = cspec_decision[1]
-        reason = (
-            f"{cspec_decision[0]} splicing: verified CSpec contract "
-            f"applied to SpliceAI={score:.3f}"
-        )
-    elif score >= SPLICEAI_RULE["thresholds"]["pp3_supporting_min"]:
-        strength = "PP3_Supporting"
-        reason = (
-            f"PP3 splicing: SpliceAI maximum unmasked delta score={score:.3f} >= 0.2"
-        )
-    elif score <= SPLICEAI_RULE["thresholds"]["bp4_supporting_max"]:
-        strength = "BP4_Supporting"
-        reason = (
-            f"BP4 splicing: SpliceAI maximum unmasked delta score={score:.3f} <= 0.1"
-        )
-    else:
-        strength = "not_met"
-        reason = f"PP3/BP4 splicing: SpliceAI max delta={score:.3f} is indeterminate"
+        if cspec_decision is not None:
+            strength = cspec_decision[1]
+            reason = (
+                f"{cspec_decision[0]} splicing: verified CSpec contract "
+                f"applied to SpliceAI={score:.3f}"
+            )
+        elif score >= SPLICEAI_RULE["thresholds"]["pp3_supporting_min"]:
+            strength = "PP3_Supporting"
+            reason = (
+                "PP3 splicing: SpliceAI maximum unmasked delta "
+                f"score={score:.3f} >= 0.2"
+            )
+        elif score <= SPLICEAI_RULE["thresholds"]["bp4_supporting_max"]:
+            strength = "BP4_Supporting"
+            reason = (
+                "BP4 splicing: SpliceAI maximum unmasked delta "
+                f"score={score:.3f} <= 0.1"
+            )
+        else:
+            strength = "not_met"
+            reason = (
+                f"PP3/BP4 splicing: SpliceAI max delta={score:.3f} is indeterminate"
+            )
     criterion = (
         "PP3"
         if strength.startswith("PP3")

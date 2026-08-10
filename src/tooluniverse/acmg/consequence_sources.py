@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import SourceFact
+from .models import SourceFact, fact_identity_matches, fact_is_available
 
 
 CONSEQUENCE_METHODS = {
@@ -56,11 +56,7 @@ def _terms(row: dict[str, Any]) -> list[str]:
     if isinstance(values, str):
         values = [values]
     return sorted(
-        {
-            _text(value).casefold().replace(" ", "_")
-            for value in values
-            if _text(value)
-        }
+        {_text(value).casefold().replace(" ", "_") for value in values if _text(value)}
     )
 
 
@@ -92,9 +88,7 @@ def _protein_change(value: Any) -> str:
     return normalized.rsplit(":", 1)[-1]
 
 
-def _transcript_match(
-    row: dict[str, Any], selected_transcript: str
-) -> tuple[str, int]:
+def _transcript_match(row: dict[str, Any], selected_transcript: str) -> tuple[str, int]:
     selected_versioned = _versioned(selected_transcript)
     selected_base = _base(selected_transcript)
     transcript = _text(
@@ -152,15 +146,9 @@ def consequence_observations(
                     "provider_version": fact.provider_version,
                     "annotation_method": CONSEQUENCE_METHODS[fact.tool_name],
                     "query_representation": dict(fact.request_arguments),
-                    "identity_status": (
-                        "verified"
-                        if fact.identity_verified
-                        else "conflict"
-                        if features.get("identity_conflict") is True
-                        else "unverified"
-                    ),
+                    "identity_status": (fact.identity_status),
                     "selected_transcript_status": "unknown",
-                    "assessment_ready": False,
+                    "source_available": False,
                     "limitation": "no_transcript_consequence_rows",
                 }
             )
@@ -200,19 +188,13 @@ def consequence_observations(
                 "protein_position": row.get("protein_start")
                 or row.get("protein_position"),
                 "canonical": row.get("canonical") or row.get("is_canonical"),
-                "identity_status": (
-                    "verified"
-                    if fact.identity_verified
-                    else "conflict"
-                    if features.get("identity_conflict") is True
-                    else "unverified"
-                ),
+                "identity_status": (fact.identity_status),
                 "selected_transcript_status": match_status,
-                "assessment_ready": bool(
-                    fact.assessment_ready
+                "source_available": bool(
+                    fact_is_available(fact)
+                    and fact_identity_matches(fact)
                     and match_rank <= 2
                     and terms
-                    and fact.provider_version
                 ),
                 "_match_rank": match_rank,
                 "_provider_rank": _PROVIDER_PRIORITY.get(fact.tool_name, 99),
@@ -235,9 +217,7 @@ def resolve_consequence_observations(
 ) -> dict[str, Any]:
     """Select one transcript-bound consequence without majority voting."""
     identity_conflicts = [
-        row
-        for row in observations
-        if row.get("identity_status") == "conflict"
+        row for row in observations if row.get("identity_status") == "conflict"
     ]
     if identity_conflicts:
         return {
@@ -261,17 +241,12 @@ def resolve_consequence_observations(
     ready = [
         row
         for row in observations
-        if row.get("assessment_ready") is True
-        and int(row.get("_match_rank", 99)) <= 2
+        if row.get("source_available") is True and int(row.get("_match_rank", 99)) <= 2
     ]
     failures = [
-        {
-            key: value
-            for key, value in row.items()
-            if not key.startswith("_")
-        }
+        {key: value for key, value in row.items() if not key.startswith("_")}
         for row in observations
-        if row.get("assessment_ready") is not True
+        if row.get("source_available") is not True
     ]
     if not ready:
         return {
@@ -292,9 +267,7 @@ def resolve_consequence_observations(
         if row.get("consequence_terms")
     }
     protein_values = {
-        _protein_change(row.get("hgvs_p"))
-        for row in best
-        if _text(row.get("hgvs_p"))
+        _protein_change(row.get("hgvs_p")) for row in best if _text(row.get("hgvs_p"))
     }
     conflicts: list[dict[str, Any]] = []
     if not _term_sets_connected(best):
@@ -302,9 +275,7 @@ def resolve_consequence_observations(
             {
                 "type": "selected_transcript_consequence_conflict",
                 "values": [list(value) for value in sorted(term_sets)],
-                "source_fact_ids": sorted(
-                    {str(row["source_fact_id"]) for row in best}
-                ),
+                "source_fact_ids": sorted({str(row["source_fact_id"]) for row in best}),
             }
         )
     if len(protein_values) > 1:
@@ -312,9 +283,7 @@ def resolve_consequence_observations(
             {
                 "type": "selected_transcript_protein_consequence_conflict",
                 "values": sorted(protein_values),
-                "source_fact_ids": sorted(
-                    {str(row["source_fact_id"]) for row in best}
-                ),
+                "source_fact_ids": sorted({str(row["source_fact_id"]) for row in best}),
             }
         )
     if conflicts:

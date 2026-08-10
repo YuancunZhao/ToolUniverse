@@ -64,7 +64,7 @@ def test_pm6_no_parentage():
 
 
 def test_not_de_novo():
-    assert _de_novo_card().strength == "not_assessed"
+    assert clinical_evidence() == []
 
 
 def test_ps2_multiple_probands_accumulate_to_very_strong():

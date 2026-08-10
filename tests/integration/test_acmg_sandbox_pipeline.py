@@ -10,9 +10,6 @@ Test scope:
 """
 
 from __future__ import annotations
-import sys
-
-sys.path.insert(0, "src")
 
 
 class _RawRuntime:
@@ -60,7 +57,8 @@ def test_genebe_sandbox_to_overlay_pipeline():
     )
     result = next(card for card in cards if card.criterion == "PM2")
     assert result.strength == "PM2_Supporting"
-    assert result.overlay_validated is False
+    assert result.evidence_status == "rule_mapped"
+    assert result.rule_source["type"] == "versioned_svi"
 
     # Verify sanitized output has no leaked classification.
     assert "classification" not in sandbox["reviewable_features"]
@@ -68,19 +66,15 @@ def test_genebe_sandbox_to_overlay_pipeline():
     assert sandbox["reviewable_features"]["gene"] == "BRCA2"
     assert sandbox["reviewable_features"]["transcript"] == "NM_000059.4"
 
-    print("  PASS: GeneBe sandbox → PM2 overlay pipeline")
-
 
 def test_non_high_risk_passthrough():
     """Non-high-risk tools must pass through sanitize unchanged."""
     from tooluniverse.acmg.policy import ACMGScopedExecutor
 
-    result = ACMGScopedExecutor(
-        _RawRuntime({"value": 42, "status": "ok"})
-    ).call("Some_normal_tool", {})
+    result = ACMGScopedExecutor(_RawRuntime({"value": 42, "status": "ok"})).call(
+        "Some_normal_tool", {}
+    )
     assert result == {"value": 42, "status": "ok"}
-
-    print("  PASS: Non-high-risk tool passes through unchanged")
 
 
 def test_high_risk_tool_passthrough_without_acmg_policy_context():
@@ -105,8 +99,6 @@ def test_error_status_preserved_through_sandbox():
     assert result["status"] == "error"
     assert result["source_lead_only"] is True
 
-    print("  PASS: Error status preserved through sandbox")
-
 
 def test_clinvar_sandbox_keeps_criteria_as_source_assertions():
     """ClinVar criteria remain quarantined source assertions, not route output."""
@@ -115,23 +107,13 @@ def test_clinvar_sandbox_keeps_criteria_as_source_assertions():
     result = ACMGScopedExecutor(
         _RawRuntime(
             {
-            "clinicalSignificance": "Pathogenic",
-            "criteria": "PM2, PP3",
-            "variation_id": "12345",
-            "reviewStatus": "criteria provided",
+                "clinicalSignificance": "Pathogenic",
+                "criteria": "PM2, PP3",
+                "variation_id": "12345",
+                "reviewStatus": "criteria provided",
             }
         )
     ).call("ClinVar_get_clinical_significance", {})
     sandbox = result["source_lead_sandbox"]
     assert "candidate_routes" not in sandbox
     assert sandbox["quarantined_conclusions"]["criteria"] == "PM2, PP3"
-
-    print("  PASS: ClinVar criteria remain source assertions")
-
-
-if __name__ == "__main__":
-    test_genebe_sandbox_to_overlay_pipeline()
-    test_non_high_risk_passthrough()
-    test_error_status_preserved_through_sandbox()
-    test_clinvar_sandbox_keeps_criteria_as_source_assertions()
-    print("PASS test_acmg_sandbox_pipeline")

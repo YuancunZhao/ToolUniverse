@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from tooluniverse.acmg.functional import functional_evidence
 from tooluniverse.acmg.collector import ACMGEvidencePipeline
@@ -18,7 +13,7 @@ from tooluniverse.acmg.pvs1 import (
 )
 from tooluniverse.acmg.rule_catalog import (
     bayesian_odds_for_output,
-    rule_allows_system_preview_strength,
+    rule_allows_verified_strength,
 )
 from tooluniverse.acmg.spliceai import bind_spliceai_site, normalize_spliceai_profile
 
@@ -144,14 +139,16 @@ def test_unresolved_literature_mechanism_does_not_establish_pvs1_gate():
         status="success",
         query_identity={"gene": "GENE1"},
         result_identity={"gene": "GENE1"},
-        identity_verified=True,
         features={
             "fact_type": "mechanism",
             "semantic_status": "unresolved",
             "values": {"gene_disease_mechanism": "loss_of_function"},
         },
         raw_result_hash="fixture",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="unresolved",
+        version_status="versioned",
     )
 
     facts, fact_ids = ACMGEvidencePipeline._pvs1_facts(
@@ -348,10 +345,12 @@ def test_collector_pvs1_facts_preserve_profile_and_native_loss_channel():
         status="success",
         query_identity={"gene": "GENE1"},
         result_identity={"gene": "GENE1"},
-        identity_verified=True,
         features={"spliceai_profile": source_profile},
         raw_result_hash="fixture",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
     )
 
     facts, fact_ids = ACMGEvidencePipeline._pvs1_facts(
@@ -391,7 +390,6 @@ def test_collector_binds_spliceai_loss_dp_to_selected_transcript_exon_boundary()
         status="success",
         query_identity={"gene": "FGFR3"},
         result_identity={"gene": "FGFR3"},
-        identity_verified=True,
         features={
             "vep_transcript_candidates": [
                 {
@@ -403,7 +401,10 @@ def test_collector_binds_spliceai_loss_dp_to_selected_transcript_exon_boundary()
             ]
         },
         raw_result_hash="vep",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
     )
     lookup = SourceFact(
         fact_id="lookup-ready",
@@ -411,7 +412,6 @@ def test_collector_binds_spliceai_loss_dp_to_selected_transcript_exon_boundary()
         status="success",
         query_identity={"transcript": "ENST00000440486.7"},
         result_identity={"transcript": "ENST00000440486.7"},
-        identity_verified=True,
         features={
             "exons": [
                 {
@@ -423,7 +423,10 @@ def test_collector_binds_spliceai_loss_dp_to_selected_transcript_exon_boundary()
             ]
         },
         raw_result_hash="lookup",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
     )
     splice = SourceFact(
         fact_id="splice-ready",
@@ -431,10 +434,12 @@ def test_collector_binds_spliceai_loss_dp_to_selected_transcript_exon_boundary()
         status="success",
         query_identity={"gene": "FGFR3"},
         result_identity={"gene": "FGFR3"},
-        identity_verified=True,
         features={"spliceai_profile": source_profile},
         raw_result_hash="splice",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
     )
 
     facts, fact_ids = ACMGEvidencePipeline._pvs1_facts(
@@ -975,7 +980,7 @@ def test_pvs1_strengths_are_eligible_for_preview_with_tavtigian_odds():
         ("PVS1_Moderate", 4.3),
         ("PVS1_Supporting", 2.08),
     ):
-        assert rule_allows_system_preview_strength(
+        assert rule_allows_verified_strength(
             "PVS1", strength, rule_id="clingen-svi-pvs1", rule_version="1.2"
         )
         assert (
@@ -984,6 +989,6 @@ def test_pvs1_strengths_are_eligible_for_preview_with_tavtigian_odds():
             )
             == odds
         )
-    assert not rule_allows_system_preview_strength(
+    assert not rule_allows_verified_strength(
         "PVS1", "not_assessed", rule_id="clingen-svi-pvs1", rule_version="1.2"
     )

@@ -153,6 +153,37 @@ def _same(value: Any, expected: str) -> bool:
     return _norm(value) == _norm(expected)
 
 
+def _target_link_status(
+    excerpt: str,
+    *,
+    fact_type: str,
+    expected_variant: str,
+    expected_gene: str,
+) -> str:
+    """Classify only links visible in the submitted, re-anchored excerpt."""
+    if expected_variant and _contains(excerpt, expected_variant):
+        return "direct_variant"
+    if fact_type in {"mechanism", "region_hotspot", "protein_length_repeat"}:
+        if expected_gene and re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(expected_gene)}(?![A-Za-z0-9_-])",
+            excerpt,
+            re.IGNORECASE,
+        ):
+            return "direct_gene"
+    return "unlinked"
+
+
+def _negation_status(excerpt: str) -> str:
+    """Conservatively flag explicit negation in an evidence-bearing excerpt."""
+    if re.search(
+        r"\b(?:no|not|without|neither|nor|failed\s+to)\b",
+        excerpt,
+        re.IGNORECASE,
+    ):
+        return "negated"
+    return "not_negated"
+
+
 def _payload(result: Any) -> dict[str, Any]:
     if not isinstance(result, dict):
         return {}
@@ -191,6 +222,14 @@ def document_text_for_locator(result: Any, locator: str) -> str:
     key = _norm(locator)
     if not key:
         return ""
+    if key in {"abstract", "summary"}:
+        abstract = data.get("abstract")
+        if isinstance(abstract, str) and abstract.strip():
+            return abstract
+    if key in {"snippet", "search snippet"}:
+        snippet = data.get("snippet")
+        if isinstance(snippet, str) and snippet.strip():
+            return snippet
     unstructured_text = data.get("text") or data.get("content")
     if isinstance(unstructured_text, str) and unstructured_text.strip():
         # Plain-text/HTML fallbacks cannot expose stable section nodes.  The
@@ -371,7 +410,10 @@ def _field_semantic_status(value: Any, excerpt: str) -> str:
         expected = float(value)
         return (
             "verified"
-            if any(math.isclose(expected, item, rel_tol=1e-9, abs_tol=1e-12) for item in observed)
+            if any(
+                math.isclose(expected, item, rel_tol=1e-9, abs_tol=1e-12)
+                for item in observed
+            )
             else "contradicted"
         )
     if isinstance(value, str):
@@ -446,6 +488,14 @@ def verify_document_fact(
     extractor = item.get("extractor") if isinstance(item.get("extractor"), dict) else {}
     text = document_text_for_locator(document_result, locator)
     semantic_errors = _semantic_errors(fact_type, values)
+    requirements_status = "complete" if not semantic_errors else "incomplete"
+    target_link_status = _target_link_status(
+        excerpt,
+        fact_type=fact_type,
+        expected_variant=expected_variant,
+        expected_gene=expected_gene,
+    )
+    negation_status = _negation_status(excerpt)
     anchor_errors: list[str] = []
     if not _document_identity_matches(document_result, pmid=pmid, pmcid=pmcid):
         anchor_errors.append("document_identity_mismatch")
@@ -503,8 +553,7 @@ def verify_document_fact(
     if not anchor_errors:
         anchor_status = "verified"
     elif any(
-        error in {"locator_not_found", "excerpt_not_found"}
-        for error in anchor_errors
+        error in {"locator_not_found", "excerpt_not_found"} for error in anchor_errors
     ):
         anchor_status = "unavailable"
     else:
@@ -528,14 +577,16 @@ def verify_document_fact(
         values=values,
     )
     return {
-        "verified": anchor_status == "verified"
-        and semantic_status != "contradicted",
+        "verified": anchor_status == "verified" and semantic_status != "contradicted",
         "verification_level": "machine_document_anchored"
         if anchor_status == "verified" and semantic_status != "contradicted"
         else "unverified",
         "validation_errors": errors,
         "anchor_status": anchor_status,
         "semantic_status": semantic_status,
+        "requirements_status": requirements_status,
+        "target_link_status": target_link_status,
+        "negation_status": negation_status,
         "field_semantics": field_semantics,
         "fact_id": fact_id,
         "submitted_fact_id": str(item.get("fact_id") or ""),

@@ -61,16 +61,14 @@ def test_fact_types_map_only_to_allowed_criteria(
 
     assert mapped == criterion
     assert mapped in LITERATURE_FACT_CRITERIA[fact_type]
-    assert status == "llm_review_required"
+    assert status == "generic_acmg_candidate"
 
 
 def test_cross_criterion_llm_suggestion_is_not_trusted():
-    mapped, status = _mapped_literature_criterion(
-        "healthy_observation", {}, "PS4"
-    )
+    mapped, status = _mapped_literature_criterion("healthy_observation", {}, "PS4")
 
     assert mapped == "BS2"
-    assert status == "llm_review_required"
+    assert status == "generic_acmg_candidate"
 
 
 def test_rna_splicing_fact_cannot_bypass_pvs1():
@@ -104,7 +102,14 @@ def test_prior_variant_requires_independent_pathogenic_evidence():
 
 @pytest.mark.parametrize(
     "fact_type",
-    ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional"],
+    [
+        "case_control",
+        "case_series",
+        "de_novo",
+        "pm3",
+        "recessive_allelic",
+        "functional",
+    ],
 )
 def test_criterion_specific_literature_proposals_do_not_create_generic_duplicate_cards(
     fact_type,
@@ -115,7 +120,6 @@ def test_criterion_specific_literature_proposals_do_not_create_generic_duplicate
         status="success",
         query_identity={"variant": "NM_000001.1:c.1A>G", "gene": "GENE"},
         result_identity={"hgvs_c": "NM_000001.1:c.1A>G", "gene": "GENE"},
-        identity_verified=True,
         features={
             "fact_type": fact_type,
             "values": {},
@@ -123,7 +127,10 @@ def test_criterion_specific_literature_proposals_do_not_create_generic_duplicate
             "semantic_status": "verified",
         },
         raw_result_hash="fixture",
-        assessment_ready=True,
+        identity_status="matched",
+        source_status="available",
+        extraction_status="rule_extracted",
+        version_status="versioned",
     )
 
     cards = ACMGEvidencePipeline._literature_proposal_cards(

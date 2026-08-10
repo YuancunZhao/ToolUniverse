@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from tooluniverse.acmg import compatibility, models, population
+from tooluniverse.acmg import (
+    compatibility,
+    literature_extractor,
+    models,
+    population,
+    rule_catalog,
+    vcep,
+)
 from tooluniverse.acmg.runtime_manifest import build_runtime_manifest, ruleset_hash
 
 
@@ -18,8 +25,8 @@ def test_ruleset_hash_tracks_candidate_preview_policy(monkeypatch):
     baseline = ruleset_hash()
     monkeypatch.setattr(
         models,
-        "SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES",
-        frozenset({*models.SOURCE_BACKED_ALLOWED_PROPOSAL_STATUSES, "fixture"}),
+        "AUTOMATIC_EVIDENCE_STATUSES",
+        frozenset({*models.AUTOMATIC_EVIDENCE_STATUSES, "fixture"}),
     )
     assert ruleset_hash() != baseline
 
@@ -36,6 +43,36 @@ def test_ruleset_hash_tracks_compatibility_policy_version(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_vcep_identity_and_moi_policies(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(vcep, "VCEP_ALLELE_MATCH_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+    baseline = ruleset_hash()
+    monkeypatch.setattr(vcep, "VCEP_MOI_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+
+def test_ruleset_hash_tracks_scenario_and_literature_contracts(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(rule_catalog, "CSPEC_SCENARIO_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+    baseline = ruleset_hash()
+    monkeypatch.setattr(
+        rule_catalog, "USER_DECISION_SCENARIO_POLICY_VERSION", "fixture"
+    )
+    assert ruleset_hash() != baseline
+
+    baseline = ruleset_hash()
+    monkeypatch.setattr(
+        literature_extractor,
+        "TARGET_LINK_POLICY_VERSION",
+        "fixture",
+    )
+    assert ruleset_hash() != baseline
+
+
 def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     manifest = build_runtime_manifest(
         {
@@ -47,8 +84,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-only-2"
-    assert manifest["collector_schema_version"] == "2026-08-07"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-3"
+    assert manifest["collector_schema_version"] == "2026-08-09-v3"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {

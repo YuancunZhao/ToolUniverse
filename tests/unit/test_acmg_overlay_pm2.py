@@ -37,8 +37,8 @@ def test_population_card_preserves_frequency_and_callability_audit_fields():
     )
     assert card.input_values["population_details"]["dataset"] == "gnomad_r4"
     assert card.input_values["callability_metrics"]["over_20"] == 0.98
-    assert card.proposal_status == "requires_user_review"
-    assert card.rule_verification == "generic_svi"
+    assert card.evidence_status == "source_backed_candidate"
+    assert card.rule_source["type"] == "fork_candidate_policy"
     assert "versioned site-coverage adequacy assessment" in card.missing_requirements
 
 
@@ -53,8 +53,8 @@ def test_pm2_explicit_adequate_coverage_is_deterministic():
         ),
         "PM2",
     )
-    assert card.proposal_status == "suggested"
-    assert card.rule_verification == "versioned_deterministic"
+    assert card.evidence_status == "rule_mapped"
+    assert card.rule_source["type"] == "versioned_svi"
 
 
 def test_pm2_present_without_disease_threshold_is_indeterminate():
@@ -84,30 +84,15 @@ def test_pm2_extremely_rare_observation_preserves_supporting_candidate():
         "PM2",
     )
 
-    assert card.strength == "indeterminate"
-    assert card.suggested_criterion == "PM2"
-    assert card.suggested_strength == "PM2_Supporting"
-    assert card.proposal_status == "requires_user_review"
-    assert card.verification_status == "unresolved"
+    assert card.strength == "PM2_Supporting"
+    assert card.evidence_status == "source_backed_candidate"
+    assert card.verification_dimensions["extraction_status"] == "unresolved"
     assert card.input_values["af_global"] == 4.1e-6
     assert "maximum credible allele frequency" in card.caveats[0]
     assert "not a deterministic ClinGen SVI PM2 threshold" in card.rule_basis
     assert card.missing_requirements == [
         "disease-specific maximum credible allele frequency"
     ]
-
-
-def test_pm2_uses_general_svi_without_vcep():
-    card = _card(
-        population_evidence(
-            gnomad_af_global=0.0,
-            gnomad_ac=0,
-            gnomad_an=100000,
-            coverage_adequate=True,
-        ),
-        "PM2",
-    )
-    assert card.strength == "PM2_Supporting"
 
 
 def test_ba1_threshold_requires_reviewed_exception_status():

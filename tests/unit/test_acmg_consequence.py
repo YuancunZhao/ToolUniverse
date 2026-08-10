@@ -215,8 +215,8 @@ def test_multi_provider_resolver_accepts_overlapping_term_detail():
         {
             "source_fact_id": "vep",
             "provider": "EnsemblVEP_annotate_hgvs",
-            "assessment_ready": True,
-            "identity_status": "verified",
+            "source_available": True,
+            "identity_status": "matched",
             "selected_transcript_status": "exact",
             "consequence_terms": ["frameshift_variant", "nmd_transcript_variant"],
             "hgvs_p": "ENSP000001:p.Pro3909ArgfsTer33",
@@ -226,8 +226,8 @@ def test_multi_provider_resolver_accepts_overlapping_term_detail():
         {
             "source_fact_id": "vv",
             "provider": "VariantValidator_format_genomic_to_transcripts",
-            "assessment_ready": True,
-            "identity_status": "verified",
+            "source_available": True,
+            "identity_status": "matched",
             "selected_transcript_status": "exact",
             "consequence_terms": ["frameshift_variant"],
             "hgvs_p": "NP_001354730.1:p.Pro3909ArgfsTer33",
@@ -247,8 +247,8 @@ def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
         {
             "source_fact_id": "vv",
             "provider": "VariantValidator_format_genomic_to_transcripts",
-            "assessment_ready": True,
-            "identity_status": "verified",
+            "source_available": True,
+            "identity_status": "matched",
             "selected_transcript_status": "exact",
             "consequence_terms": ["frameshift_variant"],
             "_match_rank": 0,
@@ -257,8 +257,8 @@ def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
         {
             "source_fact_id": "other",
             "provider": "FAVOR_annotate_variant",
-            "assessment_ready": True,
-            "identity_status": "verified",
+            "source_available": True,
+            "identity_status": "matched",
             "selected_transcript_status": "exact",
             "consequence_terms": ["synonymous_variant"],
             "_match_rank": 0,

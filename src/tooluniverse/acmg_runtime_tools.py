@@ -10,7 +10,7 @@ from .acmg.computational import computational_evidence
 from .acmg.functional import functional_evidence
 from .acmg.guard import guard_acmg_answer, validate_guard_context
 from .acmg.literature import literature_evidence
-from .acmg.models import evidence_cards_to_result
+from .acmg.models import SourceFact, evidence_cards_to_result, fact_is_strictly_verified
 from .acmg.population import population_evidence
 from .base_tool import BaseTool
 from .tool_registry import register_tool
@@ -19,14 +19,14 @@ from .tool_registry import register_tool
 def _source_fact_ids(
     collector_result: Any,
 ) -> tuple[set[str] | None, set[str] | None]:
-    """Extract known and assessment-ready fact IDs in one pass."""
+    """Extract known and strictly verified v3 fact IDs in one pass."""
     if not isinstance(collector_result, dict):
         return None, None
     facts = collector_result.get("source_facts")
     if not isinstance(facts, list):
         return None, None
     known: set[str] = set()
-    trusted: set[str] = set()
+    verified: set[str] = set()
     for fact in facts:
         if not isinstance(fact, dict):
             continue
@@ -34,13 +34,13 @@ def _source_fact_ids(
         if not fact_id:
             continue
         known.add(fact_id)
-        if (
-            fact.get("status") == "success"
-            and fact.get("identity_verified") is True
-            and fact.get("assessment_ready") is True
-        ):
-            trusted.add(fact_id)
-    return trusted, known
+        try:
+            parsed = SourceFact(**fact)
+        except TypeError:
+            continue
+        if fact_is_strictly_verified(parsed):
+            verified.add(fact_id)
+    return verified, known
 
 
 @register_tool("ACMG_evidence_collector")
@@ -112,7 +112,7 @@ class ACMGGuardFinalAnswerTool(BaseTool):
         cards = arguments.get("evidence_cards")
         collector_result = arguments.get("collector_result")
         guard_context = arguments.get("guard_context")
-        trusted_ids: set[str] | None = None
+        verified_ids: set[str] | None = None
         known_ids: set[str] | None = None
         if guard_context is not None:
             context_valid, context_error = validate_guard_context(guard_context)
@@ -128,9 +128,9 @@ class ACMGGuardFinalAnswerTool(BaseTool):
                 }
             assert isinstance(guard_context, dict)
             cards = guard_context.get("cards", [])
-            trusted_ids = {
+            verified_ids = {
                 str(value)
-                for value in guard_context.get("trusted_source_fact_ids") or []
+                for value in guard_context.get("verified_source_fact_ids") or []
                 if value
             }
             known_ids = {
@@ -143,11 +143,11 @@ class ACMGGuardFinalAnswerTool(BaseTool):
         if not isinstance(cards, list):
             cards = []
         if guard_context is None:
-            trusted_ids, known_ids = _source_fact_ids(collector_result)
+            verified_ids, known_ids = _source_fact_ids(collector_result)
         return guard_acmg_answer(
             answer_text,
             cards,
-            trusted_source_fact_ids=trusted_ids,
+            verified_source_fact_ids=verified_ids,
             known_source_fact_ids=known_ids,
         )
 

@@ -106,7 +106,7 @@ def test_sv_collector_preflight_returns_route_without_evidence():
     assert result["source_facts"] == []
     assert result["recoverable_gaps"] == []
     assert result["review_readiness"]["status"] == "not_applicable"
-    assert result["review_readiness"]["system_preview_available"] is False
+    assert result["review_readiness"]["automatic_estimate_available"] is False
     assert (
         result["next_actions"][0]["skill_name"]
         == "tooluniverse-structural-variant-analysis"
@@ -125,4 +125,4 @@ def test_coordinate_without_build_stops_before_providers():
     assert result["source_facts"] == []
     assert result["evidence_cards"] == []
     assert result["review_readiness"]["status"] == "blocked"
-    assert result["review_readiness"]["system_preview_available"] is False
+    assert result["review_readiness"]["automatic_estimate_available"] is False

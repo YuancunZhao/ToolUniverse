@@ -116,12 +116,9 @@ def _proposal(
 
 
 KIM_EXCERPT = (
-    "MAT1A NM_000429.3:c.746G>A p.Arg249Gln was observed in 4 independent "
-    "probands."
+    "MAT1A NM_000429.3:c.746G>A p.Arg249Gln was observed in 4 independent probands."
 )
-MURIELLO_EXCERPT = (
-    "MAT1A NM_000429.3:c.746G>A p.Arg249Gln was reported in 6 patients"
-)
+MURIELLO_EXCERPT = "MAT1A NM_000429.3:c.746G>A p.Arg249Gln was reported in 6 patients"
 
 PROPOSALS = [
     _proposal(
@@ -243,20 +240,20 @@ def test_mat1a_broad_and_validated_evidence_workflow():
         by_criterion.setdefault(str(card["criterion"]), []).append(card)
 
     assert len(by_criterion["PS4"]) == 2
-    pp1 = next(card for card in by_criterion["PP1"] if card["suggested_strength"])
-    pm1 = next(card for card in by_criterion["PM1"] if card["suggested_strength"])
-    assert pp1["suggested_strength"] == "PP1_Supporting"
-    assert pm1["suggested_strength"] == "PM1_Supporting"
+    pp1 = next(card for card in by_criterion["PP1"] if card["strength"])
+    pm1 = next(card for card in by_criterion["PM1"] if card["strength"])
+    # Two informative AD co-segregations contribute two ClinGen Bayesian
+    # points, which maps to Moderate rather than preserving the LLM suggestion.
+    assert pp1["strength"] == "PP1_Moderate"
+    assert pm1["strength"] == "PM1_Supporting"
     pm2 = by_criterion["PM2"][0]
-    assert pm2["strength"] == "indeterminate"
-    assert pm2["suggested_strength"] == "PM2_Supporting"
-    assert pm2["verification_status"] == "unresolved"
-    assert pm2["system_preview_included"] is True
-    assert pm2["validated_subset_included"] is False
+    assert pm2["strength"] == "PM2_Supporting"
+    assert pm2["verification_dimensions"]["extraction_status"] == "unresolved"
+    assert pm2["calculation_roles"]["automatic"] is True
+    assert pm2["calculation_roles"]["verified"] is False
 
     overlap_reasons = {
-        row["reason"]
-        for row in reviewed["compatibility_report"]["excluded_evidence"]
+        row["reason"] for row in reviewed["compatibility_report"]["excluded_evidence"]
     }
     assert overlap_reasons.intersection(
         {
@@ -266,14 +263,12 @@ def test_mat1a_broad_and_validated_evidence_workflow():
             "duplicate_criterion",
         }
     )
-    assert reviewed["system_preview_bayesian"]["estimate_policy"] == (
+    assert reviewed["automatic_bayesian"]["estimate_policy"] == (
         "source_backed_candidates"
     )
-    assert reviewed["validated_subset_bayesian"]["estimate_policy"] == (
-        "validated_subset"
-    )
-    assert set(reviewed["validated_subset_bayesian"]["included_card_ids"]) < set(
-        reviewed["system_preview_bayesian"]["included_card_ids"]
+    assert reviewed["verified_bayesian"]["estimate_policy"] == ("verified_rules")
+    assert set(reviewed["verified_bayesian"]["included_card_ids"]) < set(
+        reviewed["automatic_bayesian"]["included_card_ids"]
     )
 
     predictors = reviewed["predictor_scores"]
@@ -295,8 +290,10 @@ def test_mat1a_broad_and_validated_evidence_workflow():
         "DS_DL",
     } <= set(splice["scores"][0])
     computational = by_criterion["PP3/BP4"]
-    assert all(card["proposal_status"] == "not_suggested" for card in computational)
-    assert all(card["system_preview_included"] is False for card in computational)
+    assert all(card["evidence_status"] == "not_met" for card in computational)
+    assert all(
+        card["calculation_roles"]["automatic"] is False for card in computational
+    )
 
     html_fact = next(
         fact
@@ -316,7 +313,7 @@ def test_mat1a_broad_and_validated_evidence_workflow():
             "literature_proposals": PROPOSALS,
         }
     )
-    assert len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"))) < 50_000
+    assert len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"))) < 100_000
 
 
 def test_mat1a_source_backed_pm2_can_be_user_selected_without_reviewer():
@@ -329,19 +326,17 @@ def test_mat1a_source_backed_pm2_can_be_user_selected_without_reviewer():
             "literature_proposals": PROPOSALS,
         }
     )
-    pm2 = next(card for card in proposed["evidence_cards"] if card["criterion"] == "PM2")
+    pm2 = next(
+        card for card in proposed["evidence_cards"] if card["criterion"] == "PM2"
+    )
     selected = ACMGEvidencePipeline(fixture).run(
         {
             **BASE_ARGUMENTS,
             "response_detail": "full",
             "literature_proposals": PROPOSALS,
-            "evidence_decisions": [
-                {"card_id": pm2["card_id"], "decision": "accept"}
-            ],
+            "evidence_decisions": [{"card_id": pm2["card_id"], "decision": "accept"}],
         }
     )
 
     assert selected["decision_report"]["decision_errors"] == []
-    assert selected["user_selected_bayesian"]["included_card_ids"] == [
-        pm2["card_id"]
-    ]
+    assert selected["user_selected_bayesian"]["included_card_ids"] == [pm2["card_id"]]

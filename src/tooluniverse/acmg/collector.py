@@ -34,7 +34,10 @@ from .models import (
     EvidenceCard,
     SourceFact,
     evidence_cards_to_result,
-    is_source_backed_candidate,
+    fact_identity_matches,
+    fact_is_available,
+    fact_is_strictly_verified,
+    is_automatic_evidence,
 )
 from .functional import functional_evidence
 from .guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_hash
@@ -55,6 +58,7 @@ from .identity import (
     classify_variant_scope,
 )
 from .literature import literature_evidence
+from .literature_extractor import extract_literature_facts
 from .population import population_evidence
 from .policy import ACMGScopedExecutor
 from .pvs1 import infer_mechanism_from_population_facts
@@ -66,6 +70,7 @@ from .rule_catalog import (
     rule_for_criterion,
 )
 from .runtime_manifest import BAYESIAN_PRIOR, build_runtime_manifest
+from .scenario_engine import build_scenario_results
 from .source_adapters import (
     build_matches,
     coordinates,
@@ -78,6 +83,7 @@ from .source_adapters import (
 )
 from .spliceai import bind_spliceai_site
 from .summary import compute_bayesian_score, detect_conflicts
+from .vcep import parse_vcep_assertions
 
 _CLINVAR_TITLE_C_RE = re.compile(r"c\.[^\s();:]+", re.IGNORECASE)
 _CLINVAR_TITLE_GENE_RE = re.compile(r"\(([A-Za-z][A-Za-z0-9-]*)\)")
@@ -108,6 +114,15 @@ _AA3_TO_1 = {
     "VAL": "V",
     "TER": "*",
 }
+
+
+def _fact_usable(fact: SourceFact) -> bool:
+    """Broad v3 fact availability; strict eligibility is calculated separately."""
+    return fact_is_available(fact) and fact_identity_matches(fact)
+
+
+def _fact_source_backed(fact: SourceFact) -> bool:
+    return fact_is_available(fact) and fact.identity_status in {"matched", "partial"}
 
 
 def _normalize_clinvar_c_token(token: str) -> str:
@@ -182,9 +197,30 @@ _CLINICAL_CONTEXT_FIELDS = (
 )
 
 _CLINICAL_CONTEXT_NOTICE = (
-    "Clinical context is displayed for human review only; it never generates "
-    "PS2, PM3, PP4, or any classification."
+    "Clinical context is search and consistency background only. Structured "
+    "case evidence belongs in clinical_observations."
 )
+
+_CLINICAL_OBSERVATION_TYPES = {
+    "de_novo",
+    "recessive_case",
+    "segregation",
+    "phenotype_specificity",
+    "healthy_observation",
+    "allelic_phase",
+    "alternative_cause",
+    "functional_assay",
+    "case_control",
+    "case_series",
+}
+_CLINICAL_SOURCE_TYPES = {
+    "user_report",
+    "lab_report",
+    "pedigree",
+    "publication",
+    "external_database",
+    "other",
+}
 
 
 def _protvar_variant(identity: dict[str, Any]) -> str:
@@ -277,6 +313,153 @@ def _normalize_evidence_decisions(
             }
         )
     return decisions, errors
+
+
+def _normalize_clinical_observations(
+    raw: Any,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if raw is None:
+        return [], []
+    if not isinstance(raw, list):
+        return [], ["clinical_observations must be an array"]
+    normalized: list[dict[str, Any]] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            errors.append(f"clinical_observations[{index}] must be an object")
+            continue
+        observation_id = str(item.get("observation_id") or "").strip()
+        observation_type = str(item.get("observation_type") or "").strip()
+        source_type = str(item.get("source_type") or "").strip()
+        source_id = str(item.get("source_id") or "").strip()
+        values = item.get("values")
+        if not observation_id or observation_id in seen:
+            errors.append(
+                f"clinical_observations[{index}].observation_id must be unique and non-empty"
+            )
+            continue
+        seen.add(observation_id)
+        if observation_type not in _CLINICAL_OBSERVATION_TYPES:
+            errors.append(
+                f"clinical_observations[{index}].observation_type is unsupported"
+            )
+            continue
+        if source_type not in _CLINICAL_SOURCE_TYPES:
+            errors.append(f"clinical_observations[{index}].source_type is unsupported")
+            continue
+        if not source_id:
+            errors.append(f"clinical_observations[{index}].source_id is required")
+            continue
+        if not isinstance(values, dict):
+            errors.append(f"clinical_observations[{index}].values must be an object")
+            continue
+        normalized.append(
+            {
+                "observation_id": observation_id,
+                "observation_type": observation_type,
+                "source_type": source_type,
+                "source_id": source_id,
+                "locator": str(item.get("locator") or ""),
+                "excerpt": str(item.get("excerpt") or ""),
+                "values": dict(values),
+            }
+        )
+    return normalized, errors
+
+
+def _clinical_observation_facts(
+    observations: list[dict[str, Any]], identity: dict[str, Any]
+) -> tuple[dict[str, SourceFact], list[dict[str, Any]]]:
+    facts: dict[str, SourceFact] = {}
+    bound: list[dict[str, Any]] = []
+    expected_gene = str(identity.get("gene") or "").casefold()
+    expected_variant = str(
+        identity.get("validated_hgvs_c") or identity.get("hgvs_c") or ""
+    ).casefold()
+    for observation in observations:
+        values = dict(observation["values"])
+        submitted_gene = str(values.get("gene") or "").casefold()
+        submitted_variant = str(
+            values.get("variant") or values.get("variant_identity") or ""
+        ).casefold()
+        conflict = bool(
+            (submitted_gene and expected_gene and submitted_gene != expected_gene)
+            or (
+                submitted_variant
+                and expected_variant
+                and submitted_variant != expected_variant
+            )
+        )
+        fact_payload = {
+            **observation,
+            "bound_gene": identity.get("gene"),
+            "bound_variant": identity.get("validated_hgvs_c") or identity.get("hgvs_c"),
+        }
+        raw_hash = _stable_payload_hash(fact_payload)
+        fact_id = f"acmg-clinical:v3:{raw_hash[:20]}"
+        semantic_ids = {
+            key: values.get(key)
+            for key in (
+                "case_id",
+                "proband_id",
+                "family_id",
+                "cohort_id",
+                "assay_instance_id",
+                "experiment_id",
+            )
+            if values.get(key)
+        }
+        fact = SourceFact(
+            fact_id=fact_id,
+            tool_name="ACMG_clinical_observations",
+            status="success",
+            query_identity={"gene": identity.get("gene"), "hgvs_c": expected_variant},
+            result_identity={
+                "gene": submitted_gene or expected_gene,
+                "hgvs_c": submitted_variant or expected_variant,
+            },
+            features={
+                "fact_type": observation["observation_type"],
+                "values": values,
+                "source_type": observation["source_type"],
+                "source_id": observation["source_id"],
+                **semantic_ids,
+            },
+            raw_result_hash=raw_hash,
+            provider_version=str(values.get("report_version") or ""),
+            request_arguments={},
+            provenance=(observation["source_id"],),
+            excerpt=observation.get("excerpt", ""),
+            locator=observation.get("locator", ""),
+            verification_level="caller_supplied",
+            identity_status="conflict" if conflict else "matched",
+            source_status="available",
+            extraction_status="structured",
+            # A caller citation is provenance, not independent retrieval.  The
+            # same observation becomes strict only through a provider- or
+            # document-derived SourceFact created elsewhere in the collector.
+            version_status="unversioned",
+            disease_match_status=str(
+                values.get("disease_match_status") or "unspecified"
+            ),
+            independence_status=str(values.get("independence_status") or "unknown"),
+        )
+        facts[fact_id] = fact
+        bound.append(
+            {
+                **observation,
+                **values,
+                "source_fact_id": fact_id,
+                "identity_status": fact.identity_status,
+                "source_status": fact.source_status,
+                "extraction_status": fact.extraction_status,
+                "version_status": fact.version_status,
+                "disease_match_status": fact.disease_match_status,
+                "independence_status": fact.independence_status,
+            }
+        )
+    return facts, bound
 
 
 def _literature_input(arguments: dict[str, Any]) -> tuple[Any, str]:
@@ -774,11 +957,27 @@ def _document_provenance(result: Any) -> dict[str, Any]:
         ),
         "truncated": payload.get("truncated") is True,
         "truncated_sections": [
-            str(value)
-            for value in payload.get("truncated_sections") or []
-            if value
+            str(value) for value in payload.get("truncated_sections") or [] if value
         ],
     }
+
+
+def _retrieved_document_status(result: Any, provenance: dict[str, Any]) -> str:
+    """Classify what the provider actually returned, independently of caller claims."""
+    payload = result if isinstance(result, dict) else {}
+    data = payload.get("data")
+    data = data if isinstance(data, dict) else payload
+    has_full_text = any(
+        data.get(key) not in (None, "", [], {})
+        for key in ("sections", "tables", "figures", "text", "content")
+    )
+    if has_full_text:
+        return "partial" if provenance.get("truncated") else "complete"
+    if data.get("abstract") not in (None, "", [], {}):
+        return "abstract_only"
+    if data.get("snippet") not in (None, "", [], {}):
+        return "snippet_only"
+    return "unavailable"
 
 
 def _literature_review_state(
@@ -789,7 +988,7 @@ def _literature_review_state(
     arguments: dict[str, Any],
     consequence_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build executable host-LLM review requests without embedding a model."""
+    """Report automatic retrieval/extraction; host LLM supplementation is optional."""
     proposal_facts = [
         fact
         for fact in source_facts.values()
@@ -808,7 +1007,7 @@ def _literature_review_state(
             str(fact.features.get("pmid") or ""),
             str(fact.features.get("pmcid") or ""),
         )
-        if value and fact.assessment_ready
+        if value and _fact_usable(fact)
     }
     submitted_ids = {
         value
@@ -830,6 +1029,17 @@ def _literature_review_state(
         )
         if value
     }
+    attempted_ids = {
+        str(value)
+        for fact in source_facts.values()
+        if fact.tool_name in {"EuropePMC_get_full_text", "EuropePMC_get_fulltext"}
+        for value in (
+            fact.request_arguments.get("pmid"),
+            fact.request_arguments.get("pmcid"),
+            fact.request_arguments.get("article_id"),
+        )
+        if value
+    }
     consequence_terms = set(
         (consequence_profile or {}).get("selected_transcript_terms") or []
     )
@@ -844,7 +1054,7 @@ def _literature_review_state(
             }
         )
         and not any(
-            fact.assessment_ready
+            _fact_usable(fact)
             and fact.features.get("fact_type") in {"disease_mechanism", "mechanism"}
             for fact in source_facts.values()
         )
@@ -898,14 +1108,16 @@ def _literature_review_state(
         identifiers = {value for value in (pmid, pmcid) if value}
         if identifiers.intersection(processed_ids):
             state = "completed"
+        elif identifiers.intersection(attempted_ids):
+            state = "completed_no_rule_extractable_fact"
         elif identifiers.intersection(blocked_submitted_ids):
-            state = "blocked_full_text_unavailable"
+            state = "completed_source_unavailable"
         elif identifiers.intersection(submitted_ids):
             state = "proposal_validation_failed"
         elif candidate.get("full_text_status") != "full_text_unavailable":
             state = "pending"
         else:
-            state = "blocked_full_text_unavailable"
+            state = "completed_source_unavailable"
         fallback_arguments = (
             {"pmcid": pmcid, "output_format": "text", "max_chars": 2000000}
             if pmcid
@@ -956,9 +1168,10 @@ def _literature_review_state(
                 ),
                 "state": state,
                 "completion_condition": (
-                    "submit excerpt-backed literature_proposals and receive "
-                    "identity-bound document SourceFacts"
+                    "automatic retrieval and rule extraction attempted; optional "
+                    "literature_proposals may supplement unresolved fields"
                 ),
+                "required": False,
                 "blocking_reason": (
                     "full_text_not_verified_available"
                     if state == "blocked_full_text_unavailable"
@@ -966,30 +1179,17 @@ def _literature_review_state(
                 ),
             }
         )
-    pending = [row for row in requests if row["state"] == "pending"]
-    blocked = [
-        row for row in requests if row["state"] == "blocked_full_text_unavailable"
-    ]
-    failed = [row for row in requests if row["state"] == "proposal_validation_failed"]
-    status = (
-        "literature_review_required"
-        if pending
-        else "proposal_validation_required"
-        if failed
-        else "blocked_external_full_text"
-        if blocked
-        else "evidence_ready"
-    )
+    status = "evidence_ready"
     return {
         "candidates": candidates,
         "review_requests": requests,
         "reading_manifests": manifests,
         "processed_publication_ids": sorted(processed_ids),
         "unprocessed_request_ids": [
-            row["request_id"] for row in requests if row["state"] != "completed"
+            row["request_id"] for row in requests if row["state"] == "pending"
         ],
         "proposal_validation_status": (
-            "not_submitted"
+            "automatic_extraction_complete"
             if not proposal_facts
             else "verified"
             if processed_ids
@@ -1046,7 +1246,7 @@ def _recoverable_gaps(
         )
     terms = set(consequence_profile.get("selected_transcript_terms") or [])
     exon_structure_ready = any(
-        fact.tool_name == "ensembl_lookup_gene" and fact.assessment_ready
+        fact.tool_name == "ensembl_lookup_gene" and _fact_usable(fact)
         for fact in (source_facts or {}).values()
     )
     if (
@@ -1088,19 +1288,6 @@ def _recoverable_gaps(
                 "recovery_status": "exhausted",
             }
         )
-    if any(
-        row.get("state") == "pending"
-        for row in literature_review.get("review_requests") or []
-        if isinstance(row, dict)
-    ):
-        gaps.append(
-            {
-                "code": "variant_literature_full_text_review_pending",
-                "status": "host_llm_required",
-                "handled_internally": False,
-                "recovery_status": "pending",
-            }
-        )
     return gaps
 
 
@@ -1120,6 +1307,7 @@ def _workflow_next_actions(
             "completion_condition": row.get("completion_condition"),
             "blocking_reason": row.get("blocking_reason"),
             "repeat_collector_with": ["literature_proposals"],
+            "required": False,
         }
         for row in literature_review.get("review_requests") or []
         if isinstance(row, dict) and row.get("state") == "pending"
@@ -1151,6 +1339,7 @@ def _workflow_next_actions(
                 ),
                 "blocking_reason": "",
                 "repeat_collector_with": ["cspec_proposals"],
+                "required": False,
             }
         )
     return actions
@@ -1167,8 +1356,8 @@ def _review_readiness(
     conflict_report: dict[str, Any],
     literature_review: dict[str, Any],
     recoverable_gaps: list[dict[str, Any]],
-    system_preview_bayesian: dict[str, Any],
-    validated_subset_bayesian: dict[str, Any],
+    automatic_bayesian: dict[str, Any],
+    verified_bayesian: dict[str, Any],
     user_selected_bayesian: dict[str, Any],
 ) -> dict[str, Any]:
     """Report whether automatic evidence collection is ready for human review."""
@@ -1184,24 +1373,37 @@ def _review_readiness(
         status = "ready_for_evidence_review"
 
     route_counts: dict[str, int] = {}
-    assessment_counts: dict[str, int] = {}
     for row in criterion_reviews:
         route = str(row.get("route_status") or "insufficient_information")
-        assessment = str(row.get("assessment_status") or "not_assessed")
         route_counts[route] = route_counts.get(route, 0) + 1
-        assessment_counts[assessment] = assessment_counts.get(assessment, 0) + 1
     pending_request_ids = sorted(
         {
             str(row.get("request_id") or "")
             for row in literature_review.get("review_requests") or []
-            if isinstance(row, dict) and row.get("state") != "completed"
+            if isinstance(row, dict)
+            and row.get("required") is True
+            and row.get("state") != "completed"
+        }
+    )
+    optional_request_ids = sorted(
+        {
+            str(row.get("request_id") or "")
+            for row in literature_review.get("review_requests") or []
+            if isinstance(row, dict)
+            and row.get("required") is not True
+            and row.get("state")
+            not in {
+                "completed",
+                "completed_no_rule_extractable_fact",
+                "completed_source_unavailable",
+            }
         }
     )
     pending_card_ids = sorted(
         {
             str(row.get("card_id") or "")
             for row in evidence_rows
-            if row.get("proposal_status") == "requires_user_review"
+            if row.get("evidence_status") == "source_backed_candidate"
             and row.get("user_decision", "pending") == "pending"
             and row.get("card_id")
         }
@@ -1227,18 +1429,31 @@ def _review_readiness(
         "criterion_counts": {
             "total": len(criterion_reviews),
             "by_route_status": route_counts,
-            "by_assessment_status": assessment_counts,
+            "by_evidence_status": {
+                status: sum(
+                    1
+                    for review in criterion_reviews
+                    if review.get("evidence_status") == status
+                )
+                for status in sorted(
+                    {
+                        str(review.get("evidence_status") or "no_information")
+                        for review in criterion_reviews
+                    }
+                )
+            },
         },
         "unresolved_conflict_count": len(conflicts),
         "unresolved_conflicts": conflicts,
         "pending_request_ids": [value for value in pending_request_ids if value],
+        "optional_supplement_request_ids": [
+            value for value in optional_request_ids if value
+        ],
         "candidate_card_ids": pending_card_ids,
-        "system_preview_available": status
-        not in {"blocked", "not_applicable"}
-        and system_preview_bayesian.get("status") == "computed",
-        "validated_subset_available": status
-        not in {"blocked", "not_applicable"}
-        and validated_subset_bayesian.get("status") == "computed",
+        "automatic_estimate_available": status not in {"blocked", "not_applicable"}
+        and automatic_bayesian.get("status") == "computed",
+        "verified_estimate_available": status not in {"blocked", "not_applicable"}
+        and verified_bayesian.get("status") == "computed",
         "user_decision_status": str(
             user_selected_bayesian.get("status") or "not_requested"
         ),
@@ -1266,10 +1481,9 @@ def _apply_evidence_decisions(
     if not decisions:
         for row in rows:
             row["user_decision"] = "pending"
-            row["user_selected_included"] = False
-            row["effective_strength"] = str(
-                row.get("effective_strength") or row.get("strength") or ""
-            )
+            roles = dict(row.get("calculation_roles") or {})
+            roles["user_selected"] = False
+            row["calculation_roles"] = roles
         return (
             {
                 "status": "not_requested",
@@ -1290,6 +1504,7 @@ def _apply_evidence_decisions(
     matched: list[dict[str, Any]] = []
     unmatched: list[dict[str, Any]] = []
     decision_errors: list[dict[str, Any]] = []
+    selection_rows: list[dict[str, Any]] = []
     for decision in decisions:
         card_id = decision["card_id"]
         row = by_card_id.get(card_id)
@@ -1300,20 +1515,19 @@ def _apply_evidence_decisions(
         row["decision_reason"] = decision.get("reason") or ""
         if decision["decision"] == "reject":
             row["user_decision"] = "rejected"
-            row["user_selected_included"] = False
+            roles = dict(row.get("calculation_roles") or {})
+            roles["user_selected"] = False
+            row["calculation_roles"] = roles
             continue
         effective_strength = (
-            decision.get("strength_override")
-            or row.get("effective_strength")
-            or row.get("strength")
-            or ""
+            decision.get("strength_override") or row.get("strength") or ""
         )
-        criterion = str(
-            row.get("suggested_criterion") or row.get("criterion") or ""
-        )
+        criterion = str(row.get("criterion") or "")
         if not is_valid_strength_for_criterion(criterion, str(effective_strength)):
             row["user_decision"] = "pending"
-            row["user_selected_included"] = False
+            roles = dict(row.get("calculation_roles") or {})
+            roles["user_selected"] = False
+            row["calculation_roles"] = roles
             decision_errors.append(
                 {
                     "card_id": card_id,
@@ -1325,15 +1539,16 @@ def _apply_evidence_decisions(
             continue
         candidate_row = {
             **row,
-            "effective_strength": str(effective_strength),
-            "system_preview_included": True,
+            "strength": str(effective_strength),
         }
-        if not is_source_backed_candidate(
+        if not is_automatic_evidence(
             candidate_row,
             known_source_fact_ids=known_source_fact_ids,
         ):
             row["user_decision"] = "pending"
-            row["user_selected_included"] = False
+            roles = dict(row.get("calculation_roles") or {})
+            roles["user_selected"] = False
+            row["calculation_roles"] = roles
             decision_errors.append(
                 {
                     "card_id": card_id,
@@ -1344,38 +1559,61 @@ def _apply_evidence_decisions(
         row["user_decision"] = (
             "modified" if decision.get("strength_override") else "accepted"
         )
-        row["effective_strength"] = str(effective_strength)
-        row["user_selected_included"] = True
-
-    selection_rows = [
-        {
-            **row,
-            "system_preview_included": True,
+        roles = dict(row.get("calculation_roles") or {})
+        roles["user_selected"] = True
+        row["calculation_roles"] = roles
+        candidate_roles = dict(candidate_row.get("calculation_roles") or {})
+        candidate_roles["user_selected"] = True
+        candidate_row["calculation_roles"] = candidate_roles
+        selection_rows.append(candidate_row)
+        matched[-1]["effective_strength"] = str(effective_strength)
+    selected_scenarios = {
+        str(row.get("scenario_id") or "generic-svi") for row in selection_rows
+    }
+    if len(selected_scenarios) > 1:
+        compatibility = {
+            "compatible_evidence": [],
+            "excluded_evidence": [
+                {**row, "reason": "cross_scenario_user_selection"}
+                for row in selection_rows
+            ],
         }
-        for row in rows
-        if row.get("user_selected_included") is True
-    ]
-    compatibility = resolve_evidence_compatibility(
-        selection_rows,
-        known_source_fact_ids=known_source_fact_ids,
-        eligibility="source_backed",
-        selection_field="user_selected_included",
-    )
+        decision_errors.append(
+            {
+                "reason": "cross_scenario_user_selection",
+                "scenario_ids": sorted(selected_scenarios),
+                "card_ids": [
+                    str(row.get("card_id") or "")
+                    for row in selection_rows
+                    if row.get("card_id")
+                ],
+            }
+        )
+    else:
+        selected_scenario = next(iter(selected_scenarios), "generic-svi")
+        compatibility = resolve_evidence_compatibility(
+            selection_rows,
+            known_source_fact_ids=known_source_fact_ids,
+            eligibility="automatic",
+            calculation_role="user_selected",
+            scenario_id=selected_scenario,
+        )
     compatible_ids = {
         str(row.get("card_id") or "") for row in compatibility["compatible_evidence"]
     }
     for row in rows:
-        if (
-            row.get("user_selected_included") is True
-            and str(row.get("card_id") or "") not in compatible_ids
-        ):
-            row["user_selected_included"] = False
+        if (row.get("calculation_roles") or {}).get("user_selected") is True and str(
+            row.get("card_id") or ""
+        ) not in compatible_ids:
+            roles = dict(row.get("calculation_roles") or {})
+            roles["user_selected"] = False
+            row["calculation_roles"] = roles
     selected_score = compute_bayesian_score(
-        rows,
+        compatibility["compatible_evidence"],
         known_source_fact_ids=known_source_fact_ids,
         estimate_type="user_selected",
-        selection_field="user_selected_included",
-        eligibility="source_backed",
+        calculation_role="user_selected",
+        eligibility="automatic",
     )
     selected_score["excluded_card_ids"] = [
         str(row.get("card_id") or "")
@@ -1389,6 +1627,9 @@ def _apply_evidence_decisions(
             "matched_decisions": matched,
             "unmatched_decisions": unmatched,
             "decision_errors": decision_errors,
+            "selected_scenario_id": (
+                next(iter(selected_scenarios)) if len(selected_scenarios) == 1 else ""
+            ),
             "compatibility_exclusions": [
                 {
                     "card_id": row.get("card_id"),
@@ -1440,8 +1681,12 @@ def _compact_source_fact(fact: dict[str, Any]) -> dict[str, Any]:
             "fact_id",
             "tool_name",
             "status",
-            "identity_verified",
-            "assessment_ready",
+            "identity_status",
+            "source_status",
+            "extraction_status",
+            "version_status",
+            "disease_match_status",
+            "independence_status",
             "provider_version",
             "request_arguments",
             "provenance",
@@ -1464,8 +1709,7 @@ def _compact_source_fact(fact: dict[str, Any]) -> dict[str, Any]:
             for value in fact.get("provenance") or []
             if str(value).startswith(("http://", "https://"))
         ]
-        if status in {"success", "no_hit"}
-        or tool_name == "EuropePMC_get_full_text"
+        if status in {"success", "no_hit"} or tool_name == "EuropePMC_get_full_text"
         else []
     )
     if source_links:
@@ -1499,8 +1743,8 @@ def _compact_source_fact(fact: dict[str, Any]) -> dict[str, Any]:
         and status != "success"
     ):
         entry.pop("request_arguments", None)
-    if fact.get("status") == "success" and fact.get("assessment_ready") is False:
-        entry["limitation"] = "not_assessment_ready"
+    if fact.get("status") == "success" and fact.get("identity_status") != "matched":
+        entry["limitation"] = "identity_not_fully_matched"
     features = fact.get("features")
     if fact.get("status") == "success" and isinstance(features, dict):
         summary_features = dict(features)
@@ -1596,23 +1840,19 @@ def _compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
         "card_id": card.get("card_id"),
         "criterion": card.get("criterion"),
         "strength": card.get("strength"),
-        "suggested_criterion": card.get("suggested_criterion"),
-        "suggested_strength": card.get("suggested_strength"),
-        "assessment_status": card.get("assessment_status"),
         "source": source,
         "route": route,
-        "proposal_status": card.get("proposal_status"),
+        "evidence_status": card.get("evidence_status"),
+        "strength_source": card.get("strength_source"),
+        "rule_source": card.get("rule_source"),
+        "scenario_id": card.get("scenario_id"),
         "rule_basis": card.get("rule_basis"),
-        "verification_status": card.get("verification_status"),
-        "preview_inclusion_basis": card.get("preview_inclusion_basis"),
-        "preview_exclusion_reason": card.get("preview_exclusion_reason"),
+        "verification_dimensions": card.get("verification_dimensions"),
+        "calculation_roles": card.get("calculation_roles"),
+        "exclusion_reason": card.get("exclusion_reason"),
         "caveats": list(card.get("caveats") or []),
         "missing_requirements": list(card.get("missing_requirements") or []),
-        "system_preview_included": card.get("system_preview_included") is True,
-        "validated_subset_included": card.get("validated_subset_included") is True,
         "user_decision": card.get("user_decision"),
-        "effective_strength": card.get("effective_strength"),
-        "user_selected_included": card.get("user_selected_included") is True,
         "decision_reason": card.get("decision_reason"),
         "decision_basis": next(iter(card.get("provenance_chain") or []), ""),
         "source_fact_ids": list(card.get("source_fact_ids") or []),
@@ -1622,21 +1862,16 @@ def _compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
     }
     if entry.get("user_decision") == "pending":
         entry.pop("user_decision", None)
-    if entry.get("user_selected_included") is False:
-        entry.pop("user_selected_included", None)
-    if entry.get("effective_strength") == entry.get("strength"):
-        entry.pop("effective_strength", None)
-    if entry.get("assessment_status") not in {"met", "suggested"}:
-        entry["decision_basis"] = (
-            next(iter(entry.get("missing_requirements") or []), "")
-            or str(entry.get("proposal_status") or "")
-            or str(entry.get("assessment_status") or "")
-        )
+    if entry.get("evidence_status") not in {
+        "expert_panel_applied",
+        "rule_mapped",
+        "source_backed_candidate",
+    }:
+        entry["decision_basis"] = next(
+            iter(entry.get("missing_requirements") or []), ""
+        ) or str(entry.get("evidence_status") or "")
     else:
-        entry["decision_basis"] = (
-            str(entry.get("preview_inclusion_basis") or "")
-            or str(entry.get("proposal_status") or "")
-        )
+        entry["decision_basis"] = str(entry.get("evidence_status") or "")
     return {
         key: value for key, value in entry.items() if value not in (None, "", [], {})
     }
@@ -1658,14 +1893,21 @@ def _build_guard_context(
         cards.append(
             {
                 "card_id": row.get("card_id"),
-                "criterion": row.get("suggested_criterion")
-                or row.get("criterion"),
-                "proposal_status": row.get("proposal_status"),
+                "criterion": row.get("criterion"),
+                "strength": row.get("strength"),
+                "evidence_status": row.get("evidence_status"),
+                "strength_source": row.get("strength_source"),
+                "rule_source": row.get("rule_source") or {},
+                "verification_dimensions": row.get("verification_dimensions") or {},
+                "calculation_roles": row.get("calculation_roles") or {},
+                "rule_id": row.get("rule_id"),
+                "rule_version": row.get("rule_version"),
+                "scenario_id": row.get("scenario_id"),
                 "role": (
-                    "validated"
-                    if row.get("validated_subset_included") is True
-                    else "candidate"
-                    if row.get("system_preview_included") is True
+                    "verified"
+                    if (row.get("calculation_roles") or {}).get("verified") is True
+                    else "automatic"
+                    if (row.get("calculation_roles") or {}).get("automatic") is True
                     else "excluded"
                 ),
                 "source_fact_ids": source_ids,
@@ -1678,10 +1920,10 @@ def _build_guard_context(
         if value
     }
     known_ids = sorted(referenced_source_ids.intersection(source_facts))
-    trusted_ids = sorted(
+    verified_ids = sorted(
         fact_id
         for fact_id, fact in source_facts.items()
-        if fact_id in referenced_source_ids and fact.assessment_ready
+        if fact_id in referenced_source_ids and fact_is_strictly_verified(fact)
     )
     variant_identity_hash = hashlib.sha256(
         json.dumps(
@@ -1698,7 +1940,7 @@ def _build_guard_context(
         "ruleset_hash": str(runtime_manifest.get("ruleset_hash") or ""),
         "cards": cards,
         "known_source_fact_ids": known_ids,
-        "trusted_source_fact_ids": trusted_ids,
+        "verified_source_fact_ids": verified_ids,
     }
     context["context_hash"] = guard_context_hash(context)
     return context
@@ -1774,7 +2016,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "query_status",
             "query_completed",
             "hit_count",
-            "assessment_ready",
+            "source_available",
             "source_fact_count",
             "limitation_code",
         )
@@ -1811,12 +2053,12 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
                 "exon",
                 "identity_status",
                 "selected_transcript_status",
-                "assessment_ready",
+                "source_available",
             )
             for row in consequence_profile.get("observations") or []
             if isinstance(row, dict)
             and (
-                row.get("assessment_ready") is True
+                row.get("source_available") is True
                 or row.get("identity_status") == "conflict"
             )
         ]
@@ -1845,8 +2087,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         compact_review = dict(literature_review)
         search_queries = list(literature_review.get("search_queries") or [])
         compact_review["search_query_ids"] = [
-            "acmg-lit-query:v1:"
-            + hashlib.sha256(str(query).encode()).hexdigest()[:16]
+            "acmg-lit-query:v1:" + hashlib.sha256(str(query).encode()).hexdigest()[:16]
             for query in search_queries
             if str(query)
         ]
@@ -1944,8 +2185,8 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         )
         compact["conflict_report"] = compact_conflicts
     for key in (
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "automatic_bayesian",
+        "verified_bayesian",
         "user_selected_bayesian",
     ):
         bayesian = result.get(key)
@@ -1954,6 +2195,86 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             compact_bayesian.pop("compatibility_exclusions", None)
             compact_bayesian.pop("excluded_card_ids", None)
             compact[key] = compact_bayesian
+    vcep_context = result.get("vcep_context")
+    if isinstance(vcep_context, dict):
+        compact["vcep_context"] = {
+            **pick(vcep_context, "status", "parser_version", "assertion_count"),
+            "history_count": len(vcep_context.get("history") or []),
+            "complete_history_in": "full response vcep_context.history",
+        }
+    compact["vcep_assertions"] = [
+        pick(
+            row,
+            "scenario_id",
+            "classification",
+            "expert_panel",
+            "condition",
+            "mondo_id",
+            "inheritance",
+            "version",
+            "release_date",
+            "status",
+            "caid",
+            "clinvar_variation_id",
+            "identity_match_status",
+            "identity_match_basis",
+            "matched_identifiers",
+            "identity_rejection_reasons",
+            "disease_match_status",
+            "inheritance_match_status",
+            "applicability_status",
+            "source_fact_id",
+            "external_assertion_only",
+        )
+        for row in result.get("vcep_assertions") or []
+        if isinstance(row, dict)
+    ]
+    compact["rule_scenarios"] = [
+        {
+            "scenario_id": row.get("scenario_id"),
+            "scenario_type": row.get("scenario_type"),
+            "applicability_status": row.get("applicability_status"),
+            "applicability_reasons": list(row.get("applicability_reasons") or []),
+            "specification_id": (
+                (row.get("specification") or {}).get("specification_id")
+                if isinstance(row.get("specification"), dict)
+                else ""
+            ),
+            "version": (
+                (row.get("contract") or {}).get("version")
+                if isinstance(row.get("contract"), dict)
+                else ""
+            ),
+            "content_hash": (
+                (row.get("contract") or {}).get("content_hash")
+                if isinstance(row.get("contract"), dict)
+                else ""
+            ),
+            "complete_contract_in": "full response rule_scenarios",
+        }
+        for row in result.get("rule_scenarios") or []
+        if isinstance(row, dict)
+    ]
+    compact["scenario_estimates"] = [
+        {
+            **pick(
+                row,
+                "scenario_id",
+                "scenario_type",
+                "applicability_status",
+                "applicability_reasons",
+                "specification_id",
+                "evidence_card_ids",
+                "automatic_bayesian",
+                "verified_bayesian",
+                "compatibility_exclusions",
+                "conflict_report",
+            ),
+            "rule_execution_trace_in": "full response scenario_estimates",
+        }
+        for row in result.get("scenario_estimates") or []
+        if isinstance(row, dict)
+    ]
     compact["criterion_reviews"] = []
     for review in result.get("criterion_reviews") or []:
         if not isinstance(review, dict):
@@ -1965,9 +2286,9 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "pending_request_ids",
             "missing_requirements",
         )
-        if review.get("assessment_status") not in {
-            "not_assessed",
-            "not_applicable",
+        if review.get("evidence_status") not in {
+            "no_information",
+            "excluded",
             "deprecated",
         }:
             card_ids = list(review.get("evidence_card_ids") or [])
@@ -1977,10 +2298,12 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             candidate_ids = list(review.get("candidate_source_fact_ids") or [])
             if candidate_ids:
                 compact_review["candidate_source_fact_ids"] = candidate_ids
-        if review.get("assessment_status") in {
-            "met",
+        if review.get("evidence_status") in {
+            "expert_panel_applied",
+            "rule_mapped",
+            "source_backed_candidate",
             "not_met",
-            "not_applicable",
+            "excluded",
             "deprecated",
         }:
             compact_review.pop("missing_requirements", None)
@@ -2151,29 +2474,25 @@ def _normalize_inheritance(value: Any) -> str:
     normalized = _normalize_text(value).replace("-", " ")
     aliases = {
         "ad": "autosomal dominant",
+        "autosomal dominant": "autosomal dominant",
         "autosomal dominant inheritance": "autosomal dominant",
         "ar": "autosomal recessive",
+        "autosomal recessive": "autosomal recessive",
         "autosomal recessive inheritance": "autosomal recessive",
+        "xld": "x linked dominant",
+        "x linked dominant": "x linked dominant",
+        "x linked dominant inheritance": "x linked dominant",
+        "xlr": "x linked recessive",
+        "x linked recessive": "x linked recessive",
+        "x linked recessive inheritance": "x linked recessive",
+        "xl": "x linked",
         "x linked": "x linked",
         "x linked inheritance": "x linked",
-        "xl": "x linked",
+        "mitochondrial": "mitochondrial",
+        "mitochondrial inheritance": "mitochondrial",
+        "maternal inheritance": "mitochondrial",
     }
-    return aliases.get(normalized, normalized)
-
-
-def _identity_hgvs_values(observed: dict[str, Any]) -> set[str]:
-    """All HGVS spellings an observed identity carries, incl. candidate lists."""
-    values = {
-        _normalize_text(observed.get(key))
-        for key in ("hgvs_c", "validated_hgvs_c", "hgvs_g")
-        if observed.get(key)
-    }
-    for list_key in ("hgvsc_candidates", "hgvsg_candidates"):
-        candidates = observed.get(list_key)
-        if isinstance(candidates, list):
-            values.update(_normalize_text(value) for value in candidates)
-    values.discard("")
-    return values
+    return aliases.get(normalized, "")
 
 
 def _identity_hgvs_values_for(
@@ -2241,11 +2560,25 @@ def _identities_share_variant(left: dict[str, Any], right: dict[str, Any]) -> bo
 def _literature_values(
     source_facts: dict[str, SourceFact], fact_type: str
 ) -> list[dict[str, Any]]:
-    return [
-        dict(fact.features.get("values") or {})
-        for fact in source_facts.values()
-        if fact.assessment_ready and fact.features.get("fact_type") == fact_type
-    ]
+    values: list[dict[str, Any]] = []
+    for fact in source_facts.values():
+        if not _fact_source_backed(fact) or fact.features.get("fact_type") != fact_type:
+            continue
+        if str(fact.features.get("requirements_status") or "complete") != "complete":
+            continue
+        values.append(
+            {
+                **dict(fact.features.get("values") or {}),
+                "source_fact_id": fact.fact_id,
+                "identity_status": fact.identity_status,
+                "source_status": fact.source_status,
+                "extraction_status": fact.extraction_status,
+                "version_status": fact.version_status,
+                "disease_match_status": fact.disease_match_status,
+                "independence_status": fact.independence_status,
+            }
+        )
+    return values
 
 
 def _literature_fact_ids(
@@ -2255,7 +2588,9 @@ def _literature_fact_ids(
     return [
         fact.fact_id
         for fact in source_facts.values()
-        if fact.assessment_ready and fact.features.get("fact_type") in allowed
+        if _fact_source_backed(fact)
+        and fact.features.get("fact_type") in allowed
+        and str(fact.features.get("requirements_status") or "complete") == "complete"
     ]
 
 
@@ -2266,6 +2601,11 @@ _SPECIALIZED_LITERATURE_FACTS = {
     "pm3",
     "recessive_allelic",
     "functional",
+    "segregation",
+    "phenotype_specificity",
+    "healthy_observation",
+    "allelic_phase",
+    "alternative_cause",
 }
 
 
@@ -2280,33 +2620,33 @@ def _mapped_literature_criterion(
     if normalized_suggestion in allowed:
         if fact_type == "mechanism" and normalized_suggestion == "PVS1":
             return "", "unmapped"
-        return normalized_suggestion, "llm_review_required"
+        return normalized_suggestion, "generic_acmg_candidate"
     if fact_type == "segregation":
         direction = _normalize_text(values.get("segregation_direction"))
         if direction in {"segregates", "co-segregates", "cosegregates"}:
-            return "PP1", "llm_review_required"
+            return "PP1", "generic_acmg_candidate"
         if direction in {"does not segregate", "nonsegregation", "non-segregation"}:
-            return "BS4", "llm_review_required"
+            return "BS4", "generic_acmg_candidate"
     if fact_type == "prior_variant":
         relation = _normalize_text(values.get("amino_acid_relation"))
         if relation == "same amino acid change":
-            return "PS1", "llm_review_required"
+            return "PS1", "generic_acmg_candidate"
         if relation == "same residue different change":
-            return "PM5", "llm_review_required"
+            return "PM5", "generic_acmg_candidate"
     if fact_type == "mechanism":
         mechanism = _normalize_text(values.get("gene_disease_mechanism"))
         if mechanism in {"missense", "missense constrained"}:
-            return "PP2", "llm_review_required"
+            return "PP2", "generic_acmg_candidate"
         if mechanism in {"loss of function", "lof", "truncating"}:
-            return "BP1", "llm_review_required"
+            return "BP1", "generic_acmg_candidate"
     if fact_type == "protein_length_repeat":
         effect = _normalize_text(values.get("effect_type"))
         if effect == "length change outside repeat":
-            return "PM4", "llm_review_required"
+            return "PM4", "generic_acmg_candidate"
         if effect == "inframe change in repeat":
-            return "BP3", "llm_review_required"
+            return "BP3", "generic_acmg_candidate"
     if len(allowed) == 1:
-        return next(iter(allowed)), "llm_review_required"
+        return next(iter(allowed)), "generic_acmg_candidate"
     return "", "unmapped"
 
 
@@ -4004,7 +4344,7 @@ class ACMGEvidencePipeline:
         for fact in source_facts.values():
             if (
                 fact.tool_name != "EBIProteins_get_variation"
-                or not fact.identity_verified
+                or not fact_identity_matches(fact)
             ):
                 continue
             for row in fact.features.get("same_residue_candidates") or []:
@@ -4380,6 +4720,16 @@ class ACMGEvidencePipeline:
             ]
             if call.error:
                 provenance.append(call.error)
+            normalized_provider_version = provider_version(features)
+            identity_status = (
+                "matched"
+                if identity_verified
+                else "conflict"
+                if features.get("identity_conflict") is True
+                else "partial"
+                if observed_identity
+                else "unknown"
+            )
             facts[fact_id] = SourceFact(
                 fact_id=fact_id,
                 tool_name=call.tool_name,
@@ -4398,15 +4748,17 @@ class ACMGEvidencePipeline:
                     else query_identity
                 ),
                 result_identity=observed_identity,
-                identity_verified=identity_verified,
                 features=features,
                 raw_result_hash=raw_hash,
-                provider_version=provider_version(features),
+                provider_version=normalized_provider_version,
                 request_arguments=dict(call.arguments or {}),
                 provenance=tuple(provenance),
-                assessment_ready=call.status == "success"
-                and identity_verified
-                and ready,
+                identity_status=identity_status,
+                source_status=("available" if call.status == "success" else "failed"),
+                extraction_status=("structured" if ready else "unresolved"),
+                version_status=(
+                    "versioned" if normalized_provider_version else "unversioned"
+                ),
             )
         return facts
 
@@ -4485,6 +4837,84 @@ class ACMGEvidencePipeline:
             )
             for (tool_name, arguments, category), result in zip(
                 deduplicated, results, strict=True
+            )
+        ]
+
+    def _automatic_fulltext_calls(
+        self, candidates: list[dict[str, Any]]
+    ) -> list[SourceCall]:
+        """Fetch exact/equivalent/provider-linked articles without host prompting."""
+        specs: list[tuple[str, dict[str, Any], str]] = []
+        for candidate in candidates:
+            if candidate.get("match_class") not in {
+                "exact_variant_match",
+                "equivalent_variant_match",
+                "provider_linked_variant_match",
+            }:
+                continue
+            pmid = str(candidate.get("pmid") or "").strip()
+            pmcid = str(candidate.get("pmcid") or "").strip()
+            if not (pmid or pmcid):
+                continue
+            structured_args: dict[str, Any] = {"max_section_chars": 500000}
+            if pmcid:
+                structured_args["pmcid"] = pmcid
+            else:
+                structured_args["pmid"] = pmid
+            fallback_args: dict[str, Any] = {
+                "output_format": "text",
+                "max_chars": 2000000,
+            }
+            if pmcid:
+                fallback_args["pmcid"] = pmcid
+            else:
+                fallback_args.update({"source_db": "MED", "article_id": pmid})
+            specs.extend(
+                [
+                    ("EuropePMC_get_full_text", structured_args, "literature"),
+                    ("EuropePMC_get_fulltext", fallback_args, "literature"),
+                ]
+            )
+        deduplicated: list[tuple[str, dict[str, Any], str]] = []
+        seen: set[str] = set()
+        for tool_name, call_arguments, category in specs:
+            key = json.dumps(
+                [tool_name, call_arguments], sort_keys=True, separators=(",", ":")
+            )
+            if key not in seen:
+                seen.add(key)
+                deduplicated.append((tool_name, call_arguments, category))
+        if not deduplicated:
+            return []
+        try:
+            results = self.provider_executor.call_many(
+                [
+                    {"name": tool_name, "arguments": call_arguments}
+                    for tool_name, call_arguments, _category in deduplicated
+                ],
+                max_workers=min(len(deduplicated), 8),
+            )
+        except Exception as exc:
+            return [
+                SourceCall(
+                    tool_name,
+                    category,
+                    "failed",
+                    error=str(exc),
+                    arguments=call_arguments,
+                )
+                for tool_name, call_arguments, category in deduplicated
+            ]
+        return [
+            SourceCall(
+                tool_name,
+                category,
+                _status(result),
+                result=result,
+                arguments=call_arguments,
+            )
+            for (tool_name, call_arguments, category), result in zip(
+                deduplicated, results
             )
         ]
 
@@ -4595,6 +5025,9 @@ class ACMGEvidencePipeline:
                 or submitted_manifest.get("reading_status")
                 or "unspecified"
             )
+            retrieved_reading_status = _retrieved_document_status(
+                document_result, document_provenance
+            )
             provider_raw_hash = _stable_payload_hash(
                 document_call.result
                 if document_call and document_call.result is not None
@@ -4612,26 +5045,34 @@ class ACMGEvidencePipeline:
             )
             submitted_document_hash = str(item.get("document_hash") or "")
             document_hash_matches = (
-                not submitted_document_hash
-                or submitted_document_hash == document_hash
+                not submitted_document_hash or submitted_document_hash == document_hash
             )
             if not document_hash_matches:
                 verification["validation_errors"].append(
                     "submitted document_hash does not match re-fetched document"
                 )
                 verification["anchor_status"] = "mismatch"
-            if submitted_reading_status in {"abstract_only", "unavailable"}:
+            if retrieved_reading_status in {
+                "abstract_only",
+                "snippet_only",
+                "unavailable",
+            }:
                 verification["validation_errors"].append(
-                    "full-text reading status is not eligible for evidence mapping"
+                    "retrieved document is not complete enough for strict evidence mapping"
                 )
             if document_provenance["truncated"]:
                 verification["validation_errors"].append(
                     "retrieved full text was truncated; strict validation is unavailable"
                 )
-            is_bound = (
+            source_anchored = (
                 verification["verified"] is True
                 and document_hash_matches
-                and submitted_reading_status not in {"abstract_only", "unavailable"}
+                and retrieved_reading_status
+                in {"complete", "partial", "abstract_only", "snippet_only"}
+            )
+            is_bound = bool(
+                source_anchored
+                and retrieved_reading_status == "complete"
                 and not document_provenance["truncated"]
             )
             host_verified = False
@@ -4659,7 +5100,8 @@ class ACMGEvidencePipeline:
                 "pmcid": pmcid,
                 "doi": str(item.get("doi") or ""),
                 "document_hash": document_hash,
-                "status": submitted_reading_status,
+                "status": retrieved_reading_status,
+                "submitted_status": submitted_reading_status,
                 "sections_read": list(submitted_manifest.get("sections_read") or []),
                 "tables_read": list(
                     submitted_manifest.get("tables_read")
@@ -4690,22 +5132,24 @@ class ACMGEvidencePipeline:
                     reading_manifest["status"] = "partial"
                 reading_manifest["limitations"].append(
                     "Provider response was truncated for sections: "
-                    + ", ".join(document_provenance["truncated_sections"] or ["unknown"])
+                    + ", ".join(
+                        document_provenance["truncated_sections"] or ["unknown"]
+                    )
                 )
-            if reading_manifest["status"] == "unspecified":
+            if submitted_reading_status == "unspecified":
                 reading_manifest["limitations"].append(
-                    "host LLM did not submit a reading manifest"
+                    "caller did not submit section-level reading coverage; document "
+                    "availability was derived from the re-fetched provider response"
                 )
             facts[fact_id] = SourceFact(
                 fact_id=fact_id,
                 tool_name="EuropePMC_get_full_text",
-                status="success" if is_bound else "unverified",
+                status="success" if source_anchored else "unverified",
                 query_identity={"variant": expected_variant, "gene": expected_gene},
                 result_identity={
                     "hgvs_c": expected_variant,
                     "gene": expected_gene,
                 },
-                identity_verified=bool(is_bound),
                 features={
                     "fact_id": fact_id,
                     "submitted_fact_id": verification["submitted_fact_id"],
@@ -4719,6 +5163,9 @@ class ACMGEvidencePipeline:
                     "validation_errors": verification["validation_errors"],
                     "anchor_status": verification["anchor_status"],
                     "semantic_status": verification["semantic_status"],
+                    "requirements_status": verification["requirements_status"],
+                    "target_link_status": verification["target_link_status"],
+                    "negation_status": verification["negation_status"],
                     "field_semantics": verification["field_semantics"],
                     "criterion": verification["criterion"],
                     "suggested_strength": verification["suggested_strength"],
@@ -4736,9 +5183,7 @@ class ACMGEvidencePipeline:
                     "document_url": document_provenance["url"],
                     "retrieval_trace": document_provenance["retrieval_trace"],
                     "document_truncated": document_provenance["truncated"],
-                    "truncated_sections": document_provenance[
-                        "truncated_sections"
-                    ],
+                    "truncated_sections": document_provenance["truncated_sections"],
                     "review_request_id": str(item.get("review_request_id") or ""),
                     "proposal_hash": _stable_payload_hash(item),
                     "reading_manifest": reading_manifest,
@@ -4757,8 +5202,47 @@ class ACMGEvidencePipeline:
                 ),
                 excerpt=str(verification["excerpt"]),
                 locator=str(verification["locator"]),
-                assessment_ready=bool(is_bound),
                 verification_level=verification_level,
+                identity_status=(
+                    "conflict"
+                    if verification["anchor_status"] == "mismatch"
+                    else "matched"
+                    if source_anchored
+                    else "partial"
+                ),
+                source_status=(
+                    "available"
+                    if retrieved_reading_status in {"complete", "partial"}
+                    else retrieved_reading_status
+                    if retrieved_reading_status in {"abstract_only", "snippet_only"}
+                    else "unavailable"
+                ),
+                extraction_status=(
+                    "contradicted"
+                    if verification["semantic_status"] == "contradicted"
+                    else "llm_extracted"
+                    if verification["semantic_status"] == "verified"
+                    else "unresolved"
+                ),
+                version_status="versioned" if provider_raw_hash else "unversioned",
+                disease_match_status=(
+                    "matched"
+                    if verification["values"].get("disease")
+                    else "unspecified"
+                ),
+                independence_status=(
+                    "independent"
+                    if any(
+                        verification["values"].get(key)
+                        for key in (
+                            "case_id",
+                            "family_id",
+                            "cohort_id",
+                            "assay_instance_id",
+                        )
+                    )
+                    else "unknown"
+                ),
             )
         return facts, calls
 
@@ -4769,7 +5253,7 @@ class ACMGEvidencePipeline:
         return [
             fact
             for fact in source_facts.values()
-            if fact.tool_name in tool_names and fact.assessment_ready
+            if fact.tool_name in tool_names and _fact_usable(fact)
         ]
 
     @staticmethod
@@ -4784,7 +5268,11 @@ class ACMGEvidencePipeline:
             fact_type = str(fact.features.get("fact_type") or "")
             if fact_type not in LITERATURE_FACT_CRITERIA:
                 continue
-            if fact_type in _SPECIALIZED_LITERATURE_FACTS:
+            if (
+                fact_type in _SPECIALIZED_LITERATURE_FACTS
+                and str(fact.features.get("requirements_status") or "complete")
+                == "complete"
+            ):
                 # These facts are consumed by their criterion-specific engines;
                 # adding a second free-form LLM card would double count them.
                 continue
@@ -4806,6 +5294,12 @@ class ACMGEvidencePipeline:
             )
             anchor_status = str(fact.features.get("anchor_status") or "unavailable")
             semantic_status = str(fact.features.get("semantic_status") or "unresolved")
+            target_link_status = str(
+                fact.features.get("target_link_status") or "unlinked"
+            )
+            requirements_status = str(
+                fact.features.get("requirements_status") or "incomplete"
+            )
             criterion_valid = criterion in ACMG_CRITERIA
             consequence = (
                 consequence_applicability(criterion, consequence_profile)
@@ -4827,14 +5321,20 @@ class ACMGEvidencePipeline:
                 in {"not_applicable", "deprecated", "ambiguous"}
             )
             source_backed_candidate = (
-                not hard_error
-                and criterion_valid
-                and bool(fact.fact_id)
+                not hard_error and criterion_valid and bool(fact.fact_id)
             )
             proposal_usable = (
-                fact.assessment_ready
+                _fact_usable(fact)
                 and anchor_status == "verified"
-                and semantic_status != "contradicted"
+                and semantic_status == "verified"
+                and requirements_status == "complete"
+                and target_link_status
+                in {
+                    "direct_variant",
+                    "adjacent_explicit_referent",
+                    "direct_gene",
+                    "same_residue",
+                }
                 and strength_valid
                 and mapping_status != "unmapped"
                 and requirements_met
@@ -4855,11 +5355,21 @@ class ACMGEvidencePipeline:
                 caveats.append(
                     "One or more submitted values contradict the cited excerpts."
                 )
+            if requirements_status != "complete":
+                caveats.append(
+                    "The located sentence does not contain all criterion-specific "
+                    "minimum facts; it remains an automatic candidate only."
+                )
+            if target_link_status in {"unlinked", "provider_linked"}:
+                caveats.append(
+                    "The provider links the publication to the variant, but the "
+                    "evidence sentence does not directly bind the target allele."
+                )
             document_truncated = fact.features.get("document_truncated") is True
             if document_truncated:
                 caveats.append(
                     "The retrieved document was truncated; this proposal is excluded "
-                    "from the validated subset."
+                    "from the verified estimate."
                 )
             if not criterion_valid:
                 caveats.append(
@@ -4892,22 +5402,28 @@ class ACMGEvidencePipeline:
                 "questions": list(fact.features.get("questions") or []),
                 "extractor": dict(fact.features.get("extractor") or {}),
             }
+            extraction_method = str(
+                fact.features.get("extraction_method") or "llm_extracted"
+            )
             cards.append(
                 EvidenceCard(
                     criterion=criterion or "UNMAPPED",
                     strength=strength or "not_assessed",
-                    assessment_status=(
-                        "met"
-                        if proposal_usable
-                        else "indeterminate"
-                        if source_backed_candidate
-                        else "not_assessed"
+                    input_source=(
+                        "Built-in literature rule extractor"
+                        if extraction_method == "rule_extracted"
+                        else "Host LLM literature proposal"
                     ),
-                    input_source="Host LLM literature proposal",
                     input_values={
                         **values,
                         "anchor_status": anchor_status,
                         "semantic_status": semantic_status,
+                        "target_link_status": target_link_status,
+                        "requirements_status": requirements_status,
+                        "missing_extraction_requirements": list(
+                            fact.features.get("missing_requirements") or []
+                        ),
+                        "negation_status": fact.features.get("negation_status"),
                         "field_semantics": dict(
                             fact.features.get("field_semantics") or {}
                         ),
@@ -4920,12 +5436,39 @@ class ACMGEvidencePipeline:
                         "excerpt": fact.excerpt,
                     },
                     clinvar_rule_applied=(
-                        "Host LLM interpretation mapped to ClinGen SVI for user review"
+                        "Deterministic literature fact mapped to the versioned ACMG "
+                        "v3 candidate policy"
+                        if extraction_method == "rule_extracted"
+                        else "Optional host-LLM interpretation mapped to the versioned "
+                        "ACMG v3 candidate policy"
                     ),
-                    overlay_validated=proposal_usable,
+                    evidence_status=(
+                        "rule_mapped"
+                        if proposal_usable
+                        else "source_backed_candidate"
+                        if source_backed_candidate
+                        else "excluded"
+                    ),
+                    strength_source=(
+                        "deterministic_literature_candidate_policy"
+                        if extraction_method == "rule_extracted"
+                        else "host_llm_with_rule_mapping"
+                        if mapping_status != "unmapped"
+                        else "host_llm_unmapped"
+                    ),
+                    rule_source={
+                        "type": mapping_status or "generic_acmg_candidate",
+                        "rule_id": str(fact.features.get("rule_id") or ""),
+                        "version": str(fact.features.get("rule_version") or ""),
+                    },
                     provenance_chain=[
-                        "LLM proposal anchored to the named full-text locator; final "
-                        "criterion adoption remains a user decision."
+                        (
+                            "Built-in rule extraction located the fact in the named "
+                            "document; final criterion adoption remains a user decision."
+                            if extraction_method == "rule_extracted"
+                            else "Optional LLM proposal was re-anchored to the named "
+                            "document; final criterion adoption remains a user decision."
+                        )
                     ],
                     source_pmid=str(fact.features.get("pmid") or "") or None,
                     source_pmids=[
@@ -4938,16 +5481,11 @@ class ACMGEvidencePipeline:
                     ],
                     source_case_ids=semantic_ids,
                     source_fact_ids=[fact.fact_id],
-                    suggested_criterion=criterion if source_backed_candidate else "",
-                    suggested_strength=strength if source_backed_candidate else "",
-                    proposal_origin="llm_literature",
-                    proposal_status=(
-                        "requires_user_review"
-                        if source_backed_candidate
-                        else "insufficient_information"
+                    origin=(
+                        "deterministic_svi"
+                        if extraction_method == "rule_extracted"
+                        else "llm_literature"
                     ),
-                    rule_verification="generic_svi",
-                    rule_mapping_status=mapping_status,
                     llm_suggestion=llm_suggestion,
                     caveats=caveats,
                     missing_requirements=(
@@ -4956,6 +5494,13 @@ class ACMGEvidencePipeline:
                         else sorted(
                             {
                                 *mapping_missing,
+                                *list(fact.features.get("missing_requirements") or []),
+                                *(
+                                    ["direct target-variant evidence link"]
+                                    if target_link_status
+                                    in {"unlinked", "provider_linked"}
+                                    else []
+                                ),
                                 *(
                                     ["identity-bound full-text anchor"]
                                     if anchor_status != "verified"
@@ -4974,17 +5519,34 @@ class ACMGEvidencePipeline:
                             }
                         )
                     ),
-                    verification_status=(
-                        "contradicted"
-                        if semantic_status == "contradicted"
-                        else "identity_mismatch"
-                        if anchor_status == "mismatch"
-                        else "source_unavailable"
-                        if anchor_status == "unavailable"
-                        else "verified"
-                        if proposal_usable
-                        else "unresolved"
-                    ),
+                    verification_dimensions={
+                        "identity_status": (
+                            "conflict"
+                            if anchor_status == "mismatch"
+                            else "matched"
+                            if anchor_status == "verified"
+                            else "partial"
+                        ),
+                        "source_status": (
+                            "unavailable"
+                            if anchor_status == "unavailable"
+                            else "available"
+                        ),
+                        "extraction_status": (
+                            "contradicted"
+                            if semantic_status == "contradicted"
+                            else "rule_extracted"
+                            if extraction_method == "rule_extracted"
+                            else "llm_extracted"
+                            if semantic_status == "verified"
+                            else "unresolved"
+                        ),
+                        "version_status": (
+                            "versioned"
+                            if fact.features.get("document_hash")
+                            else "unversioned"
+                        ),
+                    },
                 )
             )
         return cards
@@ -5025,15 +5587,56 @@ class ACMGEvidencePipeline:
         source_fact_ids: list[str],
         allowed_criteria: set[str],
     ) -> list[EvidenceCard]:
-        """Promote cards only when their source facts are verified."""
+        """Bind cards to facts; serializer determines automatic and verified roles."""
         for card in cards:
             if source_fact_ids:
-                card.source_fact_ids = list(source_fact_ids)
+                card.source_fact_ids = list(dict.fromkeys(source_fact_ids))
             if card.criterion not in allowed_criteria:
-                continue
-            if source_fact_ids:
-                card.overlay_validated = True
+                card.evidence_status = "excluded"
+            elif card.strength in {"not_met", "not_applicable"}:
+                card.evidence_status = "not_met"
+            elif source_fact_ids and not card.evidence_status:
+                card.evidence_status = "rule_mapped"
         return cards
+
+    @staticmethod
+    def _representative_literature_facts(
+        facts: list[SourceFact],
+    ) -> list[SourceFact]:
+        """Keep one mapping fact per publication and semantic fact type.
+
+        Automatic extraction and optional caller/LLM supplementation remain
+        independently auditable SourceFacts.  A successfully re-anchored
+        supplemental fact is preferred for card construction because it may
+        carry richer cohort or assay identifiers; it must not create a second
+        card for the same publication-level fact.
+        """
+        selected: dict[tuple[str, str], SourceFact] = {}
+        for fact in facts:
+            publication_id = str(
+                fact.features.get("pmid")
+                or fact.features.get("pmcid")
+                or fact.features.get("doi")
+                or fact.fact_id
+            )
+            key = (str(fact.features.get("fact_type") or ""), publication_id)
+            current = selected.get(key)
+            if current is None:
+                selected[key] = fact
+                continue
+            fact_rank = (
+                1 if fact.fact_id.startswith("acmg-document-fact:") else 0,
+                1 if fact.extraction_status != "contradicted" else 0,
+                1 if fact.identity_status == "matched" else 0,
+            )
+            current_rank = (
+                1 if current.fact_id.startswith("acmg-document-fact:") else 0,
+                1 if current.extraction_status != "contradicted" else 0,
+                1 if current.identity_status == "matched" else 0,
+            )
+            if fact_rank > current_rank:
+                selected[key] = fact
+        return list(selected.values())
 
     @staticmethod
     def _population_inputs(
@@ -5049,7 +5652,7 @@ class ACMGEvidencePipeline:
         )
         for tool_name in preferred_sources:
             for fact in source_facts.values():
-                if fact.tool_name != tool_name or not fact.assessment_ready:
+                if fact.tool_name != tool_name or not _fact_usable(fact):
                     continue
                 features = fact.features
                 if _number(features, "AN", "an") is not None:
@@ -5068,7 +5671,7 @@ class ACMGEvidencePipeline:
             for fact in source_facts.values():
                 if (
                     fact.tool_name != "gnomad_get_site_callability"
-                    or not fact.assessment_ready
+                    or not _fact_usable(fact)
                     or str(fact.features.get("dataset") or "") != frequency_dataset
                     or not isinstance(frequency_coordinates, dict)
                 ):
@@ -5154,11 +5757,11 @@ class ACMGEvidencePipeline:
         for fact in source_facts.values():
             if fact.tool_name == "MyVariant_get_pathogenicity_scores":
                 predictor_audit_features = fact.features
-                if fact.assessment_ready:
+                if _fact_usable(fact):
                     predictor_features = fact.features
             elif fact.tool_name == "SpliceAI_predict_splice":
                 splice_audit_features = fact.features
-                if fact.assessment_ready:
+                if _fact_usable(fact):
                     splice_features = fact.features
         predictor_scores = dict(predictor_audit_features.get("predictor_audit") or {})
         for key in ("revel_score", "cadd_phred"):
@@ -5242,17 +5845,63 @@ class ACMGEvidencePipeline:
         }
 
     @staticmethod
-    def _clinical_inputs(source_facts: dict[str, SourceFact]) -> dict[str, Any]:
+    def _clinical_inputs(
+        source_facts: dict[str, SourceFact],
+        clinical_observations: list[dict[str, Any]] | None = None,
+        inheritance_mode: str = "",
+    ) -> dict[str, Any]:
         de_novo = _literature_values(source_facts, "de_novo")
         pm3 = [
             *_literature_values(source_facts, "pm3"),
             *_literature_values(source_facts, "recessive_allelic"),
         ]
+        clinical_items = list(clinical_observations or [])
+        for fact_type in (
+            "segregation",
+            "phenotype_specificity",
+            "healthy_observation",
+            "allelic_phase",
+            "alternative_cause",
+        ):
+            for row in _literature_values(source_facts, fact_type):
+                values = dict(row)
+                source_fact_id = str(values.pop("source_fact_id", ""))
+                clinical_items.append(
+                    {
+                        "observation_id": str(
+                            values.get("fact_id")
+                            or values.get("family_id")
+                            or values.get("case_id")
+                            or source_fact_id
+                        ),
+                        "observation_type": fact_type,
+                        "source_type": "publication",
+                        "source_id": source_fact_id,
+                        "values": values,
+                        "source_fact_id": source_fact_id,
+                        "identity_status": row.get("identity_status"),
+                        "source_status": row.get("source_status"),
+                        "extraction_status": row.get("extraction_status"),
+                        "version_status": row.get("version_status"),
+                        "disease_match_status": row.get("disease_match_status"),
+                        "independence_status": row.get("independence_status"),
+                    }
+                )
+        de_novo.extend(
+            row for row in clinical_items if row.get("observation_type") == "de_novo"
+        )
+        pm3.extend(
+            row
+            for row in clinical_items
+            if row.get("observation_type") == "recessive_case"
+        )
         return {
-            "inheritance_mode": _shared_string(de_novo or pm3, "inheritance_mode"),
+            "inheritance_mode": inheritance_mode
+            or _shared_string(de_novo or pm3 or clinical_items, "inheritance_mode"),
             "de_novo_probands": de_novo or None,
             "pm3_observations": pm3 or None,
             "pm3_frequency_eligible": _shared_bool(pm3, "pm3_frequency_eligible"),
+            "clinical_observations": clinical_items,
         }
 
     @staticmethod
@@ -5490,7 +6139,7 @@ class ACMGEvidencePipeline:
         mechanism_facts = [
             fact
             for fact in source_facts.values()
-            if fact.assessment_ready
+            if _fact_usable(fact)
             and fact.features.get("fact_type") in {"functional", "mechanism"}
             and fact.features.get("semantic_status") == "verified"
             and str(
@@ -5579,8 +6228,7 @@ class ACMGEvidencePipeline:
             (
                 fact
                 for fact in source_facts.values()
-                if fact.tool_name == "EBIProteins_get_features"
-                and fact.assessment_ready
+                if fact.tool_name == "EBIProteins_get_features" and _fact_usable(fact)
             ),
             None,
         )
@@ -5589,7 +6237,7 @@ class ACMGEvidencePipeline:
                 fact
                 for fact in source_facts.values()
                 if fact.tool_name == "InterPro_get_entries_for_protein"
-                and fact.assessment_ready
+                and _fact_usable(fact)
             ),
             None,
         )
@@ -5628,7 +6276,7 @@ class ACMGEvidencePipeline:
                     "EBIProteins_get_features",
                     "InterPro_get_entries_for_protein",
                 }
-                and fact.assessment_ready
+                and _fact_usable(fact)
             ],
         }
 
@@ -5648,7 +6296,7 @@ class ACMGEvidencePipeline:
         feature_facts = [
             fact
             for fact in source_facts.values()
-            if fact.tool_name == "EBIProteins_get_features" and fact.assessment_ready
+            if fact.tool_name == "EBIProteins_get_features" and _fact_usable(fact)
         ]
         selected_fact_ids = [
             str(value) for value in profile.get("source_fact_ids") or [] if value
@@ -5716,21 +6364,29 @@ class ACMGEvidencePipeline:
             EvidenceCard(
                 criterion=criterion,
                 strength=criterion,
-                assessment_status="met",
                 input_source="Consequence resolver + EBI Proteins",
                 input_values=common,
                 clinvar_rule_applied=rule_text,
-                overlay_validated=True,
+                evidence_status="source_backed_candidate",
+                strength_source="acmg_2015_default_candidate",
+                rule_source={
+                    "type": "generic_acmg_candidate",
+                    "rule_id": "acmg-2015-pm4-bp3-candidate",
+                    "version": "2026-08-08-v3",
+                },
                 source_fact_ids=source_fact_ids,
                 observed_facts={
                     **common,
                     "review_required": True,
                     "database_labels_used_as_evidence": False,
                 },
-                proposal_origin="external_lead",
-                proposal_status="requires_user_review",
-                rule_verification="generic_svi",
-                rule_mapping_status="provider_review_required",
+                origin="external_lead",
+                verification_dimensions={
+                    "identity_status": "matched",
+                    "source_status": "available",
+                    "extraction_status": "structured",
+                    "version_status": "unversioned",
+                },
                 caveats=[
                     "This is a provider-derived evidence proposal, not a final criterion adoption."
                 ],
@@ -5743,6 +6399,14 @@ class ACMGEvidencePipeline:
         identity: dict[str, Any],
         source_facts: dict[str, SourceFact],
     ) -> dict[str, Any]:
+        literature_facts = ACMGEvidencePipeline._representative_literature_facts(
+            [
+                fact
+                for fact in source_facts.values()
+                if fact.tool_name == "EuropePMC_get_full_text"
+                and fact.features.get("fact_type") in {"case_control", "case_series"}
+            ]
+        )
         values = {
             "case_control_facts": [
                 {
@@ -5750,7 +6414,8 @@ class ACMGEvidencePipeline:
                     "fact_id": fact.features.get("fact_id"),
                     "fact_type": fact.features.get("fact_type"),
                     "source_fact_id": fact.fact_id,
-                    "assessment_ready": fact.assessment_ready,
+                    "source_available": _fact_usable(fact),
+                    "source_status": fact.source_status,
                     "anchor_status": fact.features.get("anchor_status"),
                     "semantic_status": fact.features.get("semantic_status"),
                     "document_truncated": fact.features.get("document_truncated")
@@ -5778,9 +6443,7 @@ class ACMGEvidencePipeline:
                         "extractor": dict(fact.features.get("extractor") or {}),
                     },
                 }
-                for fact in source_facts.values()
-                if fact.tool_name == "EuropePMC_get_full_text"
-                and fact.features.get("fact_type") in {"case_control", "case_series"}
+                for fact in literature_facts
             ]
         }
         values["expected_variant"] = str(
@@ -5811,7 +6474,7 @@ class ACMGEvidencePipeline:
                 (call.category for call in calls if call.tool_name == fact.tool_name),
                 "source_assertion",
             )
-            if fact.assessment_ready:
+            if _fact_usable(fact):
                 ready_by_category[category] = ready_by_category.get(category, 0) + 1
         has_coordinates = isinstance(identity.get("coordinates"), dict)
         has_gene = bool(arguments.get("gene") or identity.get("gene"))
@@ -5911,10 +6574,10 @@ class ACMGEvidencePipeline:
                 if groups
                 else bool(selected) or not required
             )
-            assessment_ready = (
+            source_available = (
                 all(
                     any(
-                        fact.tool_name in alternatives and fact.assessment_ready
+                        fact.tool_name in alternatives and _fact_usable(fact)
                         for fact in source_facts.values()
                     )
                     for alternatives in groups
@@ -5948,7 +6611,7 @@ class ACMGEvidencePipeline:
                     "query_completed": query_completed,
                     "queried_sources": [call.tool_name for call in selected],
                     "hit_count": sum(call.status == "success" for call in selected),
-                    "assessment_ready": assessment_ready,
+                    "source_available": source_available,
                     "source_fact_count": ready_by_category.get(category, 0),
                     "limitation_code": (
                         "required_provider_incomplete"
@@ -5957,7 +6620,7 @@ class ACMGEvidencePipeline:
                         if required
                         and query_completed
                         and successful_required_result
-                        and not assessment_ready
+                        and not source_available
                         else ""
                     ),
                     "reason": (
@@ -5985,7 +6648,7 @@ class ACMGEvidencePipeline:
                     "source_type": call.tool_name,
                     "reviewable_features": _features_for_call(call),
                     "quarantined_conclusions": _quarantined_conclusions(call.result),
-                    "system_preview_eligible": False,
+                    "calculation_roles": {"automatic": False, "verified": False},
                     "notice": "Source assertion only; not automatically adopted as ACMG evidence.",
                 }
             )
@@ -5996,7 +6659,7 @@ class ACMGEvidencePipeline:
                     {
                         "source_type": "supplied_source_output",
                         "raw_source": value,
-                        "system_preview_eligible": False,
+                        "calculation_roles": {"automatic": False, "verified": False},
                         "notice": "Supplied source assertion only; not automatically adopted.",
                     }
                 )
@@ -6080,6 +6743,7 @@ class ACMGEvidencePipeline:
         normalized_inheritance = _normalize_inheritance(inheritance)
         applicable: list[dict[str, Any]] = []
         unmatched: list[dict[str, Any]] = []
+        scenario_candidates: list[dict[str, Any]] = []
         for candidate in candidates:
             if not isinstance(candidate, dict):
                 continue
@@ -6090,6 +6754,15 @@ class ACMGEvidencePipeline:
                 reasons.append("specification_not_active")
             if not str(candidate.get("version") or "").strip():
                 reasons.append("specification_version_missing")
+            base_eligible = not any(
+                value
+                in {
+                    "gene_mismatch",
+                    "specification_not_active",
+                    "specification_version_missing",
+                }
+                for value in reasons
+            )
             disease_rows = candidate.get("diseases")
             disease_rows = disease_rows if isinstance(disease_rows, list) else []
             if normalized_disease:
@@ -6120,6 +6793,8 @@ class ACMGEvidencePipeline:
                 )
             else:
                 applicable.append(candidate)
+            if base_eligible:
+                scenario_candidates.append(candidate)
         matched = applicable[0] if len(applicable) == 1 else None
         compiled_contract = None
         if matched is not None:
@@ -6152,6 +6827,72 @@ class ACMGEvidencePipeline:
             if contract is not None
             else "discovered_context_incomplete"
         )
+        rule_scenarios: list[dict[str, Any]] = [
+            {
+                "scenario_id": "generic-svi",
+                "scenario_type": "generic_svi",
+                "applicability_status": "applicable",
+                "specification": None,
+                "contract": None,
+            }
+        ]
+        for candidate in scenario_candidates:
+            specification_id = str(candidate.get("specification_id") or "")
+            version = str(candidate.get("version") or "")
+            compiled = CSPEC_RULE_CATALOG.get((specification_id, version))
+            scenario_contract = build_dynamic_cspec_contract(
+                candidate,
+                proposals=cspec_proposals,
+                compiled_contract=compiled,
+            )
+            disease_rows = candidate.get("diseases")
+            disease_rows = disease_rows if isinstance(disease_rows, list) else []
+            disease_matches = bool(
+                normalized_disease
+                and any(
+                    normalized_disease == _normalize_text(row.get("mondo_id"))
+                    for row in disease_rows
+                    if isinstance(row, dict)
+                )
+            )
+            inheritance_matches = bool(
+                normalized_inheritance
+                and any(
+                    normalized_inheritance == _normalize_inheritance(mode)
+                    for row in disease_rows
+                    if isinstance(row, dict)
+                    for mode in row.get("inheritance") or []
+                )
+            )
+            applicability_status = (
+                "matched"
+                if disease_matches and inheritance_matches
+                else "candidate"
+                if not normalized_disease or not normalized_inheritance
+                else "mismatch"
+            )
+            applicability_reasons: list[str] = []
+            if not normalized_disease:
+                applicability_reasons.append("disease_context_unresolved")
+            elif not disease_matches:
+                applicability_reasons.append("disease_mismatch")
+            if not normalized_inheritance:
+                applicability_reasons.append("inheritance_context_unresolved")
+            elif not inheritance_matches:
+                applicability_reasons.append("inheritance_mismatch")
+            scenario_hash = hashlib.sha256(
+                f"{specification_id}:{version}:{(scenario_contract or {}).get('content_hash', '')}".encode()
+            ).hexdigest()[:16]
+            rule_scenarios.append(
+                {
+                    "scenario_id": f"cspec:{scenario_hash}",
+                    "scenario_type": "vcep_cspec",
+                    "applicability_status": applicability_status,
+                    "applicability_reasons": applicability_reasons,
+                    "specification": candidate,
+                    "contract": scenario_contract,
+                }
+            )
         return {
             "vcep_discovered": bool(candidates),
             "vcep_candidates": candidates,
@@ -6185,6 +6926,7 @@ class ACMGEvidencePipeline:
                 else "general_clingen_svi"
             ),
             "multiple_applicable_specifications": len(applicable) > 1,
+            "rule_scenarios": rule_scenarios,
         }
 
     @staticmethod
@@ -6221,22 +6963,27 @@ class ACMGEvidencePipeline:
                     cspec_criterion if isinstance(cspec_criterion, dict) else None
                 ),
             )
-            statuses = {
-                str(row.get("assessment_status") or "not_assessed")
+            row_evidence_statuses = {
+                str(row.get("evidence_status") or "")
                 for row in criterion_rows
+                if row.get("evidence_status")
             }
             if applicability["status"] == "deprecated":
-                aggregate = "deprecated"
-            elif "met" in statuses:
-                aggregate = "met"
+                evidence_status = "deprecated"
             elif applicability["status"] == "not_applicable":
-                aggregate = "not_applicable"
-            elif "indeterminate" in statuses:
-                aggregate = "indeterminate"
-            elif "not_met" in statuses:
-                aggregate = "not_met"
+                evidence_status = "excluded"
+            elif "expert_panel_applied" in row_evidence_statuses:
+                evidence_status = "expert_panel_applied"
+            elif "rule_mapped" in row_evidence_statuses:
+                evidence_status = "rule_mapped"
+            elif "source_backed_candidate" in row_evidence_statuses:
+                evidence_status = "source_backed_candidate"
+            elif "not_met" in row_evidence_statuses:
+                evidence_status = "not_met"
+            elif "excluded" in row_evidence_statuses:
+                evidence_status = "excluded"
             else:
-                aggregate = "not_assessed"
+                evidence_status = "no_information"
             rule = rule_for_criterion(criterion)
             use_contract = use_matrix[criterion]
             candidate_routes = list(use_contract.get("provider_routes") or [])
@@ -6244,10 +6991,15 @@ class ACMGEvidencePipeline:
                 candidate_routes = ["prior_variant_candidates"]
             pending_request_ids = []
             for request in literature_review.get("review_requests") or []:
-                if not isinstance(request, dict) or request.get("state") not in {
-                    "pending",
-                    "proposal_validation_failed",
-                }:
+                if (
+                    not isinstance(request, dict)
+                    or request.get("state")
+                    not in {
+                        "pending",
+                        "proposal_validation_failed",
+                    }
+                    or request.get("required") is not True
+                ):
                     continue
                 allowed_fact_types = request.get("allowed_fact_types") or []
                 if any(
@@ -6259,8 +7011,7 @@ class ACMGEvidencePipeline:
                 {
                     fact.fact_id
                     for fact in source_facts.values()
-                    if fact.status == "success"
-                    and fact.identity_verified
+                    if _fact_usable(fact)
                     and any(
                         route != "literature" and _fact_matches_route(fact, route)
                         for route in candidate_routes
@@ -6291,47 +7042,44 @@ class ACMGEvidencePipeline:
                 )
                 if value
             }
-            if aggregate not in {"met", "not_applicable", "deprecated"} and not missing:
+            if (
+                evidence_status
+                not in {
+                    "expert_panel_applied",
+                    "rule_mapped",
+                    "source_backed_candidate",
+                    "excluded",
+                    "deprecated",
+                }
+                and not missing
+            ):
                 missing.update(
                     required
                     or ["No deterministic structured fact contract was satisfied."]
                 )
             missing.update(f"context:{name}" for name in missing_context)
-            row_proposal_statuses = {
-                str(row.get("proposal_status") or "")
-                for row in criterion_rows
-                if row.get("proposal_status")
-            }
-            if aggregate == "deprecated":
-                proposal_status = "deprecated"
-            elif aggregate == "not_applicable":
-                proposal_status = "not_applicable"
-            elif "suggested" in row_proposal_statuses:
-                proposal_status = "suggested"
-            elif "requires_user_review" in row_proposal_statuses:
-                proposal_status = "requires_user_review"
-            elif use_contract["automation_level"] in {
-                "disease_specific",
-                "review_guided",
-            }:
-                proposal_status = "requires_user_review"
-            else:
-                proposal_status = "insufficient_information"
             validated_proposals = [
                 row
                 for row in criterion_rows
-                if row.get("assessment_status") == "met"
-                and row.get("proposal_origin") in {"llm_literature", "llm_cspec"}
+                if row.get("evidence_status")
+                in {"expert_panel_applied", "rule_mapped", "source_backed_candidate"}
+                and row.get("origin") in {"llm_literature", "llm_cspec"}
             ]
             assessed_rows = [
                 row
                 for row in criterion_rows
-                if row.get("assessment_status") in {"met", "not_met", "indeterminate"}
-                and row.get("proposal_origin") not in {"llm_literature", "llm_cspec"}
+                if row.get("evidence_status")
+                in {
+                    "expert_panel_applied",
+                    "rule_mapped",
+                    "source_backed_candidate",
+                    "not_met",
+                }
+                and row.get("origin") not in {"llm_literature", "llm_cspec"}
             ]
-            if aggregate == "deprecated":
+            if evidence_status == "deprecated":
                 route_status = "deprecated"
-            elif aggregate == "not_applicable":
+            elif applicability["status"] == "not_applicable":
                 route_status = "not_applicable"
             elif validated_proposals:
                 route_status = "proposal_validated"
@@ -6351,15 +7099,14 @@ class ACMGEvidencePipeline:
                     "automation_level": use_contract["automation_level"],
                     "consequence_applicability": applicability["status"],
                     "consequence_reason": applicability["reason"],
-                    "assessment_status": aggregate,
-                    "proposal_status": proposal_status,
+                    "evidence_status": evidence_status,
                     "route_status": route_status,
                     "evidence_card_ids": [row.get("card_id") for row in criterion_rows],
                     "candidate_source_fact_ids": candidate_source_fact_ids,
                     "pending_request_ids": sorted(
                         value for value in set(pending_request_ids) if value
                     ),
-                    "proposal_statuses": sorted(row_proposal_statuses),
+                    "evidence_statuses": sorted(row_evidence_statuses),
                     "observed_facts": [
                         row.get("observed_facts") for row in criterion_rows
                     ],
@@ -6371,115 +7118,6 @@ class ACMGEvidencePipeline:
                 }
             )
         return reviews
-
-    @staticmethod
-    def _annotate_cspec(
-        cards: list[EvidenceCard], rule_context: dict[str, Any]
-    ) -> None:
-        """Attach a uniquely matched online CSpec to already-supported cards."""
-        specification = rule_context.get("applicable_specification")
-        contract = rule_context.get("executable_contract")
-        if not isinstance(specification, dict) or not isinstance(contract, dict):
-            return
-        by_criterion = contract.get("criteria")
-        if not isinstance(by_criterion, dict):
-            return
-        spec_id = str(specification.get("specification_id") or "")
-        for card in cards:
-            strength_criterion = str(card.strength or "").split("_", 1)[0]
-            criterion = (
-                strength_criterion
-                if strength_criterion in by_criterion
-                else str(card.criterion or "").split("/", 1)[0].split("_", 1)[0]
-            )
-            matched = by_criterion.get(criterion)
-            if not isinstance(matched, dict):
-                continue
-            if matched.get("rule_applicable") is False:
-                card.assessment_status = "not_applicable"
-                card.strength = "not_applicable"
-                card.proposal_status = "not_applicable"
-                card.overlay_validated = False
-                card.caveats.append(
-                    "The uniquely matched online CSpec marks this criterion "
-                    "not applicable."
-                )
-            assessment = card.assessment_status or ""
-            card_has_rule_result = (
-                assessment == "met"
-                or is_valid_strength_for_criterion(criterion, str(card.strength or ""))
-            )
-            if not card_has_rule_result and matched.get("rule_applicable") is not False:
-                continue
-            mapped_strength = str(matched.get("strength") or "")
-            if mapped_strength and is_valid_strength_for_criterion(
-                criterion, mapped_strength
-            ):
-                card.strength = mapped_strength
-            card.input_values = {
-                **card.input_values,
-                "applicable_cspec": {
-                    "specification_id": spec_id,
-                    "version": specification.get("version"),
-                    "vcep": specification.get("vcep"),
-                    "content_hash": contract.get("content_hash"),
-                    "criterion_contract": matched,
-                },
-                "cspec_contract_applied": {
-                    "specification_id": spec_id,
-                    "version": specification.get("version"),
-                    "content_hash": contract.get("content_hash"),
-                    "rule_id": contract.get("rule_id"),
-                    "bayesian_odds": (
-                        contract.get("bayesian_odds", {}).get(card.strength)
-                        if isinstance(contract.get("bayesian_odds"), dict)
-                        else None
-                    ),
-                    "mutually_exclusive_with": list(
-                        matched.get("mutually_exclusive_with") or []
-                    ),
-                },
-            }
-            card.rule_id = str(contract.get("rule_id") or card.rule_id)
-            card.rule_version = str(contract.get("version") or card.rule_version)
-            card.rule_reference = str(
-                contract.get("primary_reference") or card.rule_reference
-            )
-            verification = str(matched.get("verification") or "")
-            card.rule_verification = (
-                "dynamic_cspec_llm"
-                if verification == "dynamic_cspec_llm"
-                else "compiled_hash_verified"
-                if verification == "compiled_hash_verified"
-                else "dynamic_cspec_structured"
-            )
-            card.rule_mapping_status = (
-                "llm_review_required"
-                if verification == "dynamic_cspec_llm"
-                else "dynamic_cspec_structured"
-            )
-            if verification == "dynamic_cspec_llm":
-                card.proposal_origin = "llm_cspec"
-                card.llm_suggestion = {
-                    **card.llm_suggestion,
-                    "cspec": {
-                        "criterion": criterion,
-                        "suggested_strength": matched.get("strength"),
-                        "interpretation": matched.get("llm_interpretation"),
-                        "confidence": matched.get("confidence"),
-                        "extractor": dict(matched.get("extractor") or {}),
-                        "locator": matched.get("cspec_locator"),
-                        "excerpt": matched.get("cspec_excerpt"),
-                    },
-                }
-            card.proposal_status = (
-                "requires_user_review"
-                if verification == "dynamic_cspec_llm"
-                else card.proposal_status
-            )
-            card.rule_basis = (
-                f"Online ClinGen CSpec {spec_id} v{specification.get('version')}"
-            )
 
     def _error_result(
         self,
@@ -6593,16 +7231,18 @@ class ACMGEvidencePipeline:
             )
         )
         conflict_report = detect_conflicts([])
-        system_preview_bayesian = compute_bayesian_score(
+        automatic_bayesian = compute_bayesian_score(
             [],
-            estimate_type="system_preview",
+            estimate_type="automatic",
             known_source_fact_ids=set(),
-            eligibility="source_backed",
+            eligibility="automatic",
         )
-        validated_subset_bayesian = compute_bayesian_score(
+        verified_bayesian = compute_bayesian_score(
             [],
-            estimate_type="validated_subset",
-            selection_field="validated_subset_included",
+            estimate_type="verified",
+            verified_source_fact_ids=set(),
+            eligibility="verified",
+            calculation_role="verified",
         )
         user_selected_bayesian = {
             "status": "not_requested",
@@ -6620,8 +7260,8 @@ class ACMGEvidencePipeline:
             conflict_report=conflict_report,
             literature_review=literature_review,
             recoverable_gaps=recoverable_gaps,
-            system_preview_bayesian=system_preview_bayesian,
-            validated_subset_bayesian=validated_subset_bayesian,
+            automatic_bayesian=automatic_bayesian,
+            verified_bayesian=verified_bayesian,
             user_selected_bayesian=user_selected_bayesian,
         )
         runtime_manifest = build_runtime_manifest(rule_context)
@@ -6663,8 +7303,16 @@ class ACMGEvidencePipeline:
                 "excluded_evidence": [],
             },
             "conflict_report": conflict_report,
-            "system_preview_bayesian": system_preview_bayesian,
-            "validated_subset_bayesian": validated_subset_bayesian,
+            "automatic_bayesian": automatic_bayesian,
+            "verified_bayesian": verified_bayesian,
+            "scenario_estimates": [],
+            "vcep_context": {"status": "not_run", "assertions": []},
+            "vcep_assertions": [],
+            "rule_scenarios": [],
+            "automation_report": {
+                "status": "not_applicable" if not_applicable else "blocked",
+                "automatic_actions_completed": [],
+            },
             "user_selected_bayesian": user_selected_bayesian,
             "decision_report": {
                 "status": "not_requested",
@@ -6721,9 +7369,13 @@ class ACMGEvidencePipeline:
         evidence_decisions, decision_input_errors = _normalize_evidence_decisions(
             arguments.get("evidence_decisions")
         )
+        clinical_observations, clinical_observation_errors = (
+            _normalize_clinical_observations(arguments.get("clinical_observations"))
+        )
         _literature_items, literature_input_error = _literature_input(arguments)
         input_errors = [
             *decision_input_errors,
+            *clinical_observation_errors,
             *([literature_input_error] if literature_input_error else []),
         ]
         if input_errors:
@@ -6838,6 +7490,7 @@ class ACMGEvidencePipeline:
         source_calls.extend(
             self._literature_annotation_calls(literature_seed_candidates)
         )
+        source_calls.extend(self._automatic_fulltext_calls(literature_seed_candidates))
         literature_source_facts, fulltext_calls = (
             self._document_backed_literature_proposals(arguments, identity)
         )
@@ -6849,6 +7502,28 @@ class ACMGEvidencePipeline:
         ]
         source_facts = self._source_facts(calls, identity)
         source_facts.update(literature_source_facts)
+        clinical_facts, bound_clinical_observations = _clinical_observation_facts(
+            clinical_observations, identity
+        )
+        source_facts.update(clinical_facts)
+        automatic_literature_candidates = _literature_candidate_index(
+            source_facts,
+            identity=identity,
+            arguments=arguments,
+        )
+        source_facts.update(
+            extract_literature_facts(
+                automatic_literature_candidates,
+                source_facts,
+                identity=identity,
+                disease=str(arguments.get("disease") or ""),
+                inheritance=str(
+                    arguments.get("inheritance")
+                    or arguments.get("inheritance_mode")
+                    or ""
+                ),
+            )
+        )
         exon_lof_calls = self._pvs1_exon_lof_calls(
             identity, consequence_profile, source_facts
         )
@@ -6905,7 +7580,17 @@ class ACMGEvidencePipeline:
                 )
             )
 
-        clinical_cards = clinical_evidence(**self._clinical_inputs(source_facts))
+        clinical_cards = clinical_evidence(
+            **self._clinical_inputs(
+                source_facts,
+                bound_clinical_observations,
+                str(
+                    arguments.get("inheritance")
+                    or arguments.get("inheritance_mode")
+                    or ""
+                ),
+            )
+        )
         de_novo_fact_ids = _literature_fact_ids(source_facts, "de_novo")
         for card in clinical_cards:
             if card.criterion in {"PS2", "PM6"}:
@@ -6937,7 +7622,7 @@ class ACMGEvidencePipeline:
         functional_facts = {
             str(fact.features.get("values", {}).get("assay_instance_id") or ""): fact
             for fact in source_facts.values()
-            if fact.assessment_ready and fact.features.get("fact_type") == "functional"
+            if _fact_usable(fact) and fact.features.get("fact_type") == "functional"
         }
         for card in functional_cards:
             if card.criterion == "PM1":
@@ -6971,12 +7656,14 @@ class ACMGEvidencePipeline:
             **self._literature_inputs(arguments, identity, source_facts),
             rule_override=rule_context.get("executable_contract"),
         )
-        case_series_facts = [
-            fact
-            for fact in source_facts.values()
-            if fact.assessment_ready
-            and fact.features.get("fact_type") in {"case_control", "case_series"}
-        ]
+        case_series_facts = self._representative_literature_facts(
+            [
+                fact
+                for fact in source_facts.values()
+                if _fact_usable(fact)
+                and fact.features.get("fact_type") in {"case_control", "case_series"}
+            ]
+        )
         facts_by_case_id = {
             str(fact.features.get("fact_id")): fact.fact_id
             for fact in case_series_facts
@@ -6992,6 +7679,14 @@ class ACMGEvidencePipeline:
         cards.extend(literature_cards)
         cards.extend(self._literature_proposal_cards(source_facts, consequence_profile))
         self._attach_literature_suggestions(cards, source_facts)
+        vcep_context, vcep_assertions, vcep_cards = parse_vcep_assertions(
+            source_facts,
+            identity=identity,
+            disease=str(arguments.get("disease") or ""),
+            inheritance=str(
+                arguments.get("inheritance") or arguments.get("inheritance_mode") or ""
+            ),
+        )
 
         variant_identity = {
             "input_variant": identity.get("input_variant") or variant,
@@ -7013,15 +7708,17 @@ class ACMGEvidencePipeline:
                 identity.get("normalization", {}).get("excluded_candidates") or []
             ),
         }
-        self._annotate_cspec(cards, rule_context)
-        trusted_source_fact_ids = {
-            fact_id for fact_id, fact in source_facts.items() if fact.assessment_ready
+        cards.extend(vcep_cards)
+        verified_source_fact_ids = {
+            fact_id
+            for fact_id, fact in source_facts.items()
+            if fact_is_strictly_verified(fact)
         }
         known_source_fact_ids = set(source_facts)
         serialized = evidence_cards_to_result(
             cards,
             variant_identity=variant_identity,
-            trusted_source_fact_ids=trusted_source_fact_ids,
+            verified_source_fact_ids=verified_source_fact_ids,
             known_source_fact_ids=known_source_fact_ids,
         )
         evidence_rows = list(
@@ -7060,7 +7757,7 @@ class ACMGEvidencePipeline:
             any(
                 row["source_category"] == "literature"
                 and row["query_status"] == "success"
-                and row["assessment_ready"] is False
+                and row["source_available"] is False
                 for row in coverage
             )
             and not literature_items
@@ -7074,7 +7771,7 @@ class ACMGEvidencePipeline:
             for call in calls
         )
         splice_fact_ready = any(
-            fact.tool_name == "SpliceAI_predict_splice" and fact.assessment_ready
+            fact.tool_name == "SpliceAI_predict_splice" and _fact_usable(fact)
             for fact in source_facts.values()
         )
         if splice_call_succeeded and not splice_fact_ready:
@@ -7086,7 +7783,7 @@ class ACMGEvidencePipeline:
             )
         coverage_partial = any(row.get("limitation_code") for row in coverage)
         evidence_ready = any(
-            row.get("assessment_ready")
+            row.get("source_available")
             for row in coverage
             if row.get("source_category")
             in {"population", "computational", "literature", "functional"}
@@ -7101,11 +7798,36 @@ class ACMGEvidencePipeline:
         status = (
             "degraded" if self.tooluniverse is None or coverage_partial else "success"
         )
-        compatibility = resolve_evidence_compatibility(
+        scenario_result = build_scenario_results(
             evidence_rows,
+            rule_context,
+            vcep_assertions,
             known_source_fact_ids=known_source_fact_ids,
-            eligibility="source_backed",
-            selection_field="system_preview_included",
+            verified_source_fact_ids=verified_source_fact_ids,
+        )
+        scenario_estimates = list(scenario_result["scenario_estimates"])
+        for row in scenario_result["scenario_cards"]:
+            if not any(
+                existing.get("card_id") == row.get("card_id")
+                for existing in evidence_rows
+            ):
+                evidence_rows.append(row)
+        rule_context["default_scenario"] = {
+            "scenario_id": scenario_result["default_scenario_id"],
+            "reason": scenario_result["default_selection_reason"],
+            "policy_version": scenario_result["policy_version"],
+        }
+        default_card_ids = set(scenario_result["default_card_ids"])
+        default_rows = [
+            row
+            for row in evidence_rows
+            if str(row.get("card_id") or "") in default_card_ids
+        ]
+        compatibility = resolve_evidence_compatibility(
+            default_rows,
+            known_source_fact_ids=known_source_fact_ids,
+            eligibility="automatic",
+            calculation_role="automatic",
         )
         compatible_ids = {
             str(row.get("card_id") or "")
@@ -7116,58 +7838,59 @@ class ACMGEvidencePipeline:
             for row in compatibility["excluded_evidence"]
             if row.get("card_id")
         }
-        for row in evidence_rows:
+        for row in default_rows:
             card_id = str(row.get("card_id") or "")
-            if (
-                row.get("system_preview_included") is True
-                and card_id not in compatible_ids
-            ):
-                row["system_preview_included"] = False
+            if (row.get("calculation_roles") or {}).get(
+                "automatic"
+            ) is True and card_id not in compatible_ids:
+                roles = dict(row.get("calculation_roles") or {})
+                roles["automatic"] = False
+                row["calculation_roles"] = roles
                 row["exclusion_reason"] = excluded_reasons.get(
                     card_id, "excluded_by_compatibility_resolver"
                 )
-                row["preview_inclusion_basis"] = "excluded"
-                row["preview_exclusion_reason"] = row["exclusion_reason"]
-        system_preview_bayesian = compute_bayesian_score(
+        automatic_bayesian = compute_bayesian_score(
             compatibility["compatible_evidence"],
             known_source_fact_ids=known_source_fact_ids,
-            estimate_type="system_preview",
-            eligibility="source_backed",
+            estimate_type="automatic",
+            eligibility="automatic",
+            calculation_role="automatic",
         )
-        system_preview_bayesian["compatibility_exclusions"] = compatibility[
+        automatic_bayesian["compatibility_exclusions"] = compatibility[
             "excluded_evidence"
         ]
-        system_preview_bayesian["excluded_card_ids"] = [
+        automatic_bayesian["excluded_card_ids"] = [
             str(row.get("card_id") or "")
             for row in compatibility["excluded_evidence"]
             if row.get("card_id")
         ]
-        validated_compatibility = resolve_evidence_compatibility(
-            evidence_rows,
-            trusted_source_fact_ids=trusted_source_fact_ids,
-            eligibility="validated",
-            selection_field="validated_subset_included",
+        verified_compatibility = resolve_evidence_compatibility(
+            default_rows,
+            verified_source_fact_ids=verified_source_fact_ids,
+            eligibility="verified",
+            calculation_role="verified",
         )
-        validated_ids = {
+        verified_ids = {
             str(row.get("card_id") or "")
-            for row in validated_compatibility["compatible_evidence"]
+            for row in verified_compatibility["compatible_evidence"]
         }
-        for row in evidence_rows:
-            if (
-                row.get("validated_subset_included") is True
-                and str(row.get("card_id") or "") not in validated_ids
-            ):
-                row["validated_subset_included"] = False
-        validated_subset_bayesian = compute_bayesian_score(
-            validated_compatibility["compatible_evidence"],
-            trusted_source_fact_ids=trusted_source_fact_ids,
-            estimate_type="validated_subset",
-            selection_field="validated_subset_included",
-            eligibility="validated",
+        for row in default_rows:
+            if (row.get("calculation_roles") or {}).get("verified") is True and str(
+                row.get("card_id") or ""
+            ) not in verified_ids:
+                roles = dict(row.get("calculation_roles") or {})
+                roles["verified"] = False
+                row["calculation_roles"] = roles
+        verified_bayesian = compute_bayesian_score(
+            verified_compatibility["compatible_evidence"],
+            verified_source_fact_ids=verified_source_fact_ids,
+            estimate_type="verified",
+            calculation_role="verified",
+            eligibility="verified",
         )
-        validated_subset_bayesian["excluded_card_ids"] = [
+        verified_bayesian["excluded_card_ids"] = [
             str(row.get("card_id") or "")
-            for row in validated_compatibility["excluded_evidence"]
+            for row in verified_compatibility["excluded_evidence"]
             if row.get("card_id")
         ]
         user_selected_bayesian, decision_report = _apply_evidence_decisions(
@@ -7176,9 +7899,9 @@ class ACMGEvidencePipeline:
             known_source_fact_ids=known_source_fact_ids,
         )
         conflict_report = detect_conflicts(
-            evidence_rows,
+            default_rows,
             known_source_fact_ids=known_source_fact_ids,
-            eligibility="source_backed",
+            eligibility="automatic",
         )
         conflict_report["compatibility_exclusions"] = [
             {
@@ -7277,13 +8000,6 @@ class ACMGEvidencePipeline:
         )
         if unresolved_consequence:
             workflow_status = "consequence_recovery_required"
-        elif literature_status in {
-            "literature_review_required",
-            "proposal_validation_required",
-        }:
-            workflow_status = literature_status
-        elif next_actions:
-            workflow_status = "proposal_validation_required"
         elif literature_status == "blocked_external_full_text":
             workflow_status = literature_status
         else:
@@ -7308,8 +8024,8 @@ class ACMGEvidencePipeline:
             conflict_report=conflict_report,
             literature_review=literature_review,
             recoverable_gaps=recoverable_gaps,
-            system_preview_bayesian=system_preview_bayesian,
-            validated_subset_bayesian=validated_subset_bayesian,
+            automatic_bayesian=automatic_bayesian,
+            verified_bayesian=verified_bayesian,
             user_selected_bayesian=user_selected_bayesian,
         )
         runtime_manifest = build_runtime_manifest(rule_context)
@@ -7331,6 +8047,9 @@ class ACMGEvidencePipeline:
             "response_detail": "full",
             "consequence_profile": consequence_profile,
             "rule_context": rule_context,
+            "vcep_context": vcep_context,
+            "vcep_assertions": vcep_assertions,
+            "rule_scenarios": list(rule_context.get("rule_scenarios") or []),
             "runtime_manifest": runtime_manifest,
             "guard_context": guard_context,
             "coverage_summary": coverage,
@@ -7352,8 +8071,25 @@ class ACMGEvidencePipeline:
             "criterion_reviews": criterion_reviews,
             "compatibility_report": compatibility,
             "conflict_report": conflict_report,
-            "system_preview_bayesian": system_preview_bayesian,
-            "validated_subset_bayesian": validated_subset_bayesian,
+            "automatic_bayesian": automatic_bayesian,
+            "verified_bayesian": verified_bayesian,
+            "scenario_estimates": scenario_estimates,
+            "automation_report": {
+                "status": "complete"
+                if workflow_status == "evidence_ready"
+                else "partial",
+                "literature_rule_extraction": True,
+                "host_llm_required": False,
+                "clinical_observation_count": len(clinical_observations),
+                "automatic_candidate_count": sum(
+                    (row.get("calculation_roles") or {}).get("automatic") is True
+                    for row in evidence_rows
+                ),
+                "verified_evidence_count": sum(
+                    (row.get("calculation_roles") or {}).get("verified") is True
+                    for row in evidence_rows
+                ),
+            },
             "user_selected_bayesian": user_selected_bayesian,
             "decision_report": decision_report,
             "limitations": limitations,

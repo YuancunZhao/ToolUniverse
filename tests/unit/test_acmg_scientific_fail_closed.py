@@ -123,14 +123,9 @@ def test_frameshift_revel_is_outside_pejaver_missense_scope():
     assert _card(cards, "PP3/BP4").strength == "not_applicable"
 
 
-def test_literature_assay_level_alone_cannot_generate_ps3():
+def test_empty_case_control_input_produces_no_literature_cards():
     cards = literature_evidence(case_control_facts=[])
-    assert _card(cards, "PS4").strength == "not_assessed"
-
-
-def test_literature_assay_without_damaging_direction_cannot_generate_ps3():
-    cards = literature_evidence(case_control_facts=[])
-    assert _card(cards, "PS4").strength == "not_assessed"
+    assert cards == []
 
 
 def _verified_case_control_fact(**overrides):
@@ -166,13 +161,14 @@ def test_literature_fact_requires_verification_provenance_and_identity_binding()
         expected_gene="FGFR3",
     )
 
-    assert all(card.assessment_status == "not_assessed" for card in cards)
+    assert cards[0].evidence_status == "source_backed_candidate"
+    assert cards[1].evidence_status == "excluded"
 
 
 def test_literature_fact_without_expected_identity_cannot_count():
     cards = literature_evidence(case_control_facts=[_verified_case_control_fact()])
 
-    assert cards[0].assessment_status == "not_assessed"
+    assert cards[0].evidence_status == "excluded"
     assert "identity" in cards[0].provenance_chain[0]
 
 
@@ -184,17 +180,11 @@ def test_literature_fact_without_disease_policy_becomes_review_proposal():
         expected_gene="FGFR3",
     )
 
-    assert cards[0].assessment_status == "met"
+    assert cards[0].evidence_status == "source_backed_candidate"
     assert cards[0].strength == "PS4"
-    assert cards[0].proposal_status == "requires_user_review"
-    assert cards[0].rule_mapping_status == "llm_review_required"
-    assert cards[1].assessment_status == "not_assessed"
+    assert cards[0].rule_source["type"] == "generic_acmg_candidate"
+    assert cards[1].evidence_status == "excluded"
     assert "duplicate" in cards[1].provenance_chain[0]
-
-
-def test_literature_segregation_is_not_owned_by_the_ps4_module():
-    cards = literature_evidence(case_control_facts=[])
-    assert _card(cards, "PS4").strength == "not_assessed"
 
 
 def test_pm3_requires_recessive_inheritance_context():
@@ -211,7 +201,7 @@ def test_pm3_requires_recessive_inheritance_context():
             }
         ],
     )
-    assert _card(cards, "PM3").strength == "not_assessed"
+    assert cards == []
 
 
 def test_pm3_structured_confirmed_in_trans_proband_scores_moderate():
@@ -246,7 +236,8 @@ def test_pm3_phase_unknown_likely_pathogenic_is_quarter_point():
         ],
     )
     card = _card(cards, "PM3")
-    assert card.strength == "not_assessed"
+    assert card.strength == "not_met"
+    assert card.evidence_status == "not_met"
     assert card.input_values["total_points"] == 0.25
 
 
@@ -336,7 +327,7 @@ def _pm1_contract(**criterion_overrides):
     }
 
 
-def test_pm1_domain_overlap_is_visible_but_indeterminate_without_contract():
+def test_pm1_domain_overlap_is_visible_as_source_backed_candidate():
     card = _card(
         functional_evidence(
             consequence_profile=_pm1_profile(),
@@ -345,9 +336,10 @@ def test_pm1_domain_overlap_is_visible_but_indeterminate_without_contract():
         "PM1",
     )
 
-    assert card.strength == "indeterminate"
+    assert card.strength == "PM1"
     assert card.input_values["protein_context"]["overlapping_features"]
-    assert card.overlay_validated is False
+    assert card.evidence_status == "source_backed_candidate"
+    assert card.rule_source["type"] == "generic_acmg_candidate"
 
 
 def test_pm1_exact_reviewed_contract_can_suggest_configured_strength():
@@ -365,7 +357,8 @@ def test_pm1_exact_reviewed_contract_can_suggest_configured_strength():
     assert card.input_values["cspec_contract_applied"]["protein_accession"] == (
         "P22607"
     )
-    assert card.overlay_validated is False
+    assert card.evidence_status == "rule_mapped"
+    assert card.rule_source["type"] == "dynamic_cspec_structured"
 
 
 def test_pm1_contract_mismatch_and_nonapplicable_consequence_fail_closed():
@@ -377,16 +370,14 @@ def test_pm1_contract_mismatch_and_nonapplicable_consequence_fail_closed():
         ),
         "PM1",
     )
-    frameshift = _card(
-        functional_evidence(
-            consequence_profile=_pm1_profile("lof"),
-            protein_context=_pm1_protein_context(),
-        ),
-        "PM1",
+    frameshift = functional_evidence(
+        consequence_profile=_pm1_profile("lof"),
+        protein_context=_pm1_protein_context(),
     )
 
-    assert mismatch.strength == "indeterminate"
-    assert frameshift.strength == "not_applicable"
+    assert mismatch.strength == "PM1"
+    assert mismatch.evidence_status == "source_backed_candidate"
+    assert not any(card.criterion == "PM1" for card in frameshift)
 
 
 def test_removed_pvs1_boolean_context_is_rejected():
@@ -397,7 +388,7 @@ def test_removed_pvs1_boolean_context_is_rejected():
         )
 
 
-def test_de_novo_requires_inheritance_context():
+def test_de_novo_points_do_not_require_an_inheritance_label_to_remain_visible():
     cards = clinical_evidence(
         de_novo_probands=[
             {
@@ -407,12 +398,12 @@ def test_de_novo_requires_inheritance_context():
             }
         ],
     )
-    assert _card(cards, "PS2/PM6").strength == "not_assessed"
+    assert _card(cards, "PS2").strength == "PS2"
 
 
 def test_pp4_requires_complete_disease_and_phenotype_context():
     cards = clinical_evidence(inheritance_mode="autosomal_dominant")
-    assert _card(cards, "PP4").strength == "not_assessed"
+    assert cards == []
 
 
 def test_case_only_ps4_requires_independent_cases():
@@ -444,8 +435,8 @@ def test_case_only_ps4_requires_independent_cases():
         expected_variant="NM_000142.5:c.1075+95C>G",
         expected_gene="FGFR3",
     )
-    assert _card(incomplete, "PS4").assessment_status == "not_assessed"
-    assert _card(complete, "PS4").assessment_status == "met"
+    assert _card(incomplete, "PS4").evidence_status == "source_backed_candidate"
+    assert _card(complete, "PS4").evidence_status == "source_backed_candidate"
     assert _card(complete, "PS4").strength == "PS4_Supporting"
 
 

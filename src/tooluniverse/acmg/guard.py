@@ -13,20 +13,20 @@ import re
 import unicodedata
 from typing import Any
 
-from .models import EvidenceCard, is_candidate_evidence
+from .models import EvidenceCard, is_automatic_evidence
 from .rule_catalog import ACMG_CRITERIA
 
 
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
-GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-07"
+GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-07-v3"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",
     "ruleset_hash",
     "cards",
     "known_source_fact_ids",
-    "trusted_source_fact_ids",
+    "verified_source_fact_ids",
 )
 
 
@@ -65,12 +65,12 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
             return False, f"guard_context {key} must be a SHA-256 hex digest"
     cards = context.get("cards")
     known_ids = context.get("known_source_fact_ids")
-    trusted_ids = context.get("trusted_source_fact_ids")
+    verified_ids = context.get("verified_source_fact_ids")
     if not isinstance(cards, list) or not all(isinstance(row, dict) for row in cards):
         return False, "guard_context cards must be an array of objects"
     for key, values in (
         ("known_source_fact_ids", known_ids),
-        ("trusted_source_fact_ids", trusted_ids),
+        ("verified_source_fact_ids", verified_ids),
     ):
         if not isinstance(values, list) or not all(
             isinstance(value, str) and value for value in values
@@ -78,8 +78,8 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
             return False, f"guard_context {key} must be an array of non-empty strings"
         if values != sorted(set(values)):
             return False, f"guard_context {key} must be unique and sorted"
-    if not set(trusted_ids) <= set(known_ids):
-        return False, "guard_context trusted SourceFacts must be known SourceFacts"
+    if not set(verified_ids) <= set(known_ids):
+        return False, "guard_context verified SourceFacts must be known SourceFacts"
     from .runtime_manifest import ruleset_hash
 
     if context.get("ruleset_hash") != ruleset_hash():
@@ -105,18 +105,15 @@ def _card_row(card: EvidenceCard | dict[str, Any]) -> dict[str, Any]:
         return card
     return {
         "criterion": card.criterion,
-        "suggested_criterion": card.suggested_criterion,
         "strength": card.strength,
         "card_id": card.card_id,
-        "assessment_status": card.assessment_status,
-        "proposal_status": card.proposal_status,
-        "proposal_origin": card.proposal_origin,
-        "rule_mapping_status": card.rule_mapping_status,
-        "system_preview_included": card.system_preview_included,
-        "validated_subset_included": card.validated_subset_included,
-        "verification_status": card.verification_status,
+        "evidence_status": card.evidence_status,
+        "strength_source": card.strength_source,
+        "rule_source": card.rule_source,
+        "verification_dimensions": card.verification_dimensions,
+        "calculation_roles": card.calculation_roles,
+        "scenario_id": card.scenario_id,
         "user_decision": card.user_decision,
-        "overlay_validated": card.overlay_validated is True,
         "source_fact_ids": card.source_fact_ids,
         "rule_id": card.rule_id,
         "rule_version": card.rule_version,
@@ -175,11 +172,36 @@ def _has_final_classification_label(answer_text: str) -> bool:
     )
 
 
+def _strip_attributed_external_assertions(answer_text: str) -> str:
+    """Remove sentences that clearly attribute a label to an external source."""
+    retained: list[str] = []
+    for sentence in re.split(r"(?<=[.!?。！？;；])\s*|\n+", str(answer_text or "")):
+        normalized = _normalized_label_text(sentence)
+        has_source = bool(
+            re.search(
+                r"\b(?:VCEP|CLINGEN|CLINVAR|EXPERT PANEL|EXTERNAL ASSERTION)\b",
+                normalized,
+            )
+            or re.search(
+                r"(?:外部|专家组|来源|数据库).{0,12}(?:判定|分类|结论)", sentence
+            )
+        )
+        has_attribution = bool(
+            re.search(
+                r"(?:CLASSIFIED|CLASSIFIES|ASSERTED|REPORTED|CONCLUDED|判定为|分类为|报告为|结论为)",
+                normalized,
+            )
+        )
+        if not (has_source and has_attribution):
+            retained.append(sentence)
+    return "\n".join(retained)
+
+
 def guard_acmg_answer(
     answer_text: str,
     evidence_cards: list[EvidenceCard | dict[str, Any]],
     *,
-    trusted_source_fact_ids: set[str] | None = None,
+    verified_source_fact_ids: set[str] | None = None,
     known_source_fact_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """Validate ACMG claims against cards and block final five-tier labels.
@@ -199,46 +221,15 @@ def guard_acmg_answer(
         if re.search(rf"(?<![A-Z0-9]){re.escape(code)}(?![A-Z0-9])", answer_upper)
     }
     rows = [_card_row(card) for card in evidence_cards]
-    candidate_rows = [
-        row
-        for row in rows
-        if is_candidate_evidence(
-            row, trusted_source_fact_ids=trusted_source_fact_ids
-        )
-    ]
-    referenceable_statuses = {
-        "suggested",
-        "not_suggested",
-        "requires_user_review",
-        "insufficient_information",
-        "not_applicable",
-        "deprecated",
-    }
-    known_ids = {
-        str(value)
-        for value in (known_source_fact_ids or trusted_source_fact_ids or set())
-        if value
-    }
     referenceable_rows = [
         row
         for row in rows
-        if row in candidate_rows
-        or (
-            str(row.get("card_id") or "").startswith("acmg-card:v1:")
-            and str(row.get("proposal_status") or "") in referenceable_statuses
-            and bool(row.get("source_fact_ids"))
-            and {
-                str(value) for value in row.get("source_fact_ids") or [] if value
-            }
-            <= known_ids
-        )
+        if is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids)
     ]
     card_codes = {
         code
         for row in referenceable_rows
-        for code in _criterion_codes(
-            row.get("suggested_criterion") or row.get("criterion")
-        )
+        for code in _criterion_codes(row.get("criterion"))
     }
 
     # Check: cited codes that don't have EvidenceCards
@@ -249,10 +240,11 @@ def guard_acmg_answer(
             "Every ACMG criterion MUST have a corresponding EvidenceCard from overlay tools."
         )
 
-    has_final_label = _has_final_classification_label(normalized_answer)
+    own_assertion_text = _strip_attributed_external_assertions(normalized_answer)
+    has_final_label = _has_final_classification_label(own_assertion_text)
     if re.search(
         r"(?:CLASSIFICATION|CLASS|分类|结论)\s*[:：=]\s*(?:P|B)(?![A-Z0-9])",
-        answer_upper,
+        _normalized_label_text(own_assertion_text),
     ):
         has_final_label = True
 
@@ -276,21 +268,21 @@ def guard_acmg_answer(
             {
                 "card_id": row.get("card_id"),
                 "criterion": row.get("criterion"),
-                "proposal_origin": row.get("proposal_origin"),
-                "proposal_status": row.get("proposal_status"),
-                "rule_mapping_status": row.get("rule_mapping_status"),
+                "evidence_status": row.get("evidence_status"),
+                "strength_source": row.get("strength_source"),
+                "scenario_id": row.get("scenario_id"),
                 "role": (
                     row.get("role")
                     or (
-                        "validated"
-                        if row.get("validated_subset_included") is True
-                        else "candidate"
-                        if row.get("system_preview_included") is True
+                        "verified"
+                        if (row.get("calculation_roles") or {}).get("verified") is True
+                        else "automatic"
+                        if (row.get("calculation_roles") or {}).get("automatic") is True
                         else "excluded"
                     )
                 ),
-                "verification_status": row.get("verification_status") or "",
-                "system_preview_included": row.get("system_preview_included") is True,
+                "verification_dimensions": row.get("verification_dimensions") or {},
+                "calculation_roles": row.get("calculation_roles") or {},
                 "user_decision": row.get("user_decision") or "pending",
             }
             for row in referenceable_rows

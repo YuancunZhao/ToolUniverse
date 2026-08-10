@@ -1,176 +1,144 @@
-"""EvidenceCard serialization semantics for ACMG evidence tools."""
+"""EvidenceCard v3 display, automatic, and verified calculation semantics."""
 
 from __future__ import annotations
 
 from tooluniverse.acmg.models import (
     EvidenceCard,
     evidence_cards_to_result,
-    is_candidate_evidence,
+    is_automatic_evidence,
+    is_verified_evidence,
 )
 
 
-def _card(criterion: str, strength: str, *, trusted: bool = False) -> EvidenceCard:
+def _card(
+    criterion: str,
+    strength: str,
+    *,
+    evidence_status: str = "source_backed_candidate",
+    source: bool = True,
+    verified: bool = False,
+) -> EvidenceCard:
     return EvidenceCard(
-        card_id=f"{criterion}-{strength}",
         criterion=criterion,
         strength=strength,
+        evidence_status=evidence_status,
         input_source="fixture",
         input_values={},
         clinvar_rule_applied="fixture rule",
         provenance_chain=["fixture"],
-        overlay_validated=trusted,
-        source_fact_ids=["source-1"] if trusted else [],
+        source_fact_ids=["source-1"] if source else [],
+        rule_source={
+            "type": "versioned_svi" if verified else "generic_acmg_candidate",
+            "rule_id": "fixture-rule",
+            "version": "1",
+        },
+        verification_dimensions={
+            "identity_status": "matched",
+            "source_status": "available",
+            "extraction_status": "structured" if verified else "unresolved",
+            "version_status": "versioned" if verified else "unversioned",
+            "disease_match_status": "unspecified",
+            "independence_status": "unknown",
+        },
     )
 
 
-def test_only_met_source_backed_pm2_is_system_preview_eligible():
-    result = evidence_cards_to_result(
-        [
-            _card("BA1", "not_met"),
-            _card("PM2", "not_assessed"),
-            _card("PM2", "PM2_Supporting", trusted=True),
-        ],
-        trusted_source_fact_ids={"source-1"},
-    )
-
-    assert [
-        c["system_preview_included"] for c in result["evidence_cards"]
-    ] == [False, False, True]
-
-
-def test_review_cards_cannot_enter_preview_without_a_trusted_source_fact():
-    result = evidence_cards_to_result([_card("PM2", "PM2_Supporting")])
-
-    assert result["evidence_cards"][0]["system_preview_included"] is False
-    assert result["evidence_cards"][0]["overlay_validated"] is False
-
-
-def test_unresolved_source_backed_suggestion_enters_broad_not_validated_preview():
-    card = _card("PM2", "not_assessed")
-    card.source_fact_ids = ["source-1"]
-    card.suggested_criterion = "PM2"
-    card.suggested_strength = "PM2_Supporting"
-    card.proposal_status = "requires_user_review"
-    card.rule_verification = "generic_svi"
-    card.rule_mapping_status = "llm_review_required"
-    card.verification_status = "unresolved"
-
+def test_source_backed_candidate_enters_automatic_not_verified_estimate():
     row = evidence_cards_to_result(
-        [card],
-        trusted_source_fact_ids=set(),
+        [_card("PM2", "PM2_Supporting")],
         known_source_fact_ids={"source-1"},
+        verified_source_fact_ids=set(),
     )["evidence_cards"][0]
 
-    assert row["suggested_criterion"] == "PM2"
-    assert row["suggested_strength"] == "PM2_Supporting"
-    assert row["system_preview_included"] is True
-    assert row["validated_subset_included"] is False
-    assert row["preview_inclusion_basis"] == "source_backed_candidate"
-
-
-def test_semantic_contradiction_cannot_be_inferred_as_strictly_verified():
-    card = _card("PS4", "PS4_Supporting", trusted=True)
-    card.proposal_status = "requires_user_review"
-    card.rule_mapping_status = "llm_review_required"
-    card.input_values = {
-        "anchor_status": "verified",
-        "semantic_status": "contradicted",
+    assert row["evidence_status"] == "source_backed_candidate"
+    assert row["calculation_roles"] == {
+        "automatic": True,
+        "verified": False,
+        "user_selected": False,
     }
 
+
+def test_versioned_rule_with_verified_fact_enters_both_estimates():
     row = evidence_cards_to_result(
-        [card],
-        trusted_source_fact_ids={"source-1"},
+        [_card("PP3", "PP3_Supporting", evidence_status="rule_mapped", verified=True)],
         known_source_fact_ids={"source-1"},
+        verified_source_fact_ids={"source-1"},
     )["evidence_cards"][0]
 
-    assert row["verification_status"] == "contradicted"
-    assert row["system_preview_included"] is False
-    assert row["validated_subset_included"] is False
+    assert row["calculation_roles"]["automatic"] is True
+    assert row["calculation_roles"]["verified"] is True
 
 
-def test_all_non_met_assessment_states_fail_closed():
-    cards = [
-        _card("PM2", "not_met"),
-        _card("PP3", "not_assessed"),
-        _card("PM1", "not_applicable"),
-        _card("PP5", "deprecated"),
-        _card("BP6", "deprecated"),
-    ]
+def test_hard_verification_error_keeps_card_visible_but_excludes_calculation():
+    card = _card("PS4", "PS4_Supporting")
+    card.verification_dimensions["extraction_status"] = "contradicted"
+    row = evidence_cards_to_result([card], known_source_fact_ids={"source-1"})[
+        "evidence_cards"
+    ][0]
 
-    result = evidence_cards_to_result(cards)
+    assert row["calculation_roles"]["automatic"] is False
+    assert row["calculation_roles"]["verified"] is False
 
-    assert [row["assessment_status"] for row in result["evidence_cards"]] == [
-        "not_met",
-        "not_assessed",
-        "not_applicable",
-        "deprecated",
-        "deprecated",
-    ]
-    assert all(
-        row["system_preview_included"] is False
-        for row in result["evidence_cards"]
+
+def test_empty_placeholder_card_is_not_serialized():
+    card = EvidenceCard(
+        criterion="PM1",
+        strength="not_assessed",
+        input_source="fixture",
+        input_values={},
+        clinvar_rule_applied="fixture",
     )
+    assert evidence_cards_to_result([card])["evidence_cards"] == []
 
 
-def test_serialized_card_id_is_stable_for_same_evidence():
-    first = evidence_cards_to_result([_card("PM2", "PM2_Supporting")])[
+def test_explicit_bad_atom_remains_visible_as_excluded_card():
+    card = EvidenceCard(
+        criterion="PM3",
+        strength="not_assessed",
+        evidence_status="excluded",
+        exclusion_reason="duplicate_case",
+        input_source="fixture",
+        input_values={},
+        clinvar_rule_applied="fixture",
+        source_fact_ids=["source-1"],
+    )
+    row = evidence_cards_to_result([card], known_source_fact_ids={"source-1"})[
         "evidence_cards"
     ][0]
-    second = evidence_cards_to_result([_card("PM2", "PM2_Supporting")])[
-        "evidence_cards"
-    ][0]
+    assert row["evidence_status"] == "excluded"
+    assert row["calculation_roles"]["automatic"] is False
 
+
+def test_serialized_card_id_is_v3_and_stable():
+    first = evidence_cards_to_result(
+        [_card("PM2", "PM2_Supporting")], known_source_fact_ids={"source-1"}
+    )["evidence_cards"][0]
+    second = evidence_cards_to_result(
+        [_card("PM2", "PM2_Supporting")], known_source_fact_ids={"source-1"}
+    )["evidence_cards"][0]
     assert first["card_id"] == second["card_id"]
-    assert first["card_id"].startswith("acmg-card:v1:")
+    assert first["card_id"].startswith("acmg-card:v3:")
+    assert {
+        "assessment_status",
+        "suggested_criterion",
+        "suggested_strength",
+        "effective_strength",
+    }.isdisjoint(first)
 
 
-def test_shared_candidate_predicate_requires_status_and_source_facts():
-    base = {
-        "criterion": "PP3",
-        "strength": "PP3_Supporting",
-        "rule_id": "clingen-svi-pejaver-pp3-bp4",
-        "rule_version": "2022",
-        "assessment_status": "met",
-        "system_preview_included": True,
-        "overlay_validated": True,
-        "source_fact_ids": ["fixture-source"],
-    }
-    trusted = {"fixture-source"}
-    assert is_candidate_evidence(base, trusted_source_fact_ids=trusted) is True
+def test_shared_predicates_require_real_source_ids_and_legal_strength():
+    row = evidence_cards_to_result(
+        [_card("PP3", "PP3_Supporting", evidence_status="rule_mapped", verified=True)],
+        known_source_fact_ids={"source-1"},
+        verified_source_fact_ids={"source-1"},
+    )["evidence_cards"][0]
+    assert is_automatic_evidence(row, known_source_fact_ids={"source-1"}) is True
+    assert is_verified_evidence(row, verified_source_fact_ids={"source-1"}) is True
+    assert is_automatic_evidence(row, known_source_fact_ids=set()) is False
     assert (
-        is_candidate_evidence(
-            {**base, "assessment_status": "not_assessed"},
-            trusted_source_fact_ids=trusted,
+        is_automatic_evidence(
+            {**row, "strength": "arbitrary_strength"},
+            known_source_fact_ids={"source-1"},
         )
-        is False
-    )
-    assert (
-        is_candidate_evidence({**base, "source_fact_ids": []}, trusted_source_fact_ids=trusted)
-        is False
-    )
-    assert (
-        is_candidate_evidence(
-            {**base, "system_preview_included": "true"},
-            trusted_source_fact_ids=trusted,
-        )
-        is False
-    )
-    assert (
-        is_candidate_evidence(
-            {**base, "strength": "arbitrary_strength"},
-            trusted_source_fact_ids=trusted,
-        )
-        is False
-    )
-    assert (
-        is_candidate_evidence(
-            {**base, "rule_version": "forged"},
-            trusted_source_fact_ids=trusted,
-        )
-        is False
-    )
-    assert is_candidate_evidence(base) is False
-    assert (
-        is_candidate_evidence(base, trusted_source_fact_ids={"different-source"})
         is False
     )

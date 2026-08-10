@@ -8,7 +8,8 @@ from typing import Any
 from .models import EvidenceCard
 
 
-PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-07"
+PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID = "tooluniverse-pm2-rare-observed-candidate"
+PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-08-v3"
 PM2_RARE_OBSERVED_GLOBAL_AF_MAX = 0.0001
 PM2_RARE_OBSERVED_POPMAX_AF_MAX = 0.001
 
@@ -44,9 +45,7 @@ def population_evidence(
     ba1_exception = ba1_exception is True
     ba1_exception_verified = ba1_exception_verified is True
     coverage_confirmed_adequate = coverage_adequate is True
-    callability_available = (
-        callability_available is True or coverage_adequate is True
-    )
+    callability_available = callability_available is True or coverage_adequate is True
     cards: list[EvidenceCard] = []
     frequency_complete = gnomad_af_global is not None
     audit_values = {
@@ -80,7 +79,9 @@ def population_evidence(
     ):
         pm2_strength = "not_assessed"
         pm2_values = dict(audit_values)
-        pm2_reason = "PM2: complete allele-frequency fields are required -> not_assessed"
+        pm2_reason = (
+            "PM2: complete allele-frequency fields are required -> not_assessed"
+        )
     elif above(gnomad_af_popmax, 0.05) or above(gnomad_af_global, 0.05):
         pm2_strength = "not_met"
         pm2_values = dict(audit_values)
@@ -130,7 +131,7 @@ def population_evidence(
     cards.append(
         EvidenceCard(
             criterion="PM2",
-            strength=pm2_strength,
+            strength=("PM2_Supporting" if rare_observed_candidate else pm2_strength),
             input_source=population_source or "gnomAD",
             input_values=pm2_values,
             clinvar_rule_applied="ClinGen SVI PM2 Recommendation v1.0",
@@ -142,22 +143,37 @@ def population_evidence(
                 else ""
             ),
             provenance_chain=[pm2_reason],
-            proposal_status=(
-                "suggested"
+            evidence_status=(
+                "rule_mapped"
                 if pm2_strength == "PM2_Supporting" and coverage_confirmed_adequate
-                else "requires_user_review"
+                else "source_backed_candidate"
                 if pm2_strength == "PM2_Supporting" or rare_observed_candidate
-                else ""
+                else "not_met"
+                if pm2_strength == "not_met"
+                else "excluded"
             ),
-            suggested_criterion="PM2" if rare_observed_candidate else "",
-            suggested_strength=(
-                "PM2_Supporting" if rare_observed_candidate else ""
-            ),
-            rule_verification=(
-                "versioned_deterministic"
+            strength_source=(
+                "clingen_svi_pm2_v1"
                 if coverage_confirmed_adequate
-                else "generic_svi"
+                else PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID
             ),
+            rule_source={
+                "type": (
+                    "versioned_svi"
+                    if coverage_confirmed_adequate
+                    else "fork_candidate_policy"
+                ),
+                "rule_id": (
+                    "clingen-svi-pm2"
+                    if coverage_confirmed_adequate
+                    else PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID
+                ),
+                "version": (
+                    "1.0"
+                    if coverage_confirmed_adequate
+                    else PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION
+                ),
+            },
             caveats=(
                 [
                     "The observed frequency passes the fork review-only candidate "
@@ -184,15 +200,20 @@ def population_evidence(
                 if callability_available
                 else []
             ),
-            verification_status=("unresolved" if rare_observed_candidate else ""),
+            verification_dimensions={
+                "extraction_status": (
+                    "structured" if coverage_confirmed_adequate else "unresolved"
+                ),
+                "version_status": (
+                    "versioned" if coverage_confirmed_adequate else "unversioned"
+                ),
+            },
         )
     )
     if maximum_credible_af is not None:
         _mark_cspec_contract(cards[-1], rule_override, "PM2")
 
-    high_ba1_frequency = above(gnomad_af_popmax, 0.05) or above(
-        gnomad_af_global, 0.05
-    )
+    high_ba1_frequency = above(gnomad_af_popmax, 0.05) or above(gnomad_af_global, 0.05)
     if high_ba1_frequency and not ba1_exception_verified:
         ba1_strength = "not_assessed"
         ba1_reason = (

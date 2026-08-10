@@ -9,10 +9,6 @@ contract is right.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from tooluniverse.acmg_runtime_tools import ACMGEvidenceCollector
 from tooluniverse.acmg.collector import (
@@ -45,11 +41,11 @@ def _is_error(result: dict) -> bool:
     return result.get("status") == "error"
 
 
-def _system_preview_criteria(result: dict) -> set[str]:
+def _automatic_criteria(result: dict) -> set[str]:
     return {
         str(row.get("criterion") or "")
         for row in result.get("evidence_cards") or []
-        if row.get("system_preview_included") is True
+        if (row.get("calculation_roles") or {}).get("automatic") is True
     }
 
 
@@ -60,10 +56,13 @@ def _source_fact(tool_name: str, fact_id: str, features: dict) -> SourceFact:
         status="success",
         query_identity={},
         result_identity={},
-        identity_verified=True,
         features=features,
         raw_result_hash=f"hash-{fact_id}",
-        assessment_ready=True,
+        provider_version="fixture-v1",
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
     )
 
 
@@ -356,8 +355,9 @@ def test_literature_review_request_is_executable_and_idempotent():
     )
 
     request = state["review_requests"][0]
-    assert state["workflow_status"] == "literature_review_required"
+    assert state["workflow_status"] == "evidence_ready"
     assert request["state"] == "pending"
+    assert request["required"] is False
     assert request["tool_attempts"] == [
         {
             "tool_name": "EuropePMC_get_full_text",
@@ -422,7 +422,7 @@ def test_collector_returns_conflict_report():
         assert "has_conflicts" in result["conflict_report"]
 
 
-def test_collector_returns_system_preview_bayesian():
+def test_collector_returns_automatic_bayesian():
     result = _run(
         {
             "variant": "NM_182931.3:c.2484_2487del",
@@ -433,8 +433,8 @@ def test_collector_returns_system_preview_bayesian():
     if _is_error(result):
         assert "error" in result
     else:
-        assert "system_preview_bayesian" in result
-        assert "posterior_probability" in result["system_preview_bayesian"]
+        assert "automatic_bayesian" in result
+        assert "posterior_probability" in result["automatic_bayesian"]
 
 
 def test_collector_does_not_claim_success_from_stubbed_collection():
@@ -1043,8 +1043,8 @@ def test_collector_fails_closed_when_identity_cannot_be_normalized():
 
     assert result["status"] == "error"
     assert result["error"] == "variant_identity_unverified"
-    assert _system_preview_criteria(result) == set()
-    assert result["system_preview_bayesian"]["prior_probability"] == 0.1
+    assert _automatic_criteria(result) == set()
+    assert result["automatic_bayesian"]["prior_probability"] == 0.1
     called_names = {
         item if isinstance(item, str) else item[0]["name"] for item in runtime.calls
     }
@@ -1322,7 +1322,7 @@ def test_multi_allele_rsid_fails_closed_with_alternatives_and_no_downstream_call
         "VariantValidator_gene2transcripts",
         "VariantValidator_format_genomic_to_transcripts",
     }
-    assert _system_preview_criteria(result) == set()
+    assert _automatic_criteria(result) == set()
     assert result["evidence_cards"] == []
 
 
@@ -1333,7 +1333,7 @@ def test_missing_mane_transcript_stops_before_evidence_sources():
     assert result["status"] == "error"
     assert result["error"] == "variant_identity_unverified"
     assert result["evidence_cards"] == []
-    assert _system_preview_criteria(result) == set()
+    assert _automatic_criteria(result) == set()
     assert [call[0]["name"] for call in runtime.calls] == [
         "VariantValidator_gene2transcripts"
     ]
@@ -1346,7 +1346,7 @@ def test_provider_gene_mismatch_blocks_identity_verification():
     assert result["status"] == "error"
     assert result["error"] == "variant_identity_unverified"
     assert result["variant"]["normalization_error"] == "provider_identity_conflict"
-    assert _system_preview_criteria(result) == set()
+    assert _automatic_criteria(result) == set()
     assert [call[0]["name"] for call in runtime.calls] == [
         "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
@@ -1393,15 +1393,14 @@ def test_provider_result_for_another_variant_cannot_be_counted():
         {"variant": "NM_000142.5:c.1075+95C>G", "gene": "FGFR3"}
     )
 
-    assert "PM2" not in _system_preview_criteria(result)
+    assert "PM2" not in _automatic_criteria(result)
     population_facts = [
         fact
         for fact in result["source_facts"]
         if fact["tool_name"] == "gnomad_get_variant"
     ]
     assert population_facts
-    assert population_facts[0]["identity_verified"] is False
-    assert population_facts[0]["assessment_ready"] is False
+    assert population_facts[0]["identity_status"] == "conflict"
 
 
 def test_collector_runtime_executes_sources_and_group_rules():
@@ -1416,8 +1415,8 @@ def test_collector_runtime_executes_sources_and_group_rules():
 
     assert result["status"] == "degraded"
     assert result["final_classification_allowed"] is False
-    assert "PP3" in _system_preview_criteria(result)
-    assert "PM2" in _system_preview_criteria(result)
+    assert "PP3" in _automatic_criteria(result)
+    assert "PM2" in _automatic_criteria(result)
     splice_pp3 = next(
         row
         for row in result["evidence_cards"]
@@ -1438,15 +1437,15 @@ def test_collector_runtime_executes_sources_and_group_rules():
         == splice_profile["delta_scores"]
     )
     pm2 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM2")
-    assert pm2["assessment_status"] == "met"
+    assert pm2["evidence_status"] in {"rule_mapped", "source_backed_candidate"}
     assert len(pm2["source_fact_ids"]) == 2
     assert all(
         row["source_fact_ids"]
         for row in result["evidence_cards"]
-        if row["system_preview_included"] is True
+        if row["calculation_roles"]["automatic"] is True
     )
     assert all(
-        row["criterion"] != "PP5" or row["system_preview_included"] is False
+        row["criterion"] != "PP5" or row["calculation_roles"]["automatic"] is False
         for row in result["evidence_cards"]
     )
     assert any(
@@ -1472,8 +1471,11 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "response_detail",
         "consequence_profile",
         "rule_context",
-            "runtime_manifest",
-            "guard_context",
+        "vcep_context",
+        "vcep_assertions",
+        "rule_scenarios",
+        "runtime_manifest",
+        "guard_context",
         "coverage_summary",
         "source_facts",
         "source_assertions",
@@ -1489,9 +1491,11 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "workflow_status",
         "review_readiness",
         "next_actions",
-            "system_preview_bayesian",
-            "validated_subset_bayesian",
-            "user_selected_bayesian",
+        "automatic_bayesian",
+        "verified_bayesian",
+        "scenario_estimates",
+        "automation_report",
+        "user_selected_bayesian",
         "decision_report",
         "limitations",
         "final_classification_allowed",
@@ -1512,7 +1516,7 @@ def test_collector_promotes_bp7_only_after_strict_walker_bp4():
         {"variant": "NM_000142.5:c.1075+95C>G", "gene": "FGFR3"}
     )
 
-    assert {"BP4", "BP7"} <= _system_preview_criteria(result)
+    assert {"BP4", "BP7"} <= _automatic_criteria(result)
     strengths = {
         row["criterion"]: row["strength"]
         for row in result["evidence_cards"]
@@ -1536,8 +1540,8 @@ def test_collector_exposes_pm1_domain_context_without_counting_it():
     assert "EBIProteins_get_features" in names
     assert "InterPro_get_entries_for_protein" in names
     pm1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM1")
-    assert pm1["assessment_status"] == "indeterminate"
-    assert pm1["system_preview_included"] is False
+    assert pm1["evidence_status"] == "source_backed_candidate"
+    assert pm1["calculation_roles"]["automatic"] is True
     assert pm1["observed_facts"]["protein_context"]["overlapping_features"]
     protein_coverage = next(
         row
@@ -1545,7 +1549,7 @@ def test_collector_exposes_pm1_domain_context_without_counting_it():
         if row["source_category"] == "protein_context"
     )
     assert protein_coverage["query_completed"] is True
-    assert protein_coverage["assessment_ready"] is True
+    assert protein_coverage["source_available"] is True
 
 
 class _PriorVariantToolUniverse(_ProteinContextToolUniverse):
@@ -1615,7 +1619,7 @@ def test_same_residue_variants_are_visible_without_entering_mandatory_review_que
         row["prior_variant_identity"] for row in result["prior_variant_candidates"]
     ] == ["VCV000000123"]
     assert not any(
-        row["criterion"] in {"PS1", "PM5"} and row["system_preview_included"]
+        row["criterion"] in {"PS1", "PM5"} and row["calculation_roles"]["automatic"]
         for row in result["evidence_cards"]
     )
     assert not any(
@@ -1673,7 +1677,7 @@ def test_pm4_bp3_provider_proposals_require_unique_mapping_and_repeat_context():
         profile, {feature_fact.fact_id: feature_fact}, context
     )
     assert [card.criterion for card in bp3] == ["BP3"]
-    assert bp3[0].proposal_status == "requires_user_review"
+    assert bp3[0].evidence_status == "source_backed_candidate"
 
     pm4_context = {**context, "overlapping_features": []}
     pm4 = ACMGEvidencePipeline._protein_length_repeat_cards(
@@ -1806,10 +1810,9 @@ def test_exact_reviewed_cspec_pm1_contract_can_enter_candidate_bayesian(monkeypa
     pm1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM1")
     assert result["rule_context"]["cspec_status"] == "dynamic_structured_applied"
     assert result["rule_context"]["compiled_contract_status"] == "hash_verified"
-    assert pm1["assessment_status"] == "met"
-    assert pm1["suggested_strength"] == "PM1_Moderate"
-    assert pm1["system_preview_included"] is True
-    assert "PM1" in _system_preview_criteria(result)
+    assert pm1["strength"] == "PM1_Moderate"
+    assert pm1["calculation_roles"]["automatic"] is True
+    assert "PM1" in _automatic_criteria(result)
 
 
 def test_cspec_is_discovered_online_and_matched_to_context():
@@ -1829,10 +1832,20 @@ def test_cspec_is_discovered_online_and_matched_to_context():
     assert context["fallback_policy"] == "applicable_clingen_cspec"
     assert context["applicable_specification"]["specification_id"] == "GN078"
     assert context["source_fact_ids"]
-    pm2 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM2")
-    assert pm2["observed_facts"]["applicable_cspec"]["specification_id"] == "GN078"
+    pm2 = next(
+        row
+        for row in result["evidence_cards"]
+        if row["criterion"] == "PM2" and row["scenario_id"] != "generic-svi"
+    )
+    assert (
+        pm2["observed_facts"]["cspec_contract_applied"]["specification_id"] == "GN078"
+    )
     assert "Online ClinGen CSpec" in pm2["rule_basis"]
-    assert pm2["rule_verification"] == "dynamic_cspec_structured"
+    assert pm2["rule_source"]["type"] in {
+        "dynamic_cspec_structured",
+        "compiled_hash_verified",
+        "dynamic_cspec_unresolved",
+    }
 
 
 def _consequence_identity(*, multiallelic: bool = False) -> dict:
@@ -2109,8 +2122,14 @@ def test_dnah1_vep_outage_recovers_consequence_without_inventing_nmd():
         for row in result["recoverable_gaps"]
         if row["status"] == "unresolved"
     } >= {"exon_structure_missing", "nmd_facts_missing"}
-    pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
-    assert pvs1["assessment_status"] == "not_assessed"
+    assert not any(row["criterion"] == "PVS1" for row in result["evidence_cards"])
+    pvs1_review = next(
+        row for row in result["criterion_reviews"] if row["criterion"] == "PVS1"
+    )
+    assert pvs1_review["route_status"] in {
+        "candidate_available",
+        "insufficient_information",
+    }
     serialized = json.dumps(result, ensure_ascii=False)
     assert "73/82" not in serialized
     assert "PTC in exon 73" not in serialized
@@ -2126,15 +2145,19 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
     )
 
     assert result["response_detail"] == "summary"
-    assert _system_preview_criteria(result)
+    assert _automatic_criteria(result)
     assert all(
         set(fact)
         <= {
             "fact_id",
             "tool_name",
             "status",
-            "identity_verified",
-            "assessment_ready",
+            "identity_status",
+            "source_status",
+            "extraction_status",
+            "version_status",
+            "disease_match_status",
+            "independence_status",
             "provider_version",
             "request_arguments",
             "request_id",
@@ -2150,7 +2173,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
         assert "input_values" not in card
         assert card["criterion"]
         assert card["route"]
-        assert "system_preview_included" in card
+        assert "calculation_roles" in card
         assert "decision_basis" in card
     splice_index = next(
         row for row in result["evidence_cards"] if row.get("source") == "SpliceAI"
@@ -2178,9 +2201,9 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
         set(row) <= {"card_id", "criterion", "reason"}
         for row in result["compatibility_report"]["excluded_evidence"]
     )
-    assert "compatibility_exclusions" not in result["system_preview_bayesian"]
-    assert "included_card_ids" in result["system_preview_bayesian"]
-    assert "excluded_card_ids" not in result["system_preview_bayesian"]
+    assert "compatibility_exclusions" not in result["automatic_bayesian"]
+    assert "included_card_ids" in result["automatic_bayesian"]
+    assert "excluded_card_ids" not in result["automatic_bayesian"]
     assert all(
         "observed_facts" not in review and "required_facts" not in review
         for review in result["criterion_reviews"]
@@ -2202,7 +2225,7 @@ def test_full_mode_preserves_complete_payloads():
     pm2 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM2")
     assert pm2["input_values"]
     assert result["compatibility_report"]["compatible_evidence"]
-    assert "compatibility_exclusions" in result["system_preview_bayesian"]
+    assert "compatibility_exclusions" in result["automatic_bayesian"]
     assert any("observed_facts" in review for review in result["criterion_reviews"])
 
 
@@ -2233,9 +2256,9 @@ def test_clinical_context_is_review_only_and_never_becomes_evidence():
     assert context["ignored_fields"] == ["unexpected_field"]
     # Review context must never create evidence criteria.
     for card in result["evidence_cards"]:
-        assert card["criterion"] not in {"PS2", "PP4"} or not card.get(
-            "system_preview_included"
-        )
+        assert card["criterion"] not in {"PS2", "PP4"} or not (
+            card.get("calculation_roles") or {}
+        ).get("automatic")
 
 
 def test_clinical_context_absent_returns_null():
@@ -2314,9 +2337,13 @@ def test_cspec_llm_proposal_is_reverified_against_online_document():
     assert reviewed["rule_context"]["cspec_proposal_report"][0]["status"] == (
         "verified"
     )
-    pm2 = next(row for row in reviewed["evidence_cards"] if row["criterion"] == "PM2")
-    assert pm2["proposal_origin"] == "llm_cspec"
-    assert pm2["rule_mapping_status"] == "llm_review_required"
+    pm2 = next(
+        row
+        for row in reviewed["evidence_cards"]
+        if row["criterion"] == "PM2"
+        and row["rule_source"]["type"] == "dynamic_cspec_llm"
+    )
+    assert pm2["rule_source"]["type"] == "dynamic_cspec_llm"
     assert pm2["llm_suggestion"]["cspec"]["extractor"]["version"] == "1"
     assert (
         reviewed["rule_context"]["executable_contract"]["criteria"]["PM2"][
@@ -2388,10 +2415,9 @@ def test_collector_validates_document_backed_literature_fact():
 
     ps4 = [row for row in result["evidence_cards"] if row["criterion"] == "PS4"]
     assert len(ps4) == 1
-    assert ps4[0]["system_preview_included"] is True
-    assert ps4[0]["assessment_status"] == "met"
-    assert ps4[0]["proposal_status"] == "requires_user_review"
-    assert any(fact["assessment_ready"] for fact in result["source_facts"])
+    assert ps4[0]["calculation_roles"]["automatic"] is True
+    assert ps4[0]["evidence_status"] in {"rule_mapped", "source_backed_candidate"}
+    assert any(fact["source_status"] == "available" for fact in result["source_facts"])
 
 
 def _case_control_literature_proposal(**overrides):
@@ -2465,6 +2491,32 @@ class _TruncatedStructuredToolUniverse(_FakeToolUniverse):
         return result
 
 
+class _AbstractOnlyToolUniverse(_FakeToolUniverse):
+    def run_one_function(self, call, **kwargs):
+        if call["name"] == "EuropePMC_get_full_text":
+            self.calls.append((call, kwargs))
+            return {
+                "status": "success",
+                "data": {
+                    "pmid": "12345678",
+                    "abstract": (
+                        "FGFR3 NM_000142.5:c.1075+95C>G was observed in 12 cases "
+                        "and 1000 controls with odds ratio 6.2 and lower confidence "
+                        "limit 1.4."
+                    ),
+                },
+                "metadata": {
+                    "source": "PubMed abstract",
+                    "format": "text",
+                    "url": "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+                    "retrieval_trace": [
+                        {"source": "PubMed abstract", "status": "success"}
+                    ],
+                },
+            }
+        return super().run_one_function(call, **kwargs)
+
+
 def test_verified_llm_literature_proposal_enters_system_preview_for_review():
     result = _make_tool(_FakeToolUniverse()).run(
         {
@@ -2478,12 +2530,12 @@ def test_verified_llm_literature_proposal_enters_system_preview_for_review():
     proposals = [row for row in result["evidence_cards"] if row["criterion"] == "PS4"]
     assert len(proposals) == 1
     proposal = proposals[0]
-    assert proposal["proposal_origin"] == "llm_literature"
-    assert proposal["proposal_status"] == "requires_user_review"
-    assert proposal["rule_mapping_status"] == "llm_review_required"
+    assert proposal["origin"] == "llm_literature"
+    assert proposal["evidence_status"] in {"rule_mapped", "source_backed_candidate"}
+    assert proposal["rule_source"]["type"] != "unmapped"
     assert proposal["llm_suggestion"]["items"][0]["criterion"] == "PS4"
-    assert proposal["system_preview_included"] is True
-    assert proposal["card_id"] in result["system_preview_bayesian"]["included_card_ids"]
+    assert proposal["calculation_roles"]["automatic"] is True
+    assert proposal["card_id"] in result["automatic_bayesian"]["included_card_ids"]
     fact = next(
         row
         for row in result["source_facts"]
@@ -2525,8 +2577,8 @@ def test_pmc_html_fallback_is_reanchored_with_actual_source_provenance():
         for row in result["source_facts"]
         if row["fact_id"] in card["source_fact_ids"]
     )
-    assert card["system_preview_included"] is True
-    assert card["validated_subset_included"] is True
+    assert card["calculation_roles"]["automatic"] is True
+    assert card["calculation_roles"]["verified"] is False
     assert fact["features"]["document_source_tool"] == "EuropePMC_get_fulltext"
     assert fact["features"]["document_source"] == "NCBI PMC HTML"
     assert fact["features"]["document_format"] == "html"
@@ -2562,9 +2614,9 @@ def test_truncated_fulltext_is_partial_and_broad_only():
         for row in result["source_facts"]
         if row["fact_id"] in card["source_fact_ids"]
     )
-    assert card["system_preview_included"] is True
-    assert card["validated_subset_included"] is False
-    assert card["verification_status"] == "unresolved"
+    assert card["calculation_roles"]["automatic"] is True
+    assert card["calculation_roles"]["verified"] is False
+    assert card["evidence_status"] == "source_backed_candidate"
     assert "complete untruncated full-text retrieval" in card["missing_requirements"]
     assert fact["features"]["document_truncated"] is True
     assert fact["features"]["reading_manifest"]["status"] == "partial"
@@ -2583,10 +2635,10 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
     )
 
     card = next(row for row in result["evidence_cards"] if row["criterion"] == "PS4")
-    assert card["proposal_status"] == "insufficient_information"
-    assert card["system_preview_included"] is False
-    assert card["validated_subset_included"] is False
-    assert card["verification_status"] == "contradicted"
+    assert card["evidence_status"] == "excluded"
+    assert card["calculation_roles"]["automatic"] is False
+    assert card["calculation_roles"]["verified"] is False
+    assert card["verification_dimensions"]["extraction_status"] == "contradicted"
     fact = next(
         row
         for row in result["source_facts"]
@@ -2601,9 +2653,7 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
             "gene": "FGFR3",
             "response_detail": "full",
             "literature_proposals": [proposal],
-            "evidence_decisions": [
-                {"card_id": card["card_id"], "decision": "accept"}
-            ],
+            "evidence_decisions": [{"card_id": card["card_id"], "decision": "accept"}],
         }
     )
     assert selected["user_selected_bayesian"]["included_card_ids"] == []
@@ -2644,10 +2694,10 @@ def test_stale_document_hash_excludes_literature_proposal():
         for row in result["source_facts"]
         if row["fact_id"] in card["source_fact_ids"]
     )
-    assert card["system_preview_included"] is False
-    assert card["validated_subset_included"] is False
-    assert card["verification_status"] == "identity_mismatch"
-    assert fact["assessment_ready"] is False
+    assert card["calculation_roles"]["automatic"] is False
+    assert card["calculation_roles"]["verified"] is False
+    assert card["verification_dimensions"]["identity_status"] == "conflict"
+    assert fact["identity_status"] == "conflict"
     assert fact["features"]["anchor_status"] == "mismatch"
     assert any(
         "document_hash" in message for message in fact["features"]["validation_errors"]
@@ -2656,6 +2706,7 @@ def test_stale_document_hash_excludes_literature_proposal():
 
 def test_abstract_only_literature_proposal_stays_source_lead():
     proposal = _case_control_literature_proposal(
+        locator="abstract",
         reading_manifest={
             "status": "abstract_only",
             "sections_read": ["abstract"],
@@ -2664,9 +2715,9 @@ def test_abstract_only_literature_proposal_stays_source_lead():
             "supplements_read": [],
             "variant_match_locations": ["abstract"],
             "limitations": ["full text unavailable"],
-        }
+        },
     )
-    result = _make_tool(_FakeToolUniverse()).run(
+    result = _make_tool(_AbstractOnlyToolUniverse()).run(
         {
             "variant": "NM_000142.5:c.1075+95C>G",
             "gene": "FGFR3",
@@ -2681,32 +2732,25 @@ def test_abstract_only_literature_proposal_stays_source_lead():
         for row in result["source_facts"]
         if row["fact_id"] in card["source_fact_ids"]
     )
-    assert card["system_preview_included"] is True
-    assert card["validated_subset_included"] is False
-    assert card["verification_status"] == "unresolved"
-    assert fact["assessment_ready"] is False
-    assert fact["features"]["reading_manifest"]["status"] == "abstract_only"
+    assert card["calculation_roles"]["automatic"] is True
+    assert card["calculation_roles"]["verified"] is False
+    assert card["verification_dimensions"]["source_status"] == "abstract_only"
+    assert fact["source_status"] == "abstract_only"
 
-    reviewed = _make_tool(_FakeToolUniverse()).run(
+    reviewed = _make_tool(_AbstractOnlyToolUniverse()).run(
         {
             "variant": "NM_000142.5:c.1075+95C>G",
             "gene": "FGFR3",
             "response_detail": "full",
             "literature_proposals": [proposal],
-            "evidence_decisions": [
-                {"card_id": card["card_id"], "decision": "accept"}
-            ],
+            "evidence_decisions": [{"card_id": card["card_id"], "decision": "accept"}],
         }
     )
     selected = next(
-        row
-        for row in reviewed["evidence_cards"]
-        if row["card_id"] == card["card_id"]
+        row for row in reviewed["evidence_cards"] if row["card_id"] == card["card_id"]
     )
-    assert selected["user_selected_included"] is True
-    assert reviewed["user_selected_bayesian"]["included_card_ids"] == [
-        card["card_id"]
-    ]
+    assert selected["calculation_roles"]["user_selected"] is True
+    assert reviewed["user_selected_bayesian"]["included_card_ids"] == [card["card_id"]]
 
 
 def test_user_decision_recalculates_only_accepted_stable_cards():
@@ -2740,12 +2784,14 @@ def test_user_decision_recalculates_only_accepted_stable_cards():
         row for row in reviewed["evidence_cards"] if row["card_id"] == pm2["card_id"]
     )
     assert selected["user_decision"] == "modified"
-    assert selected["effective_strength"] == "PM2_Moderate"
-    assert selected["user_selected_included"] is True
+    assert selected["strength"] == pm2["strength"]
+    matched_decision = reviewed["decision_report"]["matched_decisions"][0]
+    assert matched_decision["effective_strength"] == "PM2_Moderate"
+    assert selected["calculation_roles"]["user_selected"] is True
     assert reviewed["user_selected_bayesian"]["included_card_ids"] == [pm2["card_id"]]
     assert (
         reviewed["user_selected_bayesian"]["evidence_odds"][0]["odds_source"]
-        == "tavtigian_generic_strength"
+        == "generic_tavtigian_strength"
     )
 
 
@@ -2860,7 +2906,7 @@ def test_collector_does_not_trust_public_curator_fields():
         for fact in document_facts
         if fact["features"].get("fact_type") == "case_control"
     ]
-    assert anchored and anchored[0]["assessment_ready"] is True
+    assert anchored and anchored[0]["identity_status"] == "matched"
     assert anchored[0]["verification_level"] == "machine_document_anchored"
 
 
@@ -2952,9 +2998,9 @@ def test_collector_rejects_literature_fields_without_matching_full_text():
         if fact["tool_name"] == "EuropePMC_get_full_text"
     ]
     assert document_facts and all(
-        fact["assessment_ready"] is False for fact in document_facts
+        fact["extraction_status"] != "structured" for fact in document_facts
     )
-    assert "PS2" not in _system_preview_criteria(result)
+    assert "PS2" not in _automatic_criteria(result)
 
 
 def test_collector_does_not_query_clinvar_with_hgvs_or_rsid():
@@ -3185,6 +3231,8 @@ def test_constraint_provider_never_calls_removed_acmg_fallback():
 class _PVS1ToolUniverse(_FakeToolUniverse):
     """Frameshift variant with machine-verifiable PVS1 facts."""
 
+    acmg_review_assertion_verifier = staticmethod(lambda _assertion: True)
+
     def run_one_function(self, call, **kwargs):
         name = call["name"]
         if name == "VariantValidator_validate_variant":
@@ -3296,6 +3344,14 @@ class _PVS1ToolUniverse(_FakeToolUniverse):
                         )
                     },
                 },
+                "metadata": {
+                    "source": "Europe PMC structured XML",
+                    "format": "xml",
+                    "url": "https://europepmc.org/article/MED/99999999",
+                    "retrieval_trace": [
+                        {"source": "Europe PMC structured XML", "status": "success"}
+                    ],
+                },
             }
         return super().run_one_function(call, **kwargs)
 
@@ -3350,12 +3406,12 @@ def test_pvs1_decision_tree_enters_system_preview_when_facts_verified():
     assert "gnomad_get_constraint" in names
     pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
     assert pvs1["strength"] == "PVS1"
-    assert pvs1["assessment_status"] == "met"
+    assert pvs1["evidence_status"] == "rule_mapped"
     assert pvs1["rule_id"] == "clingen-svi-pvs1"
     assert pvs1["rule_version"] == "1.2"
-    assert pvs1["overlay_validated"] is True
-    assert pvs1["system_preview_included"] is True
-    assert "PVS1" in _system_preview_criteria(result)
+    assert pvs1["calculation_roles"]["verified"] is True
+    assert pvs1["calculation_roles"]["automatic"] is True
+    assert "PVS1" in _automatic_criteria(result)
     mechanism = pvs1["observed_facts"]["lof_mechanism"]
     assert mechanism["value"] == "haploinsufficiency"
     assert mechanism["source"] == "document_fact"
@@ -3406,12 +3462,16 @@ def test_pvs1_without_mechanism_facts_stays_out_of_preview():
     )
 
     assert result.get("status") != "error"
-    pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
-    assert pvs1["strength"] == "not_assessed"
-    assert pvs1["assessment_status"] == "not_assessed"
-    assert pvs1["system_preview_included"] is False
-    assert "PVS1" not in _system_preview_criteria(result)
-    assert any("mechanism not established" in step for step in pvs1["provenance_chain"])
+    assert not any(row["criterion"] == "PVS1" for row in result["evidence_cards"])
+    assert "PVS1" not in _automatic_criteria(result)
+    review = next(
+        row for row in result["criterion_reviews"] if row["criterion"] == "PVS1"
+    )
+    assert review["evidence_status"] == "no_information"
+    assert review["route_status"] in {
+        "candidate_available",
+        "insufficient_information",
+    }
 
 
 class _PVS1LastExonToolUniverse(_PVS1ToolUniverse):
@@ -3472,7 +3532,7 @@ def test_pvs1_escape_fraction_uses_provider_protein_length():
     assert result.get("status") != "error"
     pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
     assert pvs1["strength"] == "PVS1_Strong"
-    assert pvs1["system_preview_included"] is True
+    assert pvs1["calculation_roles"]["automatic"] is True
     assert any("50.0%" in step and ">10%" in step for step in pvs1["provenance_chain"])
 
 
@@ -3549,14 +3609,7 @@ def test_pvs1_exon_lof_frequent_gate_via_ensembl_and_gnomad():
     assert "gnomad_get_region_variants" in names
     pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
     assert pvs1["strength"] == "not_applicable"
-    assert pvs1["system_preview_included"] is False
+    assert pvs1["calculation_roles"]["automatic"] is False
     assert any(
         "frequent" in step and "gnomAD" in step for step in pvs1["provenance_chain"]
     )
-
-
-if __name__ == "__main__":
-    test_collector_accepts_minimal_input()
-    test_collector_returns_conflict_report()
-    test_collector_returns_system_preview_bayesian()
-    print("PASS test_acmg_evidence_collector")

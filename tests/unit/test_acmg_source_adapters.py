@@ -155,7 +155,7 @@ def test_result_identity_preserves_numeric_clinvar_variation_id():
     assert identity["clinvar_variation_id"] == "12345"
 
 
-def test_spliceai_real_score_shape_is_assessment_ready():
+def test_spliceai_real_score_shape_satisfies_verified_run_contract():
     row = {
         "gene": "GENE1",
         "transcript": "NM_000001.1",

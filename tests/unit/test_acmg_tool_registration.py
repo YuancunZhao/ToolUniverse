@@ -99,15 +99,14 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "ACMG_evidence_collector",
         "cspec_proposals",
         "literature_proposals",
-        "recoverable_gaps",
-        "workflow_status",
-        "next_actions",
-        "Do not ask the user whether",
-        "End automated collection only when",
+        "clinical_observations",
+        "VCEP",
+        "rule_scenarios",
+        "scenario_estimates",
         "DS_AG",
         "DS_DL",
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "automatic_bayesian",
+        "verified_bayesian",
         "guard_context",
         "user_selected_bayesian",
         "ACMG_guard_final_answer",
@@ -116,6 +115,9 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
     forbidden_tokens = (
         "abstract-only or unavailable material remains a source lead",
         "Abstract-only or unavailable papers remain source leads",
+        "Run this state machine to completion",
+        "Execute every pending `next_actions`",
+        "End automated collection only when",
     )
 
     for root in roots:
@@ -124,8 +126,9 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         text = (
             root / "tooluniverse-acmg-variant-classification" / "SKILL.md"
         ).read_text(encoding="utf-8")
-        assert all(token in text for token in required_tokens)
-        assert not any(token in text for token in forbidden_tokens)
+        normalized_text = " ".join(text.split())
+        assert all(token in normalized_text for token in required_tokens)
+        assert not any(token in normalized_text for token in forbidden_tokens)
 
 
 def test_active_skills_do_not_depend_on_retired_acmg_routing_core():
@@ -256,6 +259,7 @@ def test_public_runtime_tools_dispatch_through_tooluniverse():
             "arguments": {
                 "gnomad_ac": 0,
                 "gnomad_an": 1000,
+                "gnomad_af_global": 0.0,
                 "coverage_adequate": True,
             },
         }
@@ -279,8 +283,8 @@ def test_public_runtime_tools_dispatch_through_tooluniverse():
         }
     )
 
-    assert population["evidence_cards"][0]["system_preview_included"] is False
-    assert population["evidence_cards"][0]["overlay_validated"] is False
+    assert population["evidence_cards"][0]["calculation_roles"]["automatic"] is False
+    assert population["evidence_cards"][0]["calculation_roles"]["verified"] is False
     assert guard["status"] == "BLOCK"
     assert collector["execution_status"] == "error"
     assert legacy["execution_status"] == "error"
@@ -379,8 +383,8 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
     assert "consequence_profile" in collector_required
     assert {
         "variant_scope",
-        "system_preview_bayesian",
-        "validated_subset_bayesian",
+        "automatic_bayesian",
+        "verified_bayesian",
         "guard_context",
         "user_selected_bayesian",
         "decision_report",
