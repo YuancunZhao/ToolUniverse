@@ -3,10 +3,13 @@ from graphql.language import parse
 from graphql.validation import validate
 from .base_tool import BaseTool
 from .tool_registry import register_tool
+import logging
 import re
 import requests
 import copy
 import time
+
+logger = logging.getLogger(__name__)
 
 # Upper bound on how long DiseaseTargetScoreTool will paginate through
 # OpenTargets associatedTargets before returning what it has so far. A
@@ -73,18 +76,29 @@ def execute_query(endpoint_url, query, variables=None):
         result = remove_none_and_empty_values(result)
         # Check if the response contains errors
         if "errors" in result:
-            print("Invalid Query: ", result["errors"])
+            # Log only the human-readable `message` of each GraphQL error, not
+            # the raw error objects: some APIs (e.g. OpenNeuro) include an
+            # `extensions.stacktrace` with internal server file paths, which
+            # was previously printed to stdout verbatim -- visible in every
+            # caller's output (CLI, MCP client) as an internal-implementation
+            # leak, not a useful diagnostic. `logger.debug` also keeps this out
+            # of default-level output entirely.
+            messages = [
+                e.get("message", str(e)) if isinstance(e, dict) else str(e)
+                for e in result["errors"]
+            ]
+            logger.debug("GraphQL query returned errors: %s", "; ".join(messages))
             return None
         # Feature-94A-002: always return result when data key is present,
         # even if all values are empty/null (e.g. disease not found = {"data": {}}).
         # Callers distinguish empty results from errors via status envelope.
         elif "data" not in result:
-            print("No data returned")
+            logger.debug("GraphQL response had no 'data' key")
             return None
         else:
             return result
     except requests.exceptions.JSONDecodeError:
-        print("JSONDecodeError: Could not decode the response as JSON")
+        logger.debug("Could not decode GraphQL response as JSON")
         return None
 
 
@@ -131,7 +145,25 @@ class GraphQLTool(BaseTool):
         # ({"search": {}}) and is therefore not caught here.
         if not data:
             return {"status": "error", "error": self._empty_result_error(arguments)}
-        return {"status": "success", "data": data}
+        result = {"status": "success", "data": data}
+        # Fix Round 17: for a search(...)-shaped query, the same stripping
+        # collapses a genuine 0-hit result down to an opaque empty container
+        # ({"search": {}}) once its "hits": [] list is removed -- indistinguishable
+        # from a malformed/broken response without reading this source file.
+        # Confirmed live: OpenTargets_get_disease_ids_by_name with
+        # "high-risk prostate cancer" returns status=success, data={"search": {}},
+        # with no indication that this means zero matches. Only fires for queries
+        # that actually declare a "hits" field, so entity-lookup tools (which
+        # legitimately return smaller nested objects) are unaffected.
+        if "hits" in self.query_schema:
+            empty_key = next((k for k, v in data.items() if v == {}), None)
+            if empty_key:
+                result.setdefault("metadata", {})["note"] = (
+                    f"0 matches found (empty '{empty_key}' result). This is a "
+                    "genuine zero-hit search, not an error -- try a shorter or "
+                    "simpler phrasing of the search term."
+                )
+        return result
 
 
 _OT_SEARCH_QUERY = """

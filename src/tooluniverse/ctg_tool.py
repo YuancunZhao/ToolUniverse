@@ -24,6 +24,28 @@ def _phrase_quote_if_plain(value: str) -> str:
     return value
 
 
+def _restrict_to_area(value: str, area: str) -> str:
+    """Fix-R13B-1: CTG API v2's Essie search engine treats a bare
+    query.intr/query.spons value as a match against the whole study
+    record (brief summaries, arm descriptions, eligibility text, etc.)
+    rather than restricting to the actual intervention-name or
+    lead-sponsor-name field, so a specific query like 'vedolizumab' or
+    'Takeda' surfaces completely unrelated trials -- confirmed live: an
+    oncology trial with no vedolizumab intervention ranked in the
+    query.intr top 5 (215 unrestricted hits vs. 134 once restricted, all
+    correctly containing the drug), and a Neurocrine/Shire-sponsored
+    trial ranked in the query.spons top 5 for 'Takeda' (1977 unrestricted
+    hits vs. 1022 once restricted, all correctly Takeda-sponsored).
+    Wrapping the value in Essie's AREA[<area>] operator (and
+    phrase-quoting multi-word values, same as _phrase_quote_if_plain)
+    fixes this -- but only for a plain value with no existing Essie
+    syntax, since advanced users may already supply their own
+    AREA/boolean operators."""
+    if _ESSIE_OPERATOR_RE.search(value):
+        return value
+    return f"AREA[{area}]{_phrase_quote_if_plain(value)}"
+
+
 @register_tool("ClinicalTrialsTool")
 class ClinicalTrialsTool(RESTfulTool):
     _BASE_URL = "https://clinicaltrials.gov/api/v2"
@@ -160,6 +182,13 @@ class ClinicalTrialsTool(RESTfulTool):
             return {"status": "success", **result}
         return result
 
+    # Essie fields that get restricted via AREA[<name>] rather than a plain
+    # value match (see _restrict_to_area). Keyed by the mapped API param name.
+    _AREA_RESTRICTED_FIELDS = {
+        "query.intr": "InterventionName",
+        "query.spons": "LeadSponsorName",
+    }
+
     def _run_search(self, arguments):
         """Handle search operations (search_studies, search_by_intervention, search_by_sponsor)."""
         import requests
@@ -211,10 +240,14 @@ class ClinicalTrialsTool(RESTfulTool):
                 advanced_clauses.append(study_type_clause)
             elif key in _SEARCH_PARAM_MAP:
                 mapped_key = _SEARCH_PARAM_MAP[key]
-                if mapped_key in ("query.cond", "query.intr") and isinstance(
+                if mapped_key == "query.cond" and isinstance(value, str):
+                    value = _phrase_quote_if_plain(value)
+                elif mapped_key in self._AREA_RESTRICTED_FIELDS and isinstance(
                     value, str
                 ):
-                    value = _phrase_quote_if_plain(value)
+                    value = _restrict_to_area(
+                        value, self._AREA_RESTRICTED_FIELDS[mapped_key]
+                    )
                 params[mapped_key] = value
 
         if advanced_clauses:
@@ -535,6 +568,27 @@ class ClinicalTrialsSearchTool(ClinicalTrialsTool):
             endpoint_url=formatted_endpoint_url, variables=api_params
         )
 
+        # Feature-14C-02: this tool always applies a hardcoded phase>=2
+        # filter (see default_params_not_shown above), which silently
+        # excludes every NA-phase/observational study -- the exact bucket
+        # most genetics/epidemiology trials fall into. Confirmed live:
+        # condition="orofacial cleft" returns total_count=0 here, but the
+        # same query against the raw ClinicalTrials.gov v2 API (no phase
+        # filter) surfaces real matches such as NCT03065686 ("Genetic
+        # Factors Implicated in Orofacial Cleft"), which is phase "NA".
+        # A bare total_count=0 is indistinguishable from "no matching
+        # trials exist at all", so note the filter whenever it produced
+        # zero results.
+        phase_filter_applied = "PHASE2" in str(api_params.get("filter.advanced", ""))
+        phase_filter_note = (
+            "This search excludes phase-1-only, phase-NA, and observational "
+            "studies by default (see tool description). If you expected "
+            "results (e.g. for a genetics/epidemiology trial), the true "
+            "match count on ClinicalTrials.gov may be higher than 0 -- "
+            "consider searching https://clinicaltrials.gov/ directly for "
+            "NA-phase/observational studies."
+        )
+
         # Fix-Round3-002: a well-formed query that legitimately matches zero
         # trials (empty `studies` list) is a success, not the error below --
         # `execute_RESTful_query` already returns False for genuine failures
@@ -542,15 +596,24 @@ class ClinicalTrialsSearchTool(ClinicalTrialsTool):
         # a response missing "studies" entirely) is a real error.
         # _simplify_output handles an empty list fine on its own.
         if response is not None and response and "studies" in response.keys():
+            metadata = {"source": "ClinicalTrials.gov API v2"}
+            if phase_filter_applied and not response.get("studies"):
+                metadata["note"] = phase_filter_note
             return {
                 "status": "success",
                 "data": self._simplify_output(response),
-                "metadata": {"source": "ClinicalTrials.gov API v2"},
+                "metadata": metadata,
             }
 
+        error_msg = (
+            "No studies found for the given query parameters. "
+            "Please examine your input and try different parameters."
+        )
+        if phase_filter_applied:
+            error_msg += " " + phase_filter_note
         return {
             "status": "error",
-            "error": "No studies found for the given query parameters. Please examine your input and try different parameters.",
+            "error": error_msg,
         }
 
     def _simplify_output(self, response):
