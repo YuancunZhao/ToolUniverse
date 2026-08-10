@@ -54,7 +54,7 @@ def ACMG_overlay_gate_assess_variant(
     evidence_decisions : list[Any]
         User decisions applied only to stable card IDs regenerated in this call. Acce...
     protein_accession : str
-        
+
     clinical_context : dict[str, Any]
         Review-only clinical context. Explicit HPO terms trigger term/gene/disease lo...
     clinical_observations : list[Any]

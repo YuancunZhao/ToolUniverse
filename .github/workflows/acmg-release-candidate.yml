@@ -42,7 +42,15 @@ jobs:
       - name: Verify lock file and patch whitespace
         run: |
           uv lock --check
-          git diff --check 089eb8e6308fc64ae5af3de4bfbec32b5cf07b61 HEAD
+          # Upstream's generated wrapper corpus contains historical blank-line
+          # whitespace. This release intentionally carries only the two v3
+          # wrappers whose schemas changed, so check all handwritten files plus
+          # those two generated files instead of formatting ~2,600 wrappers.
+          git diff --check 089eb8e6308fc64ae5af3de4bfbec32b5cf07b61 HEAD -- \
+            . ':(exclude)src/tooluniverse/tools/*.py'
+          git diff --check 089eb8e6308fc64ae5af3de4bfbec32b5cf07b61 HEAD -- \
+            src/tooluniverse/tools/ACMG_evidence_collector.py \
+            src/tooluniverse/tools/ACMG_overlay_gate_assess_variant.py
 
       - name: Lint ACMG release surface
         run: |
