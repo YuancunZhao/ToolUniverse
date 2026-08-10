@@ -71,6 +71,7 @@ def _ruleset_payload() -> dict[str, Any]:
         "generic_tavtigian_odds": generic_odds,
         "bayesian_prior": BAYESIAN_PRIOR,
         "evidence_calculation_policy": {
+            "identity_verification": rule_catalog.IDENTITY_VERIFICATION_POLICY,
             "automatic_policy_version": models.AUTOMATIC_EVIDENCE_POLICY_VERSION,
             "verified_policy_version": models.VERIFIED_EVIDENCE_POLICY_VERSION,
             "automatic_evidence_statuses": sorted(models.AUTOMATIC_EVIDENCE_STATUSES),

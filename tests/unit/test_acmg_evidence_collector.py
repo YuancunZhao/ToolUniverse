@@ -1016,6 +1016,29 @@ class _GeneOnlyIdentityToolUniverse(_FakeToolUniverse):
         return super().run_one_function(call, **kwargs)
 
 
+class _VariantValidatorOnlyIdentityToolUniverse(_FakeToolUniverse):
+    def run_one_function(self, call, **kwargs):
+        result = super().run_one_function(call, **kwargs)
+        if call["name"] == "VariantValidator_validate_variant":
+            result["reviewable_features"].update(
+                {
+                    "hgvs_c": "NM_000142.5:c.1075+95C>G",
+                    "transcript": "NM_000142.5",
+                    "build": "GRCh38",
+                    "chr": "4",
+                    "pos": 1803931,
+                    "ref": "C",
+                    "alt": "G",
+                }
+            )
+        if call["name"] in {
+            "EnsemblVEP_variant_recoder",
+            "EnsemblVEP_annotate_hgvs",
+        }:
+            return {"status": "unavailable", "reason": "VEP fixture outage"}
+        return result
+
+
 class _BuildMismatchIdentityToolUniverse(_FakeToolUniverse):
     def run_one_function(self, call, **kwargs):
         result = super().run_one_function(call, **kwargs)
@@ -1377,6 +1400,28 @@ def test_gene_only_provider_output_cannot_verify_variant_identity():
 
     assert result["status"] == "error"
     assert result["error"] == "variant_identity_unverified"
+
+
+def test_complete_variantvalidator_identity_survives_ensembl_outage():
+    runtime = _VariantValidatorOnlyIdentityToolUniverse()
+    result = _make_tool(runtime).run(
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "transcript": "NM_000142.5",
+        }
+    )
+
+    assert result["status"] in {"success", "degraded"}
+    assert result["variant"]["normalization"]["identity_verification_basis"] == (
+        "variantvalidator_complete_allele"
+    )
+    assert result["variant"]["normalization"]["identity_source_count"] == 1
+    assert any(
+        fact["tool_name"] == "VariantValidator_validate_variant"
+        and fact["identity_status"] == "matched"
+        for fact in result["source_facts"]
+    )
 
 
 def test_provider_build_mismatch_blocks_identity_verification():

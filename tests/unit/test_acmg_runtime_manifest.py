@@ -43,6 +43,16 @@ def test_ruleset_hash_tracks_compatibility_policy_version(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_identity_verification_policy(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setitem(
+        rule_catalog.IDENTITY_VERIFICATION_POLICY,
+        "version",
+        "fixture",
+    )
+    assert ruleset_hash() != baseline
+
+
 def test_ruleset_hash_tracks_vcep_identity_and_moi_policies(monkeypatch):
     baseline = ruleset_hash()
     monkeypatch.setattr(vcep, "VCEP_ALLELE_MATCH_POLICY_VERSION", "fixture")

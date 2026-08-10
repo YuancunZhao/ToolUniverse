@@ -65,6 +65,7 @@ from .pvs1 import infer_mechanism_from_population_facts
 from .rule_catalog import (
     ACMG_CRITERIA,
     CSPEC_RULE_CATALOG,
+    IDENTITY_VERIFICATION_POLICY,
     criterion_use_matrix,
     is_valid_strength_for_criterion,
     rule_for_criterion,
@@ -1986,6 +1987,9 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "transcript_selection",
             "canonical_hgvs",
             "selected_candidate",
+            "identity_verification_basis",
+            "identity_source_count",
+            "identity_verification_policy_version",
             "formatter_candidates",
             "rsid_resolver",
             "selected_genomic_allele",
@@ -2554,6 +2558,65 @@ def _identities_share_variant(left: dict[str, Any], right: dict[str, Any]) -> bo
             (("hgvs_c", "validated_hgvs_c"), "hgvsc_candidates"),
             (("hgvs_g",), "hgvsg_candidates"),
         )
+    )
+
+
+def _complete_variantvalidator_identity(
+    call: SourceCall,
+    observed: dict[str, Any],
+    *,
+    requested_gene: str,
+    selected_transcript: str,
+    genome_build: str,
+) -> bool:
+    """Accept one complete VariantValidator allele when Ensembl is unavailable.
+
+    This is an explicit single-authoritative-provider fallback, not simulated
+    cross-provider agreement. It requires validated coding and genomic HGVS,
+    exact gene/transcript binding, allele coordinates, and provider version.
+    Any observed identity conflict still fails closed in the caller.
+    """
+    if (
+        call.tool_name != "VariantValidator_validate_variant"
+        or call.status != "success"
+    ):
+        return False
+    features = _features_for_call(call)
+    validated_hgvs_c = str(
+        features.get("validated_hgvs_c") or features.get("hgvs_c") or ""
+    )
+    observed_gene = str(features.get("gene") or observed.get("gene") or "")
+    observed_transcript = str(
+        features.get("transcript")
+        or observed.get("transcript")
+        or _transcript_accession(validated_hgvs_c)
+    )
+    if not all(
+        (
+            validated_hgvs_c,
+            str(features.get("hgvs_g") or observed.get("hgvs_g") or ""),
+            observed_gene,
+            observed_transcript,
+            coordinates(features),
+            provider_version(features),
+        )
+    ):
+        return False
+    if requested_gene and _normalize_text(observed_gene) != _normalize_text(
+        requested_gene
+    ):
+        return False
+    if selected_transcript and _normalize_text(
+        observed_transcript
+    ) != _normalize_text(selected_transcript):
+        return False
+    observed_build = (
+        features.get("build")
+        or features.get("assembly")
+        or features.get("genome_build")
+    )
+    return not observed_build or build_matches(
+        {"build": genome_build}, {"build": observed_build}
     )
 
 
@@ -3667,7 +3730,39 @@ class ACMGEvidencePipeline:
                         }
                     )
         normalization["excluded_candidates"] = excluded
-        identity["identity_verified"] = len(positive_identities) >= 2 and not conflicts
+        cross_provider_verified = (
+            len(positive_identities)
+            >= int(IDENTITY_VERIFICATION_POLICY["cross_provider_minimum"])
+        )
+        authoritative_single_provider = any(
+            _complete_variantvalidator_identity(
+                call,
+                observed,
+                requested_gene=requested_gene,
+                selected_transcript=selected_transcript,
+                genome_build=genome_build,
+            )
+            for call, observed in observed_calls
+        )
+        identity["identity_verified"] = bool(
+            (cross_provider_verified or authoritative_single_provider) and not conflicts
+        )
+        normalization["identity_verification_basis"] = (
+            "cross_provider_agreement"
+            if cross_provider_verified and not conflicts
+            else (
+                "variantvalidator_complete_allele"
+                if authoritative_single_provider and not conflicts
+                else "unverified"
+            )
+        )
+        normalization["identity_source_count"] = len(positive_identities)
+        normalization["identity_verification_policy_version"] = str(
+            IDENTITY_VERIFICATION_POLICY["version"]
+        )
+        normalization["selected_candidate"]["reason"] = normalization[
+            "identity_verification_basis"
+        ]
         identity["transcript"] = selected_transcript
         identity["normalization"] = normalization
         if conflicts:

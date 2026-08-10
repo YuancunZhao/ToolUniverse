@@ -7,6 +7,20 @@ from typing import Any
 
 CSPEC_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
 USER_DECISION_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
+IDENTITY_VERIFICATION_POLICY = {
+    "version": "2026-08-11-v1",
+    "cross_provider_minimum": 2,
+    "single_provider_fallback": "variantvalidator_complete_allele",
+    "single_provider_required_fields": [
+        "validated_hgvs_c",
+        "hgvs_g",
+        "gene",
+        "transcript",
+        "coordinates",
+        "provider_version",
+    ],
+    "fail_closed_on_identity_conflict": True,
+}
 
 
 ACMG_CRITERIA = (
@@ -890,6 +904,7 @@ __all__ = [
     "CANDIDATE_POLICY_VERSION",
     "CSPEC_RULE_CATALOG",
     "CONSEQUENCE_POLICIES",
+    "IDENTITY_VERIFICATION_POLICY",
     "RULE_CATALOG",
     "SPLICEAI_RULE",
     "bayesian_odds_for_output",
