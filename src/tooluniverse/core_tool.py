@@ -27,12 +27,20 @@ except Exception:
     MarkItDown = None
 
 try:
-    import fitz  # PyMuPDF
+    # PyMuPDF's own name. The legacy `import fitz` alias still works but emits a
+    # deprecation warning on every import and is slated for removal, so prefer
+    # `pymupdf` and keep `fitz` only as the fallback for older installs.
+    import pymupdf as fitz
 
     FITZ_AVAILABLE = True
 except Exception:
-    FITZ_AVAILABLE = False
-    fitz = None
+    try:
+        import fitz
+
+        FITZ_AVAILABLE = True
+    except Exception:
+        FITZ_AVAILABLE = False
+        fitz = None
 
 try:
     from pypdf import PdfReader
