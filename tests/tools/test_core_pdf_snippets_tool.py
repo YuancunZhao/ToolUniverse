@@ -6,6 +6,7 @@ Unit tests for CORE_get_fulltext_snippets (PDF snippet extraction).
 import sys
 from pathlib import Path
 
+import pymupdf
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -61,6 +62,36 @@ def test_core_pdf_snippets_basic(monkeypatch):
     assert result["pdf_url"] == "https://core.ac.uk/download/123.pdf"
     assert result["snippets_count"] >= 2
     assert any("rs738409" in s["snippet"].lower() for s in result["snippets"])
+
+
+@pytest.mark.unit
+def test_core_pdf_snippets_with_pymupdf(monkeypatch):
+    tool = CorePDFSnippetsTool({"name": "CORE_get_fulltext_snippets"})
+
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 72), "This paper discusses epistasis in detail.")
+        pdf_bytes = document.tobytes()
+
+    def mock_request(session, method, url, **kwargs):
+        content = b"" if method == "HEAD" else pdf_bytes
+        return _FakeResponse(status_code=200, content=content, url=url)
+
+    monkeypatch.setattr("tooluniverse.core_tool.request_with_retry", mock_request)
+
+    result = tool.run(
+        {
+            "pdf_url": "https://example.test/paper.pdf",
+            "terms": ["epistasis"],
+            "extractor": "fitz",
+        }
+    )
+
+    assert result["status"] == "success"
+    assert result["extractor_used"] == "fitz"
+    assert result["pages_scanned"] == 1
+    assert result["snippets_count"] == 1
+    assert "epistasis" in result["snippets"][0]["snippet"].lower()
 
 
 @pytest.mark.unit
