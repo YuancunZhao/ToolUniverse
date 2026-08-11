@@ -33,6 +33,12 @@ dependencies = [
     # unrelated placeholder whose __init__ is `from frontend import *`, so it
     # raises ModuleNotFoundError on import and never provided this dependency.
     "pymupdf>=1.24.0",
+    # Imported by dose_response, survival, nca, drug_synergy, metaboanalyst,
+    # timer and two remote tools. It was previously reaching installs only as a
+    # transitive of that `fitz` placeholder (which required nibabel, nipype,
+    # pyxnat, scipy and more), so removing it left these modules without their
+    # dependency. It stays listed in the graph/visualization extras as well.
+    "scipy>=1.7.0",
     "pandas>=2.2.3",
     "openpyxl>=3.1.0", # Read .xlsx bulk downloads (CellMarker, dataset tools)
     "setuptools>=70.0.0", # Fix pkg_resources deprecation warnings
