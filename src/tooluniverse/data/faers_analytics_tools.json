@@ -46,7 +46,7 @@
   {
     "type": "FAERSAnalyticsTool",
     "name": "FAERS_stratify_by_demographics",
-    "description": "Stratify adverse event reports by demographics (sex, age group, country). Returns counts and percentages by demographic group. Example: ibuprofen + GI bleeding stratified by sex \u2192 Female: 60%, Male: 40%. Use for subpopulation risk assessment.",
+    "description": "Stratify adverse event reports by demographics (sex, age group, country). Returns counts and percentages by demographic group. Example: ibuprofen + GI bleeding stratified by sex \u2192 Female: 60%, Male: 40%. Use for subpopulation risk assessment. IMPORTANT -- the stratification covers only a SUBSET of the matching reports: FAERS records demographics inconsistently, and openFDA computes a count facet solely over records that populate the counted field, so reports missing the demographic are absent from the groups entirely rather than bucketed as unknown. The response therefore reports two figures side by side: `total_reports_matching_query` (every report matching the drug/event query, from openFDA's own meta.results.total) and `stratified_report_count` (the subset where the demographic is recorded, which the groups sum to) -- for ondansetron stratified by age these are ~136,000 and ~25,000 respectively. A `coverage_note` names both figures and the coverage fraction. Each group `percentage` is a share of `stratified_report_count`, which is the correct denominator for a stratification. The legacy `total_reports` key repeats `stratified_report_count` for backward compatibility and is NOT the drug's report count -- read `total_reports_matching_query` for that. If the extra total request fails, `total_reports_matching_query` is null and `coverage_note` says so; everything else is still returned.",
     "parameter": {
       "type": "object",
       "required": [],
@@ -94,7 +94,58 @@
       }
     },
     "return_schema": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "drug_name": {
+          "type": "string",
+          "description": "Drug the reports were matched on."
+        },
+        "adverse_event": {
+          "type": ["string", "null"],
+          "description": "MedDRA Preferred Term the query was narrowed to, or null when the drug alone was queried."
+        },
+        "stratified_by": {
+          "type": "string",
+          "description": "Demographic dimension used: sex, age, or country."
+        },
+        "total_reports_matching_query": {
+          "type": ["integer", "null"],
+          "description": "Every report matching the drug/event query, from openFDA's meta.results.total. This is the drug's report count. Null when the extra total request failed -- coverage_note then says the total was unavailable."
+        },
+        "stratified_report_count": {
+          "type": "integer",
+          "description": "Reports where the demographic field is recorded -- the subset the groups below sum to, and the denominator of every percentage. Always <= total_reports_matching_query, often far below it."
+        },
+        "total_reports": {
+          "type": "integer",
+          "description": "Legacy alias of stratified_report_count, kept for backward compatibility. NOT the drug's report count; read total_reports_matching_query for that."
+        },
+        "stratification": {
+          "type": "array",
+          "description": "Demographic groups ranked by descending report count.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "group": {
+                "type": ["string", "integer"],
+                "description": "Demographic group label (sex and age codes are decoded; country stays an ISO code)."
+              },
+              "count": {
+                "type": "integer",
+                "description": "Reports in this group."
+              },
+              "percentage": {
+                "type": "number",
+                "description": "Share of stratified_report_count, not of total_reports_matching_query."
+              }
+            }
+          }
+        },
+        "coverage_note": {
+          "type": "string",
+          "description": "Explains that the stratification covers only reports where the demographic is recorded, naming stratified_report_count, total_reports_matching_query and the coverage fraction."
+        }
+      }
     },
     "test_examples": [
       {
@@ -166,7 +217,7 @@
   {
     "type": "FAERSAnalyticsTool",
     "name": "FAERS_compare_drugs",
-    "description": "Compare safety signals for two drugs with the same adverse event. Returns ROR/PRR/IC for both drugs with comparative analysis. Example: compare fulvestrant vs tamoxifen for hepatotoxicity. Use for safety benchmarking.",
+    "description": "Compare safety signals for two drugs with the same adverse event. Returns ROR/PRR/IC for both drugs with comparative analysis. Example: compare fulvestrant vs tamoxifen for hepatotoxicity. Use for safety benchmarking. Each drug's arm also returns the 2x2 `contingency_table` its metrics were computed from -- `a_drug_and_event`, `b_drug_no_event`, `c_no_drug_event`, `d_no_drug_no_event`, the same keys FAERS_calculate_disproportionality uses -- so the case counts behind the verdict are visible without extra calls. This matters because a ratio of two ratios is uninterpretable on its own: \"similar-strength signals\" means something very different when both arms rest on thousands of co-reported cases than when one rests on a handful. When either arm's `a_drug_and_event` falls below 25, `comparison_caveat` names that arm and its count and warns that `comparison` is not an equal-confidence statement; it is null when both arms clear the threshold. 25 is where an arm's own 95% ROR interval becomes narrower than the 1.5x ratio this comparison uses to separate \"similar-strength\" from \"stronger\".",
     "parameter": {
       "type": "object",
       "required": [],
@@ -202,7 +253,103 @@
       }
     },
     "return_schema": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "adverse_event": {
+          "type": "string",
+          "description": "MedDRA Preferred Term both arms were computed for."
+        },
+        "drug1": {
+          "type": "object",
+          "description": "First drug's arm: its name, the 2x2 case counts, and the metrics and signal verdict derived from them.",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "contingency_table": {
+              "type": ["object", "null"],
+              "description": "The 2x2 case counts this arm's ROR/PRR/IC were computed from, using the same key names as FAERS_calculate_disproportionality. Null only if the underlying analysis omitted them.",
+              "properties": {
+                "a_drug_and_event": {
+                  "type": "integer",
+                  "description": "Reports naming both this drug and this adverse event."
+                },
+                "b_drug_no_event": {
+                  "type": "integer",
+                  "description": "Reports naming this drug but not this adverse event."
+                },
+                "c_no_drug_event": {
+                  "type": "integer",
+                  "description": "Reports naming this adverse event but not this drug."
+                },
+                "d_no_drug_no_event": {
+                  "type": "integer",
+                  "description": "Reports naming neither this drug nor this adverse event."
+                }
+              }
+            },
+            "metrics": {
+              "type": ["object", "null"],
+              "description": "ROR, PRR and IC with 95% confidence intervals."
+            },
+            "signal_detection": {
+              "type": ["object", "null"],
+              "description": "Whether this arm alone crosses the signal-detection threshold, and how strongly."
+            }
+          }
+        },
+        "drug2": {
+          "type": "object",
+          "description": "Second drug's arm, in the same shape as drug1.",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "contingency_table": {
+              "type": ["object", "null"],
+              "description": "The 2x2 case counts this arm's ROR/PRR/IC were computed from, using the same key names as FAERS_calculate_disproportionality. Null only if the underlying analysis omitted them.",
+              "properties": {
+                "a_drug_and_event": {
+                  "type": "integer",
+                  "description": "Reports naming both this drug and this adverse event."
+                },
+                "b_drug_no_event": {
+                  "type": "integer",
+                  "description": "Reports naming this drug but not this adverse event."
+                },
+                "c_no_drug_event": {
+                  "type": "integer",
+                  "description": "Reports naming this adverse event but not this drug."
+                },
+                "d_no_drug_no_event": {
+                  "type": "integer",
+                  "description": "Reports naming neither this drug nor this adverse event."
+                }
+              }
+            },
+            "metrics": {
+              "type": ["object", "null"],
+              "description": "ROR, PRR and IC with 95% confidence intervals."
+            },
+            "signal_detection": {
+              "type": ["object", "null"],
+              "description": "Whether this arm alone crosses the signal-detection threshold, and how strongly."
+            }
+          }
+        },
+        "comparison": {
+          "type": "string",
+          "description": "Plain-language verdict comparing the two arms. Always read alongside comparison_caveat."
+        },
+        "comparison_caveat": {
+          "type": ["string", "null"],
+          "description": "Set when either arm's a_drug_and_event is below 25, naming the arm and its count and warning that comparison is not an equal-confidence statement. Null when both arms clear the threshold, and also when an arm's count is unavailable -- check contingency_table to tell those two cases apart."
+        },
+        "note": {
+          "type": "string",
+          "description": "Standing caveat that both drugs may show signals from differing baseline risks."
+        }
+      }
     },
     "test_examples": [
       {
@@ -262,7 +409,7 @@
   {
     "type": "FAERSAnalyticsTool",
     "name": "FAERS_rollup_meddra_hierarchy",
-    "description": "Aggregate adverse events by MedDRA hierarchy (Preferred Term level). Returns top 50 PTs with counts. Note: Full HLT/SOC hierarchy requires MedDRA license. Use for adverse event profile overview.",
+    "description": "Aggregate adverse events by MedDRA hierarchy (Preferred Term level). Returns the most-reported preferred terms with counts, ranked by descending report count, up to openFDA's per-request maximum (999 anonymous, 1000 with FDA_API_KEY set). openFDA does not report how many distinct terms exist, so 'unique_PTs_returned' is the number of rows returned, NOT a total: check 'truncated' and read 'truncation_note' before treating the list as the drug's full reaction profile. A PT absent from the list is not evidence it was never reported. Note: Full HLT/SOC hierarchy requires MedDRA license. Use for adverse event profile overview.",
     "parameter": {
       "type": "object",
       "required": [],

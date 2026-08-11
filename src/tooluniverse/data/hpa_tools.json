@@ -494,7 +494,7 @@
   {
     "type": "HPAGetCancerPrognosticsTool",
     "name": "HPA_get_cancer_prognostics_by_gene",
-    "description": "Retrieve prognostic value of a gene across various cancer types, indicating if its expression level correlates with patient survival outcomes.",
+    "description": "Retrieve prognostic value of a gene across various cancer types, indicating if its expression level correlates with patient survival outcomes. Reports both the significant results ('prognostic_summary') and the cancer types that were assessed but found NOT prognostic ('non_prognostic_summary'), plus 'cancers_assessed_count' as the denominator, so that a negative result can be distinguished from missing data.",
     "fields": {
       "endpoint": "https://www.proteinatlas.org/{ensembl_id}.json",
       "timeout": 30,
@@ -513,7 +513,7 @@
       ]
     },
     "input_description": "Input a single Ensembl Gene ID. The tool will use HPA's efficient JSON API to retrieve cancer prognostic data.",
-    "output_description": "Returns a list of cancers where the gene has significant prognostic value, including the prognostic type (favorable/unfavorable), p-value, and summary statistics. Explains whether high/low expression correlates with better/worse patient survival.",
+    "output_description": "Returns 'prognostic_summary' (cancers where the gene has SIGNIFICANT prognostic value, with prognostic type favorable/unfavorable and p-value), 'non_prognostic_summary' (cancers HPA assessed and found not prognostic, with p-values), and 'cancers_assessed_count' as the denominator for both. Use the denominator to tell 'HPA tested this cancer and found no signal' apart from 'HPA has no data for this cancer'.",
     "test_examples": [
       {
         "ensembl_id": "ENSG00000141510"
@@ -534,11 +534,21 @@
             "type": "string"
           }
         },
+        "cancers_assessed_count": {
+          "type": "integer",
+          "description": "Total number of cancer types HPA assessed for this gene (the denominator). Equals prognostic_cancers_count + non_prognostic_cancers_count. A cancer type absent from both summary arrays was not assessed by HPA for this gene."
+        },
         "prognostic_cancers_count": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Number of assessed cancer types where expression significantly correlates with survival. This is a filtered subset of cancers_assessed_count, not a total."
+        },
+        "non_prognostic_cancers_count": {
+          "type": "integer",
+          "description": "Number of assessed cancer types where HPA found NO significant survival correlation."
         },
         "prognostic_summary": {
           "type": "array",
+          "description": "Cancer types with SIGNIFICANT prognostic value only. Compare its length against cancers_assessed_count before concluding a cancer type has no data — non-significant assessed cancers are in non_prognostic_summary.",
           "items": {
             "type": "object",
             "properties": {
@@ -547,6 +557,30 @@
               },
               "prognostic_type": {
                 "type": "string"
+              },
+              "p_value": {
+                "type": "string"
+              },
+              "is_prognostic": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "non_prognostic_summary": {
+          "type": "array",
+          "description": "Cancer types HPA assessed and found NOT prognostic, with their p-values. These are citable negative results and are distinct from cancer types HPA never assessed (absent from both arrays).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cancer_type": {
+                "type": "string"
+              },
+              "prognostic_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "p_value": {
                 "type": "string"
@@ -641,7 +675,7 @@
       ]
     },
     "input_description": "Input an Ensembl Gene ID and a list of tissue names. The tool will perform intelligent tissue name matching.",
-    "output_description": "Returns a dictionary mapping each queried tissue name to its expression data: the HPA tissue the value actually came from (matched_tissue), the expression value, its unit read from the HPA column header (expression_unit), a categorized expression level (Very high/High/Medium/Low/Very low), the HPA column header used (source_field), and a 'note' when the queried name resolved to a differently-named HPA column or matched nothing. Also lists the tissues HPA classifies the gene as enriched in.",
+    "output_description": "Returns a dictionary mapping each queried tissue name to its expression data: the HPA tissue the value actually came from (matched_tissue), the expression value, its unit read from the HPA column header (expression_unit), an expression_level band (Very high/High/Medium/Low/Very low), the HPA column header used (source_field), and a 'note' when the queried name resolved to a differently-named HPA column or matched nothing. expression_level is computed by ToolUniverse from expression_value, NOT a classification published by HPA -- HPA supplies only the number. The exact cut-offs (>50 Very high, >10 High, >1 Medium, >0.1 Low, <=0.1 Very low) are stated once per response in the top-level 'expression_level_basis' field rather than repeated on every tissue row, so the banding can be reproduced or ignored. Also lists the tissues HPA classifies the gene as enriched in.",
     "test_examples": [
       {
         "ensembl_id": "ENSG00000254647",
@@ -692,7 +726,7 @@
       ]
     },
     "input_description": "Input a gene name and a context (tissue or cell line name). This composite tool will perform multi-step analysis combining biological processes and expression data.",
-    "output_description": "Returns a comprehensive contextual analysis including: gene's biological processes, expression level in the specified context, contextual conclusion about functional relevance, and intelligent interpretation of whether the gene's roles are likely important in the given tissue/cell line context.",
+    "output_description": "Returns a comprehensive contextual analysis including: gene's biological processes, expression level in the specified context, contextual conclusion about functional relevance, and an interpretation of whether the gene's roles are likely important in the given tissue/cell line context. 'expression_level' is computed by ToolUniverse from the nTPM value, NOT a classification published by HPA -- HPA supplies only the number. This tool uses its own cut-offs (>10 highly expressed, >1 moderately expressed, >0.1 expressed at low level, <=0.1 not expressed or very low), which differ from the bands returned by HPA_get_rna_expression_by_source and HPA_get_rna_expression_in_specific_tissues; the 'expression_level_basis' field states them. 'functional_relevance' and 'contextual_conclusion' are derived from that band, so they inherit the same tool-computed cut-offs and are not HPA assertions.",
     "test_examples": [
       {
         "gene_name": "TP53",
@@ -740,7 +774,7 @@
       ]
     },
     "input_description": "Input gene name (e.g., GFAP), source type (tissue/blood/brain/single_cell), and specific source name (e.g., liver). The tool will directly query the specific column for highly efficient data retrieval.",
-    "output_description": "Returns the expression value, its unit taken from HPA's column header (nTPM, or nCPM for single_cell), a categorized expression level, the exact HPA column header the number came from (column_queried), and a 'note' whenever the requested source name resolved to a differently-named HPA column.",
+    "output_description": "Returns the expression value, its unit taken from HPA's column header (nTPM, or nCPM for single_cell), an expression_level band, the exact HPA column header the number came from (column_queried), and a 'note' whenever the requested source name resolved to a differently-named HPA column. expression_level is computed by ToolUniverse from expression_value, NOT a classification published by HPA -- HPA supplies only the number. The accompanying 'expression_level_basis' field spells out the exact cut-offs applied (>50 very high, >10 high, >1 medium, >0.1 low, <=0.1 very low) so the banding can be reproduced or ignored.",
     "test_examples": [
       {
         "gene_name": "TP53",
