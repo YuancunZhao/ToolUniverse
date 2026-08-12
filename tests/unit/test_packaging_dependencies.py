@@ -74,6 +74,13 @@ def _names(pyproject_path):
     return {_distribution_name(r) for r in _load_dependencies(pyproject_path)}
 
 
+def _requirements_by_name(pyproject_path):
+    return {
+        _distribution_name(requirement): requirement
+        for requirement in _load_dependencies(pyproject_path)
+    }
+
+
 def _project_version(pyproject_path):
     with open(pyproject_path, "rb") as fh:
         return tomllib.load(fh)["project"]["version"]
@@ -108,8 +115,10 @@ def test_pymupdf_is_an_explicit_root_extra_only():
 
 def test_mcpb_dependencies_mirror_root():
     """The bundle list is documented as a mirror of the root list."""
-    root = _names(ROOT_PYPROJECT)
-    mcpb = _names(MCPB_PYPROJECT)
+    root_requirements = _requirements_by_name(ROOT_PYPROJECT)
+    mcpb_requirements = _requirements_by_name(MCPB_PYPROJECT)
+    root = set(root_requirements)
+    mcpb = set(mcpb_requirements)
 
     missing = root - mcpb - KNOWN_MCPB_OMISSIONS
     assert not missing, (
@@ -122,6 +131,16 @@ def test_mcpb_dependencies_mirror_root():
     assert not extra, (
         f"mcpb/pyproject.toml declares dependencies absent from the root "
         f"pyproject.toml: {sorted(extra)}."
+    )
+
+    mismatched = {
+        name: (root_requirements[name], mcpb_requirements[name])
+        for name in root & mcpb
+        if root_requirements[name] != mcpb_requirements[name]
+    }
+    assert not mismatched, (
+        "mcpb/pyproject.toml has dependency constraints that differ from the "
+        f"root pyproject.toml: {mismatched}."
     )
 
 
