@@ -21,10 +21,10 @@ Install the exact validated runtime commit instead of a floating branch:
 ```text
 Repository: https://github.com/YuancunZhao/ToolUniverse
 Branch:     codex/acmg-on-tooluniverse-1.4
-Commit:     911200550b10600ded44b36dcb614c25ff06e0e6
+Commit:     07973c6a372acf95aa8b85fcdcdc41ba15efd2e2
 ```
 
-This commit passed the 379-test ACMG/SpliceAI/provider suite, MCP registration
+This commit passed the 445-test ACMG/SpliceAI/provider suite, MCP registration
 checks, Skill mirror checks, wrapper/schema checks, and local plus exact-Git-SHA
 isolated installation smoke tests.
 
@@ -32,17 +32,15 @@ The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
-The branch documentation below describes the v3 candidate interface. Until
-the validated block is advanced by a dedicated pin-only commit, production
-installers must continue to use the exact SHA above. Candidate maintainers use
-the pushed candidate SHA directly for the offline and online gates; they must
-not replace this block with an unverified worktree revision.
+The branch documentation below describes the validated v3 interface. The
+dedicated pin-only commit that contains this text is not the runtime install
+target; installers must continue to use the exact validated runtime SHA above.
 
 ## One-line installation prompt
 
 Copy this sentence into another AI agent:
 
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `911200550b10600ded44b36dcb614c25ff06e0e6` for my current AI client. Preserve unrelated MCP servers and skills.
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `07973c6a372acf95aa8b85fcdcdc41ba15efd2e2` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
 
@@ -56,7 +54,7 @@ existing `tooluniverse` entry:
   "args": [
     "--refresh",
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@911200550b10600ded44b36dcb614c25ff06e0e6",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@07973c6a372acf95aa8b85fcdcdc41ba15efd2e2",
     "tooluniverse"
   ],
   "env": {
@@ -104,7 +102,7 @@ Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 Then run:
 
 ```bash
-TOOLUNIVERSE_COMMIT="911200550b10600ded44b36dcb614c25ff06e0e6"
+TOOLUNIVERSE_COMMIT="07973c6a372acf95aa8b85fcdcdc41ba15efd2e2"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
 : "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
@@ -363,7 +361,7 @@ First verify that the exact commit starts:
 
 ```bash
 uvx --refresh --from \
-  git+https://github.com/YuancunZhao/ToolUniverse.git@911200550b10600ded44b36dcb614c25ff06e0e6 \
+  git+https://github.com/YuancunZhao/ToolUniverse.git@07973c6a372acf95aa8b85fcdcdc41ba15efd2e2 \
   tooluniverse --help
 ```
 
