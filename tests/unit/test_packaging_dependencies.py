@@ -16,13 +16,14 @@ with "An executable named `tooluniverse` is not provided by package
 `tooluniverse`". The MCPB bundle re-resolves on every launch, so working
 installs broke without any local change.
 
-These tests pin the distribution name, keep the bundle's copy of the dependency
-list in step with the root one, and keep every version marker moving together
-so a fix actually reaches PyPI.
+These tests reject the wrong distribution, keep PyMuPDF behind its explicit
+license-sensitive extra, keep the bundle's default dependency list in step with
+the root one, and keep every version marker moving together so a fix actually
+reaches PyPI.
 """
 
-import re
 import json
+import re
 from importlib.metadata import packages_distributions
 from pathlib import Path
 
@@ -54,9 +55,13 @@ KNOWN_MCPB_OMISSIONS = {
 }
 
 
-def _load_dependencies(pyproject_path):
+def _load_pyproject(pyproject_path):
     with open(pyproject_path, "rb") as fh:
-        return tomllib.load(fh)["project"]["dependencies"]
+        return tomllib.load(fh)["project"]
+
+
+def _load_dependencies(pyproject_path):
+    return _load_pyproject(pyproject_path)["dependencies"]
 
 
 def _distribution_name(requirement):
@@ -85,13 +90,20 @@ def test_no_forbidden_distributions(pyproject):
         )
 
 
-@pytest.mark.parametrize("pyproject", [ROOT_PYPROJECT, MCPB_PYPROJECT])
-def test_pymupdf_is_declared(pyproject):
-    """core_tool.py and uspto_downloader_tool.py import pymupdf, so it is required."""
-    assert "pymupdf" in _names(pyproject), (
-        f"{pyproject.relative_to(REPO_ROOT)} must declare 'pymupdf'; the PDF "
-        "extraction path imports it."
-    )
+def test_pymupdf_is_an_explicit_root_extra_only():
+    """Do not impose PyMuPDF's AGPL/commercial terms on default installs."""
+    root = _load_pyproject(ROOT_PYPROJECT)
+    root_default = {_distribution_name(r) for r in root["dependencies"]}
+    mcpb_default = _names(MCPB_PYPROJECT)
+    pdf_extra = {
+        _distribution_name(r) for r in root["optional-dependencies"].get("pdf", [])
+    }
+    all_extra = " ".join(root["optional-dependencies"]["all"]).lower()
+
+    assert "pymupdf" not in root_default
+    assert "pymupdf" not in mcpb_default
+    assert pdf_extra == {"pymupdf"}
+    assert "pdf" not in all_extra
 
 
 def test_mcpb_dependencies_mirror_root():

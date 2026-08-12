@@ -6250,7 +6250,6 @@ dependencies = [
     { name = "psutil" },
     { name = "pydantic", version = "2.11.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "pydantic", version = "2.13.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
-    { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rcsb-api" },
@@ -6370,6 +6369,9 @@ ml = [
     { name = "huggingface-hub" },
     { name = "sentence-transformers" },
 ]
+pdf = [
+    { name = "pymupdf" },
+]
 singlecell = [
     { name = "cellxgene-census" },
     { name = "tiledbsoma" },
@@ -6454,7 +6456,7 @@ requires-dist = [
     { name = "pydot", marker = "extra == 'graph'", specifier = ">=1.4.0" },
     { name = "pygraphviz", marker = "extra == 'graph'", specifier = ">=1.7" },
     { name = "pyinstaller", marker = "extra == 'build'", specifier = ">=6.0.0" },
-    { name = "pymupdf", specifier = ">=1.24.3" },
+    { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.24.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
@@ -6496,7 +6498,7 @@ requires-dist = [
     { name = "werkzeug", marker = "extra == 'graph'", specifier = ">=2.0.0" },
     { name = "xmltodict", specifier = ">=1.0.0" },
 ]
-provides-extras = ["client", "smolagents", "singlecell", "dev", "docs", "embedding", "ml", "graph", "visualization", "space", "bioinformatics", "all", "build"]
+provides-extras = ["pdf", "client", "smolagents", "singlecell", "dev", "docs", "embedding", "ml", "graph", "visualization", "space", "bioinformatics", "all", "build"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "tooluniverse", extras = ["dev", "embedding"], editable = "." }]
