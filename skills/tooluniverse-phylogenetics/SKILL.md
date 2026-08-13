@@ -11,11 +11,22 @@ disable-model-invocation: true
 Each of these was observed producing a wrong answer *while the correct guidance
 was already present further down this file*. Check them before you answer.
 
-1. **PhyKIT prints more than one column.** `saturation` gives
-   `slope <TAB> 1-slope`; the saturation value is the **second**. Taking the
-   first returns exactly `1 - answer` (0.3854 where the answer is 0.6146 — they
-   sum to 1.0000, which is the tell). `treeness_over_rcv` gives
-   `ratio <TAB> treeness <TAB> RCV`; the ratio is first.
+1. **PhyKIT prints more than one column, and for `saturation` the two
+   conventions disagree — state which you used.** `phykit saturation` prints
+   `saturation <TAB> |saturation-1|`. Its own `--help` is explicit: *"The first
+   value is the saturation value and the second column is the absolute value of
+   saturation minus 1."* But several published analyses (and some reference
+   answers derived from them) report the **second** column as "the saturation
+   value". The two always sum to 1.0000, which is the tell that you may be
+   looking at the wrong one — on the fungal scogs set the medians are 0.39
+   (col 1) and 0.61 (col 2).
+
+   So: **follow phykit and use column 1** unless the question or source defines
+   saturation the other way, and say in your answer which column you read. Do
+   not silently pick the one that looks closer to an expected number.
+
+   `treeness_over_rcv` has no such ambiguity: it gives
+   `ratio <TAB> treeness <TAB> RCV` and the ratio is first.
 
 2. **"Gap percentage" means the fraction of alignment COLUMNS containing at
    least one gap**, not the fraction of residues that are gaps. On the fungal
@@ -407,7 +418,7 @@ the question wants is usually not the first:
 
 | subcommand | prints | the value asked for |
 |---|---|---|
-| `saturation` | `slope <TAB> 1-slope` | **column 2**, `1-slope` |
+| `saturation` | `saturation <TAB> \|saturation-1\|` | **column 1** per phykit's docs; some sources report col 2 — say which you used |
 | `treeness_over_rcv` | `treeness/RCV <TAB> treeness <TAB> RCV` | **column 1**, the ratio |
 | `parsimony_informative_sites` | `n_pi <TAB> n_total <TAB> %PIS` | column 3 for a percentage |
 
