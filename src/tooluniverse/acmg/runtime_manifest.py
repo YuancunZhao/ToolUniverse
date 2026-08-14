@@ -9,6 +9,7 @@ from typing import Any
 
 from . import (
     compatibility,
+    consequence_sources,
     cspec,
     literature_extractor,
     models,
@@ -19,8 +20,8 @@ from . import (
 )
 
 
-ACMG_RUNTIME_VERSION = "evidence-automation-3"
-COLLECTOR_SCHEMA_VERSION = "2026-08-09-v3"
+ACMG_RUNTIME_VERSION = "evidence-automation-3.1"
+COLLECTOR_SCHEMA_VERSION = "2026-08-13-v3"
 UPSTREAM_BASE_COMMIT = "089eb8e6308fc64ae5af3de4bfbec32b5cf07b61"
 BAYESIAN_PRIOR = 0.1
 
@@ -86,6 +87,9 @@ def _ruleset_payload() -> dict[str, Any]:
             "compatibility_policy_version": (
                 compatibility.COMPATIBILITY_POLICY_VERSION
             ),
+            "evidence_aggregation_policy_version": (
+                compatibility.EVIDENCE_AGGREGATION_POLICY_VERSION
+            ),
             "pm2_rare_observed_candidate": {
                 "policy_id": population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID,
                 "version": (population.PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION),
@@ -96,6 +100,36 @@ def _ruleset_payload() -> dict[str, Any]:
                 ),
                 "requires_missing_disease_specific_mcaf": True,
                 "deterministic_svi_threshold": False,
+            },
+            "pm2_decision_policy": {
+                "version": population.PM2_DECISION_POLICY_VERSION,
+                "order": [
+                    "require_complete_af_ac_an",
+                    "apply_unique_cspec_frequency_condition",
+                    "apply_generic_or_fork_candidate_policy",
+                    "assess_callability_only_when_ac_is_zero",
+                ],
+                "provider_failure_is_absence": False,
+            },
+            "mondo_resolution_policy": {
+                "version": rule_catalog.MONDO_RESOLUTION_POLICY_VERSION,
+                "envelope": "terms",
+                "exclude_obsolete": True,
+                "exact_label_first": True,
+                "unique_remaining_candidate": True,
+            },
+            "consequence_conflict_policy": {
+                "version": consequence_sources.CONSEQUENCE_CONFLICT_POLICY_VERSION,
+                "hard_conflicts": [
+                    "build",
+                    "allele",
+                    "gene",
+                    "selected_transcript_consequence",
+                    "selected_transcript_protein_change",
+                ],
+                "alternate_transcript_difference": "context_only",
+                "selection": "exact_refseq_then_mane_then_version_compatible",
+                "majority_vote": False,
             },
             "literature_extractor": {
                 "id": literature_extractor.EXTRACTOR_ID,

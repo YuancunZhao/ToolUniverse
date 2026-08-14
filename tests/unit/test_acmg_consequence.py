@@ -270,3 +270,43 @@ def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
 
     assert resolution["status"] == "identity_conflict"
     assert resolution["selected_observation"] is None
+
+
+def test_alternate_transcript_protein_difference_is_context_only():
+    observations = [
+        {
+            "source_fact_id": "refseq",
+            "provider": "VariantValidator_format_genomic_to_transcripts",
+            "source_available": True,
+            "identity_status": "matched",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["missense_variant"],
+            "hgvs_p": "NP_000164.5:p.Gln587His",
+            "_match_rank": 0,
+            "_provider_rank": 1,
+        },
+        {
+            "source_fact_id": "ensembl",
+            "provider": "FAVOR_annotate_variant",
+            "source_available": False,
+            "identity_status": "conflict",
+            "selected_transcript_status": "other",
+            "conflict_class": "alternate_transcript_observation",
+            "transcript": "ENST00000611961.1",
+            "consequence_terms": ["missense_variant"],
+            "hgvs_p": "ENSP00000480761.1:p.Gln561His",
+            "_match_rank": 4,
+            "_provider_rank": 3,
+        },
+    ]
+
+    resolution = resolve_consequence_observations(
+        {**IDENTITY, "transcript": "NM_000173.7"}, observations
+    )
+
+    assert resolution["status"] == "resolved"
+    assert resolution["selected_source_fact_ids"] == ["refseq"]
+    assert resolution["hard_identity_conflicts"] == []
+    assert resolution["alternate_transcript_observations"][0]["hgvs_p"].endswith(
+        "p.Gln561His"
+    )

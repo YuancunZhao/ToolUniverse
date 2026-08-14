@@ -2171,6 +2171,12 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
         features = _constraint_fields(payload_dict)
     elif tool_name == "gnomad_get_region_variants":
         features = _gnomad_region_variants_fields(payload_dict)
+    elif tool_name == "gnomad_search_variants":
+        rows = payload_dict.get("variant_search")
+        features = {
+            "variant_search": rows if isinstance(rows, list) else [],
+            "provider_version": "gnomAD GraphQL variant search",
+        }
     elif tool_name == "ensembl_lookup_gene":
         features = _ensembl_lookup_fields(payload_dict)
     elif tool_name in {

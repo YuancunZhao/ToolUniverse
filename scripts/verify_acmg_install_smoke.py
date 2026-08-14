@@ -213,7 +213,7 @@ from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_has
 
 check(
     "v3_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-3",
+    ACMG_RUNTIME_VERSION == "evidence-automation-3.1",
     ACMG_RUNTIME_VERSION,
 )
 
@@ -221,9 +221,7 @@ guard_context = {
     "schema_version": GUARD_CONTEXT_SCHEMA_VERSION,
     "variant_identity_hash": "a" * 64,
     "ruleset_hash": ruleset_hash(),
-    "cards": [],
-    "known_source_fact_ids": [],
-    "verified_source_fact_ids": [],
+    "claims": [],
 }
 guard_context["context_hash"] = guard_context_hash(guard_context)
 guard = tu.run_one_function(

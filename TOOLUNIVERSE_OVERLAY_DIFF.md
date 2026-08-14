@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@089eb8e6308fc64ae5af3de4bfbec32b5cf07b61` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.0+acmg.3`. Files unrelated to the ACMG runtime,
+The package version is `1.4.0+acmg.4`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -60,7 +60,9 @@ through `VariantValidator_gene2transcripts`, genomic input uses
 before validation. Gene;transcript:c. input is validated directly, while gene
 plus p. input uses `EnsemblVEP_annotate_hgvs` for genomic identity and then the
 MANE projection path. Ambiguous transcript or protein-to-genomic resolution
-fails closed and never creates ACMG evidence.
+fails closed and never creates ACMG evidence. Inputs such as `NM_:c.(p.)` and
+`gene;NM_:c.(p.)` send only c.HGVS to providers and retain the submitted
+protein change for consistency checking.
 
 Before identity normalization, the collector performs a deterministic scope
 and assembly preflight. `hg19`/`GRCh37` normalize to `GRCh37`, while
@@ -81,8 +83,11 @@ points, Brnich OddsPath assay strengths, and a PM1 protein-context route using
 upstream EBI Proteins and InterPro tools. Ordinary domain overlap is displayed
 but is not sufficient for PM1; an exact CSpec protein-region contract must bind
 to the current online document. `ClinGen_search_cspec` runs immediately after
-gene identity is verified. A released specification applies only after a
-unique gene, MONDO disease, and inheritance match. Explicit structured
+gene identity is verified. Free-text disease input uses the declared OLS
+`terms` envelope, excludes obsolete terms, and prefers an exact label; missing,
+unresolved, and ambiguous disease states remain distinct. A released
+specification applies only after a unique gene, MONDO disease, and inheritance
+match. Explicit structured
 applicability and strength fields are normalized directly. The v3 finite
 condition evaluator executes supported predictor, AF/MCAF, case-count, point,
 residue/region, variant-type, ceiling, and mutual-exclusion rules. Partial or
@@ -91,8 +96,11 @@ candidates and cannot enter the verified estimate. Optional `cspec_proposals`
 are revalidated against the online specification ID, version, content hash,
 criterion, and excerpt. Local compiled contracts are optional
 exact-hash caches or fixtures, not a whitelist. Missing context, ambiguity, or
-network failure remains visible and falls back without blocking evidence.
-Under that fallback, AC=0 with auditable callability may suggest
+network failure remains visible and falls back without blocking evidence. PM2
+first requires complete AF/AC/AN, then applies an exact CSpec frequency rule for
+observed alleles. Without that rule, an observed allele can only use the fork's
+review candidate policy; only AC=0 enters absence/callability handling, and a
+provider failure never means absence. Under that fallback, AC=0 with auditable callability may suggest
 PM2_Supporting; the fork's review-only candidate filter requires global AF <=
 0.0001, absent or <=0.001 popmax AF, AC > 0, and no disease-specific MCAF. This
 is not a deterministic ClinGen SVI PM2 threshold and the card says so. When no
@@ -222,7 +230,7 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-09-v3` adds automatic/verified candidate policies and retains
+Collector schema `2026-08-13-v3` adds automatic/verified candidate policies and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
@@ -254,8 +262,10 @@ consequence source rather than stopping at VEP: selected/genomic/single-allele
 rsID/region VEP, VariantValidator/VariantFormatter, FAVOR, OpenTargets,
 Mutalyzer, GRCh37 GenomeNexus, and protein-representable ProtVar. The resolver
 uses exact RefSeq, unique MANE, then version-compatible observations without
-majority voting; build, allele, gene, transcript, consequence, or protein
-conflicts fail closed. The profile exposes observations, method dependence,
+majority voting. Build, allele, gene, or disagreement on the selected
+transcript's consequence/protein change fails closed; expected consequences on
+other transcripts remain visible context and do not veto the selected result.
+The profile exposes observations, method dependence,
 selected/corroborating SourceFacts, failures, conflicts, resolution reason, and
 missing requirements. PVS1 can consume a uniquely resolved non-VEP
 consequence, but exon structure, PTC/NMD, and disease mechanism must still come
@@ -341,6 +351,9 @@ floating `uvx tooluniverse` package resolution.
 The default `tooluniverse` entry runs compact mode and exposes
 `find_tools`, `list_tools`, `grep_tools`, `get_tool_info`, and `execute_tool`;
 approximately 2,600 scientific tools remain dynamically discoverable behind
-that compact surface. When any discovery or execution tool is unavailable,
+that compact surface. The known ACMG path does not use discovery: it calls
+`execute_tool` once for the collector and once for the Guard, passes the
+sub-5-KB claim context unchanged, and uses no shell or temporary files. When
+execution is unavailable,
 ACMG review stops rather than falling back to direct provider HTTP calls or
 manual criterion scoring.

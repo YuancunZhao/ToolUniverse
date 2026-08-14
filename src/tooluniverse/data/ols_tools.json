@@ -90,95 +90,58 @@
     "return_schema": {
       "type": "object",
       "properties": {
-        "response": {
-          "type": "object",
-          "properties": {
-            "docs": {
-              "type": "array"
-            },
-            "numFound": {
-              "type": "integer"
-            },
-            "start": {
-              "type": "integer"
-            }
-          }
-        },
-        "responseHeader": {
-          "type": "object",
-          "properties": {
-            "QTime": {
-              "type": "integer"
-            },
-            "status": {
-              "type": "integer"
-            }
-          }
-        },
-        "facet_counts": {
-          "type": "object",
-          "properties": {
-            "facet_fields": {
-              "type": "object",
-              "properties": {
-                "ontologyPreferredPrefix": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "isDefiningOntology": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "ontologyId": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "ontologyIri": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "isObsolete": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "type": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
+        "terms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "iri": {
+                "type": "string"
+              },
+              "ontologyName": {
+                "type": "string"
+              },
+              "shortForm": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "oboId": {
+                "type": ["string", "null"]
+              },
+              "isObsolete": {
+                "type": ["boolean", "null"]
               }
-            }
+            },
+            "required": ["iri", "ontologyName", "shortForm", "label"]
           }
         },
-        "query": {
-          "type": "string"
+        "total_items": {
+          "type": "integer"
         },
-        "filters": {
+        "showing": {
+          "type": "integer"
+        },
+        "pagination": {
           "type": "object",
           "properties": {
-            "ontology": {
-              "type": "string"
+            "page": {
+              "type": "integer"
             },
-            "exact_match": {
-              "type": "boolean"
+            "size": {
+              "type": "integer"
             },
-            "include_obsolete": {
-              "type": "boolean"
+            "total_pages": {
+              "type": "integer"
+            },
+            "total_items": {
+              "type": "integer"
             }
           }
         }
-      }
+      },
+      "required": ["terms", "total_items", "showing"]
     }
   },
   {

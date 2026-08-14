@@ -75,12 +75,15 @@ This branch-only installer:
 - removes retired ACMG routing/refinement Skills;
 - checks the known global Skill roots and the supplied project's
   `.reasonix/skills`, `.agents/skills`, and `.claude/skills` roots;
+- replaces a content-hash-known legacy ACMG template and updates only blocks
+  carrying ToolUniverse ACMG managed markers;
 - preserves unrelated user Skills.
 
-`PROJECT_ROOT` is the project in which the agent will use ToolUniverse. The
-installer reports, but does not rewrite, stale `AGENTS.md`, `CLAUDE.md`, or
-`reasonix.toml` instructions that still reference retired route/combine/finalize
-workflows.
+`PROJECT_ROOT` is the project in which the agent will use ToolUniverse. Unknown
+or user-edited ACMG instructions in `AGENTS.md`, `CLAUDE.md`, or
+`reasonix.toml` are not overwritten; the installer reports their exact lines
+and exits nonzero so the user can merge them deliberately. Unrelated project
+instructions are never changed.
 
 Do not combine an upstream marketplace plugin with global fork Skill copies.
 The fork's exact-SHA MCP runtime and its Skills must be installed as one

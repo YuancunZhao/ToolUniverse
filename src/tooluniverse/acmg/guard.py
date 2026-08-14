@@ -13,21 +13,27 @@ import re
 import unicodedata
 from typing import Any
 
-from .models import EvidenceCard, is_automatic_evidence
-from .rule_catalog import ACMG_CRITERIA
+from .models import EVIDENCE_STATUSES, EvidenceCard
+from .rule_catalog import ACMG_CRITERIA, is_valid_strength_for_criterion
 
 
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
-GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-07-v3"
+GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-13-v3-light"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",
     "ruleset_hash",
-    "cards",
-    "known_source_fact_ids",
-    "verified_source_fact_ids",
+    "claims",
 )
+_GUARD_CLAIM_FIELDS = {
+    "card_id",
+    "criterion",
+    "strength",
+    "evidence_status",
+    "role",
+}
+_GUARD_ROLES = {"automatic", "verified", "user_selected", "not_met", "excluded"}
 
 
 def guard_context_hash(context: dict[str, Any]) -> str:
@@ -63,23 +69,42 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
         value = context.get(key)
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             return False, f"guard_context {key} must be a SHA-256 hex digest"
-    cards = context.get("cards")
-    known_ids = context.get("known_source_fact_ids")
-    verified_ids = context.get("verified_source_fact_ids")
-    if not isinstance(cards, list) or not all(isinstance(row, dict) for row in cards):
-        return False, "guard_context cards must be an array of objects"
-    for key, values in (
-        ("known_source_fact_ids", known_ids),
-        ("verified_source_fact_ids", verified_ids),
+    claims = context.get("claims")
+    if not isinstance(claims, list) or not all(
+        isinstance(row, dict) for row in claims
     ):
-        if not isinstance(values, list) or not all(
-            isinstance(value, str) and value for value in values
-        ):
-            return False, f"guard_context {key} must be an array of non-empty strings"
-        if values != sorted(set(values)):
-            return False, f"guard_context {key} must be unique and sorted"
-    if not set(verified_ids) <= set(known_ids):
-        return False, "guard_context verified SourceFacts must be known SourceFacts"
+        return False, "guard_context claims must be an array of objects"
+    card_ids: list[str] = []
+    for row in claims:
+        unexpected_claim_fields = sorted(set(row) - _GUARD_CLAIM_FIELDS)
+        if unexpected_claim_fields:
+            return False, (
+                "guard_context claim has unexpected fields: "
+                + ", ".join(unexpected_claim_fields)
+            )
+        missing_claim_fields = sorted(_GUARD_CLAIM_FIELDS - set(row))
+        if missing_claim_fields:
+            return False, (
+                "guard_context claim missing fields: "
+                + ", ".join(missing_claim_fields)
+            )
+        card_id = row.get("card_id")
+        if not isinstance(card_id, str) or not card_id:
+            return False, "guard_context claim card_id must be a non-empty string"
+        if not _criterion_codes(row.get("criterion")):
+            return False, "guard_context claim criterion is unsupported"
+        strength = str(row.get("strength") or "")
+        status = str(row.get("evidence_status") or "")
+        role = str(row.get("role") or "")
+        if not strength:
+            return False, "guard_context claim strength must be non-empty"
+        if status not in EVIDENCE_STATUSES:
+            return False, "guard_context claim evidence_status is unsupported"
+        if role not in _GUARD_ROLES:
+            return False, "guard_context claim role is unsupported"
+        card_ids.append(card_id)
+    if len(card_ids) != len(set(card_ids)):
+        return False, "guard_context claim card_ids must be unique"
     from .runtime_manifest import ruleset_hash
 
     if context.get("ruleset_hash") != ruleset_hash():
@@ -126,6 +151,48 @@ def _criterion_codes(value: Any) -> set[str]:
         for token in re.split(r"[/,\s]+", str(value or "").upper())
         if token in ACMG_CRITERIA
     }
+
+
+def _referenceable_card(
+    row: dict[str, Any],
+    *,
+    known_source_fact_ids: set[str] | None,
+    validated_claim: bool,
+) -> bool:
+    """Return whether a card or validated compact claim may support discussion."""
+    codes = _criterion_codes(row.get("criterion"))
+    status = str(row.get("evidence_status") or "")
+    strength = str(row.get("strength") or "")
+    if not codes or not str(row.get("card_id") or "") or status not in EVIDENCE_STATUSES:
+        return False
+    if validated_claim:
+        return str(row.get("role") or "") in _GUARD_ROLES
+    source_ids = {
+        str(value)
+        for value in row.get("source_fact_ids") or []
+        if isinstance(value, str) and value
+    }
+    if not source_ids:
+        return False
+    if known_source_fact_ids is not None and not source_ids <= known_source_fact_ids:
+        return False
+    dimensions = row.get("verification_dimensions")
+    if isinstance(dimensions, dict) and any(
+        str(dimensions.get(key) or "") in blocked
+        for key, blocked in {
+            "identity_status": {"conflict"},
+            "extraction_status": {"contradicted"},
+            "disease_match_status": {"mismatch"},
+            "independence_status": {"overlapping"},
+        }.items()
+    ):
+        return False
+    if status in {"not_met", "excluded", "deprecated"}:
+        return bool(strength)
+    rule_valid = any(
+        is_valid_strength_for_criterion(code, strength) for code in codes
+    )
+    return rule_valid
 
 
 def _has_final_classification_label(answer_text: str) -> bool:
@@ -203,6 +270,7 @@ def guard_acmg_answer(
     *,
     verified_source_fact_ids: set[str] | None = None,
     known_source_fact_ids: set[str] | None = None,
+    validated_claims: bool = False,
 ) -> dict[str, Any]:
     """Validate ACMG claims against cards and block final five-tier labels.
 
@@ -224,7 +292,11 @@ def guard_acmg_answer(
     referenceable_rows = [
         row
         for row in rows
-        if is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids)
+        if _referenceable_card(
+            row,
+            known_source_fact_ids=known_source_fact_ids,
+            validated_claim=validated_claims,
+        )
     ]
     card_codes = {
         code

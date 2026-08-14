@@ -21,7 +21,7 @@ from .rule_catalog import (
 
 
 _APPLICABLE = {"applicable", "apply", "yes", "true"}
-CSPEC_RULE_PARSER_VERSION = "2026-08-09-v3"
+CSPEC_RULE_PARSER_VERSION = "2026-08-13-v3"
 _SAFE_INTERPRETATION_FIELDS = {
     "alternative_in_frame_start",
     "ba1_exception",
@@ -33,6 +33,7 @@ _SAFE_INTERPRETATION_FIELDS = {
     "exon_lof_frequent_in_population",
     "lof_mechanism_established",
     "maximum_credible_af",
+    "population_frequency_threshold",
     "mutually_exclusive_with",
     "operator",
     "case_count_threshold",
@@ -64,6 +65,8 @@ _OPERATOR_ALIASES = {
     "=<": "<=",
     ">": ">",
     "<": "<",
+    "greater than or equal to": ">=",
+    "less than or equal to": "<=",
 }
 
 
@@ -110,6 +113,24 @@ def _deterministic_text_contract(
     )
     if mcaf_match:
         parsed["maximum_credible_af"] = float(mcaf_match.group(1))
+
+    frequency_match = re.search(
+        r"\b(?:gnomAD\s+)?(?:MAF|AF|allele\s+frequency)\b\s*"
+        r"(?:of|is|[:=])?\s*"
+        r"(greater\s+than\s+or\s+equal\s+to|less\s+than\s+or\s+equal\s+to|"
+        r">=|<=|=>|=<|≥|≤|>|<)\s*"
+        r"(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if frequency_match:
+        raw_operator = " ".join(frequency_match.group(1).casefold().split())
+        operation = _OPERATOR_ALIASES.get(raw_operator, raw_operator)
+        threshold = float(frequency_match.group(2))
+        parsed["population_frequency_threshold"] = threshold
+        parsed["operator"] = operation
+        if criterion == "PM2" and operation in {"<", "<="}:
+            parsed["maximum_credible_af"] = threshold
 
     case_match = re.search(
         r"(>=|<=|=>|=<|≥|≤|>|<|at least|no more than)\s*(\d+)\s*"
@@ -235,6 +256,7 @@ def _deterministic_text_contract(
             "predictor",
             "predictor_rules",
             "maximum_credible_af",
+            "population_frequency_threshold",
             "case_count_threshold",
             "point_table",
             "residues",

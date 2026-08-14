@@ -176,10 +176,10 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert initial["variant_identity"]["transcript"] == "NM_000059.4"
     assert initial["consequence_profile"]["protein_effect"] == "lof"
     assert initial["review_readiness"]["status"] == "ready_for_evidence_review"
-    assert initial["review_readiness"]["pending_request_ids"] == []
+    assert not initial["review_readiness"].get("pending_request_ids")
     assert initial["final_classification_allowed"] is False
     assert initial["runtime_manifest"]["acmg_runtime_version"] == (
-        "evidence-automation-3"
+        "evidence-automation-3.1"
     )
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
     assert validate_guard_context(initial["guard_context"]) == (True, "")
@@ -187,7 +187,24 @@ def test_brca2_golden_three_phase_evidence_workflow():
         initial["guard_context"]["ruleset_hash"]
         == initial["runtime_manifest"]["ruleset_hash"]
     )
-    assert len(json.dumps(initial, ensure_ascii=False, separators=(",", ":"))) < 100_000
+    assert (
+        len(
+            json.dumps(initial, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        )
+        < 40_000
+    )
+    assert (
+        len(
+            json.dumps(
+                initial["guard_context"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        < 5_000
+    )
     forbidden_card_fields = {
         "assessment_status",
         "suggested_criterion",
@@ -227,7 +244,7 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert pvs1["card_id"] in proposed["automatic_bayesian"]["included_card_ids"]
     assert pvs1["card_id"] not in proposed["verified_bayesian"]["included_card_ids"]
     assert proposed["review_readiness"]["status"] == "ready_for_evidence_review"
-    assert proposed["review_readiness"]["pending_request_ids"] == []
+    assert not proposed["review_readiness"].get("pending_request_ids")
     assert "compatibility_exclusions" in proposed["conflict_report"]
     assert "correlated_source_exclusions" in proposed["conflict_report"]
 
@@ -300,5 +317,5 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
     payload = _mcp_payload(response)
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
-    assert payload["runtime_manifest"]["collector_schema_version"] == ("2026-08-09-v3")
+    assert payload["runtime_manifest"]["collector_schema_version"] == ("2026-08-13-v3")
     assert payload["final_classification_allowed"] is False

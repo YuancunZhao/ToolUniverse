@@ -239,30 +239,28 @@ def test_mat1a_broad_and_validated_evidence_workflow():
     for card in reviewed["evidence_cards"]:
         by_criterion.setdefault(str(card["criterion"]), []).append(card)
 
-    assert len(by_criterion["PS4"]) == 2
+    assert len(by_criterion["PS4"]) == 1
+    assert by_criterion["PS4"][0]["aggregation"]["input_card_count"] == 2
     pp1 = next(card for card in by_criterion["PP1"] if card["strength"])
-    pm1 = next(card for card in by_criterion["PM1"] if card["strength"])
     # Two informative AD co-segregations contribute two ClinGen Bayesian
     # points, which maps to Moderate rather than preserving the LLM suggestion.
     assert pp1["strength"] == "PP1_Moderate"
-    assert pm1["strength"] == "PM1_Supporting"
+    # The PM1 excerpt names a region but does not bind the target variant in
+    # the same sentence, so it remains a visible SourceFact rather than a card.
+    assert "PM1" not in by_criterion
+    pm1_review = next(
+        row for row in reviewed["criterion_reviews"] if row["criterion"] == "PM1"
+    )
+    assert pm1_review["route_status"] == "candidate_available"
     pm2 = by_criterion["PM2"][0]
     assert pm2["strength"] == "PM2_Supporting"
     assert pm2["verification_dimensions"]["extraction_status"] == "unresolved"
     assert pm2["calculation_roles"]["automatic"] is True
     assert pm2["calculation_roles"]["verified"] is False
 
-    overlap_reasons = {
-        row["reason"] for row in reviewed["compatibility_report"]["excluded_evidence"]
-    }
-    assert overlap_reasons.intersection(
-        {
-            "overlapping_cases",
-            "overlapping_clinical_case",
-            "overlapping_cohort",
-            "duplicate_criterion",
-        }
-    )
+    # Duplicate provider/publication cards are collapsed before compatibility;
+    # their original IDs remain auditable on the representative card.
+    assert by_criterion["PS4"][0]["aggregation"]["corroborating_card_ids"]
     assert reviewed["automatic_bayesian"]["estimate_policy"] == (
         "source_backed_candidates"
     )
@@ -302,7 +300,7 @@ def test_mat1a_broad_and_validated_evidence_workflow():
     )
     assert html_fact["features"]["document_source_tool"] == "EuropePMC_get_fulltext"
     assert html_fact["features"]["document_source"] == "NCBI PMC HTML"
-    assert reviewed["guard_context"]["cards"]
+    assert reviewed["guard_context"]["claims"]
     assert validate_guard_context(reviewed["guard_context"]) == (True, "")
     assert reviewed["final_classification_allowed"] is False
 
@@ -313,7 +311,24 @@ def test_mat1a_broad_and_validated_evidence_workflow():
             "literature_proposals": PROPOSALS,
         }
     )
-    assert len(json.dumps(summary, ensure_ascii=False, separators=(",", ":"))) < 100_000
+    assert (
+        len(
+            json.dumps(summary, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        )
+        < 40_000
+    )
+    assert (
+        len(
+            json.dumps(
+                summary["guard_context"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        < 5_000
+    )
 
 
 def test_mat1a_source_backed_pm2_can_be_user_selected_without_reviewer():

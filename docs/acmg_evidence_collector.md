@@ -26,8 +26,10 @@ small-variant PVS1, PM2, EvidenceCard, or Bayesian logic.
 For supported input, identity normalization preserves all allele and transcript
 candidates. Numeric ClinVar Variation ID, rsID, selected-transcript HGVS, VCF,
 RefSeq/Ensembl MANE mapping, and genomic projections are cross-checked. Build,
-allele, gene, or transcript ambiguity fails closed rather than selecting the
-first or most pathogenic-looking record.
+allele, gene, or selected-transcript ambiguity fails closed rather than
+selecting the first or most pathogenic-looking record. Consequences on other
+transcripts remain visible as `alternate_transcript_observation` and do not
+veto an exact RefSeq/MANE selected-transcript result.
 
 ## Inputs
 
@@ -85,6 +87,11 @@ Facts do not disappear merely because they cannot be scored. Their normalized
 values, query representation, dataset/release, provider URL, identity check,
 and raw-result hash remain auditable.
 
+`failure_details` separates `no_hit`, `identity_conflict`, `provider_failed`,
+and `provider_contract_malformed`, with the attempted representation,
+retryability, dataset/release, and provider message. A technical failure is
+never treated as evidence that a variant or publication is absent.
+
 ## Consequence and prediction collection
 
 Consequence resolution is conditional and multi-source. Applicable providers
@@ -93,8 +100,11 @@ FAVOR, OpenTargets transcript consequences, Mutalyzer, GRCh37 GenomeNexus,
 and protein-representable ProtVar. Aggregated VEP-derived results are labeled
 and do not count as independent agreement.
 
-The resolver selects exact versioned RefSeq, unique MANE mapping, then
-version-compatible transcript observations. It never votes. The resulting
+Inputs containing a parenthesized protein suffix are normalized before
+provider calls: only c.HGVS is queried, while the submitted p.HGVS is retained
+and checked against the resolved protein consequence. The resolver selects
+exact versioned RefSeq, unique MANE mapping, then version-compatible transcript
+observations. It never votes. The resulting
 `consequence_profile` exposes all observations, selected/corroborating facts,
 failures, conflicts, mapping reason, and missing requirements.
 
@@ -132,6 +142,10 @@ IDs, `strength_source`, `rule_source`, rule ID/version/hash, VCEP/CSpec and
 publication identifiers, verification dimensions, calculation roles,
 correlation keys, scenario ID, limitations, and missing requirements.
 
+Population cards additionally expose `rule_evaluation`, containing the AF,
+popmax, AC and AN actually used, rule/threshold/comparator, condition status,
+one primary reason, and secondary caveats.
+
 The 28-criterion machine matrix records provider routes, literature fact
 types, candidate and strict fact requirements, generic candidate strength,
 SVI/VCEP modifications, exclusions, deduplication keys, and compatibility
@@ -150,6 +164,12 @@ After gene identity is confirmed, the collector queries the online ClinGen
 CSpec Registry and Evidence Repository. It retains specification and curation
 identity, version/date, condition, mode of inheritance, panel, URL, content
 hash, historical versions, and parsing limitations.
+
+Free-text disease names are resolved from OLS's top-level `terms` response.
+Obsolete terms are excluded, exact labels are preferred, and a sole remaining
+MONDO candidate is selected. Missing, unresolved, ambiguous, and mismatched
+disease contexts remain separate states; a unique disease/gene/inheritance
+match applies the released CSpec without requiring the caller to supply MONDO.
 
 Structured rules and safely parsed numeric inequalities, point tables,
 predictor thresholds, residue/region lists, variant-type clauses, strength
@@ -192,6 +212,12 @@ Clear facts in an abstract or snippet can create a source-backed candidate for
 the automatic estimate. Truncated or non-full-text facts cannot enter the
 verified estimate. A record with no evidence-bearing text remains only a
 literature lead.
+
+Literature coverage uses explicit limitation codes:
+`search_leads_only`, `full_text_unavailable`, `target_fact_not_found`,
+`extraction_unresolved`, `provider_failed`, and
+`provider_contract_malformed`. A title record without extracted evidence is
+not a malformed provider contract.
 
 Deterministic extraction covers case-control/case-series PS4, de novo PS2/PM6,
 recessive phase PM3, functional assay PS3/BS3, segregation PP1/BS4, phenotype
@@ -257,23 +283,34 @@ Principal outputs include:
 - `automation_report`, `decision_report`, `runtime_manifest`, `guard_context`,
   and limitations.
 
-Summary mode keeps every clinically relevant card, predictor, literature item,
-source index, and conflict while omitting full text, full CSpec documents, and
-raw provider payloads. Representative summaries target less than 100 KB
-without truncating clinical lists. Full mode retains normalized facts,
-excerpts, rule content, provenance, and raw-result hashes without a 100 KB
-limit.
+Summary mode keeps every clinically relevant representative card, predictor,
+literature item, provider/failure index, and conflict while omitting full text,
+full CSpec documents, repeated atomic-card payloads, and raw provider payloads.
+Repeated source failures are grouped by provider and failure code; complete
+attempt records remain in full mode. Representative CFTR, GP1BA, MAT1A, and
+BRCA2 summaries stay below 40 KB without truncating cards, predictors, or
+literature candidates. Full mode retains
+normalized facts, excerpts, rule content, provenance, and raw-result hashes
+without a summary-size limit.
 
 `runtime_manifest` anchors package/runtime/schema versions, upstream base,
 VCS commit when available, dynamic CSpec hashes, and a `ruleset_hash` covering
 the 28 contracts, candidate policy, extractors, scenario policy, compatibility,
 fixed prior, and odds.
 
-`guard_context` is a compact self-checking transport contract. The Guard
-recomputes its hash, allows source-backed candidate claims, explicitly
+`guard_context` is a compact self-checking transport contract containing only
+schema/ruleset/variant hashes and representative-card `claims`; representative
+cases stay below 5 KB. The Guard does not recompute evidence or carry the full
+SourceFact set on its second call. It recomputes the context hash, allows
+source-backed candidate claims, explicitly
 attributed external VCEP/ClinVar assertions, and Bayesian review estimates,
 but blocks unsupported criteria and ToolUniverse-authored five-tier labels.
 The checksum detects accidental change; it is not a digital signature.
+
+The normal host flow is one collector call followed by one Guard call. Pass the
+returned context object unchanged. Tool discovery, schema lookup, shell/Python
+parsing, temporary files, source imports, and manual provider retries are not
+part of that path.
 
 ## v2 to v3 migration
 

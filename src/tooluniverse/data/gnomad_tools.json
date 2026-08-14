@@ -830,6 +830,12 @@
         {
           "type": "object",
           "properties": {
+            "status": {
+              "enum": [
+                "error",
+                "no_hit"
+              ]
+            },
             "error": {
               "type": "string"
             }
@@ -1031,6 +1037,12 @@
         {
           "type": "object",
           "properties": {
+            "status": {
+              "enum": [
+                "error",
+                "no_hit"
+              ]
+            },
             "error": {
               "type": "string"
             }

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 from typing import Any
 
 from .models import is_automatic_evidence, is_verified_evidence
 
 
-COMPATIBILITY_POLICY_VERSION = "2026-08-08-v3"
+COMPATIBILITY_POLICY_VERSION = "2026-08-13-v3-light"
+EVIDENCE_AGGREGATION_POLICY_VERSION = "2026-08-13-v1"
 
 
 def _criterion(row: dict[str, Any]) -> str:
@@ -39,6 +43,135 @@ def _evidence_priority(row: dict[str, Any]) -> int:
         "rule_mapped": 2,
         "source_backed_candidate": 1,
     }.get(str(row.get("evidence_status") or ""), 0)
+
+
+def _merged_strings(rows: list[dict[str, Any]], key: str) -> list[str]:
+    values: set[str] = set()
+    for row in rows:
+        value = row.get(key)
+        if isinstance(value, (list, tuple, set)):
+            values.update(str(item) for item in value if item)
+        elif value:
+            values.add(str(value))
+    return sorted(values)
+
+
+def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse duplicate criterion/scenario cards into stable representatives.
+
+    Atomic facts remain available through ``source_facts``. The representative
+    keeps their provenance and correlation keys while preventing repeated
+    publications or provider hits from expanding the public card surface.
+    """
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    passthrough: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        criterion = _criterion(row)
+        scenario_id = str(row.get("scenario_id") or "generic-svi")
+        if not criterion:
+            passthrough.append(copy.deepcopy(row))
+            continue
+        grouped.setdefault((scenario_id, criterion), []).append(row)
+
+    representatives: list[dict[str, Any]] = []
+    for (scenario_id, criterion), members in grouped.items():
+        calculable = [
+            row
+            for row in members
+            if str(row.get("evidence_status") or "")
+            in {"expert_panel_applied", "rule_mapped", "source_backed_candidate"}
+        ]
+        ordered = sorted(
+            calculable or members,
+            key=lambda row: (
+                -_evidence_priority(row),
+                -_strength_rank(row),
+                str(row.get("card_id") or ""),
+            ),
+        )
+        representative = copy.deepcopy(ordered[0])
+        representative["source_fact_ids"] = _merged_strings(
+            ordered, "source_fact_ids"
+        )
+        representative["source_pmids"] = sorted(
+            {
+                *(_merged_strings(ordered, "source_pmids")),
+                *(
+                    str(row.get("source_pmid"))
+                    for row in ordered
+                    if row.get("source_pmid")
+                ),
+            }
+        )
+        representative["source_case_ids"] = _merged_strings(
+            ordered, "source_case_ids"
+        )
+        if representative["source_pmids"] and not representative.get("source_pmid"):
+            representative["source_pmid"] = representative["source_pmids"][0]
+        correlation_keys: dict[str, list[str]] = {}
+        for row in ordered:
+            for key, values in (row.get("correlation_keys") or {}).items():
+                correlation_keys.setdefault(str(key), []).extend(
+                    str(value) for value in values or [] if value
+                )
+        representative["correlation_keys"] = {
+            key: sorted(set(values)) for key, values in correlation_keys.items()
+        }
+        original_ids = sorted(
+            {
+                str(row.get("card_id") or "")
+                for row in members
+                if row.get("card_id")
+            }
+        )
+        representative["aggregation"] = {
+            "policy_version": EVIDENCE_AGGREGATION_POLICY_VERSION,
+            "input_card_count": len(members),
+            "corroborating_card_ids": [
+                card_id
+                for card_id in original_ids
+                if card_id != str(ordered[0].get("card_id") or "")
+            ],
+            "other_results": [
+                {
+                    "card_id": row.get("card_id"),
+                    "strength": row.get("strength"),
+                    "evidence_status": row.get("evidence_status"),
+                    "reason": (
+                        row.get("exclusion_reason")
+                        or "lower_priority_same_criterion_scenario"
+                    ),
+                }
+                for row in sorted(
+                    members,
+                    key=lambda value: str(value.get("card_id") or ""),
+                )
+                if row.get("card_id") != ordered[0].get("card_id")
+            ],
+        }
+        if len(ordered) > 1:
+            identity = {
+                "scenario_id": scenario_id,
+                "criterion": criterion,
+                "strength": representative.get("strength"),
+                "evidence_status": representative.get("evidence_status"),
+                "rule_source": representative.get("rule_source"),
+                "source_fact_ids": representative["source_fact_ids"],
+                "correlation_keys": representative["correlation_keys"],
+            }
+            digest = hashlib.sha256(
+                json.dumps(
+                    identity,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest()[:20]
+            representative["card_id"] = f"acmg-card:v3:{digest}"
+        representatives.append(representative)
+    return [*passthrough, *representatives]
 
 
 def _semantic_ids(row: dict[str, Any], key: str) -> set[str]:
@@ -306,4 +439,9 @@ def resolve_evidence_compatibility(
     }
 
 
-__all__ = ["resolve_evidence_compatibility"]
+__all__ = [
+    "COMPATIBILITY_POLICY_VERSION",
+    "EVIDENCE_AGGREGATION_POLICY_VERSION",
+    "aggregate_evidence_cards",
+    "resolve_evidence_compatibility",
+]

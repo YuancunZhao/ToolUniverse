@@ -95,6 +95,87 @@ def test_pm2_extremely_rare_observation_preserves_supporting_candidate():
     ]
 
 
+def test_pm2_observed_variant_uses_cspec_frequency_rule_before_callability():
+    card = _card(
+        population_evidence(
+            gnomad_af_global=0.00018,
+            gnomad_af_popmax=0.00099,
+            gnomad_ac=267,
+            gnomad_an=1_461_676,
+            callability_available=False,
+            rule_override={
+                "specification_id": "GN079",
+                "version": "1.1.0",
+                "rule_id": "clingen-cspec-runtime-gn079",
+                "criteria": {
+                    "PM2": {
+                        "strength": "PM2_Supporting",
+                        "population_frequency_threshold": 0.0001114,
+                        "operator": "<=",
+                    }
+                },
+            },
+        ),
+        "PM2",
+    )
+
+    assert card.strength == "not_met"
+    assert card.evidence_status == "not_met"
+    assert card.missing_requirements == []
+    assert card.rule_evaluation["threshold"] == 0.0001114
+    assert card.rule_evaluation["comparison"] == "<="
+    assert card.rule_evaluation["status"] == "condition_not_met"
+    assert "coverage" not in card.rule_evaluation["primary_reason"].casefold()
+    assert card.clinvar_rule_applied == "ClinGen CSpec population-frequency condition"
+    assert "released CSpec" in card.rule_basis
+
+
+def test_pm2_cspec_frequency_rule_can_be_met_for_observed_variant():
+    card = _card(
+        population_evidence(
+            gnomad_af_global=0.00001,
+            gnomad_af_popmax=0.00005,
+            gnomad_ac=2,
+            gnomad_an=200_000,
+            rule_override={
+                "specification_id": "GN079",
+                "version": "1.1.0",
+                "criteria": {
+                    "PM2": {
+                        "strength": "PM2_Supporting",
+                        "population_frequency_threshold": 0.0001114,
+                        "operator": "<=",
+                    }
+                },
+            },
+        ),
+        "PM2",
+    )
+
+    assert card.strength == "PM2_Supporting"
+    assert card.evidence_status == "rule_mapped"
+    assert card.rule_evaluation["status"] == "condition_met"
+    assert card.missing_requirements == []
+
+
+def test_bs1_contract_does_not_suppress_pm2_candidate_without_pm2_threshold():
+    cards = population_evidence(
+        gnomad_af_global=0.00001,
+        gnomad_af_popmax=0.00005,
+        gnomad_ac=2,
+        gnomad_an=200_000,
+        rule_override={"criteria": {"BS1": {"maximum_credible_af": 0.00001}}},
+    )
+
+    pm2 = _card(cards, "PM2")
+    bs1 = _card(cards, "BS1")
+    assert pm2.evidence_status == "source_backed_candidate"
+    assert pm2.missing_requirements == [
+        "disease-specific maximum credible allele frequency"
+    ]
+    assert bs1.strength == "BS1"
+
+
 def test_ba1_threshold_requires_reviewed_exception_status():
     """A >5% frequency is visible but cannot bypass exception review."""
     cards = population_evidence(

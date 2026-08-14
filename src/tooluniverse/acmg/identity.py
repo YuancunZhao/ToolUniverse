@@ -20,6 +20,11 @@ GENE_TRANSCRIPT_RE = re.compile(
     r"(?P<hgvs>(?P<transcript>[A-Za-z][A-Za-z0-9_]*\.\d+):c\.[^\s]+)$",
     re.IGNORECASE,
 )
+_CODING_WITH_PROTEIN_SUFFIX_RE = re.compile(
+    r"^(?P<coding>.+:c\.[^\s()]+|c\.[^\s()]+)"
+    r"\((?P<protein>p\.[^\s()]+)\)$",
+    re.IGNORECASE,
+)
 RSID_RE = re.compile(r"^rs\d+$", re.IGNORECASE)
 GENOMIC_HGVS_RE = re.compile(r"^(?:NC_\d+\.\d+|chr[^:\s]+):g\.", re.IGNORECASE)
 GENOMIC_VCF_RE = re.compile(
@@ -294,6 +299,19 @@ def split_gene_transcript_input(variant: str, gene: str) -> tuple[str, str, bool
     return gene.strip() or embedded_gene, match.group("hgvs"), True
 
 
+def split_coding_protein_suffix(variant: str) -> tuple[str, str]:
+    """Separate an optional submitted ``(p.)`` check from a coding HGVS query.
+
+    Providers receive only the coding HGVS.  The protein expression remains a
+    caller-supplied assertion until an identity-bound provider resolves it.
+    """
+    value = variant.strip()
+    match = _CODING_WITH_PROTEIN_SUFFIX_RE.fullmatch(value)
+    if match is None:
+        return value, ""
+    return match.group("coding"), match.group("protein")
+
+
 def transcript_accession(hgvs: str) -> str:
     return hgvs.split(":", 1)[0] if ":" in hgvs else ""
 
@@ -408,6 +426,7 @@ __all__ = [
     "split_gene_coding_input",
     "split_gene_protein_input",
     "split_gene_transcript_input",
+    "split_coding_protein_suffix",
     "transcript_accession",
     "transcript_candidates",
 ]

@@ -2,7 +2,7 @@
 Unit tests for gnomad_get_variant_populations (gnomADGetVariantPopulations).
 
 Covers per-ancestry allele-frequency (af = ac/an) computation, the an==0 guard,
-genome vs exome callset separation, and an error path. HTTP is mocked so the
+genome vs exome callset separation, and empty/error paths. HTTP is mocked so the
 tests run offline.
 """
 
@@ -159,11 +159,11 @@ def test_missing_variant_id_returns_error():
     assert "variant_id" in result["error"]
 
 
-def test_variant_not_found_returns_error():
-    """A null variant in the response yields an error envelope, never raises."""
+def test_variant_not_found_returns_no_hit():
+    """A null variant is an explicit no-hit, not a transport failure."""
     payload = {"data": {"variant": None}}
     result = _make_tool(payload).run({"variant_id": "1-1-A-T"})
-    assert result["status"] == "error"
+    assert result["status"] == "no_hit"
     assert result["data"] is None
     assert "error" in result
 

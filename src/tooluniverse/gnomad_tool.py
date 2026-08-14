@@ -63,8 +63,14 @@ class gnomADGraphQLTool(BaseTool):
 
             data = result.get("data")
             if not data or all(not v for v in data.values()):
+                tool_name = str(self.tool_config.get("name") or "")
                 return {
-                    "status": "error",
+                    "status": (
+                        "no_hit"
+                        if tool_name
+                        in {"gnomad_get_variant", "gnomad_get_variant_populations"}
+                        else "error"
+                    ),
                     "error": "No data returned from gnomAD API",
                     "url": getattr(response, "url", self.endpoint_url),
                     "status_code": status_code,
@@ -204,7 +210,7 @@ class gnomADGetVariantPopulations(gnomADGraphQLTool):
         variant = (result.get("data") or {}).get("variant")
         if not variant:
             return {
-                "status": "error",
+                "status": "no_hit",
                 "error": f"No variant found for variant_id '{variant_id}' in dataset '{dataset}'",
                 "url": result.get("url"),
                 "data": None,

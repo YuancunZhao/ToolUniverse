@@ -53,24 +53,14 @@ def _context(card: dict | None = None) -> dict:
             "criterion",
             "strength",
             "evidence_status",
-            "strength_source",
-            "rule_source",
-            "verification_dimensions",
-            "calculation_roles",
-            "rule_id",
-            "rule_version",
-            "scenario_id",
         )
     }
-    compact["source_fact_ids"] = ["fixture-source"]
     compact["role"] = "verified"
     context = {
         "schema_version": GUARD_CONTEXT_SCHEMA_VERSION,
         "variant_identity_hash": "a" * 64,
         "ruleset_hash": ruleset_hash(),
-        "cards": [compact],
-        "known_source_fact_ids": ["fixture-source"],
-        "verified_source_fact_ids": ["fixture-source"],
+        "claims": [compact],
     }
     context["context_hash"] = guard_context_hash(context)
     return context
@@ -99,6 +89,34 @@ def test_guard_rejects_source_less_or_identity_conflicted_cards():
         )
         assert result["status"] == "BLOCK"
         assert result["unsupported_codes"] == ["PP3"]
+
+
+def test_runtime_guard_accepts_bare_source_backed_evidence_cards():
+    result = ACMGGuardFinalAnswerTool({"name": "ACMG_guard_final_answer"}).run(
+        {
+            "final_answer_text": "PP3 is present as a source-backed card.",
+            "evidence_cards": [_candidate_pp3()],
+        }
+    )
+
+    assert result["status"] == "PASS"
+
+
+def test_guard_allows_discussion_of_not_met_and_excluded_claims():
+    for role, status in (("not_met", "not_met"), ("excluded", "excluded")):
+        context = _context()
+        context["claims"][0]["evidence_status"] = status
+        context["claims"][0]["strength"] = "not_met"
+        context["claims"][0]["role"] = role
+        context["context_hash"] = guard_context_hash(context)
+        result = ACMGGuardFinalAnswerTool({}).run(
+            {
+                "final_answer_text": "PP3 was not met in this result.",
+                "guard_context": context,
+            }
+        )
+        assert result["status"] == "PASS"
+        assert result["card_roles"][0]["role"] == role
 
 
 def test_guard_blocks_tool_owned_five_tier_labels():
@@ -187,8 +205,8 @@ def test_runtime_guard_fails_closed_for_mutated_or_stale_context():
     invalid_contexts = [
         {key: value for key, value in base.items() if key != "context_hash"},
         {**base, "schema_version": "stale"},
-        {**base, "cards": [{**base["cards"][0], "criterion": "PS4"}]},
-        {**base, "known_source_fact_ids": ["different-source"]},
+        {**base, "claims": [{**base["claims"][0], "criterion": "PS4"}]},
+        {**base, "claims": [{**base["claims"][0], "role": "unknown"}]},
         ["not-an-object"],
     ]
     tool = ACMGGuardFinalAnswerTool({"name": "ACMG_guard_final_answer"})
@@ -207,3 +225,20 @@ def test_runtime_guard_rejects_rehashed_context_from_another_ruleset():
     )
     assert result["status"] == "BLOCK"
     assert "ruleset_hash" in result["guard_context_error"]
+
+
+def test_runtime_guard_rejects_rehashed_duplicate_cards():
+    context = _context()
+    context["claims"] = [
+        context["claims"][0],
+        deepcopy(context["claims"][0]),
+    ]
+    context["context_hash"] = guard_context_hash(context)
+
+    result = ACMGGuardFinalAnswerTool({}).run(
+        {"final_answer_text": "PP3 is a candidate.", "guard_context": context}
+    )
+
+    assert result["status"] == "BLOCK"
+    assert result["blocking_reasons"] == ["guard_context_invalid"]
+    assert "unique" in result["guard_context_error"]

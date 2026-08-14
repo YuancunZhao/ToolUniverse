@@ -195,6 +195,114 @@ def test_installer_reports_retired_project_instruction_without_rewriting_it(
     assert instruction.read_text(encoding="utf-8") == "Call ACMG_route_overlays first.\n"
 
 
+def test_installer_updates_managed_acmg_block_idempotently(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    instruction = project_root / "CLAUDE.md"
+    instruction.write_text(
+        "Keep this user instruction.\n"
+        "<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_START -->\n"
+        "Old managed ACMG content.\n"
+        "<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_END -->\n"
+        "Keep this footer.\n",
+        encoding="utf-8",
+    )
+    command = [
+        "bash",
+        str(INSTALLER),
+        "--client",
+        "generic",
+        "--dest",
+        str(tmp_path / "skills"),
+        "--project-root",
+        str(project_root),
+    ]
+
+    first = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(tmp_path / "home")},
+    )
+    first_content = instruction.read_text(encoding="utf-8")
+    second = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(tmp_path / "home")},
+    )
+
+    assert first.returncode == second.returncode == 0
+    assert instruction.read_text(encoding="utf-8") == first_content
+    assert "Keep this user instruction." in first_content
+    assert "Keep this footer." in first_content
+    assert "Old managed ACMG content." not in first_content
+    assert first_content.count("TOOLUNIVERSE_ACMG_INSTRUCTIONS_START") == 1
+    assert "exactly" in first_content
+
+
+def test_installer_replaces_known_legacy_acmg_template(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    instruction = project_root / "AGENTS.md"
+    instruction.write_bytes(
+        (ROOT / "tests/fixtures/acmg/legacy_project_AGENTS_acmg3.md").read_bytes()
+    )
+
+    run = subprocess.run(
+        [
+            "bash",
+            str(INSTALLER),
+            "--client",
+            "generic",
+            "--dest",
+            str(tmp_path / "skills"),
+            "--project-root",
+            str(project_root),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(tmp_path / "home")},
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert "Replaced known legacy ACMG instructions" in run.stdout
+    assert instruction.read_bytes() == (
+        ROOT / "docs/reference/acmg_project_instructions.md"
+    ).read_bytes()
+
+
+def test_installer_ignores_unrelated_project_instructions(tmp_path: Path):
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    instruction = project_root / "AGENTS.md"
+    original = "Use the project formatter and preserve generated assets.\n"
+    instruction.write_text(original, encoding="utf-8")
+
+    run = subprocess.run(
+        [
+            "bash",
+            str(INSTALLER),
+            "--client",
+            "generic",
+            "--dest",
+            str(tmp_path / "skills"),
+            "--project-root",
+            str(project_root),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(tmp_path / "home")},
+    )
+
+    assert run.returncode == 0, run.stderr
+    assert instruction.read_text(encoding="utf-8") == original
+
+
 def test_plugin_marketplace_and_mcp_manifests_follow_upstream_layout():
     marketplace = json.loads(
         (ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8")

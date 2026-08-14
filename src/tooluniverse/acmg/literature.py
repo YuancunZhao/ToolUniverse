@@ -167,6 +167,8 @@ def literature_evidence(
             missing_requirements.append("identity-bound full-text anchor")
         if semantic_status == "unresolved":
             missing_requirements.append("semantically verified extracted values")
+        if fact_type == "case_series" and fact.get("cases_independent") is not True:
+            missing_requirements.append("independent case-series confirmation")
         if document_truncated:
             missing_requirements.append("complete untruncated full-text retrieval")
         extraction_method = str(fact.get("extraction_method") or "")

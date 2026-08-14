@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import operator
 from typing import Any
 
 from .models import EvidenceCard
@@ -12,6 +13,13 @@ PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID = "tooluniverse-pm2-rare-observed-candidat
 PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-08-v3"
 PM2_RARE_OBSERVED_GLOBAL_AF_MAX = 0.0001
 PM2_RARE_OBSERVED_POPMAX_AF_MAX = 0.001
+PM2_DECISION_POLICY_VERSION = "2026-08-13-v3"
+_FREQUENCY_OPERATORS = {
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+}
 
 
 def _finite_number(value: object) -> float | None:
@@ -71,146 +79,244 @@ def population_evidence(
     def above(value: float | None, threshold: float) -> bool:
         return value is not None and value > threshold
 
-    if (
-        gnomad_ac is None
-        or gnomad_an is None
-        or gnomad_an <= 0
-        or not frequency_complete
-    ):
+    complete = bool(
+        gnomad_ac is not None
+        and gnomad_an is not None
+        and gnomad_an > 0
+        and frequency_complete
+    )
+    observed_frequency = (
+        max(
+            value for value in (gnomad_af_global, gnomad_af_popmax) if value is not None
+        )
+        if frequency_complete
+        else None
+    )
+    cspec_pm2 = (
+        (rule_override.get("criteria") or {}).get("PM2")
+        if isinstance(rule_override, dict)
+        and isinstance(rule_override.get("criteria"), dict)
+        else None
+    )
+    cspec_bs1 = (
+        (rule_override.get("criteria") or {}).get("BS1")
+        if isinstance(rule_override, dict)
+        and isinstance(rule_override.get("criteria"), dict)
+        else None
+    )
+    bs1_maximum_credible_af = (
+        _finite_number(cspec_bs1.get("maximum_credible_af"))
+        if isinstance(cspec_bs1, dict)
+        else None
+    )
+    if bs1_maximum_credible_af is None:
+        bs1_maximum_credible_af = maximum_credible_af
+    cspec_frequency_threshold = (
+        _finite_number(cspec_pm2.get("population_frequency_threshold"))
+        if isinstance(cspec_pm2, dict)
+        else None
+    )
+    if cspec_frequency_threshold is None and isinstance(cspec_pm2, dict):
+        cspec_frequency_threshold = _finite_number(cspec_pm2.get("maximum_credible_af"))
+    cspec_frequency_operator = (
+        str(cspec_pm2.get("operator") or "<=") if isinstance(cspec_pm2, dict) else "<="
+    )
+    has_cspec_threshold = bool(
+        isinstance(cspec_pm2, dict)
+        and cspec_frequency_threshold is not None
+        and cspec_frequency_operator in _FREQUENCY_OPERATORS
+    )
+    cspec_strength = (
+        str(cspec_pm2.get("strength") or "") if isinstance(cspec_pm2, dict) else ""
+    )
+    if not cspec_strength and isinstance(cspec_pm2, dict):
+        allowed = [
+            str(value)
+            for value in cspec_pm2.get("allowed_strengths") or []
+            if str(value).startswith("PM2")
+        ]
+        cspec_strength = allowed[0] if len(allowed) == 1 else ""
+    cspec_strength = cspec_strength or "PM2_Supporting"
+    pm2_values = {
+        **audit_values,
+        "maximum_credible_af": maximum_credible_af,
+        "coverage_adequate": coverage_adequate,
+        "callability_available": callability_available,
+    }
+    caveats: list[str] = []
+    missing_requirements: list[str] = []
+    if not complete:
         pm2_strength = "not_assessed"
-        pm2_values = dict(audit_values)
-        pm2_reason = (
-            "PM2: complete allele-frequency fields are required -> not_assessed"
-        )
-    elif above(gnomad_af_popmax, 0.05) or above(gnomad_af_global, 0.05):
-        pm2_strength = "not_met"
-        pm2_values = dict(audit_values)
-        pm2_reason = "PM2: frequency exceeds the BA1 threshold -> not_met"
-    elif maximum_credible_af is not None and (
-        above(gnomad_af_popmax, maximum_credible_af)
-        or above(gnomad_af_global, maximum_credible_af)
-    ):
-        pm2_strength = "not_met"
-        pm2_values = {
-            **audit_values,
-            "maximum_credible_af": maximum_credible_af,
-        }
-        pm2_reason = (
-            "PM2: frequency exceeds the disease-specific maximum credible AF -> not_met"
-        )
+        pm2_status = "excluded"
+        condition = "unresolved"
+        pm2_reason = "PM2: complete AF, AC, and positive AN are required"
+        missing_requirements = ["complete AF, AC, and AN"]
+    elif has_cspec_threshold and gnomad_ac > 0:
+        comparison = _FREQUENCY_OPERATORS[cspec_frequency_operator]
+        if observed_frequency is not None and comparison(
+            observed_frequency, cspec_frequency_threshold
+        ):
+            pm2_strength = cspec_strength
+            pm2_status = "rule_mapped"
+            condition = "condition_met"
+            pm2_reason = (
+                "PM2: observed frequency satisfies the applicable CSpec maximum "
+                "credible allele-frequency condition"
+            )
+        else:
+            pm2_strength = "not_met"
+            pm2_status = "not_met"
+            condition = "condition_not_met"
+            pm2_reason = (
+                "PM2: observed frequency exceeds the applicable CSpec maximum "
+                "credible allele-frequency condition"
+            )
     elif gnomad_ac > 0:
-        pm2_strength = "indeterminate"
-        pm2_values = {
-            **audit_values,
-            "maximum_credible_af": maximum_credible_af,
-        }
-        pm2_reason = (
-            "PM2: the variant is observed; recessive extremely-low-frequency use "
-            "requires a disease-specific maximum credible AF"
-        )
+        condition = "unresolved"
+        missing_requirements = ["disease-specific maximum credible allele frequency"]
+        if rare_observed_candidate:
+            pm2_strength = "PM2_Supporting"
+            pm2_status = "source_backed_candidate"
+            pm2_reason = (
+                "PM2: observed frequency passes the fork review-only rare-variant "
+                "candidate filter; no disease-specific threshold was available"
+            )
+            caveats.append(
+                "The fork AF filters route a review candidate because a "
+                "disease-specific maximum credible allele frequency is missing; "
+                "they are not a deterministic ClinGen SVI PM2 threshold."
+            )
+        else:
+            pm2_strength = "indeterminate"
+            pm2_status = "excluded"
+            pm2_reason = (
+                "PM2: the variant is observed and no disease-specific maximum "
+                "credible allele frequency was available"
+            )
     elif gnomad_ac == 0:
+        condition = "condition_met" if coverage_confirmed_adequate else "unresolved"
         pm2_strength = "PM2_Supporting" if callability_available else "indeterminate"
-        pm2_values = {
-            **audit_values,
-            "coverage_adequate": coverage_adequate,
-            "callability_available": callability_available,
-        }
-        pm2_reason = (
-            "PM2: absent from a population dataset with a versioned adequate-coverage "
-            "assessment -> PM2_Supporting"
+        pm2_status = (
+            "rule_mapped"
             if coverage_confirmed_adequate
-            else "PM2: absence and site callability metrics are available, but no "
-            "versioned adequacy threshold was applied -> review PM2_Supporting"
+            else "source_backed_candidate"
             if callability_available
-            else "PM2: absence was observed but site callability was unavailable"
+            else "excluded"
         )
+        pm2_reason = (
+            "PM2: absence is supported by a versioned adequate-coverage assessment"
+            if coverage_confirmed_adequate
+            else "PM2: absence and raw callability metrics are available, but no "
+            "versioned adequacy policy was applied"
+            if callability_available
+            else "PM2: absence was reported but site callability was unavailable"
+        )
+        if callability_available and not coverage_confirmed_adequate:
+            caveats.append(
+                "Raw coverage/callability values are shown without inventing an "
+                "adequacy threshold."
+            )
+            missing_requirements = ["versioned site-coverage adequacy assessment"]
+        elif not callability_available:
+            missing_requirements = ["site callability metrics"]
     else:
         pm2_strength = "not_assessed"
-        pm2_values = dict(audit_values)
-        pm2_reason = "PM2: population observation could not be resolved -> not_assessed"
+        pm2_status = "excluded"
+        condition = "unresolved"
+        pm2_reason = "PM2: population observation could not be resolved"
+        missing_requirements = ["resolved population observation"]
+
+    if has_cspec_threshold and gnomad_ac > 0:
+        strength_source = "dynamic_cspec"
+        rule_source = {
+            "type": "dynamic_cspec_structured",
+            "rule_id": str(rule_override.get("rule_id") or ""),
+            "version": str(rule_override.get("version") or ""),
+            "specification_id": str(rule_override.get("specification_id") or ""),
+        }
+    elif coverage_confirmed_adequate:
+        strength_source = "clingen_svi_pm2_v1"
+        rule_source = {
+            "type": "versioned_svi",
+            "rule_id": "clingen-svi-pm2",
+            "version": "1.0",
+        }
+    else:
+        strength_source = PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID
+        rule_source = {
+            "type": "fork_candidate_policy",
+            "rule_id": PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID,
+            "version": PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION,
+        }
+    applied_rule_label = (
+        "ClinGen CSpec population-frequency condition"
+        if has_cspec_threshold and gnomad_ac > 0
+        else "ClinGen SVI PM2 Recommendation v1.0"
+    )
     cards.append(
         EvidenceCard(
             criterion="PM2",
-            strength=("PM2_Supporting" if rare_observed_candidate else pm2_strength),
+            strength=pm2_strength,
             input_source=population_source or "gnomAD",
             input_values=pm2_values,
-            clinvar_rule_applied="ClinGen SVI PM2 Recommendation v1.0",
+            clinvar_rule_applied=applied_rule_label,
             rule_basis=(
-                "Fork review-only rare-observed PM2 candidate policy "
+                "Applicable released CSpec population-frequency condition."
+                if has_cspec_threshold and gnomad_ac > 0
+                else "Fork review-only rare-observed PM2 candidate policy "
                 f"{PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION}; its AF filters "
                 "are not a deterministic ClinGen SVI PM2 threshold."
                 if rare_observed_candidate
                 else ""
             ),
             provenance_chain=[pm2_reason],
-            evidence_status=(
-                "rule_mapped"
-                if pm2_strength == "PM2_Supporting" and coverage_confirmed_adequate
-                else "source_backed_candidate"
-                if pm2_strength == "PM2_Supporting" or rare_observed_candidate
-                else "not_met"
-                if pm2_strength == "not_met"
-                else "excluded"
-            ),
-            strength_source=(
-                "clingen_svi_pm2_v1"
-                if coverage_confirmed_adequate
-                else PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID
-            ),
-            rule_source={
-                "type": (
-                    "versioned_svi"
-                    if coverage_confirmed_adequate
-                    else "fork_candidate_policy"
+            evidence_status=pm2_status,
+            strength_source=strength_source,
+            rule_source=rule_source,
+            caveats=caveats,
+            missing_requirements=missing_requirements,
+            rule_evaluation={
+                "observed": {
+                    "af_global": gnomad_af_global,
+                    "af_popmax": gnomad_af_popmax,
+                    "ac": gnomad_ac,
+                    "an": gnomad_an,
+                },
+                "rule_source": rule_source,
+                "threshold": cspec_frequency_threshold,
+                "comparison": (
+                    cspec_frequency_operator
+                    if has_cspec_threshold and gnomad_ac > 0
+                    else ""
                 ),
-                "rule_id": (
-                    "clingen-svi-pm2"
-                    if coverage_confirmed_adequate
-                    else PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID
+                "threshold_type": (
+                    "cspec_population_frequency"
+                    if has_cspec_threshold and gnomad_ac > 0
+                    else "fork_candidate_filter"
+                    if rare_observed_candidate
+                    else ""
                 ),
-                "version": (
-                    "1.0"
-                    if coverage_confirmed_adequate
-                    else PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION
-                ),
+                "status": condition,
+                "primary_reason": pm2_reason,
+                "caveats": list(caveats),
             },
-            caveats=(
-                [
-                    "The observed frequency passes the fork review-only candidate "
-                    f"filters (global AF <= {PM2_RARE_OBSERVED_GLOBAL_AF_MAX}; "
-                    "popmax AF missing or <= "
-                    f"{PM2_RARE_OBSERVED_POPMAX_AF_MAX}), but no disease-specific "
-                    "maximum credible allele frequency was available. These are "
-                    "candidate-routing filters, not deterministic SVI thresholds."
-                ]
-                if rare_observed_candidate
-                else []
-                if coverage_confirmed_adequate or not callability_available
-                else [
-                    "Coverage metrics were returned, but coverage adequacy was not "
-                    "established by a versioned policy."
-                ]
-            ),
-            missing_requirements=(
-                []
-                if coverage_confirmed_adequate
-                else ["disease-specific maximum credible allele frequency"]
-                if rare_observed_candidate
-                else ["versioned site-coverage adequacy assessment"]
-                if callability_available
-                else []
-            ),
             verification_dimensions={
                 "extraction_status": (
-                    "structured" if coverage_confirmed_adequate else "unresolved"
+                    "structured"
+                    if coverage_confirmed_adequate
+                    or (has_cspec_threshold and gnomad_ac > 0)
+                    else "unresolved"
                 ),
                 "version_status": (
-                    "versioned" if coverage_confirmed_adequate else "unversioned"
+                    "versioned"
+                    if coverage_confirmed_adequate
+                    or (has_cspec_threshold and gnomad_ac > 0)
+                    else "unversioned"
                 ),
             },
         )
     )
-    if maximum_credible_af is not None:
+    if has_cspec_threshold:
         _mark_cspec_contract(cards[-1], rule_override, "PM2")
 
     high_ba1_frequency = above(gnomad_af_popmax, 0.05) or above(gnomad_af_global, 0.05)
@@ -251,13 +357,13 @@ def population_evidence(
     if ba1_exception_verified:
         _mark_cspec_contract(cards[-1], rule_override, "BA1")
 
-    if maximum_credible_af is None:
+    if bs1_maximum_credible_af is None:
         bs1_strength = "not_assessed"
         bs1_reason = "BS1: disease-specific maximum credible AF is missing"
     elif gnomad_an is None or gnomad_an <= 0 or gnomad_af_popmax is None:
         bs1_strength = "not_assessed"
         bs1_reason = "BS1: popmax allele frequency is missing"
-    elif gnomad_af_popmax > maximum_credible_af:
+    elif gnomad_af_popmax > bs1_maximum_credible_af:
         bs1_strength = "BS1"
         bs1_reason = "BS1: popmax AF exceeds the disease-specific maximum credible AF"
     else:
@@ -272,13 +378,13 @@ def population_evidence(
                 **audit_values,
                 "af_popmax": gnomad_af_popmax,
                 "an": gnomad_an,
-                "maximum_credible_af": maximum_credible_af,
+                "maximum_credible_af": bs1_maximum_credible_af,
             },
             clinvar_rule_applied="ACMG/AMP 2015; disease-specific frequency required",
             provenance_chain=[bs1_reason],
         )
     )
-    if maximum_credible_af is not None:
+    if bs1_maximum_credible_af is not None:
         _mark_cspec_contract(cards[-1], rule_override, "BS1")
     return cards
 

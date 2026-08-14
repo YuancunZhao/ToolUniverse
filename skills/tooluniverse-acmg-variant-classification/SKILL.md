@@ -1,175 +1,86 @@
 ---
 name: tooluniverse-acmg-variant-classification
-description: Automatically collect, map, and score source-backed evidence for germline small variants with ClinGen SVI and VCEP/CSpec rules. The result remains evidence-only and never supplies ToolUniverse's own five-tier classification.
+description: Automatically collect, map, deduplicate, and score source-backed evidence for germline small variants with ClinGen SVI and VCEP/CSpec rules. ToolUniverse remains evidence-only and does not issue a five-tier classification.
 ---
 
-# Germline Small-Variant ACMG Evidence Automation
+# Germline small-variant ACMG evidence
 
-This is the single user-visible ACMG Skill. The collector, not free-form model
-reasoning, performs provider discovery, consequence recovery, literature fact
-extraction, VCEP/CSpec rule mapping, conflict control, and Bayesian calculation.
+Use this single Skill for germline SNVs and indels up to 50 bp. Route larger
+intervals, symbolic ALT, breakends, DEL/DUP/INV/BND/CPX/CNV, somatic,
+mitochondrial, and repeat-expansion requests to their dedicated workflows.
+Normalize hg19 to GRCh37 and hg38 to GRCh38; do not assume a build for a bare
+genomic coordinate.
 
-## Scope and entry point
+## Normal path: exactly two tool calls
 
-Before calling ACMG tools, distinguish a germline small variant from CNV/SV,
-mitochondrial, somatic, and repeat-expansion requests. Intervals over 50 bp,
-symbolic ALT, breakends, and DEL/DUP/INV/BND/CPX/CNV belong to
-`tooluniverse-structural-variant-analysis`. Normalize hg19 to GRCh37 and hg38 to
-GRCh38. Never assume a build for a bare genomic coordinate.
+1. Call the known `ACMG_evidence_collector` directly with the supplied variant
+   context and `response_detail="summary"`.
+2. If `workflow_status` reports an identity/scope block, report that correction
+   and stop. Otherwise build the answer directly from the returned fields.
+3. Present the evidence table, external assertions, estimates, conflicts, and
+   important limitations. A `degraded` or `partial` result does not hide cards
+   that were successfully produced.
+4. Call `ACMG_guard_final_answer` once with the draft and the returned
+   `guard_context` object unchanged. Return only after `PASS`.
 
-For a supported small variant call `ACMG_evidence_collector`. The
-`ACMG_overlay_gate_assess_variant` tool is only a thin alias. The other five
-evidence-group tools are optional focused-review surfaces:
+During this path do not list capabilities, call `get_tool_info`, run shell or
+Python commands, write temporary files, inspect site-packages, directly import
+the Guard, or repeat provider calls already performed by the collector. The
+collector handles consequence fallbacks, literature retrieval and extraction,
+VCEP/CSpec discovery, deduplication, conflict checks, and scoring internally.
 
-- `ACMG_population_evidence`
-- `ACMG_computational_evidence`
-- `ACMG_clinical_evidence`
-- `ACMG_functional_evidence`
-- `ACMG_literature_evidence`
+Optional `literature_proposals` and `cspec_proposals` are supplemental
+reproducibility inputs, not normal completion requirements. Optional
+`evidence_decisions` requests a user-selected recalculation. `reviewer` and
+`decided_at` are optional and never affect eligibility or scoring.
 
-If ToolUniverse execution is unavailable, report that limitation. Do not
-replace the collector with remembered exon structure, manual provider HTTP
-calls, or model-invented ACMG scoring.
+## Read the result, do not reconstruct it
 
-## Default workflow
+Report in this order:
 
-1. Call `ACMG_evidence_collector` once with the variant and all known gene,
-   transcript, disease, inheritance, build, protein, and clinical background.
-   When the caller has case, family, phase, phenotype, assay, case-control, or
-   case-series observations, pass them as `clinical_observations`.
-2. If identity or scope is blocked, report the correction or recommended route.
-   Otherwise directly present the EvidenceCard table, source facts, VCEP
-   assertions, rule scenarios, conflicts, and estimates.
-3. Show `automatic_bayesian`, `verified_bayesian`, `scenario_estimates`, and—if
-   requested by the user—`user_selected_bayesian` as review estimates.
-4. Call `ACMG_guard_final_answer` with the returned `guard_context` before
-   returning criterion claims.
+1. aggregated `evidence_cards`: criterion, strength, source, evidence status,
+   primary rule reason, and caveats;
+2. attributed `vcep_assertions` and isolated `rule_scenarios`;
+3. `automatic_bayesian`, `verified_bayesian`, optional
+   `user_selected_bayesian`, and `scenario_estimates`;
+4. conflicts, provider limitations, and unresolved requirements.
 
-The collector automatically runs applicable consequence fallbacks, online
-CSpec/VCEP discovery, literature retrieval, deterministic text extraction,
-deduplication, rule mapping, and scoring. Do not ask the user whether papers or
-alternative providers should be queried. Do not make normal completion depend
-on a host LLM, `literature_proposals`, or `cspec_proposals`.
+`literature_candidates` is the complete compact lead index. A search hit is not
+an EvidenceCard. A card is emitted only when a source-located atomic fact binds
+the target and satisfies that criterion's minimum fields. Abstract or snippet
+facts may support an automatic candidate when those fields are complete;
+ordinary keyword/provider-linked leads do not enter Bayesian calculation.
 
-`literature_proposals` and `cspec_proposals` remain optional supplemental and
-reproducibility inputs for passages that deterministic extraction could not
-resolve. A second collector call is appropriate only when such supplemental
-material or `evidence_decisions` is actually supplied. `reviewer` and
-`decided_at` are optional and their absence never changes scoring.
+`clinical_context` is retrieval background. Structured case, family, phase,
+phenotype, assay, case-control, or case-series evidence belongs in
+`clinical_observations`. Caller-supplied observations may enter the automatic
+estimate; only independently re-anchored observations enter the verified
+estimate.
 
-## Evidence semantics
+The calculation views are review estimates with fixed prior 0.1:
 
-Every successful, empty, failed, stale, incomplete, or conflicting source is
-retained as a SourceFact. An EvidenceCard is created when a criterion has an
-actual source-backed fact; lack of information appears only in
-`criterion_reviews`, never as an empty placeholder card.
+- `automatic_bayesian`: legal source-backed representative cards;
+- `verified_bayesian`: strictly identity-, source-, and rule-verified cards;
+- `user_selected_bayesian`: accepted regenerated cards only.
 
-EvidenceCard v3 uses these statuses:
+Never combine cards across disease/inheritance scenarios. BA1 remains special.
+PP5/BP6 and database labels remain attributed source assertions rather than
+criteria. An exact released VCEP label may be reported only as an external
+expert assertion, never as ToolUniverse's own conclusion.
 
-- `expert_panel_applied`: an exact released VCEP application;
-- `rule_mapped`: a versioned SVI or applicable CSpec rule was satisfied;
-- `source_backed_candidate`: traceable evidence supports a legal candidate,
-  but strict verification or an exact disease-specific rule may be absent;
-- `not_met`: relevant facts were found but do not meet the rule;
-- `excluded`: identity, contradiction, duplication, incompatibility, or rule
-  applicability prevents use;
-- `deprecated`: PP5/BP6 source assertions, never scored.
+## Scientific boundaries retained by the runtime
 
-The answer must expose criterion, tool-proposed strength, evidence status,
-`strength_source`, `rule_source`, sources/excerpts, verification dimensions,
-calculation roles, limitations, and exclusion reasons. Candidate evidence is
-not hidden merely because it is based on an abstract, snippet, generic domain,
-unversioned source, or caller-supplied observation. Those limitations determine
-whether the card enters the automatic or verified estimate; they do not erase
-the information.
+- PVS1 must pass the existing selected-transcript, native splice-site,
+  frame/NMD, LoF mechanism, and downgrade decision tree; no generic fallback.
+- SpliceAI reports `DS_AG`, `DS_AL`, `DS_DG`, and `DS_DL`, positions, maximum
+  delta, and trigger channel. Maximum delta is not donor loss.
+- PP3/BP4 uses the versioned calibrated predictor contract, not majority vote;
+  all available predictor values remain visible when neither criterion is met.
+- Provider failure is not absence evidence. Interpret `success`, `no_hit`,
+  identity conflict, malformed contract, and technical failure separately.
+- `final_classification_allowed` is always false. The Guard blocks unsupported
+  criterion claims and ToolUniverse-authored five-tier labels, while allowing
+  clearly attributed VCEP/ClinVar assertions.
 
-### Three calculation views
-
-- `automatic_bayesian` includes legal source-backed candidates after criterion,
-  case/family/cohort/experiment, correlation, and conflict deduplication.
-- `verified_bayesian` includes exact VCEP/CSpec, versioned SVI, and strictly
-  anchored facts only.
-- `user_selected_bayesian` includes accepted regenerated cards. A reason is
-  required only for `strength_override`. All accepted cards must come from one
-  scenario; never mix generic, disease, or inheritance scenarios.
-
-Never invent source-quality discounts to Tavtigian odds. Use the difference
-between automatic and verified estimates to communicate uncertainty. BA1 is a
-special criterion and does not silently enter the ordinary odds product. All
-posteriors use the fixed 0.1 prior and remain review estimates.
-
-## Clinical observations
-
-`clinical_context` is background used for retrieval and consistency checks.
-`clinical_observations` is the structured evidence channel. Each item requires
-`observation_id`, `observation_type`, `source_type`, `source_id`, and `values`;
-`locator` and `excerpt` are optional. Supported types include de novo,
-recessive case, segregation, phenotype specificity, healthy observation,
-allelic phase, alternative cause, functional assay, case-control, and case
-series.
-
-Caller-supplied observations may enter `automatic_bayesian`. They enter
-`verified_bayesian` only when a provider, publication, or re-fetchable report
-anchors them. Never send private clinical observations to external providers
-unless the user explicitly asks for that transmission.
-
-## VCEP, CSpec, and literature
-
-The collector searches the ClinGen CSpec Registry and Evidence Repository after
-gene identity is confirmed. A uniquely matched released CSpec can modify
-criterion applicability and strength. If disease or inheritance is missing or
-multiple specifications could apply, the collector creates isolated
-`rule_scenarios`; never combine criteria across scenarios.
-
-An exact VCEP curation is an external expert assertion. Report its five-tier
-label only with attribution such as “ClinGen VCEP classified this variant as
-...”, including condition, inheritance, panel, version, release date, and URL.
-Its applied criteria can become `expert_panel_applied` cards. Never present the
-VCEP label as ToolUniverse's own final classification.
-
-The internal literature chain is retrieval followed by deterministic rule
-extraction. It checks VCEP/ERepo structured summaries, Europe PMC XML or HTML,
-PubTator locations, tables/captions/supplements, PubMed abstracts, and
-provider-linked snippets. Search queries do not prove a variant match. A PMID
-or PMCID does not prove that full text was retrieved. If only an abstract or
-snippet contains a clear fact, emit a source-backed candidate and identify the
-limited source status; never claim the full article was read.
-
-The deterministic fact map covers PS4, PS2/PM6, PM3, PS3/BS3, PP1/BS4, PP4,
-BS2, BP2, BP5, PS1/PM5, PM1, PP2/BP1, PM4/BP3, and RNA-splicing facts. Optional
-LLM extraction may resolve difficult prose, but is neither a runtime dependency
-nor a completion requirement.
-
-## Scientific boundaries
-
-PVS1 never receives a generic fallback strength. It must pass the existing
-transcript, consequence, native splice-site, frame/NMD, LoF mechanism, and
-downgrade decision tree. Frameshift, stop-gained, LOFTEE HC, or HIGH impact
-cannot supply missing exon count, PTC position, NMD, or disease mechanism.
-
-For SpliceAI, report `DS_AG`, `DS_AL`, `DS_DG`, and `DS_DL`, their positions,
-the maximum delta, and trigger channel. Do not recompute delta scores from raw
-REF/ALT values. Donor loss uses DS_DL and acceptor loss uses DS_AL at the
-selected-transcript boundary. A low loss score for a canonical insertion or
-duplication is not proof of normal splicing.
-
-PP3/BP4 follows the versioned calibrated predictor contract, not majority vote.
-All available predictor values remain visible even when neither criterion is
-met. ClinVar, GeneBe, InterVar, generic constraint/domain, HPO matches, and
-author labels remain source assertions unless a valid rule maps the underlying
-fact. PP5 and BP6 remain deprecated.
-
-## Answer contract
-
-Lead with a compact evidence table. Then show external VCEP assertions,
-automatic/verified/user estimates, scenario separation, conflicts and important
-limitations. Distinguish source observation, criterion candidate, verified
-application, and user selection.
-
-Use `ACMG_guard_final_answer` with `guard_context`. The Guard allows sourced
-candidate criteria, external assertions with explicit attribution, and all
-three review estimates. It blocks unsupported criterion claims and any
-ToolUniverse-authored five-tier final classification. The collector always
-returns `final_classification_allowed: false`.
-
-See [QUICK_START.md](QUICK_START.md) for request examples.
+See [QUICK_START.md](QUICK_START.md) for the exact compact-MCP and Reasonix call
+shapes.

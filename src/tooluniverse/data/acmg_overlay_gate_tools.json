@@ -206,6 +206,11 @@
         },
         "execution_status": {"type": "string"},
         "coverage_status": {"type": "string"},
+        "provider_failures": {
+          "type": "array",
+          "description": "Summary-only provider failure groups with tool names, failure code, attempts, dataset and release.",
+          "items": {"type": "object"}
+        },
         "variant": {
           "type": "object"
         },
@@ -231,6 +236,9 @@
             "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
             "provider_failures": {"type": "array", "items": {"type": "object"}},
             "provider_conflicts": {"type": "array", "items": {"type": "object"}},
+            "hard_identity_conflicts": {"type": "array", "items": {"type": "object"}},
+            "selected_transcript_conflicts": {"type": "array", "items": {"type": "object"}},
+            "alternate_transcript_observations": {"type": "array", "items": {"type": "object"}},
             "resolution_reason": {"type": "string"},
             "transcript_mapping": {"type": "object"},
             "selected_observation": {"type": ["object", "null"]},
@@ -254,7 +262,7 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Compact self-checking EvidenceCard and SourceFact provenance contract for ACMG_guard_final_answer. context_hash detects truncation or accidental mutation; it is not a digital signature."
+          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, and context_hash; it contains no raw SourceFacts. The hash detects truncation or accidental mutation and is not a digital signature."
         },
         "coverage_summary": {
           "type": "array",
@@ -265,7 +273,18 @@
         "source_facts": {
           "type": "array",
           "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
-          "items": {"type": "object"}
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {"type": "string"},
+              "tool_name": {"type": "string"},
+              "status": {"type": "string"},
+              "failure_details": {
+                "type": "object",
+                "description": "Structured no-hit, identity-conflict, provider-failure, or malformed-contract diagnostics."
+              }
+            }
+          }
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
         "prior_variant_candidates": {
@@ -322,7 +341,11 @@
               "scenario_id": {"type": "string"},
               "source_fact_ids": {"type": "array", "items": {"type": "string"}},
               "caveats": {"type": "array", "items": {"type": "string"}},
-              "missing_requirements": {"type": "array", "items": {"type": "string"}}
+              "missing_requirements": {"type": "array", "items": {"type": "string"}},
+              "rule_evaluation": {
+                "type": "object",
+                "description": "Observed inputs, applicable rule and threshold, condition status, one primary reason, and secondary caveats."
+              }
             },
             "required": ["card_id", "criterion", "strength", "evidence_status", "scenario_id", "source_fact_ids"]
           }
@@ -587,6 +610,11 @@
         "status": {"type": "string", "enum": ["success", "degraded", "error", "not_applicable"]},
         "execution_status": {"type": "string"},
         "coverage_status": {"type": "string"},
+        "provider_failures": {
+          "type": "array",
+          "description": "Summary-only provider failure groups with tool names, failure code, attempts, dataset and release.",
+          "items": {"type": "object"}
+        },
         "variant": {"type": "object"},
         "variant_identity": {"type": "object"},
         "variant_scope": {
@@ -610,6 +638,9 @@
             "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
             "provider_failures": {"type": "array", "items": {"type": "object"}},
             "provider_conflicts": {"type": "array", "items": {"type": "object"}},
+            "hard_identity_conflicts": {"type": "array", "items": {"type": "object"}},
+            "selected_transcript_conflicts": {"type": "array", "items": {"type": "object"}},
+            "alternate_transcript_observations": {"type": "array", "items": {"type": "object"}},
             "resolution_reason": {"type": "string"},
             "transcript_mapping": {"type": "object"},
             "selected_observation": {"type": ["object", "null"]},
@@ -633,13 +664,24 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Compact self-checking EvidenceCard and SourceFact provenance contract for ACMG_guard_final_answer. context_hash detects truncation or accidental mutation; it is not a digital signature."
+          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, and context_hash; it contains no raw SourceFacts. The hash detects truncation or accidental mutation and is not a digital signature."
         },
         "coverage_summary": {"type": "array", "items": {"type": "object"}},
         "source_facts": {
           "type": "array",
           "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
-          "items": {"type": "object"}
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {"type": "string"},
+              "tool_name": {"type": "string"},
+              "status": {"type": "string"},
+              "failure_details": {
+                "type": "object",
+                "description": "Structured no-hit, identity-conflict, provider-failure, or malformed-contract diagnostics."
+              }
+            }
+          }
         },
         "source_assertions": {"type": "array", "items": {"type": "object"}},
         "prior_variant_candidates": {
@@ -696,7 +738,11 @@
               "scenario_id": {"type": "string"},
               "source_fact_ids": {"type": "array", "items": {"type": "string"}},
               "caveats": {"type": "array", "items": {"type": "string"}},
-              "missing_requirements": {"type": "array", "items": {"type": "string"}}
+              "missing_requirements": {"type": "array", "items": {"type": "string"}},
+              "rule_evaluation": {
+                "type": "object",
+                "description": "Observed inputs, applicable rule and threshold, condition status, one primary reason, and secondary caveats."
+              }
             },
             "required": ["card_id", "criterion", "strength", "evidence_status", "scenario_id", "source_fact_ids"]
           }
@@ -1115,6 +1161,7 @@
         },
         "evidence_cards": {
           "type": "array",
+          "description": "Compatibility input. Each bare card must contain a legal criterion, strength, evidence status, and at least one source_fact_id.",
           "items": {
             "type": "object"
           }
@@ -1124,7 +1171,7 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Compact self-checking guard_context returned by ACMG_evidence_collector. Invalid or modified contexts fail closed."
+          "description": "Preferred lightweight input. Pass the collector's schema_version, variant_identity_hash, ruleset_hash, claims, and context_hash object unchanged. Invalid or modified contexts fail closed."
         }
       },
       "required": [

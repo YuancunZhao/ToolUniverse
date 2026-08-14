@@ -92,6 +92,7 @@ class EvidenceCard:
     llm_suggestion: dict[str, Any] = field(default_factory=dict)
     caveats: list[str] = field(default_factory=list)
     missing_requirements: list[str] = field(default_factory=list)
+    rule_evaluation: dict[str, Any] = field(default_factory=dict)
     user_decision: str = "pending"
     decision_reason: str = ""
 
@@ -119,6 +120,7 @@ class SourceFact:
     version_status: str = "unversioned"
     disease_match_status: str = "unspecified"
     independence_status: str = "unknown"
+    failure_details: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

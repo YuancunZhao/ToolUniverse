@@ -24,7 +24,7 @@ Branch:     codex/acmg-on-tooluniverse-1.4
 Commit:     07973c6a372acf95aa8b85fcdcdc41ba15efd2e2
 ```
 
-This commit passed the 445-test ACMG/SpliceAI/provider suite, MCP registration
+This commit passed the then-current ACMG/SpliceAI/provider suite, MCP registration
 checks, Skill mirror checks, wrapper/schema checks, and local plus exact-Git-SHA
 isolated installation smoke tests.
 
@@ -35,6 +35,9 @@ exact-Git-SHA installation smoke test.
 The branch documentation below describes the validated v3 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
+The working branch may describe newer `1.4.0+acmg.4` interfaces before a new
+validated SHA is published; the pinned commit above remains the install target
+until the full exact-SHA gate is repeated.
 
 ## One-line installation prompt
 
@@ -197,12 +200,20 @@ Evidence-card inclusion is represented by
 the retired preview/counting fields.
 
 `guard_context` is a compact self-checking contract. Its `context_hash` covers
-the schema version, variant identity hash, ruleset hash, cards, and known and
-verified SourceFact ID sets. Guard recomputes the checksum and fails closed if
-the context was truncated or accidentally modified. It is not a digital
-signature and does not authenticate a malicious sender.
+the schema version, variant identity hash, ruleset hash, and representative-card
+`claims`. It carries no full SourceFacts and stays below 5 KB in representative
+cases. Guard recomputes the checksum and fails closed if the context was
+truncated or accidentally modified. It is not a digital signature and does not
+authenticate a malicious sender.
 
 ## Evidence workflow
+
+The normal client workflow is exactly one `ACMG_evidence_collector` call with
+`response_detail="summary"`, followed by one `ACMG_guard_final_answer` call
+using the returned `guard_context` unchanged. It requires no capability
+listing, `get_tool_info`, shell/Python parsing, temporary files, source imports,
+or file-write permissions. See the installed classification Skill's
+`QUICK_START.md` for native compact-MCP and Reasonix call shapes.
 
 ### 1. Initial collection
 
@@ -392,7 +403,7 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.0+acmg.3 \
+  --expected-version 1.4.0+acmg.4 \
   --online-providers
 ```
 

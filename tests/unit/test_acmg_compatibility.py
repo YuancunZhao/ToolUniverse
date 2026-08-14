@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from tooluniverse.acmg.compatibility import resolve_evidence_compatibility
+from tooluniverse.acmg.compatibility import (
+    aggregate_evidence_cards,
+    resolve_evidence_compatibility,
+)
 from tooluniverse.acmg.rule_catalog import rule_for_criterion
 
 
@@ -57,6 +60,61 @@ def test_exact_duplicate_card_is_included_once():
     resolved = _resolve([row, dict(row)])
     assert [item["card_id"] for item in resolved["compatible_evidence"]] == ["same"]
     assert resolved["excluded_evidence"][0]["reason"] == "duplicate_card_id"
+
+
+def test_aggregation_keeps_one_stable_representative_and_all_sources():
+    supporting = _row(
+        "supporting",
+        "PS4",
+        "100",
+        strength="PS4_Supporting",
+        source_fact_ids=["fact-1"],
+        source_case_ids=["case-1"],
+    )
+    strong = _row(
+        "strong",
+        "PS4",
+        "200",
+        strength="PS4",
+        source_fact_ids=["fact-2"],
+        source_case_ids=["case-2"],
+    )
+
+    forward = aggregate_evidence_cards([supporting, strong])
+    reverse = aggregate_evidence_cards([strong, supporting])
+
+    assert len(forward) == 1
+    assert forward[0]["card_id"] == reverse[0]["card_id"]
+    assert forward[0]["strength"] == "PS4"
+    assert forward[0]["source_fact_ids"] == ["fact-1", "fact-2"]
+    assert forward[0]["source_pmids"] == ["100", "200"]
+    assert forward[0]["source_case_ids"] == ["case-1", "case-2"]
+    assert forward[0]["aggregation"]["input_card_count"] == 2
+    assert forward[0]["aggregation"]["other_results"] == [
+        {
+            "card_id": "supporting",
+            "strength": "PS4_Supporting",
+            "evidence_status": "rule_mapped",
+            "reason": "lower_priority_same_criterion_scenario",
+        }
+    ]
+
+
+def test_aggregation_never_combines_scenarios_or_opposite_criteria():
+    rows = [
+        _row("generic", "PP3", scenario_id="generic-svi"),
+        _row("cspec", "PP3", scenario_id="cspec:one"),
+        _row("benign", "BP4", scenario_id="generic-svi"),
+    ]
+
+    aggregated = aggregate_evidence_cards(rows)
+
+    assert len(aggregated) == 3
+    assert {(row["scenario_id"], row["criterion"]) for row in aggregated} == {
+        ("generic-svi", "PP3"),
+        ("cspec:one", "PP3"),
+        ("generic-svi", "BP4"),
+    }
 
 
 def test_same_criterion_and_overlapping_cases_are_not_multiplied():

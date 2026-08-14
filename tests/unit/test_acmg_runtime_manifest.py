@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tooluniverse.acmg import (
     compatibility,
+    consequence_sources,
     literature_extractor,
     models,
     population,
@@ -83,6 +84,24 @@ def test_ruleset_hash_tracks_scenario_and_literature_contracts(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_gp1ba_exposed_policies(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(population, "PM2_DECISION_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+    baseline = ruleset_hash()
+    monkeypatch.setattr(
+        consequence_sources,
+        "CONSEQUENCE_CONFLICT_POLICY_VERSION",
+        "fixture",
+    )
+    assert ruleset_hash() != baseline
+
+    baseline = ruleset_hash()
+    monkeypatch.setattr(rule_catalog, "MONDO_RESOLUTION_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+
 def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     manifest = build_runtime_manifest(
         {
@@ -94,8 +113,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-automation-3"
-    assert manifest["collector_schema_version"] == "2026-08-09-v3"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-3.1"
+    assert manifest["collector_schema_version"] == "2026-08-13-v3"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {

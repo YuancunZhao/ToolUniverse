@@ -54,6 +54,12 @@ if [ -z "$dest" ]; then
 fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+acmg_instruction_template="$repo_root/docs/reference/acmg_project_instructions.md"
+managed_start='<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_START -->'
+managed_end='<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_END -->'
+legacy_acmg_instruction_hashes=(
+  "7ee16edb16ecabbb976f72289b3973c4cae978e0fc2c56a9a03cddd57996251a"
+)
 home_dir="${HOME:-}"
 if [ "$dest" = "/" ] || [ "$dest" = "$repo_root" ] \
   || { [ -n "$home_dir" ] && [ "$dest" = "$home_dir" ]; }; then
@@ -73,6 +79,65 @@ esac
 
 mkdir -p "$dest"
 
+file_sha256() {
+  file_path="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file_path" | awk '{print $1}'
+  else
+    sha256sum "$file_path" | awk '{print $1}'
+  fi
+}
+
+is_known_legacy_acmg_template() {
+  digest="$(file_sha256 "$1")"
+  for known_digest in "${legacy_acmg_instruction_hashes[@]}"; do
+    [ "$digest" = "$known_digest" ] && return 0
+  done
+  return 1
+}
+
+update_managed_acmg_block() {
+  instruction_path="$1"
+  temp_path="$(mktemp "${TMPDIR:-/tmp}/tooluniverse-acmg-instructions.XXXXXX")"
+  awk -v start="$managed_start" -v end="$managed_end" \
+      -v template="$acmg_instruction_template" '
+    function emit_template(line) {
+      while ((getline line < template) > 0) print line
+      close(template)
+    }
+    $0 == start { emit_template(); managed = 1; found = 1; next }
+    managed && $0 == end { managed = 0; next }
+    !managed { print }
+    END { if (!found || managed) exit 3 }
+  ' "$instruction_path" > "$temp_path" || {
+    rm -f "$temp_path"
+    echo "Malformed managed ACMG instruction block: $instruction_path" >&2
+    return 1
+  }
+  mv "$temp_path" "$instruction_path"
+  printf 'Updated managed ACMG instructions: %s\n' "$instruction_path"
+}
+
+migrate_project_instruction() {
+  instruction_path="$1"
+  if is_known_legacy_acmg_template "$instruction_path"; then
+    cp "$acmg_instruction_template" "$instruction_path"
+    printf 'Replaced known legacy ACMG instructions: %s\n' "$instruction_path"
+    return 0
+  fi
+  if grep -Fq "$managed_start" "$instruction_path" \
+      || grep -Fq "$managed_end" "$instruction_path"; then
+    update_managed_acmg_block "$instruction_path"
+    return
+  fi
+  if grep -nHE \
+      'ACMG_route_overlays|ACMG_combine_criteria|ACMG_(finalize|finalizer)|ACMG Guard|ACMG_evidence_collector|tooluniverse-acmg-variant-classification' \
+      "$instruction_path" >&2; then
+    echo "Custom ACMG instructions were not modified: $instruction_path" >&2
+    return 1
+  fi
+}
+
 if [ -n "$project_root" ]; then
   if [ ! -d "$project_root" ]; then
     echo "--project-root must be an existing directory" >&2
@@ -82,11 +147,7 @@ if [ -n "$project_root" ]; then
   for instruction_file in AGENTS.md CLAUDE.md reasonix.toml; do
     instruction_path="$project_root/$instruction_file"
     [ -f "$instruction_path" ] || continue
-    if grep -nHE 'ACMG_route_overlays|ACMG_combine_criteria|ACMG_(finalize|finalizer)' \
-      "$instruction_path" >&2; then
-      echo "Retired ACMG workflow instruction found in $instruction_path" >&2
-      exit 1
-    fi
+    migrate_project_instruction "$instruction_path" || exit 1
   done
 fi
 

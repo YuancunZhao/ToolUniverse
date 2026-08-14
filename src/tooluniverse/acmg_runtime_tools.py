@@ -114,6 +114,7 @@ class ACMGGuardFinalAnswerTool(BaseTool):
         guard_context = arguments.get("guard_context")
         verified_ids: set[str] | None = None
         known_ids: set[str] | None = None
+        validated_claims = False
         if guard_context is not None:
             context_valid, context_error = validate_guard_context(guard_context)
             if not context_valid:
@@ -127,17 +128,8 @@ class ACMGGuardFinalAnswerTool(BaseTool):
                     "message": "BLOCKED: guard_context_invalid",
                 }
             assert isinstance(guard_context, dict)
-            cards = guard_context.get("cards", [])
-            verified_ids = {
-                str(value)
-                for value in guard_context.get("verified_source_fact_ids") or []
-                if value
-            }
-            known_ids = {
-                str(value)
-                for value in guard_context.get("known_source_fact_ids") or []
-                if value
-            }
+            cards = guard_context.get("claims", [])
+            validated_claims = True
         elif cards is None and isinstance(collector_result, dict):
             cards = collector_result.get("evidence_cards", [])
         if not isinstance(cards, list):
@@ -149,6 +141,7 @@ class ACMGGuardFinalAnswerTool(BaseTool):
             cards,
             verified_source_fact_ids=verified_ids,
             known_source_fact_ids=known_ids,
+            validated_claims=validated_claims,
         )
 
 

@@ -9,7 +9,7 @@ import operator
 import re
 from typing import Any
 
-from .compatibility import resolve_evidence_compatibility
+from .compatibility import aggregate_evidence_cards, resolve_evidence_compatibility
 from .rule_catalog import CSPEC_SCENARIO_POLICY_VERSION, is_valid_strength_for_criterion
 from .summary import compute_bayesian_score, detect_conflicts
 
@@ -207,6 +207,47 @@ def _mcaf_condition(row: dict[str, Any], threshold: Any) -> dict[str, Any]:
         "observed": observed,
         "source_path": path,
         "operator": "<=",
+        "threshold": threshold_value,
+    }
+
+
+def _frequency_condition(
+    row: dict[str, Any], threshold: Any, operation: str
+) -> dict[str, Any]:
+    values = _numeric_values(
+        row,
+        {
+            "af",
+            "allele_frequency",
+            "global_af",
+            "af_global",
+            "popmax_af",
+            "af_popmax",
+            "maximum_allele_frequency",
+        },
+    )
+    if not values:
+        return {
+            "condition": "population_frequency_threshold",
+            "status": "unresolved",
+            "missing": ["allele_frequency"],
+        }
+    try:
+        threshold_value = float(threshold)
+    except (TypeError, ValueError):
+        return {
+            "condition": "population_frequency_threshold",
+            "status": "unresolved",
+            "missing": ["numeric_threshold"],
+        }
+    path, observed = max(values, key=lambda item: item[1])
+    met = _compare(observed, operation, threshold_value)
+    return {
+        "condition": "population_frequency_threshold",
+        "status": "met" if met is True else "not_met" if met is False else "unresolved",
+        "observed": observed,
+        "source_path": path,
+        "operator": operation,
         "threshold": threshold_value,
     }
 
@@ -425,6 +466,7 @@ def evaluate_cspec_criterion(
         "predictor_rules",
         "predictor",
         "maximum_credible_af",
+        "population_frequency_threshold",
         "case_count_threshold",
         "point_table",
         "residues",
@@ -469,6 +511,14 @@ def evaluate_cspec_criterion(
     if criterion_contract.get("maximum_credible_af") is not None:
         conditions.append(
             _mcaf_condition(row, criterion_contract.get("maximum_credible_af"))
+        )
+    elif criterion_contract.get("population_frequency_threshold") is not None:
+        conditions.append(
+            _frequency_condition(
+                row,
+                criterion_contract.get("population_frequency_threshold"),
+                str(criterion_contract.get("operator") or ""),
+            )
         )
     if criterion_contract.get("case_count_threshold") is not None:
         conditions.append(
@@ -806,7 +856,6 @@ def build_scenario_results(
                 cloned, trace = _clone_for_scenario(row, scenario, contract)
                 scenario_rows.append(cloned)
                 traces.append(trace)
-            scenario_cards.extend(scenario_rows)
         else:
             scenario_rows = []
             if scenario.get("scenario_type") == "vcep_assertion":
@@ -827,7 +876,6 @@ def build_scenario_results(
                         roles["verified"] = False
                         cloned["calculation_roles"] = roles
                     scenario_rows.append(cloned)
-                scenario_cards.extend(scenario_rows)
 
         vcep_rows = (
             []
@@ -852,7 +900,6 @@ def build_scenario_results(
                     "merged-vcep-assertion",
                     "condition_met",
                 )
-                scenario_cards.append(copy.deepcopy(row))
         if applicability == "candidate":
             for row in vcep_rows:
                 dimensions = dict(row.get("verification_dimensions") or {})
@@ -862,6 +909,9 @@ def build_scenario_results(
                 roles.update({"automatic": True, "verified": False})
                 row["calculation_roles"] = roles
         scenario_rows.extend(vcep_rows)
+        scenario_rows = aggregate_evidence_cards(scenario_rows)
+        if scenario_id != "generic-svi":
+            scenario_cards.extend(copy.deepcopy(scenario_rows))
 
         automatic_compatibility = resolve_evidence_compatibility(
             scenario_rows,

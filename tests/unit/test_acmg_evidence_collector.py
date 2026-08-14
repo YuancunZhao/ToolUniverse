@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import json
 
-from tooluniverse.acmg_runtime_tools import ACMGEvidenceCollector
+from tooluniverse.acmg_runtime_tools import (
+    ACMGEvidenceCollector,
+    ACMGGuardFinalAnswerTool,
+)
 from tooluniverse.acmg.collector import (
     ACMGEvidencePipeline,
+    SourceCall,
     _literature_candidate_index,
     _literature_review_state,
 )
@@ -666,6 +670,155 @@ class _FakeToolUniverse:
                 },
             }
         return {"status": "unavailable", "reason": "fixture has no result"}
+
+
+class _CFTRHighLiteratureToolUniverse(_FakeToolUniverse):
+    """One useful CFTR abstract among many traceable literature leads."""
+
+    def __init__(self):
+        super().__init__()
+        self._pubmed_returned = False
+
+    @classmethod
+    def _cftr_identity(cls, value):
+        if isinstance(value, dict):
+            transformed = {
+                key: cls._cftr_identity(child) for key, child in value.items()
+            }
+            for key in ("chr", "chrom", "chromosome"):
+                if transformed.get(key) == "4":
+                    transformed[key] = "7"
+            for key in ("pos", "position"):
+                if transformed.get(key) == 1803931:
+                    transformed[key] = 117548630
+            if transformed.get("ref") == "C":
+                transformed["ref"] = "T"
+            return transformed
+        if isinstance(value, list):
+            return [cls._cftr_identity(child) for child in value]
+        if isinstance(value, int) and value == 1803931:
+            return 117548630
+        if isinstance(value, str):
+            replacements = (
+                ("NM_000142.5:c.1075+95C>G", "NM_000492.4:c.1210-11T>G"),
+                ("NC_000004.12:g.1803931C>G", "NC_000007.14:g.117548630T>G"),
+                ("chr4:g.1803931C>G", "chr7:g.117548630T>G"),
+                ("4-1803931-C-G", "7-117548630-T-G"),
+                ("NM_000142.5", "NM_000492.4"),
+                ("1803931", "117548630"),
+                ("FGFR3", "CFTR"),
+            )
+            for old, new in replacements:
+                value = value.replace(old, new)
+        return value
+
+    def run_one_function(self, call, **kwargs):
+        name = call["name"]
+        if name == "PubMed_search_articles":
+            self.calls.append((call, kwargs))
+            if self._pubmed_returned:
+                return {"status": "success", "data": [], "metadata": {"total": 0}}
+            self._pubmed_returned = True
+            articles = [
+                {
+                    "pmid": str(9_100_100 + index),
+                    "title": f"CFTR disease background report {index}",
+                    "abstract": "This report reviews CFTR-associated disease.",
+                }
+                for index in range(98)
+            ]
+            articles.extend(
+                [
+                    {
+                        "pmid": "9100001",
+                        "title": "Transcript methods in CFTR",
+                        "abstract": (
+                            "NM_000492.4:c.1210-11T>G was used for de novo "
+                            "transcript assembly in CFTR."
+                        ),
+                    },
+                    {
+                        "pmid": "9100002",
+                        "title": "A CFTR splice variant",
+                        "abstract": (
+                            "CFTR NM_000492.4:c.1210-11T>G was catalogued "
+                            "without patient-level evidence."
+                        ),
+                    },
+                    {
+                        "pmid": "9100003",
+                        "title": "A CFTR case series",
+                        "abstract": (
+                            "CFTR NM_000492.4:c.1210-11T>G was observed in "
+                            "12 unrelated patients in this case series."
+                        ),
+                    },
+                ]
+            )
+            return {
+                "status": "success",
+                "data": articles,
+                "metadata": {"total": len(articles), "source": "PubMed fixture"},
+            }
+        if name in {"EuropePMC_get_full_text", "EuropePMC_get_fulltext"}:
+            self.calls.append((call, kwargs))
+            return {"status": "unavailable", "reason": "fixture full text unavailable"}
+        return self._cftr_identity(super().run_one_function(call, **kwargs))
+
+
+def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
+    runtime = _CFTRHighLiteratureToolUniverse()
+    collector = _make_tool(runtime)
+    calls = ["ACMG_evidence_collector"]
+    result = collector.run(
+        {
+            "variant": "NM_000492.4:c.1210-11T>G",
+            "gene": "CFTR",
+            "transcript": "NM_000492.4",
+            "response_detail": "summary",
+        }
+    )
+
+    assert len(result["literature_candidates"]) == 101
+    assert sum(
+        card["criterion"] == "PS4" for card in result["evidence_cards"]
+    ) <= 1
+    assert not {"PM3", "BP2", "PP1"}.intersection(
+        card["criterion"] for card in result["evidence_cards"]
+    )
+    assert len(
+        json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
+    ) < 40_000
+    assert len(
+        json.dumps(
+            result["guard_context"],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode()
+    ) < 5_000
+
+    guard = ACMGGuardFinalAnswerTool(
+        {"name": "ACMG_guard_final_answer", "type": "ACMGGuardFinalAnswerTool"}
+    )
+    criterion = next(
+        card["criterion"]
+        for card in result["evidence_cards"]
+        if card.get("criterion")
+    )
+    calls.append("ACMG_guard_final_answer")
+    guarded = guard.run(
+        {
+            "final_answer_text": f"工具生成了来源可追溯的 {criterion} 证据候选。",
+            "guard_context": result["guard_context"],
+        }
+    )
+
+    assert guarded["status"] == "PASS"
+    assert calls == ["ACMG_evidence_collector", "ACMG_guard_final_answer"]
+    public_calls = {call["name"] for call, _kwargs in runtime.calls}
+    assert not public_calls.intersection(
+        {"list_tools", "get_tool_info", "Bash", "write_file"}
+    )
 
 
 class _CSpecToolUniverse(_FakeToolUniverse):
@@ -1409,6 +1562,7 @@ def test_complete_variantvalidator_identity_survives_ensembl_outage():
             "variant": "NM_000142.5:c.1075+95C>G",
             "gene": "FGFR3",
             "transcript": "NM_000142.5",
+            "response_detail": "full",
         }
     )
 
@@ -1435,7 +1589,11 @@ def test_provider_build_mismatch_blocks_identity_verification():
 
 def test_provider_result_for_another_variant_cannot_be_counted():
     result = _make_tool(_PopulationIdentityMismatchToolUniverse()).run(
-        {"variant": "NM_000142.5:c.1075+95C>G", "gene": "FGFR3"}
+        {
+            "variant": "NM_000142.5:c.1075+95C>G",
+            "gene": "FGFR3",
+            "response_detail": "full",
+        }
     )
 
     assert "PM2" not in _automatic_criteria(result)
@@ -2197,20 +2355,12 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
             "fact_id",
             "tool_name",
             "status",
-            "identity_status",
-            "source_status",
-            "extraction_status",
-            "version_status",
-            "disease_match_status",
-            "independence_status",
             "provider_version",
-            "request_arguments",
-            "request_id",
             "provenance",
             "limitation",
-            "observed_values",
-            "excerpt",
-            "locator",
+            "limitations",
+            "failure_details",
+            "attempt_count",
         }
         for fact in result["source_facts"]
     )
@@ -2219,7 +2369,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
         assert card["criterion"]
         assert card["route"]
         assert "calculation_roles" in card
-        assert "decision_basis" in card
+        assert "evidence_status" in card
     splice_index = next(
         row for row in result["evidence_cards"] if row.get("source") == "SpliceAI"
     )
@@ -2236,7 +2386,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
                 "utf-8"
             )
         )
-        <= 50_000
+        <= 40_000
     )
     assert set(result["compatibility_report"]) == {
         "compatible_card_ids",
@@ -2315,7 +2465,7 @@ def test_clinical_context_absent_returns_null():
         }
     )
 
-    assert result["clinical_context"] is None
+    assert "clinical_context" not in result
 
 
 def test_clinical_context_survives_identity_failure():
@@ -2340,6 +2490,7 @@ def test_discovered_cspec_without_local_contract_is_executable_online():
             "gene": "FGFR3",
             "disease": "MONDO:0007037",
             "inheritance": "AD",
+            "response_detail": "full",
         }
     )
 
@@ -2413,7 +2564,7 @@ def test_cspec_gene_hit_without_disease_context_falls_back_to_general_svi():
 
     context = result["rule_context"]
     assert context["vcep_discovered"] is True
-    assert context["applicable_specification"] is None
+    assert context.get("applicable_specification") is None
     assert context["fallback_policy"] == "general_clingen_svi"
 
 
@@ -3010,6 +3161,7 @@ def test_collector_rejects_literature_fields_without_matching_full_text():
         {
             "variant": "NM_000142.5:c.1075+95C>G",
             "gene": "FGFR3",
+            "response_detail": "full",
             "literature_proposals": [
                 {
                     "fact_id": "bad-excerpt",
@@ -3273,6 +3425,110 @@ def test_constraint_provider_never_calls_removed_acmg_fallback():
     )
 
 
+class _GnomadRetryToolUniverse:
+    def run_one_function(self, call, **_kwargs):
+        name = call["name"]
+        if name == "gnomad_search_variants":
+            return {
+                "status": "success",
+                "variant_search": [{"variant_id": "17-4934364-AA-AC"}],
+            }
+        if name == "VariantValidator_format_genomic_to_transcripts":
+            return {
+                "status": "success",
+                "source_lead_sandbox": {
+                    "reviewable_features": {
+                        "g_hgvs": "NC_000017.11:g.4934364_4934365delinsAC",
+                        "hgvs_t_and_p": {
+                            "NM_000173.7": {
+                                "t_hgvs": "NM_000173.7:c.1761A>C",
+                                "select_status": {"mane_select": True},
+                                "gene_info": {"symbol": "GP1BA"},
+                            }
+                        },
+                        "provider_version": "VariantValidator fixture",
+                    }
+                },
+            }
+        if name in {"gnomad_get_variant", "gnomad_get_variant_populations"}:
+            return {
+                "status": "success",
+                "variant_id": "17-4934364-AA-AC",
+                "dataset": "gnomad_r4",
+                "exome": {"af": 0.00001, "ac": 2, "an": 200000},
+                "provider_version": "gnomAD r4 fixture",
+            }
+        raise AssertionError(name)
+
+
+def test_gnomad_representation_retry_requires_unique_hgvs_equivalence():
+    identity = {
+        "gene": "GP1BA",
+        "rsid": "rs570515282",
+        "validated_hgvs_c": "NM_000173.7:c.1761A>C",
+        "build": "GRCh38",
+        "coordinates": {"chr": "17", "pos": 4934365, "ref": "A", "alt": "C"},
+    }
+    initial = [
+        SourceCall(
+            "gnomad_get_variant",
+            "population",
+            "failed",
+            error="representation not found",
+            arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
+        )
+    ]
+    pipeline = ACMGEvidencePipeline(_GnomadRetryToolUniverse())
+    recovery = pipeline._gnomad_representation_retry_calls(initial, identity)
+    retry = recovery[-1]
+
+    assert [call.tool_name for call in recovery] == [
+        "gnomad_search_variants",
+        "VariantValidator_format_genomic_to_transcripts",
+        "gnomad_get_variant",
+    ]
+    assert retry.arguments["_acmg_retry_of"] == "17-4934365-A-C"
+    facts = pipeline._source_facts(recovery, identity)
+    retry_fact = next(
+        fact for fact in facts.values() if fact.tool_name == "gnomad_get_variant"
+    )
+    assert retry_fact.identity_status == "matched"
+    assert retry_fact.failure_details == {}
+
+
+def test_gnomad_failure_details_distinguish_transport_and_malformed_contract():
+    identity = {
+        "build": "GRCh38",
+        "coordinates": {"chr": "17", "pos": 4934365, "ref": "A", "alt": "C"},
+    }
+    calls = [
+        SourceCall(
+            "gnomad_get_variant",
+            "population",
+            "failed",
+            error="timeout",
+            arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
+        ),
+        SourceCall(
+            "gnomad_get_variant_populations",
+            "population",
+            "success",
+            result={"status": "success", "unexpected": []},
+            arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
+        ),
+    ]
+    facts = ACMGEvidencePipeline._source_facts(calls, identity)
+    codes = {
+        fact.tool_name: fact.failure_details.get("failure_code")
+        for fact in facts.values()
+    }
+
+    assert codes == {
+        "gnomad_get_variant": "provider_failed",
+        "gnomad_get_variant_populations": "provider_contract_malformed",
+    }
+
+
 class _PVS1ToolUniverse(_FakeToolUniverse):
     """Frameshift variant with machine-verifiable PVS1 facts."""
 
@@ -3418,6 +3674,7 @@ def _pvs1_arguments() -> dict:
                 ),
                 "variant_identity": "NM_000142.5:c.500del",
                 "gene": "FGFR3",
+                "response_detail": "full",
                 "values": {
                     "variant_identity": "NM_000142.5:c.500del",
                     "gene": "FGFR3",

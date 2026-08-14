@@ -1,0 +1,233 @@
+{
+  "VariantValidator_gene2transcripts": {
+    "status": "success",
+    "data": [
+      {
+        "current_symbol": "GP1BA",
+        "transcripts": [
+          {
+            "reference": "NM_000173.7",
+            "annotations": {
+              "mane_select": true,
+              "mane_plus_clinical": false
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "VariantValidator_validate_variant": {
+    "status": "success",
+    "reviewable_features": {
+      "validated_hgvs_c": "NM_000173.7:c.1761A>C",
+      "hgvs_c": "NM_000173.7:c.1761A>C",
+      "hgvs_g": "NC_000017.11:g.4934365A>C",
+      "hgvs_p": "NP_000164.5:p.Gln587His",
+      "rsid": "rs570515282",
+      "gene": "GP1BA",
+      "transcript": "NM_000173.7",
+      "build": "GRCh38",
+      "chr": "17",
+      "pos": 4934365,
+      "ref": "A",
+      "alt": "C",
+      "consequence": "missense_variant",
+      "provider_version": "VariantValidator GP1BA fixture 1"
+    }
+  },
+  "EnsemblVEP_variant_recoder": {
+    "status": "success",
+    "reviewable_features": {
+      "validated_hgvs_c": "NM_000173.7:c.1761A>C",
+      "hgvs_c": "NM_000173.7:c.1761A>C",
+      "hgvs_g": "NC_000017.11:g.4934365A>C",
+      "hgvs_p": "NP_000164.5:p.Gln587His",
+      "rsid": "rs570515282",
+      "gene": "GP1BA",
+      "transcript": "NM_000173.7",
+      "build": "GRCh38",
+      "chr": "17",
+      "pos": 4934365,
+      "ref": "A",
+      "alt": "C",
+      "hgvsc_candidates": ["NM_000173.7:c.1761A>C"],
+      "hgvsg_candidates": ["NC_000017.11:g.4934365A>C"],
+      "hgvsp_candidates": ["NP_000164.5:p.Gln587His"],
+      "allele_candidates": [
+        {
+          "ids": ["rs570515282"],
+          "hgvsc": ["NM_000173.7:c.1761A>C"],
+          "hgvsg": ["NC_000017.11:g.4934365A>C"],
+          "hgvsp": ["NP_000164.5:p.Gln587His"]
+        }
+      ],
+      "provider_version": "Ensembl Variant Recoder GP1BA fixture 1"
+    }
+  },
+  "EnsemblVEP_annotate_hgvs": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chr": "17",
+        "pos": 4934365,
+        "ref": "A",
+        "alt": "C",
+        "build": "GRCh38",
+        "gene": "GP1BA",
+        "transcript": "NM_000173.7",
+        "most_severe_consequence": "missense_variant",
+        "vep_transcript_candidates": [
+          {
+            "gene": "GP1BA",
+            "transcript": "NM_000173.7",
+            "mane_select": "NM_000173.7",
+            "hgvsc": "NM_000173.7:c.1761A>C",
+            "hgvsp": "NP_000164.5:p.Gln587His",
+            "biotype": "protein_coding",
+            "exon": "2/2",
+            "protein_start": 587,
+            "consequence": ["missense_variant"]
+          },
+          {
+            "gene": "GP1BA",
+            "transcript": "ENST00000611961.1",
+            "hgvsc": "ENST00000611961.1:c.1683A>C",
+            "hgvsp": "ENSP00000480761.1:p.Gln561His",
+            "biotype": "protein_coding",
+            "protein_start": 561,
+            "consequence": ["missense_variant"]
+          }
+        ],
+        "provider_version": "Ensembl VEP GP1BA fixture 1"
+      }
+    }
+  },
+  "FAVOR_annotate_variant": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chr": "17",
+        "pos": 4934365,
+        "ref": "A",
+        "alt": "C",
+        "build": "GRCh38",
+        "gene": "GP1BA",
+        "transcript": "ENST00000611961.1",
+        "consequence_candidates": [
+          {
+            "gene": "GP1BA",
+            "transcript": "ENST00000611961.1",
+            "hgvsc": "ENST00000611961.1:c.1683A>C",
+            "hgvsp": "ENSP00000480761.1:p.Gln561His",
+            "consequence": ["missense_variant"]
+          }
+        ],
+        "provider_version": "FAVOR GP1BA fixture 1"
+      }
+    }
+  },
+  "ols_search_terms": {
+    "status": "success",
+    "data": {
+      "terms": [
+        {
+          "iri": "http://purl.obolibrary.org/obo/MONDO_0009276",
+          "ontologyName": "mondo",
+          "shortForm": "MONDO_0009276",
+          "oboId": "MONDO:0009276",
+          "label": "Bernard-Soulier syndrome",
+          "isObsolete": false
+        }
+      ],
+      "total_items": 1,
+      "showing": 1
+    }
+  },
+  "ClinGen_search_cspec": {
+    "status": "success",
+    "gene": "GP1BA",
+    "provider": "ClinGen CSpec Registry",
+    "provider_version": "GN079 fixture 1",
+    "request_url": "https://cspec.genome.network/cspec/ui/svi/svi/GN079",
+    "data": [
+      {
+        "specification_id": "GN079",
+        "gene": "GP1BA",
+        "vcep": "Platelet Disorders VCEP",
+        "version": "1.1.0",
+        "status": "Released",
+        "url": "https://cspec.genome.network/cspec/ui/svi/svi/GN079",
+        "diseases": [
+          {
+            "name": "Bernard-Soulier syndrome",
+            "mondo_id": "MONDO:0009276",
+            "inheritance": ["Autosomal recessive inheritance"]
+          }
+        ],
+        "criterion_modifications": [
+          {
+            "criterion": "PM2",
+            "applicability": "Applicable",
+            "default_strength": "Supporting",
+            "instructions": "gnomAD MAF of less than or equal to 0.0001114.",
+            "criterion_id": "GN079-PM2"
+          }
+        ]
+      }
+    ]
+  },
+  "gnomad_get_variant": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "17-4934365-A-C",
+        "rsid": "rs570515282",
+        "build": "GRCh38",
+        "AF": 0.0001827,
+        "AC": 267,
+        "AN": 1461676,
+        "popmax": 0.000985,
+        "dataset": "gnomad_r4",
+        "callset": "exome",
+        "provider_version": "gnomAD GP1BA fixture 1"
+      }
+    }
+  },
+  "gnomad_get_variant_populations": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "variant_id": "17-4934365-A-C",
+        "rsid": "rs570515282",
+        "build": "GRCh38",
+        "AF": 0.0001827,
+        "AC": 267,
+        "AN": 1461676,
+        "popmax": 0.000985,
+        "populations": [{"id": "sas", "af": 0.000985}],
+        "dataset": "gnomad_r4",
+        "callset": "exome",
+        "provider_version": "gnomAD populations GP1BA fixture 1"
+      }
+    }
+  },
+  "gnomad_get_site_callability": {
+    "status": "success",
+    "source_lead_sandbox": {
+      "reviewable_features": {
+        "chrom": "17",
+        "position": 4934365,
+        "reference_genome": "GRCh38",
+        "dataset": "gnomad_r4",
+        "callsets": {
+          "exome": {"position": 4934365, "median": 30, "over_20": 0.94}
+        },
+        "provider_version": "gnomAD callability GP1BA fixture 1"
+      }
+    }
+  },
+  "ClinVar_search_variants": {
+    "status": "no_hit",
+    "data": {"variants": [], "total_count": 0}
+  }
+}

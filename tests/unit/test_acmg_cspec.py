@@ -5,6 +5,77 @@ from tooluniverse.acmg.cspec import (
 from tooluniverse.acmg.collector import ACMGEvidencePipeline, SourceCall
 
 
+class _OLSFixture:
+    def __init__(self, terms):
+        self.terms = terms
+
+    def run_one_function(self, call, **_kwargs):
+        assert call["name"] == "ols_search_terms"
+        return {"status": "success", "terms": self.terms}
+
+
+def test_mondo_resolution_prefers_exact_nonobsolete_term():
+    runtime = _OLSFixture(
+        [
+            {
+                "ontologyName": "mondo",
+                "shortForm": "MONDO_0000001",
+                "oboId": "MONDO:0000001",
+                "label": "Related disorder",
+            },
+            {
+                "ontologyName": "mondo",
+                "shortForm": "MONDO_0009276",
+                "oboId": "MONDO:0009276",
+                "label": "Bernard-Soulier syndrome",
+            },
+            {
+                "ontologyName": "mondo",
+                "shortForm": "MONDO_9999999",
+                "oboId": "MONDO:9999999",
+                "label": "Bernard-Soulier syndrome",
+                "isObsolete": True,
+            },
+        ]
+    )
+    context, call = ACMGEvidencePipeline(runtime)._normalize_disease_context(
+        "Bernard-Soulier syndrome"
+    )
+
+    assert call is not None
+    assert context["status"] == "resolved"
+    assert context["mondo_id"] == "MONDO:0009276"
+    assert context["match_basis"] == "exact_label"
+
+
+def test_mondo_resolution_distinguishes_ambiguous_unresolved_and_not_provided():
+    rows = [
+        {
+            "ontologyName": "mondo",
+            "oboId": "MONDO:0000001",
+            "label": "First candidate",
+        },
+        {
+            "ontologyName": "mondo",
+            "oboId": "MONDO:0000002",
+            "label": "Second candidate",
+        },
+    ]
+    ambiguous, _ = ACMGEvidencePipeline(_OLSFixture(rows))._normalize_disease_context(
+        "candidate disorder"
+    )
+    unresolved, _ = ACMGEvidencePipeline(_OLSFixture([]))._normalize_disease_context(
+        "missing disorder"
+    )
+    not_provided, _ = ACMGEvidencePipeline(_OLSFixture([]))._normalize_disease_context(
+        ""
+    )
+
+    assert ambiguous["status"] == "ambiguous"
+    assert unresolved["status"] == "unresolved"
+    assert not_provided["status"] == "not_provided"
+
+
 def _candidate():
     return {
         "specification_id": "GN078",
@@ -37,6 +108,29 @@ def test_online_structured_cspec_is_executable_without_local_catalog():
     assert contract["criteria"]["PM2"]["strength"] == "PM2_Supporting"
     assert contract["criteria"]["PM2"]["verification"] == "dynamic_cspec_structured"
     assert contract["review_requests"][0]["criterion"] == "PM2"
+
+
+def test_gp1ba_frequency_language_is_parsed_as_an_executable_pm2_condition():
+    candidate = _candidate()
+    candidate["specification_id"] = "GN079"
+    candidate["gene"] = "GP1BA"
+    candidate["version"] = "1.1.0"
+    candidate["criterion_modifications"] = [
+        {
+            "criterion": "PM2",
+            "applicability": "Applicable",
+            "default_strength": "Supporting",
+            "instructions": "gnomAD MAF of less than or equal to 0.0001114.",
+        }
+    ]
+
+    contract = build_dynamic_cspec_contract(candidate)
+    pm2 = contract["criteria"]["PM2"]
+
+    assert pm2["deterministic_parse_status"] == "parsed"
+    assert pm2["population_frequency_threshold"] == 0.0001114
+    assert pm2["maximum_credible_af"] == 0.0001114
+    assert pm2["operator"] == "<="
 
 
 def test_unbound_compiled_contract_is_ignored():
