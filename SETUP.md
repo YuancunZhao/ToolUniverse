@@ -21,7 +21,7 @@ Install the exact validated runtime commit instead of a floating branch:
 ```text
 Repository: https://github.com/YuancunZhao/ToolUniverse
 Branch:     codex/acmg-on-tooluniverse-1.4
-Commit:     07973c6a372acf95aa8b85fcdcdc41ba15efd2e2
+Commit:     4321a546bb1953a14b8238cfe84fbb86647d2a8f
 ```
 
 This commit passed the then-current ACMG/SpliceAI/provider suite, MCP registration
@@ -43,7 +43,7 @@ until the full exact-SHA gate is repeated.
 
 Copy this sentence into another AI agent:
 
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `07973c6a372acf95aa8b85fcdcdc41ba15efd2e2` for my current AI client. Preserve unrelated MCP servers and skills.
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `4321a546bb1953a14b8238cfe84fbb86647d2a8f` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
 
@@ -57,7 +57,7 @@ existing `tooluniverse` entry:
   "args": [
     "--refresh",
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@07973c6a372acf95aa8b85fcdcdc41ba15efd2e2",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@4321a546bb1953a14b8238cfe84fbb86647d2a8f",
     "tooluniverse"
   ],
   "env": {
@@ -105,7 +105,7 @@ Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 Then run:
 
 ```bash
-TOOLUNIVERSE_COMMIT="07973c6a372acf95aa8b85fcdcdc41ba15efd2e2"
+TOOLUNIVERSE_COMMIT="4321a546bb1953a14b8238cfe84fbb86647d2a8f"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
 : "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
@@ -372,7 +372,7 @@ First verify that the exact commit starts:
 
 ```bash
 uvx --refresh --from \
-  git+https://github.com/YuancunZhao/ToolUniverse.git@07973c6a372acf95aa8b85fcdcdc41ba15efd2e2 \
+  git+https://github.com/YuancunZhao/ToolUniverse.git@4321a546bb1953a14b8238cfe84fbb86647d2a8f \
   tooluniverse --help
 ```
 
