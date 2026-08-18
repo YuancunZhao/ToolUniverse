@@ -1097,6 +1097,8 @@ default_tool_files = {
     "fhir_terminology": os.path.join(
         current_dir, "data", "fhir_terminology_tools.json"
     ),
+    # EGA - controlled-access human genomic archive, public metadata only
+    "ega": os.path.join(current_dir, "data", "ega_tools.json"),
     # Gene2Phenotype - EBI curated gene-disease associations for clinical genetics
     "gene2phenotype": os.path.join(current_dir, "data", "gene2phenotype_tools.json"),
     # NASA Exoplanet Archive - ADQL queries for 5500+ confirmed exoplanets and stellar hosts
