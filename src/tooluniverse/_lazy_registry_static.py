@@ -646,6 +646,7 @@ STATIC_LAZY_REGISTRY = {
     "OpenFDADeviceTool": "openfda_device_tool",
     "FHIRTerminologyTool": "fhir_terminology_tool",
     "EGATool": "ega_tool",
+    "DbGaPTool": "dbgap_tool",
     "OrphadataTool": "orphadata_tool",
     "SCREENRESTTool": "screen_tool",
     "SingleCellPortalTool": "single_cell_portal_tool",
