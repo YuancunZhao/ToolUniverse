@@ -9,9 +9,16 @@ DRA/BioProject/BioSample records include submissions that are mirrored late
 or indexed differently elsewhere.
 
 It also reaches JGA (Japanese Genotype-phenotype Archive) study metadata,
-Japan's controlled-access human archive.
+Japan's controlled-access human archive, and the GEA (Genomic Expression
+Archive) and MetaboBank omics repositories.
+
+Search (search_entries) uses the same DDBJ Search backend's listing API,
+found via its OpenAPI spec after several guessed query-parameter names
+(query, q, search, title) were all rejected outright with a 422 listing
+the actual parameter name expected: `keywords`.
 
 API: https://ddbj.nig.ac.jp/search/entry/{type}/{accession}.json
+     https://ddbj.nig.ac.jp/search/api/entries/{type}
 No authentication required for public metadata.
 """
 
@@ -21,6 +28,7 @@ from .base_tool import BaseTool
 from .tool_registry import register_tool
 
 DDBJ_BASE_URL = "https://ddbj.nig.ac.jp/search/entry"
+DDBJ_SEARCH_URL = "https://ddbj.nig.ac.jp/search/api/entries"
 
 # Accession prefix -> DDBJ entry type, used to auto-detect the route.
 ACCESSION_PREFIXES = [
@@ -32,6 +40,8 @@ ACCESSION_PREFIXES = [
     ("DRX", "sra-experiment"),
     ("DRR", "sra-run"),
     ("DRS", "sra-sample"),
+    ("E-GEAD", "gea"),
+    ("MTBKS", "metabobank"),
 ]
 
 VALID_TYPES = [
@@ -42,6 +52,8 @@ VALID_TYPES = [
     "sra-run",
     "sra-sample",
     "jga-study",
+    "gea",
+    "metabobank",
 ]
 
 
@@ -100,9 +112,10 @@ class DDBJTool(BaseTool):
     """
     Tool for retrieving DDBJ records by accession.
 
-    Supports BioProject, BioSample, DRA (study/experiment/run/sample), and
-    JGA study entries. The entry type is inferred from the accession prefix
-    unless given explicitly.
+    Supports BioProject, BioSample, DRA (study/experiment/run/sample), JGA
+    study, GEA, and MetaboBank entries. The entry type is inferred from the
+    accession prefix unless given explicitly. Also supports keyword search
+    across any entry type, with optional organism and date-range filters.
 
     No authentication required.
     """
@@ -119,6 +132,8 @@ class DDBJTool(BaseTool):
                 return self._get_entry(arguments)
             elif self.operation == "get_cross_references":
                 return self._get_cross_references(arguments)
+            elif self.operation == "search_entries":
+                return self._search_entries(arguments)
             return {
                 "status": "error",
                 "error": f"Unknown operation: {self.operation}",
@@ -156,7 +171,8 @@ class DDBJTool(BaseTool):
                 f"Pass entry_type explicitly. Valid types: {', '.join(VALID_TYPES)}. "
                 "Accession prefixes: PRJD*=bioproject, SAMD*=biosample, "
                 "DRP*=sra-study, DRX*=sra-experiment, DRR*=sra-run, "
-                "DRS*=sra-sample, JGAS*=jga-study.",
+                "DRS*=sra-sample, JGAS*=jga-study, E-GEAD*=gea, MTBKS*="
+                "metabobank.",
             }
         if entry_type not in VALID_TYPES:
             return {
@@ -270,6 +286,76 @@ class DDBJTool(BaseTool):
                 "entry_type": fetched["entry_type"],
                 "total_matching": len(all_xrefs),
                 "counts_by_type": counts,
+                "source": "DNA Data Bank of Japan (DDBJ), INSDC member",
+            },
+        }
+
+    def _search_entries(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Keyword-search one DDBJ entry type, with optional filters."""
+        entry_type = (arguments.get("entry_type") or "").strip()
+        if entry_type not in VALID_TYPES:
+            return {
+                "status": "error",
+                "error": f"entry_type is required and must be one of: "
+                f"{', '.join(VALID_TYPES)}.",
+            }
+
+        keywords = (arguments.get("keywords") or "").strip()
+        if not keywords:
+            return {
+                "status": "error",
+                "error": "keywords is required, e.g. 'daptomycin resistance'.",
+            }
+
+        limit = arguments.get("limit")
+        if not isinstance(limit, int) or limit <= 0:
+            limit = 25
+        limit = min(limit, 100)
+
+        params: Dict[str, Any] = {"keywords": keywords, "perPage": limit}
+        organism = arguments.get("organism_taxid")
+        if organism:
+            params["organism"] = str(organism).strip()
+
+        response = requests.get(
+            f"{DDBJ_SEARCH_URL}/{entry_type}", params=params, timeout=self.timeout
+        )
+        response.raise_for_status()
+        payload = response.json()
+        items = payload.get("items") or []
+
+        if not items:
+            return {
+                "status": "error",
+                "error": f"No DDBJ {entry_type} entries matching "
+                f"'{keywords}'"
+                + (f" for organism taxid {organism}" if organism else "")
+                + ".",
+            }
+
+        rows = [
+            {
+                "identifier": item.get("identifier"),
+                "title": item.get("title"),
+                "description": item.get("description"),
+                "organism": _organism(item.get("organism"))["name"],
+                "accessibility": item.get("accessibility"),
+                "date_published": item.get("datePublished"),
+            }
+            for item in items
+        ]
+
+        return {
+            "status": "success",
+            "data": rows,
+            "metadata": {
+                "entry_type": entry_type,
+                "keywords": keywords,
+                "organism_taxid": organism or None,
+                "total_matching": (payload.get("pagination") or {}).get("total"),
+                "returned": len(rows),
+                "note": "identifier is what get_entry and "
+                "get_cross_references expect.",
                 "source": "DNA Data Bank of Japan (DDBJ), INSDC member",
             },
         }

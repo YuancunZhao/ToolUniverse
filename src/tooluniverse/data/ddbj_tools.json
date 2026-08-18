@@ -2,7 +2,7 @@
   {
     "name": "DDBJ_get_entry",
     "type": "DDBJTool",
-    "description": "Retrieve a DNA Data Bank of Japan record by accession. DDBJ is the third INSDC member alongside NCBI/GenBank and EMBL-EBI/ENA, and also hosts JGA, Japan's controlled-access human archive. The entry type is inferred from the accession prefix (PRJD*=bioproject, SAMD*=biosample, DRP*=sra-study, DRX*=sra-experiment, DRR*=sra-run, DRS*=sra-sample, JGAS*=jga-study) unless you pass entry_type. Example: accession='DRP000001'.",
+    "description": "Retrieve a DNA Data Bank of Japan record by accession. DDBJ is the third INSDC member alongside NCBI/GenBank and EMBL-EBI/ENA, and also hosts JGA (Japan's controlled-access human archive), GEA (expression), and MetaboBank (metabolomics). The entry type is inferred from the accession prefix (PRJD*=bioproject, SAMD*=biosample, DRP*=sra-study, DRX*=sra-experiment, DRR*=sra-run, DRS*=sra-sample, JGAS*=jga-study, E-GEAD*=gea, MTBKS*=metabobank) unless you pass entry_type. Example: accession='DRP000001'.",
     "fields": {
       "operation": "get_entry"
     },
@@ -14,7 +14,7 @@
       "properties": {
         "accession": {
           "type": "string",
-          "description": "DDBJ accession, e.g. 'DRP000001', 'PRJDB3490', 'JGAS000001'."
+          "description": "DDBJ accession, e.g. 'DRP000001', 'PRJDB3490', 'JGAS000001', 'E-GEAD-1000', 'MTBKS102'."
         },
         "entry_type": {
           "type": [
@@ -29,9 +29,11 @@
             "sra-experiment",
             "sra-run",
             "sra-sample",
-            "jga-study"
+            "jga-study",
+            "gea",
+            "metabobank"
           ],
-          "description": "Override the inferred entry type. One of: bioproject, biosample, sra-study, sra-experiment, sra-run, sra-sample, jga-study."
+          "description": "Override the inferred entry type. One of: bioproject, biosample, sra-study, sra-experiment, sra-run, sra-sample, jga-study, gea, metabobank."
         }
       }
     },
@@ -188,6 +190,12 @@
       },
       {
         "accession": "JGAS000001"
+      },
+      {
+        "accession": "E-GEAD-1000"
+      },
+      {
+        "accession": "MTBKS102"
       }
     ]
   },
@@ -286,6 +294,74 @@
         "accession": "PRJDB3490",
         "limit": 10
       }
+    ]
+  },
+  {
+    "name": "DDBJ_search_entries",
+    "type": "DDBJTool",
+    "description": "Keyword search one DDBJ entry type (bioproject, biosample, sra-study, sra-experiment, sra-run, sra-sample, jga-study, gea, metabobank), optionally filtered by organism NCBI taxonomy ID. Example: entry_type='gea', keywords='daptomycin resistance' finds gene-expression studies on antibiotic resistance. Returns each match's identifier for use with DDBJ_get_entry or DDBJ_get_cross_references.",
+    "fields": {
+      "operation": "search_entries"
+    },
+    "parameter": {
+      "type": "object",
+      "required": ["entry_type", "keywords"],
+      "properties": {
+        "entry_type": {
+          "type": "string",
+          "enum": [
+            "bioproject",
+            "biosample",
+            "sra-study",
+            "sra-experiment",
+            "sra-run",
+            "sra-sample",
+            "jga-study",
+            "gea",
+            "metabobank"
+          ],
+          "description": "Which DDBJ record type to search."
+        },
+        "keywords": {
+          "type": "string",
+          "description": "Free-text search terms, e.g. 'daptomycin resistance'."
+        },
+        "organism_taxid": {
+          "type": ["string", "integer", "null"],
+          "description": "Optional NCBI taxonomy ID filter, e.g. 9606 (human)."
+        },
+        "limit": {
+          "type": ["integer", "null"],
+          "description": "Max entries to return, 1-100. Default 25."
+        }
+      }
+    },
+    "return_schema": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "identifier": {"type": ["string", "null"]},
+              "title": {"type": ["string", "null"]},
+              "description": {"type": ["string", "null"]},
+              "organism": {"type": ["string", "null"]},
+              "accessibility": {"type": ["string", "null"]},
+              "date_published": {"type": ["string", "null"]}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {"error": {"type": "string"}},
+          "required": ["error"]
+        }
+      ]
+    },
+    "test_examples": [
+      {"entry_type": "gea", "keywords": "daptomycin", "limit": 5},
+      {"entry_type": "bioproject", "keywords": "lung cancer", "organism_taxid": 9606, "limit": 5}
     ]
   }
 ]

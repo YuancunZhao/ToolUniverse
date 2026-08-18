@@ -13,6 +13,7 @@ from tooluniverse import ToolUniverse
 EXPECTED_TOOLS = [
     "DDBJ_get_entry",
     "DDBJ_get_cross_references",
+    "DDBJ_search_entries",
     "BacDive_search_by_taxon",
     "BacDive_get_strain",
     "Orphadata_get_disorder",
@@ -66,12 +67,47 @@ class TestDDBJ:
             ("SAMD00000001", "biosample"),
             ("DRX000001", "sra-experiment"),
             ("JGAS000001", "jga-study"),
+            ("E-GEAD-1000", "gea"),
+            ("MTBKS102", "metabobank"),
         ],
     )
     def test_entry_type_inferred_from_prefix(self, tu, accession, expected_type):
         result = tu.tools.DDBJ_get_entry(accession=accession)
         data_of(result)
         assert result["metadata"]["entry_type"] == expected_type
+
+    def test_search_entries_actually_filters(self, tu):
+        # Regression guard: several DDBJ-adjacent list endpoints (M-CSA,
+        # MediaDive, DHS Program) silently ignore their search parameter
+        # elsewhere in this codebase; confirm this one really filters.
+        narrow = tu.tools.DDBJ_search_entries(
+            entry_type="gea", keywords="daptomycin", limit=10
+        )
+        rows = data_of(narrow)
+        assert rows
+        assert narrow["metadata"]["total_matching"] < 100
+
+    def test_search_entries_organism_filter(self, tu):
+        result = tu.tools.DDBJ_search_entries(
+            entry_type="bioproject",
+            keywords="lung cancer",
+            organism_taxid=9606,
+            limit=5,
+        )
+        rows = data_of(result)
+        assert rows
+
+    def test_search_entries_unmatched_query(self, tu):
+        result = tu.tools.DDBJ_search_entries(
+            entry_type="gea", keywords="zzzznotarealterm12345"
+        )
+        assert result["status"] == "error"
+
+    def test_search_entries_requires_valid_entry_type(self, tu):
+        result = tu.tools.DDBJ_search_entries(
+            entry_type="notarealtype", keywords="test"
+        )
+        assert result["status"] == "error"
 
     def test_organism_flattened_to_name_and_taxid(self, tu):
         # Upstream returns {"identifier": ..., "name": ...}
