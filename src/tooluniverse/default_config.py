@@ -1081,6 +1081,22 @@ default_tool_files = {
     "dhs_program": os.path.join(current_dir, "data", "dhs_program_tools.json"),
     # MDDB - molecular dynamics trajectory database (MoDEL, BioExcel, DESRES)
     "mddb": os.path.join(current_dir, "data", "mddb_tools.json"),
+    # SmartAPI - registry of ~270 biomedical web APIs, resolves an API
+    # name to its base URL and endpoints
+    "smartapi": os.path.join(current_dir, "data", "smartapi_tools.json"),
+    # NCI EVS - CTCAE, ICD-10-CM/ICD-9-CM, RadLex, NDF-RT/MedRT terminologies
+    # (sibling to the existing NCIt-only NCIThesaurusTool)
+    "nci_evs": os.path.join(current_dir, "data", "nci_evs_tools.json"),
+    # openFDA device - recalls and MAUDE adverse events, the device side of
+    # openFDA (existing tools cover only drug/label, drug/event, drugsfda)
+    "openfda_device": os.path.join(
+        current_dir, "data", "openfda_device_tools.json"
+    ),
+    # FHIR Terminology Service - SNOMED CT code lookup and hierarchy
+    # expansion (LOINC/RxNorm/ICD-10-CM already have dedicated tools)
+    "fhir_terminology": os.path.join(
+        current_dir, "data", "fhir_terminology_tools.json"
+    ),
     # Gene2Phenotype - EBI curated gene-disease associations for clinical genetics
     "gene2phenotype": os.path.join(current_dir, "data", "gene2phenotype_tools.json"),
     # NASA Exoplanet Archive - ADQL queries for 5500+ confirmed exoplanets and stellar hosts
