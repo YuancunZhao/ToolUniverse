@@ -240,9 +240,137 @@ def test_multi_provider_resolver_accepts_overlapping_term_detail():
 
     assert resolution["status"] == "resolved"
     assert resolution["selected_source_fact_ids"] == ["vep", "vv"]
+    assert resolution["resolution_confidence"] == "authoritative_corroborated"
+    assert resolution["verified_usable"] is True
 
 
-def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
+def test_single_authoritative_source_is_verified_usable():
+    resolution = resolve_consequence_observations(
+        IDENTITY,
+        [
+            {
+                "source_fact_id": "vv",
+                "provider": "VariantValidator_format_genomic_to_transcripts",
+                "source_available": True,
+                "identity_status": "matched",
+                "selected_transcript_status": "exact",
+                "consequence_terms": ["frameshift_variant"],
+                "_match_rank": 0,
+                "_provider_rank": 1,
+            }
+        ],
+    )
+
+    assert resolution["status"] == "resolved"
+    assert resolution["resolution_confidence"] == "authoritative_single_source"
+    assert resolution["automatic_usable"] is True
+    assert resolution["verified_usable"] is True
+
+
+def test_empty_aggregation_observation_is_visible_but_nonblocking():
+    resolution = resolve_consequence_observations(
+        IDENTITY,
+        [
+            {
+                "source_fact_id": "vv",
+                "provider": "VariantValidator_format_genomic_to_transcripts",
+                "source_available": True,
+                "identity_status": "matched",
+                "selected_transcript_status": "exact",
+                "consequence_terms": ["splice_acceptor_variant"],
+                "_match_rank": 0,
+                "_provider_rank": 1,
+            },
+            {
+                "source_fact_id": "favor",
+                "provider": "FAVOR_annotate_variant",
+                "provider_role": "aggregation",
+                "source_available": False,
+                "identity_status": "matched",
+                "selected_transcript_status": "unknown",
+                "limitation": "no_transcript_consequence_rows",
+                "observation_role": "unavailable",
+                "_match_rank": 99,
+                "_provider_rank": 3,
+            },
+        ],
+    )
+
+    assert resolution["status"] == "resolved"
+    assert resolution["verified_usable"] is True
+    assert resolution["failures"][0]["source_fact_id"] == "favor"
+
+
+def test_normalization_context_cannot_resolve_consequence_by_itself():
+    resolution = resolve_consequence_observations(
+        IDENTITY,
+        [
+            {
+                "source_fact_id": "context",
+                "provider": "gProfiler_annotate_snps",
+                "provider_role": "normalization_context",
+                "source_available": True,
+                "_match_rank": 0,
+                "_provider_rank": 99,
+                "selected_transcript_status": "exact",
+                "transcript": "NM_000059.4",
+                "consequence_terms": ["frameshift_variant"],
+            }
+        ],
+    )
+
+    assert resolution["status"] == "unavailable"
+    assert resolution["automatic_usable"] is False
+    assert resolution["verified_usable"] is False
+
+
+def test_normalization_hgvs_representation_does_not_veto_authoritative_result():
+    resolution = resolve_consequence_observations(
+        {**IDENTITY, "transcript": "NM_015295.3"},
+        [
+            {
+                "source_fact_id": "vv",
+                "provider": "VariantValidator_format_genomic_to_transcripts",
+                "provider_role": "authoritative",
+                "source_available": True,
+                "identity_status": "matched",
+                "selected_transcript_status": "exact",
+                "transcript_match_status": "exact",
+                "hgvs_c": "NM_015295.3:c.106_107dup",
+                "consequence_terms": ["frameshift_variant"],
+                "_match_rank": 0,
+                "_provider_rank": 1,
+            },
+            {
+                "source_fact_id": "mutalyzer",
+                "provider": "Mutalyzer_normalize_variant",
+                "provider_role": "normalization_context",
+                "source_available": False,
+                "identity_status": "partial",
+                "selected_transcript_status": "exact",
+                "transcript_match_status": "exact",
+                "hgvs_c": "NM_015295.3:c.104_107A[6]",
+                "consequence_terms": ["frameshift_variant"],
+                "limitation": "normalization_context_only",
+                "_match_rank": 0,
+                "_provider_rank": 5,
+            },
+        ],
+    )
+
+    assert resolution["status"] == "resolved"
+    assert resolution["resolution_confidence"] == "authoritative_single_source"
+    assert resolution["verified_usable"] is True
+    assert {
+        row["value"]
+        for row in resolution["equivalent_or_alternate_representations"]
+    } == {
+        "NM_015295.3:c.106_107dup",
+        "NM_015295.3:c.104_107A[6]",
+    }
+
+
+def test_authoritative_and_aggregation_disagreement_is_nonblocking():
     observations = [
         {
             "source_fact_id": "vv",
@@ -268,8 +396,45 @@ def test_multi_provider_resolver_fails_closed_on_disjoint_effects():
 
     resolution = resolve_consequence_observations(IDENTITY, observations)
 
+    assert resolution["status"] == "resolved"
+    assert resolution["selected_observation"]["provider"] == (
+        "VariantValidator_format_genomic_to_transcripts"
+    )
+    assert resolution["resolution_confidence"] == "disputed"
+    assert resolution["automatic_usable"] is True
+    assert resolution["verified_usable"] is False
+    assert resolution["nonblocking_disagreements"]
+
+
+def test_two_authoritative_sources_fail_closed_on_disjoint_effects():
+    observations = [
+        {
+            "source_fact_id": "vv",
+            "provider": "VariantValidator_format_genomic_to_transcripts",
+            "source_available": True,
+            "identity_status": "matched",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["frameshift_variant"],
+            "_match_rank": 0,
+            "_provider_rank": 1,
+        },
+        {
+            "source_fact_id": "vep",
+            "provider": "EnsemblVEP_annotate_hgvs",
+            "source_available": True,
+            "identity_status": "matched",
+            "selected_transcript_status": "exact",
+            "consequence_terms": ["synonymous_variant"],
+            "_match_rank": 0,
+            "_provider_rank": 0,
+        },
+    ]
+
+    resolution = resolve_consequence_observations(IDENTITY, observations)
+
     assert resolution["status"] == "identity_conflict"
     assert resolution["selected_observation"] is None
+    assert resolution["selected_transcript_conflicts"]
 
 
 def test_alternate_transcript_protein_difference_is_context_only():

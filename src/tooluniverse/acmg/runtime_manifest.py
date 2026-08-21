@@ -16,12 +16,13 @@ from . import (
     population,
     pvs1,
     rule_catalog,
+    spliceai,
     vcep,
 )
 
 
-ACMG_RUNTIME_VERSION = "evidence-automation-3.1"
-COLLECTOR_SCHEMA_VERSION = "2026-08-13-v3"
+ACMG_RUNTIME_VERSION = "evidence-automation-3.2"
+COLLECTOR_SCHEMA_VERSION = "2026-08-15-v3"
 UPSTREAM_BASE_COMMIT = "089eb8e6308fc64ae5af3de4bfbec32b5cf07b61"
 BAYESIAN_PRIOR = 0.1
 
@@ -73,6 +74,12 @@ def _ruleset_payload() -> dict[str, Any]:
         "bayesian_prior": BAYESIAN_PRIOR,
         "evidence_calculation_policy": {
             "identity_verification": rule_catalog.IDENTITY_VERIFICATION_POLICY,
+            "identity_provider_roles": rule_catalog.IDENTITY_PROVIDER_ROLES,
+            "clinical_observation_case_identifier_priority": [
+                "case_id",
+                "proband_id",
+                "observation_id",
+            ],
             "automatic_policy_version": models.AUTOMATIC_EVIDENCE_POLICY_VERSION,
             "verified_policy_version": models.VERIFIED_EVIDENCE_POLICY_VERSION,
             "automatic_evidence_statuses": sorted(models.AUTOMATIC_EVIDENCE_STATUSES),
@@ -123,13 +130,23 @@ def _ruleset_payload() -> dict[str, Any]:
                 "hard_conflicts": [
                     "build",
                     "allele",
-                    "gene",
-                    "selected_transcript_consequence",
-                    "selected_transcript_protein_change",
+                    "authoritative_selected_transcript_consequence",
+                    "authoritative_selected_transcript_protein_change",
                 ],
+                "provider_roles": consequence_sources.CONSEQUENCE_PROVIDER_ROLES,
                 "alternate_transcript_difference": "context_only",
+                "empty_or_failed_provider": "nonblocking_visible_limitation",
+                "authoritative_aggregation_disagreement": ("automatic_only_disputed"),
+                "single_authoritative_selected_transcript": "verified_usable",
+                "single_aggregation_selected_transcript": "automatic_only",
                 "selection": "exact_refseq_then_mane_then_version_compatible",
                 "majority_vote": False,
+            },
+            "spliceai_scope_policy": {
+                "version": spliceai.SPLICEAI_SCOPE_POLICY_VERSION,
+                "calculation_scope": "identity_selected_transcript_row",
+                "provider_global_max": "context_only",
+                "selected_row_claimed_max": "validated_against_four_delta_channels",
             },
             "literature_extractor": {
                 "id": literature_extractor.EXTRACTOR_ID,

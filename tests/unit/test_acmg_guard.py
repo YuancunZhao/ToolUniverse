@@ -61,6 +61,7 @@ def _context(card: dict | None = None) -> dict:
         "variant_identity_hash": "a" * 64,
         "ruleset_hash": ruleset_hash(),
         "claims": [compact],
+        "criterion_review_claims": [],
     }
     context["context_hash"] = guard_context_hash(context)
     return context
@@ -200,6 +201,45 @@ def test_runtime_guard_accepts_compact_guard_context():
     assert result["status"] == "PASS"
 
 
+def test_runtime_guard_allows_criterion_review_without_evidence_card():
+    context = _context()
+    context["criterion_review_claims"] = [
+        {
+            "criterion": "PVS1",
+            "route_status": "insufficient_information",
+            "evidence_status": "no_information",
+        }
+    ]
+    context["context_hash"] = guard_context_hash(context)
+
+    result = ACMGGuardFinalAnswerTool({}).run(
+        {
+            "final_answer_text": (
+                "PVS1 尚未评估，缺少疾病特异 LoF 机制；PP3 是候选证据。"
+            ),
+            "guard_context": context,
+        }
+    )
+
+    assert result["status"] == "PASS"
+    assert result["criterion_review_roles"] == [
+        {
+            "criterion": "PVS1",
+            "route_status": "insufficient_information",
+            "evidence_status": "no_information",
+            "role": "review_only",
+        }
+    ]
+
+
+def test_runtime_guard_blocks_unknown_acmg_like_criterion():
+    result = ACMGGuardFinalAnswerTool({}).run(
+        {"final_answer_text": "PS7 is present.", "guard_context": _context()}
+    )
+    assert result["status"] == "BLOCK"
+    assert result["unsupported_codes"] == ["PS7"]
+
+
 def test_runtime_guard_fails_closed_for_mutated_or_stale_context():
     base = _context()
     invalid_contexts = [
@@ -207,6 +247,16 @@ def test_runtime_guard_fails_closed_for_mutated_or_stale_context():
         {**base, "schema_version": "stale"},
         {**base, "claims": [{**base["claims"][0], "criterion": "PS4"}]},
         {**base, "claims": [{**base["claims"][0], "role": "unknown"}]},
+        {
+            **base,
+            "criterion_review_claims": [
+                {
+                    "criterion": "PVS1",
+                    "route_status": "unknown",
+                    "evidence_status": "no_information",
+                }
+            ],
+        },
         ["not-an-object"],
     ]
     tool = ACMGGuardFinalAnswerTool({"name": "ACMG_guard_final_answer"})

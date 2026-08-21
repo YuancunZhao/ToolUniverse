@@ -179,7 +179,7 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert not initial["review_readiness"].get("pending_request_ids")
     assert initial["final_classification_allowed"] is False
     assert initial["runtime_manifest"]["acmg_runtime_version"] == (
-        "evidence-automation-3.1"
+        "evidence-automation-3.2"
     )
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
     assert validate_guard_context(initial["guard_context"]) == (True, "")
@@ -317,5 +317,5 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
     payload = _mcp_payload(response)
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
-    assert payload["runtime_manifest"]["collector_schema_version"] == ("2026-08-13-v3")
+    assert payload["runtime_manifest"]["collector_schema_version"] == ("2026-08-15-v3")
     assert payload["final_classification_allowed"] is False

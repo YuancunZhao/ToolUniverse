@@ -83,9 +83,13 @@ SourceFact records independent status dimensions:
 - `disease_match_status`: matched, candidate, mismatch, or unspecified;
 - `independence_status`: independent, overlapping, or unknown.
 
-Facts do not disappear merely because they cannot be scored. Their normalized
-values, query representation, dataset/release, provider URL, identity check,
-and raw-result hash remain auditable.
+Facts do not disappear merely because they cannot be scored. Allele/build
+identity is tracked separately from gene/transcript target binding. Canonical
+HGNC and transcript accessions are returned in `gene` and `transcript`, while
+provider text such as a FAVOR locus label remains in
+`provider_gene_label`/`provider_transcript_label`. Their normalized values,
+query representation, dataset/release, provider URL, identity check, and
+raw-result hash remain auditable.
 
 `failure_details` separates `no_hit`, `identity_conflict`, `provider_failed`,
 and `provider_contract_malformed`, with the attempted representation,
@@ -104,9 +108,20 @@ Inputs containing a parenthesized protein suffix are normalized before
 provider calls: only c.HGVS is queried, while the submitted p.HGVS is retained
 and checked against the resolved protein consequence. The resolver selects
 exact versioned RefSeq, unique MANE mapping, then version-compatible transcript
-observations. It never votes. The resulting
-`consequence_profile` exposes all observations, selected/corroborating facts,
-failures, conflicts, mapping reason, and missing requirements.
+observations. It never votes: one allele-bound authoritative selected-
+transcript result is sufficient, while `no_hit`, an empty row, a failed
+provider, or an alternate transcript is not a negative vote. Two authoritative
+sources that materially disagree on the same selected transcript fail closed.
+Mutalyzer and g:Profiler are normalization context only. Different HGVS
+descriptions are retained under `equivalent_or_alternate_representations`; they
+do not become conflicts unless authoritative sources expose incompatible
+genomic build/coordinate/ref/alt facts.
+An authoritative/aggregation disagreement remains visible and can support the
+automatic view, but not the verified view. The resulting
+`consequence_profile` exposes all observations, provider roles,
+selected/corroborating facts, nonblocking disagreements, failures, conflicts,
+resolution confidence, calculation usability, mapping reason, and missing
+requirements.
 
 MyVariant and related providers retain all available REVEL, CADD,
 AlphaMissense, SIFT, PolyPhen-2 HDIV, MetaRNN, GERP, phyloP, phastCons, VEST4,
@@ -114,10 +129,14 @@ MutationTaster, and SpliceAI values with versions and input identity. PP3/BP4
 uses only versioned calibrated rules; predictor majority voting is prohibited.
 
 SpliceAI output always preserves `DS_AG`, `DS_AL`, `DS_DG`, `DS_DL`, the four
-positions, maximum delta, and trigger channel. Delta scores are never
-recomputed from raw REF/ALT values. Canonical donor loss uses DS_DL and
-acceptor loss uses DS_AL at the selected-transcript boundary. Low native-site
-loss for an insertion or duplication is not proof of normal splicing.
+positions, maximum delta, and trigger channel. The provider-wide maximum is
+reported separately as `provider_global_max_delta_score`; PP3/PVS1 use the
+identity-selected row's `selected_transcript_max_delta_score` and four
+channels. A higher score on another transcript is context, not an inconsistency.
+Delta scores are never recomputed from raw REF/ALT values. Canonical donor loss
+uses DS_DL and acceptor loss uses DS_AL at the selected-transcript boundary.
+Low native-site loss for an insertion or duplication is not proof of normal
+splicing.
 
 PVS1 has no generic fallback. It must pass the existing transcript,
 consequence, splice-site, reading-frame/NMD, LoF disease-mechanism, and
@@ -286,6 +305,9 @@ Principal outputs include:
 Summary mode keeps every clinically relevant representative card, predictor,
 literature item, provider/failure index, and conflict while omitting full text,
 full CSpec documents, repeated atomic-card payloads, and raw provider payloads.
+When every literature row has the same provider, that provider appears once in
+`literature_candidate_defaults`; consumers merge the defaults into each compact
+`literature_candidates` row.
 Repeated source failures are grouped by provider and failure code; complete
 attempt records remain in full mode. Representative CFTR, GP1BA, MAT1A, and
 BRCA2 summaries stay below 40 KB without truncating cards, predictors, or
@@ -299,10 +321,12 @@ the 28 contracts, candidate policy, extractors, scenario policy, compatibility,
 fixed prior, and odds.
 
 `guard_context` is a compact self-checking transport contract containing only
-schema/ruleset/variant hashes and representative-card `claims`; representative
+schema/ruleset/variant hashes, representative-card `claims`, and compact
+`criterion_review_claims`; representative
 cases stay below 5 KB. The Guard does not recompute evidence or carry the full
 SourceFact set on its second call. It recomputes the context hash, allows
-source-backed candidate claims, explicitly
+source-backed candidate claims and accurate review-only criterion status,
+without turning review claims into cards or Bayesian inputs. It also allows explicitly
 attributed external VCEP/ClinVar assertions, and Bayesian review estimates,
 but blocks unsupported criteria and ToolUniverse-authored five-tier labels.
 The checksum detects accidental change; it is not a digital signature.

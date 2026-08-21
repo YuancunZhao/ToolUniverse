@@ -159,8 +159,9 @@ def _mechanism_from_facts(
         return False
     steps.append(
         "LoF disease mechanism not established: requires a CSpec contract, a "
-        "document-verified gene_disease_mechanism fact, or ClinGen validity "
-        "plus gnomAD LoF intolerance"
+        "document-verified gene_disease_mechanism fact, or another explicitly "
+        "validated disease-specific mechanism source. ClinGen validity, pLI, "
+        "and LOEUF are context only."
     )
     return None
 

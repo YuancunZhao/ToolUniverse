@@ -115,6 +115,7 @@ class ACMGGuardFinalAnswerTool(BaseTool):
         verified_ids: set[str] | None = None
         known_ids: set[str] | None = None
         validated_claims = False
+        criterion_review_claims: list[dict[str, Any]] = []
         if guard_context is not None:
             context_valid, context_error = validate_guard_context(guard_context)
             if not context_valid:
@@ -129,9 +130,13 @@ class ACMGGuardFinalAnswerTool(BaseTool):
                 }
             assert isinstance(guard_context, dict)
             cards = guard_context.get("claims", [])
+            criterion_review_claims = guard_context.get(
+                "criterion_review_claims", []
+            )
             validated_claims = True
         elif cards is None and isinstance(collector_result, dict):
             cards = collector_result.get("evidence_cards", [])
+            criterion_review_claims = collector_result.get("criterion_reviews", [])
         if not isinstance(cards, list):
             cards = []
         if guard_context is None:
@@ -142,6 +147,7 @@ class ACMGGuardFinalAnswerTool(BaseTool):
             verified_source_fact_ids=verified_ids,
             known_source_fact_ids=known_ids,
             validated_claims=validated_claims,
+            criterion_review_claims=criterion_review_claims,
         )
 
 

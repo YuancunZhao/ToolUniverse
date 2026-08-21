@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@089eb8e6308fc64ae5af3de4bfbec32b5cf07b61` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.0+acmg.4`. Files unrelated to the ACMG runtime,
+The package version is `1.4.0+acmg.5`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -202,7 +202,9 @@ roles. The collector returns broad source-backed `automatic_bayesian`, strict
 Collector output defaults to a compact `summary` shape (unified card index,
 clinically relevant normalized fact values, complete lead indexes, compatibility exclusions
 as `{card_id, criterion, reason}`, Bayesian included/excluded card IDs, and
-criterion-review decision fields without repeated observed facts). The
+criterion-review decision fields without repeated observed facts). A common
+literature provider is factored into `literature_candidate_defaults` rather
+than repeated on every candidate row. The
 representative compact UTF-8 JSON regression ceiling is 100 KB;
 `response_detail="full"` restores complete payloads. A review-only
 `clinical_context` (zygosity,
@@ -230,7 +232,7 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-13-v3` adds automatic/verified candidate policies and retains
+Collector schema `2026-08-15-v3` adds automatic/verified candidate policies and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
@@ -261,16 +263,28 @@ Once identity is fixed, the collector runs every applicable read-only
 consequence source rather than stopping at VEP: selected/genomic/single-allele
 rsID/region VEP, VariantValidator/VariantFormatter, FAVOR, OpenTargets,
 Mutalyzer, GRCh37 GenomeNexus, and protein-representable ProtVar. The resolver
+keeps normalization-only HGVS descriptions as non-veto context and records
+them under `equivalent_or_alternate_representations`; only explicit
+authoritative genomic allele/build disagreement is an identity conflict. It
 uses exact RefSeq, unique MANE, then version-compatible observations without
-majority voting. Build, allele, gene, or disagreement on the selected
-transcript's consequence/protein change fails closed; expected consequences on
-other transcripts remain visible context and do not veto the selected result.
-The profile exposes observations, method dependence,
-selected/corroborating SourceFacts, failures, conflicts, resolution reason, and
-missing requirements. PVS1 can consume a uniquely resolved non-VEP
+majority voting. Exact allele/build conflicts and incompatible authoritative
+observations on the same selected transcript fail closed. Provider gene labels,
+alternate transcripts, empty rows, no-hit responses, and technical failures
+remain visible but do not veto an allele-bound selected result. One
+authoritative selected-transcript observation can support the verified view;
+an aggregation-only result supports only the automatic view. The profile
+exposes canonical and provider labels, observations, provider roles,
+selected/corroborating SourceFacts, nonblocking disagreements, failures,
+conflicts, resolution confidence, calculation usability, resolution reason,
+and missing requirements. PVS1 can consume a uniquely resolved non-VEP
 consequence, but exon structure, PTC/NMD, and disease mechanism must still come
 from provider/document facts. All available provider and predictor values
 remain visible even when excluded from automatic or verified calculation.
+
+SpliceAI separates the provider-wide maximum and its transcript/event from the
+identity-selected row maximum. PP3/PVS1 consume only the selected row's four
+delta channels and positions; a larger value on another transcript is context,
+not a score-consistency failure.
 
 The collector exposes one source-assertion list and one criterion-review list.
 Older duplicate `source_leads`, `route_candidates`, `candidate_criteria`, and

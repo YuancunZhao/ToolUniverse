@@ -79,7 +79,7 @@ jobs:
         run: |
           uv run python scripts/verify_acmg_install_smoke.py \
             --source local \
-            --expected-version 1.4.0+acmg.3
+            --expected-version 1.4.0+acmg.5
 
       - name: Build documentation and reject new ACMG-page warnings
         run: |
@@ -121,5 +121,5 @@ jobs:
             --source git-ref \
             --git-ref "${{ github.sha }}" \
             --repo-url "https://github.com/${{ github.repository }}.git" \
-            --expected-version 1.4.0+acmg.3 \
+            --expected-version 1.4.0+acmg.5 \
             --online-providers

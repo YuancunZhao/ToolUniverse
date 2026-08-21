@@ -9,6 +9,7 @@ from tooluniverse.acmg import (
     models,
     population,
     rule_catalog,
+    spliceai,
     vcep,
 )
 from tooluniverse.acmg.runtime_manifest import build_runtime_manifest, ruleset_hash
@@ -102,6 +103,12 @@ def test_ruleset_hash_tracks_gp1ba_exposed_policies(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_spliceai_scope_policy(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(spliceai, "SPLICEAI_SCOPE_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+
 def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     manifest = build_runtime_manifest(
         {
@@ -113,8 +120,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-automation-3.1"
-    assert manifest["collector_schema_version"] == "2026-08-13-v3"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-3.2"
+    assert manifest["collector_schema_version"] == "2026-08-15-v3"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {

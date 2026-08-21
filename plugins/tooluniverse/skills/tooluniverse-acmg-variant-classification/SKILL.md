@@ -51,6 +51,8 @@ an EvidenceCard. A card is emitted only when a source-located atomic fact binds
 the target and satisfies that criterion's minimum fields. Abstract or snippet
 facts may support an automatic candidate when those fields are complete;
 ordinary keyword/provider-linked leads do not enter Bayesian calculation.
+In summary mode, merge `literature_candidate_defaults` into each candidate row;
+it only factors out a field shared by every row and does not truncate leads.
 
 `clinical_context` is retrieval background. Structured case, family, phase,
 phenotype, assay, case-control, or case-series evidence belongs in
@@ -74,11 +76,24 @@ expert assertion, never as ToolUniverse's own conclusion.
 - PVS1 must pass the existing selected-transcript, native splice-site,
   frame/NMD, LoF mechanism, and downgrade decision tree; no generic fallback.
 - SpliceAI reports `DS_AG`, `DS_AL`, `DS_DG`, and `DS_DL`, positions, maximum
-  delta, and trigger channel. Maximum delta is not donor loss.
+  delta, and trigger channel. Read the selected-transcript four-channel maximum
+  separately from the provider-global maximum; a higher score on another
+  transcript is context, not a conflict. Maximum delta is not donor loss.
+- Multi-provider consequence collection is not majority voting. One
+  allele-bound authoritative selected-transcript result is usable; alternate
+  transcripts, empty rows, `no_hit`, and provider failures remain visible but
+  do not veto it. Mutalyzer and g:Profiler are normalization context: a
+  different HGVS string without a directly comparable genomic allele is not a
+  conflict. Only explicit authoritative allele/build conflict or incompatible
+  authoritative results on the same selected transcript fail closed.
 - PP3/BP4 uses the versioned calibrated predictor contract, not majority vote;
   all available predictor values remain visible when neither criterion is met.
 - Provider failure is not absence evidence. Interpret `success`, `no_hit`,
   identity conflict, malformed contract, and technical failure separately.
+- `criterion_reviews` may be discussed exactly as review-only,
+  not-applicable, or insufficient-information results; these are not
+  EvidenceCards and never enter Bayesian calculation. The returned
+  `guard_context` carries those review claims automatically.
 - `final_classification_allowed` is always false. The Guard blocks unsupported
   criterion claims and ToolUniverse-authored five-tier labels, while allowing
   clearly attributed VCEP/ClinVar assertions.

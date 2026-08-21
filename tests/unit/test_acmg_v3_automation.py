@@ -859,6 +859,49 @@ def test_unknown_independence_is_retained_but_only_one_de_novo_atom_is_counted()
     assert ps2.evidence_status == "source_backed_candidate"
 
 
+def test_observation_id_is_the_atomic_case_identifier_fallback():
+    de_novo = _clinical_atom(
+        "observation-only-de-novo",
+        "de_novo",
+        {
+            "parental_relationships": "confirmed",
+            "phenotype_consistency": "consistent",
+        },
+    )
+    de_novo = {**de_novo, **de_novo["values"]}
+    ps2 = next(
+        card
+        for card in clinical_evidence(
+            inheritance_mode="autosomal dominant",
+            de_novo_probands=[de_novo],
+        )
+        if card.criterion == "PS2"
+    )
+    assert ps2.input_values["counted_case_ids"] == ["observation-only-de-novo"]
+
+    pm3_observation = _clinical_atom(
+        "observation-only-pm3",
+        "recessive_case",
+        {
+            "other_variant_classification": "PATHOGENIC",
+            "other_variant_frequency_eligible": True,
+            "zygosity": "compound_heterozygous",
+            "phase": "confirmed_in_trans",
+        },
+    )
+    pm3_observation = {**pm3_observation, **pm3_observation["values"]}
+    pm3 = next(
+        card
+        for card in clinical_evidence(
+            inheritance_mode="autosomal recessive",
+            pm3_frequency_eligible=True,
+            pm3_observations=[pm3_observation],
+        )
+        if card.criterion == "PM3"
+    )
+    assert pm3.input_values["counted_case_ids"] == ["observation-only-pm3"]
+
+
 def test_numeric_case_control_observation_is_mapped_and_null_result_is_not_met():
     enriched = clinical_evidence(
         clinical_observations=[

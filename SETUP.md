@@ -35,7 +35,7 @@ exact-Git-SHA installation smoke test.
 The branch documentation below describes the validated v3 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
-The working branch may describe newer `1.4.0+acmg.4` interfaces before a new
+The working branch may describe newer `1.4.0+acmg.5` interfaces before a new
 validated SHA is published; the pinned commit above remains the install target
 until the full exact-SHA gate is repeated.
 
@@ -201,7 +201,10 @@ the retired preview/counting fields.
 
 `guard_context` is a compact self-checking contract. Its `context_hash` covers
 the schema version, variant identity hash, ruleset hash, and representative-card
-`claims`. It carries no full SourceFacts and stays below 5 KB in representative
+`claims` plus compact `criterion_review_claims`. Review claims allow exact
+discussion of not-applicable or insufficient-information criteria but are not
+EvidenceCards and cannot enter Bayesian calculation. The context carries no
+full SourceFacts and stays below 5 KB in representative
 cases. Guard recomputes the checksum and fails closed if the context was
 truncated or accidentally modified. It is not a digital signature and does not
 authenticate a malicious sender.
@@ -403,7 +406,7 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.0+acmg.4 \
+  --expected-version 1.4.0+acmg.5 \
   --online-providers
 ```
 

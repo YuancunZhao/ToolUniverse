@@ -9,7 +9,7 @@ MONDO_RESOLUTION_POLICY_VERSION = "2026-08-13-v3"
 CSPEC_SCENARIO_POLICY_VERSION = "2026-08-13-v3"
 USER_DECISION_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
 IDENTITY_VERIFICATION_POLICY = {
-    "version": "2026-08-11-v1",
+    "version": "2026-08-15-v3",
     "cross_provider_minimum": 2,
     "single_provider_fallback": "variantvalidator_complete_allele",
     "single_provider_required_fields": [
@@ -21,6 +21,18 @@ IDENTITY_VERIFICATION_POLICY = {
         "provider_version",
     ],
     "fail_closed_on_identity_conflict": True,
+    "identity_dimension": "allele_and_build",
+    "gene_and_transcript_are_target_binding_dimensions": True,
+    "normalization_context_is_non_veto": True,
+    "cross_provider_agreement": "matching_authoritative_component",
+}
+IDENTITY_PROVIDER_ROLES = {
+    "VariantValidator_validate_variant": "authoritative",
+    "EnsemblVEP_variant_recoder": "authoritative",
+    "EnsemblVEP_annotate_hgvs": "authoritative",
+    "NCBIVariation_rsid_lookup": "authoritative",
+    "Mutalyzer_normalize_variant": "normalization_context",
+    "gProfiler_annotate_snps": "normalization_context",
 }
 
 
@@ -905,6 +917,7 @@ __all__ = [
     "CANDIDATE_POLICY_VERSION",
     "CSPEC_RULE_CATALOG",
     "CONSEQUENCE_POLICIES",
+    "IDENTITY_PROVIDER_ROLES",
     "IDENTITY_VERIFICATION_POLICY",
     "RULE_CATALOG",
     "SPLICEAI_RULE",

@@ -230,7 +230,7 @@
             "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
             "attempted_representations": {"type": "array", "items": {"type": "object"}},
             "annotation_reason": {"type": "string"},
-            "observations": {"type": "array", "items": {"type": "object"}},
+            "observations": {"type": "array", "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.", "items": {"type": "object"}},
             "selected_provider": {"type": "string"},
             "selected_source_fact_ids": {"type": "array", "items": {"type": "string"}},
             "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
@@ -239,6 +239,15 @@
             "hard_identity_conflicts": {"type": "array", "items": {"type": "object"}},
             "selected_transcript_conflicts": {"type": "array", "items": {"type": "object"}},
             "alternate_transcript_observations": {"type": "array", "items": {"type": "object"}},
+            "nonblocking_disagreements": {"type": "array", "items": {"type": "object"}},
+            "equivalent_or_alternate_representations": {"type": "array", "description": "Provider HGVS descriptions retained as normalization or alternate representations; string differences alone are non-veto context.", "items": {"type": "object"}},
+            "resolution_confidence": {"type": "string", "enum": ["authoritative_single_source", "authoritative_corroborated", "source_backed_only", "disputed", "unresolved"]},
+            "automatic_usable": {"type": "boolean"},
+            "verified_usable": {"type": "boolean"},
+            "spliceai_profile": {"type": "object", "description": "Identity-selected transcript SpliceAI four-channel profile plus separately named provider-global maximum context."},
+            "spliceai_scores": {"type": "object"},
+            "spliceai_max_delta": {"type": ["number", "null"], "description": "Maximum of the selected-transcript DS_AG, DS_AL, DS_DG, and DS_DL values."},
+            "spliceai_trigger_channel": {"type": "string"},
             "resolution_reason": {"type": "string"},
             "transcript_mapping": {"type": "object"},
             "selected_observation": {"type": ["object", "null"]},
@@ -262,7 +271,7 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, and context_hash; it contains no raw SourceFacts. The hash detects truncation or accidental mutation and is not a digital signature."
+          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, criterion_review_claims, and context_hash; review claims permit accurate discussion but are not EvidenceCards or Bayesian inputs."
         },
         "coverage_summary": {
           "type": "array",
@@ -294,8 +303,12 @@
         },
         "literature_candidates": {
           "type": "array",
-          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
+          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
           "items": {"type": "object"}
+        },
+        "literature_candidate_defaults": {
+          "type": "object",
+          "description": "Common summary-only fields omitted from every literature candidate row to avoid repeated payload. Merge these defaults into each row when reading the compact index."
         },
         "literature_review": {
           "type": "object",
@@ -632,7 +645,7 @@
             "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
             "attempted_representations": {"type": "array", "items": {"type": "object"}},
             "annotation_reason": {"type": "string"},
-            "observations": {"type": "array", "items": {"type": "object"}},
+            "observations": {"type": "array", "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.", "items": {"type": "object"}},
             "selected_provider": {"type": "string"},
             "selected_source_fact_ids": {"type": "array", "items": {"type": "string"}},
             "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
@@ -641,6 +654,15 @@
             "hard_identity_conflicts": {"type": "array", "items": {"type": "object"}},
             "selected_transcript_conflicts": {"type": "array", "items": {"type": "object"}},
             "alternate_transcript_observations": {"type": "array", "items": {"type": "object"}},
+            "nonblocking_disagreements": {"type": "array", "items": {"type": "object"}},
+            "equivalent_or_alternate_representations": {"type": "array", "description": "Provider HGVS descriptions retained as normalization or alternate representations; string differences alone are non-veto context.", "items": {"type": "object"}},
+            "resolution_confidence": {"type": "string", "enum": ["authoritative_single_source", "authoritative_corroborated", "source_backed_only", "disputed", "unresolved"]},
+            "automatic_usable": {"type": "boolean"},
+            "verified_usable": {"type": "boolean"},
+            "spliceai_profile": {"type": "object", "description": "Identity-selected transcript SpliceAI four-channel profile plus separately named provider-global maximum context."},
+            "spliceai_scores": {"type": "object"},
+            "spliceai_max_delta": {"type": ["number", "null"], "description": "Maximum of the selected-transcript DS_AG, DS_AL, DS_DG, and DS_DL values."},
+            "spliceai_trigger_channel": {"type": "string"},
             "resolution_reason": {"type": "string"},
             "transcript_mapping": {"type": "object"},
             "selected_observation": {"type": ["object", "null"]},
@@ -664,7 +686,7 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, and context_hash; it contains no raw SourceFacts. The hash detects truncation or accidental mutation and is not a digital signature."
+          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, criterion_review_claims, and context_hash; review claims permit accurate discussion but are not EvidenceCards or Bayesian inputs."
         },
         "coverage_summary": {"type": "array", "items": {"type": "object"}},
         "source_facts": {
@@ -691,8 +713,12 @@
         },
         "literature_candidates": {
           "type": "array",
-          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits.",
+          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
           "items": {"type": "object"}
+        },
+        "literature_candidate_defaults": {
+          "type": "object",
+          "description": "Common summary-only fields omitted from every literature candidate row to avoid repeated payload. Merge these defaults into each row when reading the compact index."
         },
         "literature_review": {
           "type": "object",
@@ -1151,7 +1177,7 @@
   },
   {
     "name": "ACMG_guard_final_answer",
-    "description": "Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serialized EvidenceCard; returned card roles distinguish automatic, verified, excluded, and user-selected use. Final five-tier ToolUniverse classifications are always blocked.",
+    "description": "Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references an EvidenceCard or a compact criterion review claim; review claims never become evidence or Bayesian inputs. Final five-tier ToolUniverse classifications are always blocked.",
     "type": "ACMGGuardFinalAnswerTool",
     "parameter": {
       "type": "object",
@@ -1171,7 +1197,7 @@
         },
         "guard_context": {
           "type": "object",
-          "description": "Preferred lightweight input. Pass the collector's schema_version, variant_identity_hash, ruleset_hash, claims, and context_hash object unchanged. Invalid or modified contexts fail closed."
+          "description": "Preferred lightweight input. Pass the collector's schema_version, variant_identity_hash, ruleset_hash, claims, criterion_review_claims, and context_hash object unchanged. Invalid or modified contexts fail closed."
         }
       },
       "required": [

@@ -780,30 +780,34 @@ def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
     )
 
     assert len(result["literature_candidates"]) == 101
-    assert sum(
-        card["criterion"] == "PS4" for card in result["evidence_cards"]
-    ) <= 1
+    assert result["literature_candidate_defaults"] == {
+        "source": "PubMed_search_articles"
+    }
+    assert all("source" not in row for row in result["literature_candidates"])
+    assert sum(card["criterion"] == "PS4" for card in result["evidence_cards"]) <= 1
     assert not {"PM3", "BP2", "PP1"}.intersection(
         card["criterion"] for card in result["evidence_cards"]
     )
-    assert len(
-        json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
-    ) < 40_000
-    assert len(
-        json.dumps(
-            result["guard_context"],
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode()
-    ) < 5_000
+    assert (
+        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
+        < 40_000
+    )
+    assert (
+        len(
+            json.dumps(
+                result["guard_context"],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode()
+        )
+        < 5_000
+    )
 
     guard = ACMGGuardFinalAnswerTool(
         {"name": "ACMG_guard_final_answer", "type": "ACMGGuardFinalAnswerTool"}
     )
     criterion = next(
-        card["criterion"]
-        for card in result["evidence_cards"]
-        if card.get("criterion")
+        card["criterion"] for card in result["evidence_cards"] if card.get("criterion")
     )
     calls.append("ACMG_guard_final_answer")
     guarded = guard.run(
@@ -1271,7 +1275,8 @@ def test_gene_transcript_coding_input_is_validated_directly():
     assert result["status"] == "degraded"
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
     assert result["variant"]["normalization"]["input_kind"] == ("gene_transcript_hgvs")
-    assert [call[0]["name"] for call in runtime.calls][:2] == [
+    assert [call[0]["name"] for call in runtime.calls][:3] == [
+        "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",
     ]
@@ -1515,15 +1520,21 @@ def test_missing_mane_transcript_stops_before_evidence_sources():
     ]
 
 
-def test_provider_gene_mismatch_blocks_identity_verification():
+def test_provider_gene_mismatch_is_a_nonblocking_target_binding_difference():
     runtime = _MismatchedGeneIdentityToolUniverse()
     result = _make_tool(runtime).run({"variant": "c.5946delT", "gene": "BRCA2"})
 
-    assert result["status"] == "error"
-    assert result["error"] == "variant_identity_unverified"
-    assert result["variant"]["normalization_error"] == "provider_identity_conflict"
+    assert result["status"] == "degraded"
+    assert result["variant"]["normalization"]["identity_source_count"] == 2
+    differences = result["variant"]["normalization"][
+        "provider_target_binding_differences"
+    ]
+    assert {row["observed_gene"] for row in differences} == {"TP53"}
+    assert all(
+        row["gene_match_status"] == "alternate_annotation" for row in differences
+    )
     assert _automatic_criteria(result) == set()
-    assert [call[0]["name"] for call in runtime.calls] == [
+    assert [call[0]["name"] for call in runtime.calls][:3] == [
         "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",

@@ -150,18 +150,64 @@ def _build(value: Any) -> str:
     return normalized
 
 
+def explicit_allele_conflict(
+    expected: dict[str, Any], observed: dict[str, Any]
+) -> bool:
+    """Return true only for a directly comparable build or genomic allele clash.
+
+    HGVS strings are deliberately excluded: repeat-normalized descriptions may
+    differ while representing the same allele.  Such rows remain visible but
+    cannot veto a coordinate-bound identity.
+    """
+    expected_build = _build(
+        expected.get("build")
+        or expected.get("assembly")
+        or expected.get("genome_build")
+    )
+    observed_build = _build(
+        observed.get("build")
+        or observed.get("assembly")
+        or observed.get("genome_build")
+    )
+    if expected_build and observed_build and expected_build != observed_build:
+        return True
+
+    expected_coordinates = expected.get("coordinates")
+    observed_coordinates = observed.get("coordinates")
+    if not isinstance(expected_coordinates, dict) or not isinstance(
+        observed_coordinates, dict
+    ):
+        return False
+    comparable = [
+        key
+        for key in ("chr", "pos", "ref", "alt")
+        if expected_coordinates.get(key) not in (None, "")
+        and observed_coordinates.get(key) not in (None, "")
+    ]
+    return bool(
+        comparable
+        and any(
+            _norm(expected_coordinates.get(key))
+            != _norm(observed_coordinates.get(key))
+            for key in comparable
+        )
+    )
+
+
 def identity_matches(expected: dict[str, Any], observed: dict[str, Any]) -> bool:
-    """Require one positive variant identity match; gene alone is insufficient."""
+    """Require one positive allele match; annotation labels are not identity.
+
+    Gene and transcript agreement is evaluated by the consequence resolver.  A
+    provider may annotate the same genomic allele against another transcript or
+    expose a locus label instead of an HGNC symbol; neither is an allele
+    conflict.
+    """
     if (
         not observed
         or not has_variant_identity(expected)
         or not has_variant_identity(observed)
     ):
         return False
-
-    if expected.get("gene") and observed.get("gene"):
-        if _norm(expected["gene"]) != _norm(observed["gene"]):
-            return False
 
     expected_coordinates = expected.get("coordinates")
     observed_coordinates = observed.get("coordinates")
@@ -928,6 +974,52 @@ def _variant_id_coordinates(value: Any) -> dict[str, Any]:
         return {}
 
 
+_FAVOR_COMPOSITE_LABEL_RE = re.compile(
+    r"^\s*(?P<label>[^()]+?)\s*\((?P<transcript>ENST\d+(?:\.\d+)?)"
+    r"(?::(?P<details>[^)]*))?\)\s*$",
+    re.IGNORECASE,
+)
+_LOCUS_ACCESSION_RE = re.compile(r"^[A-Z]{1,4}\d{5,}(?:\.\d+)?$")
+
+
+def _favor_consequence_identity(consequence: dict[str, Any]) -> dict[str, Any]:
+    """Separate FAVOR's raw locus label from canonical gene/transcript IDs."""
+    provider_gene_label = str(consequence.get("gene") or "").strip()
+    provider_transcript_label = str(consequence.get("transcript") or "").strip()
+    gene_symbol = provider_gene_label
+    transcript = provider_transcript_label
+    exon = consequence.get("exon")
+    inferred_hgvs_c = ""
+
+    match = _FAVOR_COMPOSITE_LABEL_RE.fullmatch(provider_gene_label)
+    if match:
+        locus_label = str(match.group("label") or "").strip()
+        transcript = transcript or str(match.group("transcript") or "").strip()
+        details = str(match.group("details") or "")
+        detail_parts = [part.strip() for part in details.split(":") if part.strip()]
+        exon = exon or next(
+            (part for part in detail_parts if part.casefold().startswith("exon")),
+            None,
+        )
+        coding = next(
+            (part for part in detail_parts if part.casefold().startswith("c.")),
+            "",
+        )
+        inferred_hgvs_c = f"{transcript}:{coding}" if transcript and coding else ""
+        gene_symbol = "" if _LOCUS_ACCESSION_RE.fullmatch(locus_label) else locus_label
+    elif _LOCUS_ACCESSION_RE.fullmatch(provider_gene_label):
+        gene_symbol = ""
+
+    return {
+        "gene": gene_symbol,
+        "transcript": transcript,
+        "provider_gene_label": provider_gene_label,
+        "provider_transcript_label": provider_transcript_label,
+        "exon": exon,
+        "inferred_hgvs_c": inferred_hgvs_c,
+    }
+
+
 def _favor_fields(payload: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any]:
     variant = payload.get("variant")
     variant = variant if isinstance(variant, dict) else {}
@@ -936,7 +1028,10 @@ def _favor_fields(payload: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any
     coordinates_value = _variant_id_coordinates(
         variant.get("variant_vcf") or raw.get("variant")
     )
-    hgvs_c = str(consequence.get("hgvs_c") or "")
+    consequence_identity = _favor_consequence_identity(consequence)
+    hgvs_c = str(
+        consequence.get("hgvs_c") or consequence_identity.get("inferred_hgvs_c") or ""
+    )
     hgvs_p = str(consequence.get("hgvs_p") or consequence.get("protein_variant") or "")
     so_term = consequence.get("so_term") or consequence.get("exonic_category")
     terms = (
@@ -945,21 +1040,30 @@ def _favor_fields(payload: dict[str, Any], raw: dict[str, Any]) -> dict[str, Any
         else _terms_from_hgvs(hgvs_c, hgvs_p)
     )
     candidate = {
-        "gene": consequence.get("gene"),
-        "transcript": consequence.get("transcript"),
+        "gene": consequence_identity.get("gene"),
+        "transcript": consequence_identity.get("transcript"),
+        "provider_gene_label": consequence_identity.get("provider_gene_label"),
+        "provider_transcript_label": consequence_identity.get(
+            "provider_transcript_label"
+        ),
         "mane_select": consequence.get("mane_select"),
         "hgvsc": hgvs_c,
         "hgvsp": hgvs_p,
         "consequence": terms,
         "canonical": consequence.get("is_canonical"),
-        "exon": consequence.get("exon"),
+        "exon": consequence_identity.get("exon"),
     }
     return {
         **coordinates_value,
         "build": "GRCh38",
         "rsid": variant.get("rsid"),
         "hgvs_g": variant.get("hgvs_genomic"),
-        "gene": consequence.get("gene"),
+        "gene": consequence_identity.get("gene"),
+        "transcript": consequence_identity.get("transcript"),
+        "provider_gene_label": consequence_identity.get("provider_gene_label"),
+        "provider_transcript_label": consequence_identity.get(
+            "provider_transcript_label"
+        ),
         "hgvs_c": hgvs_c,
         "hgvs_p": hgvs_p,
         "most_severe_consequence": next(iter(terms), None),
@@ -1617,6 +1721,8 @@ def _spliceai_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "score",
         "scores",
         "max_delta_score",
+        "max_delta_transcript",
+        "max_delta_event",
         "predicted_splice_event_type",
         "event_type",
         "variant",
@@ -1630,13 +1736,68 @@ def _spliceai_fields(payload: dict[str, Any]) -> dict[str, Any]:
             features.update(dict(zip(("chr", "pos", "ref", "alt"), parts)))
     if payload.get("genome"):
         features["build"] = payload["genome"]
+    global_max = features.pop("max_delta_score", None)
+    global_transcript = features.pop("max_delta_transcript", None)
+    global_event = features.pop("max_delta_event", None)
     scores = payload.get("scores")
     if isinstance(scores, list):
         rows = [row for row in scores if isinstance(row, dict)]
+        derived_max: float | None = None
+        derived_transcript = ""
+        derived_event = ""
+        event_names = {
+            "DS_AG": "acceptor_gain",
+            "DS_AL": "acceptor_loss",
+            "DS_DG": "donor_gain",
+            "DS_DL": "donor_loss",
+        }
+        for row in rows:
+            for channel, event_name in event_names.items():
+                try:
+                    value = float(row.get(channel))
+                except (TypeError, ValueError):
+                    continue
+                if not math.isfinite(value) or (
+                    derived_max is not None and value <= derived_max
+                ):
+                    continue
+                derived_max = value
+                derived_event = event_name
+                refseq_ids = row.get("t_refseq_ids")
+                first_refseq = (
+                    next((str(item) for item in refseq_ids if item), "")
+                    if isinstance(refseq_ids, list)
+                    else str(refseq_ids or "")
+                )
+                derived_transcript = str(
+                    row.get("transcript")
+                    or row.get("transcript_id")
+                    or row.get("t_id")
+                    or first_refseq
+                ).strip()
+        parsed_global_max = _number({"value": global_max}, "value")
+        if global_max is None and derived_max is not None:
+            global_max = derived_max
+            parsed_global_max = derived_max
+        if (
+            derived_max is not None
+            and parsed_global_max is not None
+            and math.isclose(derived_max, parsed_global_max)
+        ):
+            global_transcript = global_transcript or derived_transcript
+            global_event = global_event or derived_event
         if len(rows) == 1:
-            features.update(_copy(rows[0], keys))
-        if features.get("max_delta_score") is not None:
-            features["provider_max_delta_score"] = features.pop("max_delta_score")
+            row_features = _copy(rows[0], keys)
+            row_features.pop("max_delta_score", None)
+            row_features.pop("max_delta_transcript", None)
+            row_features.pop("max_delta_event", None)
+            features.update(row_features)
+    if global_max is not None:
+        features["provider_global_max_delta_score"] = global_max
+    if global_transcript is not None:
+        features["provider_global_max_transcript"] = global_transcript
+    if global_event is not None:
+        features["provider_global_max_event"] = global_event
     return features
 
 
@@ -1722,14 +1883,18 @@ def prepare_spliceai_features(
     if len(matches) == 1:
         selected = matches[0]
         prepared["selected_score_row"] = selected
-        provider_max = prepared.get("provider_max_delta_score")
-        if provider_max is None:
-            provider_max = selected.get("max_delta_score")
         profile = normalize_spliceai_profile(
             selected,
-            provider_max_delta_score=provider_max,
+            selected_transcript_claimed_max_delta_score=selected.get("max_delta_score"),
             distance=int(arguments.get("distance") or 500),
         )
+        profile["provider_global_max_delta_score"] = prepared.get(
+            "provider_global_max_delta_score"
+        )
+        profile["provider_global_max_transcript"] = prepared.get(
+            "provider_global_max_transcript"
+        )
+        profile["provider_global_max_event"] = prepared.get("provider_global_max_event")
         prepared["spliceai_profile"] = profile
         if profile.get("status") == "resolved":
             prepared["max_delta_score"] = profile["max_delta_score"]
@@ -2446,6 +2611,7 @@ __all__ = [
     "adapt_source_output",
     "build_matches",
     "coordinates",
+    "explicit_allele_conflict",
     "has_variant_identity",
     "identity_matches",
     "ncbi_refsnp_alleles",

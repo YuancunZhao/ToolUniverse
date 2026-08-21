@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from tooluniverse.acmg.source_adapters import (
     adapt_source_output,
+    explicit_allele_conflict,
+    identity_matches,
     prepare_spliceai_features,
     result_identity,
     source_fact_ready,
@@ -14,6 +16,31 @@ EXPECTED = {
     "coordinates": {"chr": "1", "pos": 10, "ref": "A", "alt": "G"},
     "build": "GRCh38",
 }
+
+
+def test_gene_label_difference_does_not_override_exact_allele_identity():
+    assert identity_matches(
+        {**EXPECTED, "gene": "NEK8"},
+        {**EXPECTED, "gene": "AC010761.1"},
+    )
+
+
+def test_explicit_allele_conflict_ignores_hgvs_string_differences():
+    assert not explicit_allele_conflict(
+        {
+            **EXPECTED,
+            "hgvs_c": "NM_015295.3:c.106_107dup",
+        },
+        {
+            **EXPECTED,
+            "hgvs_c": "NM_015295.3:c.104_107A[6]",
+        },
+    )
+    assert explicit_allele_conflict(
+        EXPECTED,
+        {**EXPECTED, "coordinates": {"chr": "1", "pos": 11, "ref": "A", "alt": "G"}},
+    )
+    assert explicit_allele_conflict(EXPECTED, {**EXPECTED, "build": "GRCh37"})
 
 
 def _gnomad(**overrides):
@@ -315,7 +342,7 @@ def test_spliceai_live_lookup_row_schema_matches_via_g_name_and_refseq_ids():
     assert prepared_other["spliceai_run_metadata"]["selected_score_row"] is None
 
 
-def test_spliceai_provider_max_mismatch_and_missing_channel_fail_closed():
+def test_spliceai_global_max_is_context_but_selected_row_claim_is_validated():
     row = {
         "gene": "GENE1",
         "transcript": "NM_000001.1",
@@ -338,14 +365,15 @@ def test_spliceai_provider_max_mismatch_and_missing_channel_fail_closed():
         "variant_id": "1-10-A-G",
         "build": "GRCh38",
         "scores": [row],
-        "provider_max_delta_score": 0.9,
+        "provider_global_max_delta_score": 0.9,
+        "provider_global_max_transcript": "NM_999999.1",
         "run_metadata": {
             "model_version": "1.3.1",
             "annotation_version": "MANE fixture release",
             "score_mode": "raw",
         },
     }
-    conflicting = prepare_spliceai_features(
+    global_context = prepare_spliceai_features(
         base,
         expected,
         {"distance": 500, "mask": False},
@@ -353,23 +381,34 @@ def test_spliceai_provider_max_mismatch_and_missing_channel_fail_closed():
     incomplete = prepare_spliceai_features(
         {
             **base,
-            "provider_max_delta_score": None,
+            "provider_global_max_delta_score": None,
             "scores": [{k: v for k, v in row.items() if k != "DS_DL"}],
         },
         expected,
         {"distance": 500, "mask": False},
     )
 
-    profile = conflicting["spliceai_profile"]
-    assert profile["status"] == "conflicting"
+    profile = global_context["spliceai_profile"]
+    assert profile["status"] == "resolved"
     assert profile["max_delta_channels"] == ["DS_AG", "DS_AL"]
+    assert profile["selected_transcript_max_delta_score"] == 0.22
+    assert profile["provider_global_max_delta_score"] == 0.9
+    assert profile["provider_global_max_transcript"] == "NM_999999.1"
     assert (
-        source_fact_ready("SpliceAI_predict_splice", conflicting, expected)[2] is False
+        source_fact_ready("SpliceAI_predict_splice", global_context, expected)[2]
+        is True
     )
     assert incomplete["spliceai_profile"]["status"] == "incomplete"
     assert (
         source_fact_ready("SpliceAI_predict_splice", incomplete, expected)[2] is False
     )
+
+    selected_claim_conflict = prepare_spliceai_features(
+        {**base, "scores": [{**row, "max_delta_score": 0.9}]},
+        expected,
+        {"distance": 500, "mask": False},
+    )
+    assert selected_claim_conflict["spliceai_profile"]["status"] == "conflicting"
 
 
 def test_spliceai_zero_or_ambiguous_selected_gene_rows_fail_closed():
@@ -1101,3 +1140,44 @@ def test_favor_and_opentargets_adapters_preserve_transcript_consequences():
     assert open_targets["consequence_candidates"][0]["consequence"] == [
         "frameshift_variant"
     ]
+
+
+def test_favor_composite_locus_label_does_not_impersonate_gene_symbol():
+    features = adapt_source_output(
+        "FAVOR_annotate_variant",
+        {
+            "status": "success",
+            "metadata": {"source": "FAVOR fixture"},
+            "data": {
+                "variant": {"variant_vcf": "17-28740462-G-A"},
+                "gene_consequence": {
+                    "gene": ("AC010761.1(ENST00000268766.11:exon11:c.1418-1G>A)"),
+                    "so_term": "splice_acceptor_variant",
+                },
+            },
+        },
+    )["reviewable_features"]
+
+    candidate = features["consequence_candidates"][0]
+    assert features.get("gene") in (None, "")
+    assert features["transcript"] == "ENST00000268766.11"
+    assert features["hgvs_c"] == "ENST00000268766.11:c.1418-1G>A"
+    assert candidate["provider_gene_label"].startswith("AC010761.1(")
+    observed, identity_verified, ready = source_fact_ready(
+        "FAVOR_annotate_variant",
+        features,
+        {
+            "coordinates": {
+                "chr": "17",
+                "pos": 28740462,
+                "ref": "G",
+                "alt": "A",
+            },
+            "build": "GRCh38",
+            "gene": "NEK8",
+            "transcript": "NM_178170.3",
+        },
+    )
+    assert observed["coordinates"]["pos"] == 28740462
+    assert identity_verified is True
+    assert ready is True

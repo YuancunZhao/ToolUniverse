@@ -255,6 +255,16 @@ def _point_strength(criterion: str, points: float) -> str:
     return next((strength for minimum, strength in levels if points >= minimum), "")
 
 
+def _case_identifier(record: dict[str, Any]) -> str:
+    """Use the atomic observation ID when no narrower case ID is supplied."""
+    return str(
+        record.get("case_id")
+        or record.get("proband_id")
+        or record.get("observation_id")
+        or ""
+    )
+
+
 def _de_novo_cards(
     probands: list[dict[str, Any]], inheritance_mode: str
 ) -> list[EvidenceCard]:
@@ -277,7 +287,7 @@ def _de_novo_cards(
         if error := _hard_error(proband):
             cards.append(_excluded_atom("PS2/PM6", proband, error, rule_reference=rule))
             continue
-        case_id = str(proband.get("case_id") or proband.get("proband_id") or "")
+        case_id = _case_identifier(proband)
         relationship = str(proband.get("parental_relationships") or "").casefold()
         phenotype = str(proband.get("phenotype_consistency") or "").casefold()
         if not case_id or case_id in seen:
@@ -285,7 +295,7 @@ def _de_novo_cards(
                 _excluded_atom(
                     "PS2/PM6",
                     proband,
-                    "unique non-empty case_id is required",
+                    "unique non-empty case_id, proband_id, or observation_id is required",
                     rule_reference=rule,
                 )
             )
@@ -334,11 +344,11 @@ def _de_novo_cards(
             {value for row, _points in rows for value in _source_ids(row)}
         )
         case_ids = [
-            str(row.get("case_id") or row.get("proband_id"))
+            _case_identifier(row)
             for row, _points in counted_rows
         ]
         uncounted_case_ids = [
-            str(row.get("case_id") or row.get("proband_id"))
+            _case_identifier(row)
             for row, _points in uncounted_rows
         ]
         all_counted_independent = bool(counted_rows) and all(
@@ -446,13 +456,13 @@ def _pm3_cards(
         if error := _hard_error(observation):
             cards.append(_excluded_atom("PM3", observation, error, rule_reference=rule))
             continue
-        case_id = str(observation.get("case_id") or observation.get("proband_id") or "")
+        case_id = _case_identifier(observation)
         if not case_id or case_id in seen:
             cards.append(
                 _excluded_atom(
                     "PM3",
                     observation,
-                    "unique non-empty case_id is required",
+                    "unique non-empty case_id, proband_id, or observation_id is required",
                     rule_reference=rule,
                 )
             )
@@ -481,10 +491,10 @@ def _pm3_cards(
     strength = _point_strength("PM3", total) or "not_met"
     if valid:
         case_ids = [
-            str(row.get("case_id") or row.get("proband_id")) for row, _points in counted
+            _case_identifier(row) for row, _points in counted
         ]
         uncounted_case_ids = [
-            str(row.get("case_id") or row.get("proband_id"))
+            _case_identifier(row)
             for row, _points in uncounted
         ]
         all_counted_independent = bool(counted) and all(

@@ -19,12 +19,13 @@ from .rule_catalog import ACMG_CRITERIA, is_valid_strength_for_criterion
 
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
-GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-13-v3-light"
+GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-15-v3-light"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",
     "ruleset_hash",
     "claims",
+    "criterion_review_claims",
 )
 _GUARD_CLAIM_FIELDS = {
     "card_id",
@@ -34,6 +35,17 @@ _GUARD_CLAIM_FIELDS = {
     "role",
 }
 _GUARD_ROLES = {"automatic", "verified", "user_selected", "not_met", "excluded"}
+_REVIEW_ROUTE_STATUSES = {
+    "assessed",
+    "proposal_validated",
+    "candidate_available",
+    "review_pending",
+    "insufficient_information",
+    "not_applicable",
+    "deprecated",
+}
+_REVIEW_EVIDENCE_STATUSES = {*EVIDENCE_STATUSES, "no_information"}
+_CRITERION_REVIEW_FIELDS = {"criterion", "route_status", "evidence_status"}
 
 
 def guard_context_hash(context: dict[str, Any]) -> str:
@@ -105,6 +117,25 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
         card_ids.append(card_id)
     if len(card_ids) != len(set(card_ids)):
         return False, "guard_context claim card_ids must be unique"
+    review_claims = context.get("criterion_review_claims")
+    if not isinstance(review_claims, list) or not all(
+        isinstance(row, dict) for row in review_claims
+    ):
+        return False, "guard_context criterion_review_claims must be an array of objects"
+    review_criteria: list[str] = []
+    for row in review_claims:
+        if set(row) != _CRITERION_REVIEW_FIELDS:
+            return False, "guard_context criterion review claim fields are invalid"
+        criterion = str(row.get("criterion") or "")
+        if criterion not in ACMG_CRITERIA:
+            return False, "guard_context criterion review claim criterion is unsupported"
+        if str(row.get("route_status") or "") not in _REVIEW_ROUTE_STATUSES:
+            return False, "guard_context criterion review claim route_status is unsupported"
+        if str(row.get("evidence_status") or "") not in _REVIEW_EVIDENCE_STATUSES:
+            return False, "guard_context criterion review claim evidence_status is unsupported"
+        review_criteria.append(criterion)
+    if len(review_criteria) != len(set(review_criteria)):
+        return False, "guard_context criterion review claims must be unique"
     from .runtime_manifest import ruleset_hash
 
     if context.get("ruleset_hash") != ruleset_hash():
@@ -271,6 +302,7 @@ def guard_acmg_answer(
     verified_source_fact_ids: set[str] | None = None,
     known_source_fact_ids: set[str] | None = None,
     validated_claims: bool = False,
+    criterion_review_claims: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Validate ACMG claims against cards and block final five-tier labels.
 
@@ -283,11 +315,11 @@ def guard_acmg_answer(
 
     normalized_answer = unicodedata.normalize("NFKC", str(answer_text or ""))
     answer_upper = _normalized_label_text(normalized_answer)
-    cited_codes = {
-        code
-        for code in ACMG_CRITERIA
-        if re.search(rf"(?<![A-Z0-9]){re.escape(code)}(?![A-Z0-9])", answer_upper)
-    }
+    cited_like_codes = set(
+        re.findall(r"(?<![A-Z0-9])(?:PVS|PS|PM|PP|BA|BS|BP)\d+(?![A-Z0-9])", answer_upper)
+    )
+    known_criteria = set(ACMG_CRITERIA)
+    cited_codes = cited_like_codes & known_criteria
     rows = [_card_row(card) for card in evidence_cards]
     referenceable_rows = [
         row
@@ -303,13 +335,24 @@ def guard_acmg_answer(
         for row in referenceable_rows
         for code in _criterion_codes(row.get("criterion"))
     }
+    review_rows = [
+        row
+        for row in criterion_review_claims or []
+        if isinstance(row, dict)
+        and str(row.get("criterion") or "") in ACMG_CRITERIA
+        and str(row.get("route_status") or "") in _REVIEW_ROUTE_STATUSES
+        and str(row.get("evidence_status") or "") in _REVIEW_EVIDENCE_STATUSES
+    ]
+    review_codes = {str(row["criterion"]) for row in review_rows}
 
     # Check: cited codes that don't have EvidenceCards
-    unsupported = cited_codes - card_codes
+    unsupported = (cited_codes - card_codes - review_codes) | (
+        cited_like_codes - known_criteria
+    )
     if unsupported:
         reasons.append(
-            f"Unsupported ACMG criteria cited without EvidenceCards: {sorted(unsupported)}. "
-            "Every ACMG criterion MUST have a corresponding EvidenceCard from overlay tools."
+            f"Unsupported ACMG criteria cited without an EvidenceCard or criterion review: "
+            f"{sorted(unsupported)}."
         )
 
     own_assertion_text = _strip_attributed_external_assertions(normalized_answer)
@@ -358,6 +401,16 @@ def guard_acmg_answer(
                 "user_decision": row.get("user_decision") or "pending",
             }
             for row in referenceable_rows
+        ],
+        "criterion_review_roles": [
+            {
+                "criterion": row.get("criterion"),
+                "route_status": row.get("route_status"),
+                "evidence_status": row.get("evidence_status"),
+                "role": "review_only",
+            }
+            for row in review_rows
+            if row.get("criterion") in cited_codes
         ],
         "unsupported_codes": sorted(unsupported),
         "message": (

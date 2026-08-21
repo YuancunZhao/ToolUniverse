@@ -1,7 +1,7 @@
 """
 ACMG_guard_final_answer
 
-Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serializ...
+Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references an Evidenc...
 """
 
 from typing import Any, Optional, Callable
@@ -19,19 +19,18 @@ def ACMG_guard_final_answer(
     validate: bool = True,
 ) -> Any:
     """
-    Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references a serializ...
+    Fail-closed guard for ACMG wording. Criterion discussion is allowed when it references an Evidenc...
 
     Parameters
     ----------
     final_answer_text : str
 
     evidence_cards : list[Any]
-
+        Compatibility input. Each bare card must contain a legal criterion, strength,...
     collector_result : dict[str, Any]
 
     guard_context : dict[str, Any]
-        Compact self-checking context returned by ACMG_evidence_collector.
-        Invalid or modified contexts fail closed.
+        Preferred lightweight input. Pass the collector's schema_version, variant_ide...
     stream_callback : Callable, optional
         Callback for streaming output
     use_cache : bool, default False

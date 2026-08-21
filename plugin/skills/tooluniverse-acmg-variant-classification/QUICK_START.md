@@ -24,6 +24,14 @@ Draft the evidence-only response from the returned `evidence_cards`, source
 indexes, VCEP/CSpec scenarios, estimates, conflicts, and limitations. Then call
 `execute_tool` again:
 
+When reading `consequence_profile`, do not treat an empty/failed provider or an
+alternate-transcript annotation as a vote against the selected transcript.
+Different normalization-only HGVS strings are preserved in
+`equivalent_or_alternate_representations` and are not allele conflicts unless
+authoritative genomic build/coordinate/ref/alt facts actually disagree.
+For SpliceAI, use the selected-transcript four-channel values; the provider-
+global maximum is context only.
+
 ```json
 {
   "tool_name": "ACMG_guard_final_answer",
@@ -35,7 +43,8 @@ indexes, VCEP/CSpec scenarios, estimates, conflicts, and limitations. Then call
 ```
 
 Pass `guard_context` as an object, unchanged—not as a manually rebuilt list or
-a file path.
+a file path. Its compact `criterion_review_claims` allow accurate statements
+such as “PVS1 is insufficiently informed” without creating a PVS1 EvidenceCard.
 
 ## Reasonix capability proxy
 

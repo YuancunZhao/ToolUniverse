@@ -20,6 +20,7 @@ GAIN_CHANNELS = ("DS_AG", "DS_DG")
 DEFAULT_INTERPRETATION_THRESHOLD = 0.5
 PLUS_2_T_TO_C_THRESHOLD = 0.8
 CANONICAL_GAIN_WINDOW = 20
+SPLICEAI_SCOPE_POLICY_VERSION = "2026-08-14-v2"
 _MAX_TOLERANCE = 1e-12
 _PLUS_2_T_TO_C_RE = re.compile(r"\+2T>C(?:$|[;)])", re.IGNORECASE)
 
@@ -45,7 +46,7 @@ def _position(value: Any, distance: int) -> int | None:
 def normalize_spliceai_profile(
     score_row: dict[str, Any] | None,
     *,
-    provider_max_delta_score: Any = None,
+    selected_transcript_claimed_max_delta_score: Any = None,
     distance: int = 500,
 ) -> dict[str, Any]:
     """Return one validated profile from the identity-selected score row."""
@@ -91,20 +92,23 @@ def normalize_spliceai_profile(
             )
         ]
 
-    provider_max = _finite_float(provider_max_delta_score)
-    if provider_max_delta_score not in (None, "") and provider_max is None:
-        issues.append("invalid_provider_max_delta_score")
+    selected_claimed_max = _finite_float(selected_transcript_claimed_max_delta_score)
+    if (
+        selected_transcript_claimed_max_delta_score not in (None, "")
+        and selected_claimed_max is None
+    ):
+        issues.append("invalid_selected_transcript_claimed_max_delta_score")
         status = "conflicting"
-    elif provider_max is not None and (
+    elif selected_claimed_max is not None and (
         max_delta is None
         or not math.isclose(
-            provider_max,
+            selected_claimed_max,
             max_delta,
             rel_tol=0.0,
             abs_tol=_MAX_TOLERANCE,
         )
     ):
-        issues.append("provider_max_delta_score_mismatch")
+        issues.append("selected_transcript_claimed_max_delta_score_mismatch")
         status = "conflicting"
 
     return {
@@ -112,9 +116,10 @@ def normalize_spliceai_profile(
         "delta_scores": deltas,
         "delta_positions": positions,
         "max_delta_score": max_delta,
+        "selected_transcript_max_delta_score": max_delta,
         "max_delta_channels": max_channels,
         "max_delta_events": [EVENT_NAMES[channel] for channel in max_channels],
-        "provider_max_delta_score": provider_max,
+        "selected_transcript_claimed_max_delta_score": selected_claimed_max,
         "canonical_site_type": "none",
         "native_loss_channel": None,
         "native_loss_score": None,
@@ -292,18 +297,22 @@ def normalize_spliceai_inputs(
             **dict(supplied_profile.get("delta_positions") or {}),
         }
         claimed_profile_max = supplied_profile.get("max_delta_score")
-        provider_max = supplied_profile.get("provider_max_delta_score")
     else:
         row = dict(spliceai_scores or {})
         claimed_profile_max = None
-        provider_max = None
     profile = normalize_spliceai_profile(
         row,
-        provider_max_delta_score=provider_max,
         distance=distance,
     )
     if supplied_profile:
-        for key in ("selected_gene", "selected_transcript", "transcript_strand"):
+        for key in (
+            "selected_gene",
+            "selected_transcript",
+            "transcript_strand",
+            "provider_global_max_delta_score",
+            "provider_global_max_transcript",
+            "provider_global_max_event",
+        ):
             if supplied_profile.get(key) not in (None, ""):
                 profile[key] = supplied_profile[key]
     profile = bind_spliceai_site(
@@ -413,6 +422,7 @@ __all__ = [
     "DEFAULT_INTERPRETATION_THRESHOLD",
     "GAIN_CHANNELS",
     "POSITION_CHANNELS",
+    "SPLICEAI_SCOPE_POLICY_VERSION",
     "PLUS_2_T_TO_C_THRESHOLD",
     "bind_spliceai_site",
     "normalize_spliceai_inputs",

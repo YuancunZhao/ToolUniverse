@@ -22,7 +22,7 @@ def ACMG_overlay_gate_assess_variant(
     protein_accession: Optional[str] = None,
     clinical_context: Optional[dict[str, Any]] = None,
     clinical_observations: Optional[list[Any]] = None,
-    response_detail: Optional[str] = 'summary',
+    response_detail: Optional[str] = "summary",
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
@@ -75,22 +75,26 @@ def ACMG_overlay_gate_assess_variant(
     # Handle mutable defaults to avoid B006 linting error
 
     # Strip None values so optional parameters don't trigger schema validation errors
-    _args = {k: v for k, v in {
-        "variant": variant,
-                "gene": gene,
-                "transcript": transcript,
-                "disease": disease,
-                "inheritance": inheritance,
-                "genome_build": genome_build,
-                "source_outputs_or_leads": source_outputs_or_leads,
-                "literature_proposals": literature_proposals,
-                "cspec_proposals": cspec_proposals,
-                "evidence_decisions": evidence_decisions,
-                "protein_accession": protein_accession,
-                "clinical_context": clinical_context,
-                "clinical_observations": clinical_observations,
-                "response_detail": response_detail
-    }.items() if v is not None}
+    _args = {
+        k: v
+        for k, v in {
+            "variant": variant,
+            "gene": gene,
+            "transcript": transcript,
+            "disease": disease,
+            "inheritance": inheritance,
+            "genome_build": genome_build,
+            "source_outputs_or_leads": source_outputs_or_leads,
+            "literature_proposals": literature_proposals,
+            "cspec_proposals": cspec_proposals,
+            "evidence_decisions": evidence_decisions,
+            "protein_accession": protein_accession,
+            "clinical_context": clinical_context,
+            "clinical_observations": clinical_observations,
+            "response_detail": response_detail,
+        }.items()
+        if v is not None
+    }
     return get_shared_client().run_one_function(
         {
             "name": "ACMG_overlay_gate_assess_variant",
@@ -98,7 +102,7 @@ def ACMG_overlay_gate_assess_variant(
         },
         stream_callback=stream_callback,
         use_cache=use_cache,
-        validate=validate
+        validate=validate,
     )
 
 

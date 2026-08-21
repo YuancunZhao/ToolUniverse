@@ -66,6 +66,7 @@ from .pvs1 import infer_mechanism_from_population_facts
 from .rule_catalog import (
     ACMG_CRITERIA,
     CSPEC_RULE_CATALOG,
+    IDENTITY_PROVIDER_ROLES,
     IDENTITY_VERIFICATION_POLICY,
     MONDO_RESOLUTION_POLICY_VERSION,
     criterion_use_matrix,
@@ -77,6 +78,7 @@ from .scenario_engine import build_scenario_results
 from .source_adapters import (
     build_matches,
     coordinates,
+    explicit_allele_conflict,
     has_variant_identity,
     ncbi_refsnp_alleles,
     prepare_spliceai_features,
@@ -1827,6 +1829,7 @@ def _compact_scenario_bayesian(value: Any) -> dict[str, Any]:
 def _build_guard_context(
     evidence_rows: list[dict[str, Any]],
     *,
+    criterion_reviews: list[dict[str, Any]],
     variant_identity: dict[str, Any],
     runtime_manifest: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1858,6 +1861,18 @@ def _build_guard_context(
             }
         )
     claims.sort(key=lambda row: (str(row["criterion"]), str(row["card_id"])))
+    criterion_review_claims = sorted(
+        [
+            {
+                "criterion": row.get("criterion"),
+                "route_status": row.get("route_status"),
+                "evidence_status": row.get("evidence_status"),
+            }
+            for row in criterion_reviews
+            if row.get("criterion") in ACMG_CRITERIA
+        ],
+        key=lambda row: str(row["criterion"]),
+    )
     variant_identity_hash = hashlib.sha256(
         json.dumps(
             variant_identity,
@@ -1872,6 +1887,7 @@ def _build_guard_context(
         "variant_identity_hash": variant_identity_hash,
         "ruleset_hash": str(runtime_manifest.get("ruleset_hash") or ""),
         "claims": claims,
+        "criterion_review_claims": criterion_review_claims,
     }
     context["context_hash"] = guard_context_hash(context)
     return context
@@ -1946,6 +1962,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "identity_verification_basis",
             "identity_source_count",
             "identity_verification_policy_version",
+            "provider_target_binding_differences",
             "formatter_candidates",
             "rsid_resolver",
             "selected_genomic_allele",
@@ -2047,23 +2064,27 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
     compact["source_facts"] = compact_source_facts
     compact_failure_groups: dict[tuple[Any, ...], dict[str, Any]] = {}
     for row in failure_groups.values():
-        group_key = (
-            row.get("failure_code") or row.get("status"),
-            row.get("dataset"),
-            row.get("release"),
-        )
+        group_key = (row.get("failure_code") or row.get("status"),)
         group = compact_failure_groups.setdefault(
             group_key,
             {
                 "failure_code": group_key[0],
                 "tools": [],
                 "attempt_count": 0,
-                **pick(row, "dataset", "release"),
+                "datasets": [],
+                "releases": [],
             },
         )
         group["tools"].append(row.get("tool_name"))
         group["attempt_count"] += int(row.get("attempt_count") or 0)
-    compact["provider_failures"] = list(compact_failure_groups.values())
+        for key, target in (("dataset", "datasets"), ("release", "releases")):
+            value = row.get(key)
+            if value and value not in group[target]:
+                group[target].append(value)
+    compact["provider_failures"] = [
+        {key: value for key, value in row.items() if value not in (None, "", [])}
+        for row in compact_failure_groups.values()
+    ]
     compact["evidence_cards"] = [
         _compact_evidence_card(card)
         for card in result.get("evidence_cards") or []
@@ -2117,7 +2138,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         for row in result.get("coverage_summary") or []
         if isinstance(row, dict)
     ]
-    compact["literature_candidates"] = [
+    compact_literature_candidates = [
         {
             **pick(
                 row,
@@ -2139,7 +2160,61 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         for row in result.get("literature_candidates") or []
         if isinstance(row, dict)
     ]
+    candidate_sources = {
+        row.get("source")
+        for row in compact_literature_candidates
+        if row.get("source")
+    }
+    if len(candidate_sources) == 1:
+        common_source = candidate_sources.pop()
+        compact["literature_candidate_defaults"] = {"source": common_source}
+        for row in compact_literature_candidates:
+            row.pop("source", None)
+    compact["literature_candidates"] = compact_literature_candidates
     if isinstance(consequence_profile, dict):
+
+        def compact_consequence_observation(row: dict[str, Any]) -> dict[str, Any]:
+            compact_row = pick(
+                row,
+                "source_fact_id",
+                "provider",
+                "provider_role",
+                "observation_role",
+                "limitation",
+            )
+            if row.get("observation_role") not in {"unavailable", "context_only"}:
+                compact_row.update(
+                    pick(
+                        row,
+                        "annotation_method",
+                        "gene",
+                        "provider_gene_label",
+                        "transcript",
+                        "provider_transcript_label",
+                        "hgvs_c",
+                        "hgvs_p",
+                        "consequence_terms",
+                        "allele_match_status",
+                        "gene_match_status",
+                        "transcript_match_status",
+                        "target_binding_status",
+                    )
+                )
+            else:
+                # Unknown/default binding dimensions add no information for an
+                # unavailable row.  Preserve any positive, partial, or conflict
+                # observation so absence and disagreement remain distinguishable.
+                for key in (
+                    "allele_match_status",
+                    "gene_match_status",
+                    "transcript_match_status",
+                    "target_binding_status",
+                ):
+                    value = row.get(key)
+                    if value not in (None, "", "unknown", "other"):
+                        compact_row[key] = value
+            return compact_row
+
         compact_profile = pick(
             consequence_profile,
             "annotation_status",
@@ -2157,6 +2232,11 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "protein_position",
             "hard_identity_conflicts",
             "selected_transcript_conflicts",
+            "nonblocking_disagreements",
+            "equivalent_or_alternate_representations",
+            "resolution_confidence",
+            "automatic_usable",
+            "verified_usable",
             "resolution_reason",
             "missing_requirements",
             "spliceai_profile",
@@ -2166,23 +2246,15 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "spliceai_run_metadata",
             "protein_mapping",
         )
-        compact_profile["alternate_transcript_observations"] = [
-            pick(
-                row,
-                "source_fact_id",
-                "provider",
-                "annotation_method",
-                "transcript",
-                "hgvs_c",
-                "hgvs_p",
-                "consequence_terms",
-                "identity_status",
-                "conflict_class",
-            )
-            for row in consequence_profile.get("alternate_transcript_observations")
-            or []
+        compact_profile["observations"] = [
+            compact_consequence_observation(row)
+            for row in consequence_profile.get("observations") or []
             if isinstance(row, dict)
         ]
+        # ``observations`` is the sole summary-level consequence index.  The
+        # full payload retains the expanded failure and alternate-transcript
+        # views; duplicating them here made high-provider summaries needlessly
+        # large without adding information.
         compact["consequence_profile"] = compact_profile
     literature_review = result.get("literature_review")
     if isinstance(literature_review, dict):
@@ -2450,9 +2522,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "vcep_discovered": rule_context.get("vcep_discovered") is True,
             "cspec_status": rule_context.get("cspec_status"),
             "applied_contract_id": rule_context.get("applied_contract_id"),
-            "applied_contract_version": rule_context.get(
-                "applied_contract_version"
-            ),
+            "applied_contract_version": rule_context.get("applied_contract_version"),
             "cspec_content_hash": rule_context.get("cspec_content_hash"),
             "disease_context": rule_context.get("disease_context"),
             "unmatched_reasons": list(rule_context.get("unmatched_reasons") or []),
@@ -2619,23 +2689,37 @@ def _source_failure_details(
         failure_code = "provider_failed"
         message = message or "Provider request failed."
         retryable = True
-    elif call.status == "success" and not ready and call.tool_name in {
-        "gnomad_get_variant",
-        "gnomad_get_variant_populations",
-        "gnomad_get_site_callability",
-    }:
+    elif (
+        call.status == "success"
+        and not ready
+        and call.tool_name
+        in {
+            "gnomad_get_variant",
+            "gnomad_get_variant_populations",
+            "gnomad_get_site_callability",
+        }
+    ):
         failure_code = "provider_contract_malformed"
-        message = "Provider response could not be parsed into the declared gnomAD contract."
+        message = (
+            "Provider response could not be parsed into the declared gnomAD contract."
+        )
         retryable = False
-    elif call.status == "success" and call.tool_name in {
-        "LitVar_search_variants",
-        "LitVar_get_variant_publications",
-        "PubMed_search_articles",
-        "EuropePMC_search_articles",
-        "PubTator3_LiteratureSearch",
-    } and not isinstance(features.get("articles"), list):
+    elif (
+        call.status == "success"
+        and call.tool_name
+        in {
+            "LitVar_search_variants",
+            "LitVar_get_variant_publications",
+            "PubMed_search_articles",
+            "EuropePMC_search_articles",
+            "PubTator3_LiteratureSearch",
+        }
+        and not isinstance(features.get("articles"), list)
+    ):
         failure_code = "provider_contract_malformed"
-        message = "Literature search response did not contain the declared article index."
+        message = (
+            "Literature search response did not contain the declared article index."
+        )
         retryable = False
     else:
         return {}
@@ -2736,34 +2820,8 @@ def _identity_hgvs_values_for(
 
 
 def _identity_conflicts(left: dict[str, Any], right: dict[str, Any]) -> bool:
-    """Detect contradictory provider identity fields without cross-mapping HGVS."""
-    left_coordinates = left.get("coordinates")
-    right_coordinates = right.get("coordinates")
-    if left_coordinates and right_coordinates and left_coordinates != right_coordinates:
-        return True
-
-    left_rsid = _normalize_text(left.get("rsid"))
-    right_rsid = _normalize_text(right.get("rsid"))
-    if left_rsid and right_rsid and left_rsid != right_rsid:
-        return True
-
-    for keys, list_key in (
-        (("hgvs_c", "validated_hgvs_c"), "hgvsc_candidates"),
-        (("hgvs_g",), "hgvsg_candidates"),
-    ):
-        left_hgvs = _identity_hgvs_values_for(left, keys=keys, list_key=list_key)
-        right_hgvs = _identity_hgvs_values_for(right, keys=keys, list_key=list_key)
-        if left_hgvs and right_hgvs and not left_hgvs & right_hgvs:
-            return True
-
-    left_gene = _normalize_text(left.get("gene"))
-    right_gene = _normalize_text(right.get("gene"))
-    if left_gene and right_gene and left_gene != right_gene:
-        return True
-
-    return bool(
-        left.get("build") and right.get("build") and not build_matches(left, right)
-    )
+    """Detect only directly comparable genomic allele/build disagreement."""
+    return explicit_allele_conflict(left, right)
 
 
 def _identities_share_variant(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -2828,9 +2886,9 @@ def _complete_variantvalidator_identity(
         requested_gene
     ):
         return False
-    if selected_transcript and _normalize_text(
-        observed_transcript
-    ) != _normalize_text(selected_transcript):
+    if selected_transcript and _normalize_text(observed_transcript) != _normalize_text(
+        selected_transcript
+    ):
         return False
     observed_build = (
         features.get("build")
@@ -3489,6 +3547,38 @@ class ACMGEvidencePipeline:
                 return failed_identity("gene_required_for_coding_shorthand")
             if selected_transcript:
                 normalization["transcript_source"] = "caller"
+                if requested_gene:
+                    resolver_call = self._call(
+                        "VariantValidator_gene2transcripts",
+                        {
+                            "gene_symbol": requested_gene,
+                            "transcript_set": "mane",
+                            "genome_build": genome_build,
+                        },
+                        "identity",
+                    )
+                    calls.append(resolver_call)
+                    candidates = _transcript_candidates(
+                        resolver_call.result, requested_gene
+                    )
+                    normalization["transcript_candidates"] = candidates
+                    matching = [
+                        candidate
+                        for candidate in candidates
+                        if _normalize_text(candidate.get("reference"))
+                        == _normalize_text(selected_transcript)
+                    ]
+                    if len(matching) == 1:
+                        normalization["transcript_selection"] = {
+                            "reference": selected_transcript,
+                            "mane_select": matching[0].get("mane_select") is True,
+                            "mane_plus_clinical": (
+                                matching[0].get("mane_plus_clinical") is True
+                            ),
+                            "verification_source": (
+                                "VariantValidator_gene2transcripts"
+                            ),
+                        }
             else:
                 resolver_args = {
                     "gene_symbol": requested_gene,
@@ -3686,6 +3776,41 @@ class ACMGEvidencePipeline:
             != _normalize_text(canonical_transcript)
         ):
             return failed_identity("transcript_identity_mismatch")
+
+        if (
+            requested_gene
+            and selected_transcript
+            and not isinstance(normalization.get("transcript_selection"), dict)
+            and not isinstance(normalization.get("transcript_candidates"), list)
+        ):
+            resolver_call = self._call(
+                "VariantValidator_gene2transcripts",
+                {
+                    "gene_symbol": requested_gene,
+                    "transcript_set": "mane",
+                    "genome_build": genome_build,
+                },
+                "identity",
+            )
+            calls.append(resolver_call)
+            candidates = _transcript_candidates(resolver_call.result, requested_gene)
+            normalization["transcript_candidates"] = candidates
+            matching = [
+                candidate
+                for candidate in candidates
+                if _normalize_text(candidate.get("reference"))
+                == _normalize_text(selected_transcript)
+            ]
+            if len(matching) == 1:
+                normalization["transcript_selection"] = {
+                    "reference": selected_transcript,
+                    "mane_select": matching[0].get("mane_select") is True,
+                    "mane_plus_clinical": (
+                        matching[0].get("mane_plus_clinical") is True
+                    ),
+                    "verification_source": "VariantValidator_gene2transcripts",
+                }
+
         if not selected_transcript:
             selected_transcript = canonical_transcript
         validator_args = {
@@ -3797,59 +3922,104 @@ class ACMGEvidencePipeline:
             match = re.search(r"\brs\d+\b", variant, re.IGNORECASE)
             if match:
                 identity["rsid"] = match.group(0)
+        authoritative_rows = [
+            (call, observed)
+            for call, observed in observed_calls
+            if IDENTITY_PROVIDER_ROLES.get(call.tool_name) == "authoritative"
+            and has_variant_identity(observed)
+        ]
         conflicts = any(
             _identity_conflicts(left, right)
-            for index, left in enumerate(observed_identities)
-            for right in observed_identities[index + 1 :]
+            for index, (_, left) in enumerate(authoritative_rows)
+            for _, right in authoritative_rows[index + 1 :]
         ) or any(
-            (
-                observed.get("build")
-                or observed.get("assembly")
-                or observed.get("genome_build")
-            )
-            and not build_matches(identity, observed)
-            for observed in observed_identities
+            explicit_allele_conflict(identity, observed)
+            for _, observed in authoritative_rows
         )
-        positive_identities = [
-            observed
-            for observed in observed_identities
-            if has_variant_identity(observed)
-        ]
-        if len(positive_identities) > 1:
-            connected = {0}
-            frontier = [0]
+
+        matching_component: set[int] = set()
+        for seed in range(len(authoritative_rows)):
+            connected = {seed}
+            frontier = [seed]
             while frontier:
                 left_index = frontier.pop()
-                for right_index, right in enumerate(positive_identities):
+                for right_index, (_, right) in enumerate(authoritative_rows):
                     if right_index in connected:
                         continue
                     if _identities_share_variant(
-                        positive_identities[left_index], right
+                        authoritative_rows[left_index][1], right
                     ):
                         connected.add(right_index)
                         frontier.append(right_index)
-            if len(connected) != len(positive_identities):
-                conflicts = True
+            if len(connected) > len(matching_component):
+                matching_component = connected
+
+        matching_observation_ids = {
+            id(authoritative_rows[index][1]) for index in matching_component
+        }
+        normalization["nonblocking_identity_disagreements"] = [
+            {
+                "tool_name": call.tool_name,
+                "provider_role": IDENTITY_PROVIDER_ROLES.get(
+                    call.tool_name, "aggregation"
+                ),
+                "observed_identity": observed,
+                "reason": "provider_not_in_authoritative_matching_component",
+            }
+            for call, observed in observed_calls
+            if (
+                IDENTITY_PROVIDER_ROLES.get(call.tool_name) != "authoritative"
+                or id(observed) not in matching_observation_ids
+            )
+            and has_variant_identity(observed)
+        ]
+        positive_identities = [
+            observed for _, observed in authoritative_rows
+        ]
         requested_gene_key = _normalize_text(requested_gene)
-        if requested_gene_key and any(
-            observed.get("gene")
-            and _normalize_text(observed["gene"]) != requested_gene_key
-            for observed in observed_identities
-        ):
-            conflicts = True
         selected_transcript_key = _normalize_text(selected_transcript)
-        if selected_transcript_key and any(
-            observed.get("transcript")
-            and _normalize_text(observed["transcript"]) != selected_transcript_key
-            for observed in observed_identities
-        ):
-            conflicts = True
+        target_binding_differences = [
+            {
+                "tool_name": call.tool_name,
+                "observed_gene": observed.get("gene"),
+                "observed_transcript": observed.get("transcript"),
+                "gene_match_status": (
+                    "matched"
+                    if not observed.get("gene")
+                    or not requested_gene_key
+                    or _normalize_text(observed["gene"]) == requested_gene_key
+                    else "alternate_annotation"
+                ),
+                "transcript_match_status": (
+                    "matched"
+                    if not observed.get("transcript")
+                    or not selected_transcript_key
+                    or _normalize_text(observed["transcript"])
+                    == selected_transcript_key
+                    else "alternate_annotation"
+                ),
+            }
+            for call, observed in observed_calls
+            if (
+                observed.get("gene")
+                and requested_gene_key
+                and _normalize_text(observed["gene"]) != requested_gene_key
+            )
+            or (
+                observed.get("transcript")
+                and selected_transcript_key
+                and _normalize_text(observed["transcript"]) != selected_transcript_key
+            )
+        ]
+        normalization["provider_target_binding_differences"] = (
+            target_binding_differences
+        )
         transcript_selection = normalization.get("transcript_selection")
         transcript_selection = (
             transcript_selection if isinstance(transcript_selection, dict) else {}
         )
         if (
-            len(positive_identities) >= 2
+            len(matching_component) >= 2
             and not conflicts
             and requested_gene
             and selected_transcript
@@ -3958,9 +4128,8 @@ class ACMGEvidencePipeline:
                         }
                     )
         normalization["excluded_candidates"] = excluded
-        cross_provider_verified = (
-            len(positive_identities)
-            >= int(IDENTITY_VERIFICATION_POLICY["cross_provider_minimum"])
+        cross_provider_verified = len(matching_component) >= int(
+            IDENTITY_VERIFICATION_POLICY["cross_provider_minimum"]
         )
         authoritative_single_provider = any(
             _complete_variantvalidator_identity(
@@ -3984,7 +4153,10 @@ class ACMGEvidencePipeline:
                 else "unverified"
             )
         )
-        normalization["identity_source_count"] = len(positive_identities)
+        normalization["identity_source_count"] = len(matching_component)
+        normalization["authoritative_identity_observation_count"] = len(
+            positive_identities
+        )
         normalization["identity_verification_policy_version"] = str(
             IDENTITY_VERIFICATION_POLICY["version"]
         )
@@ -4498,6 +4670,17 @@ class ACMGEvidencePipeline:
                 "alternate_transcript_observations": list(
                     resolution.get("alternate_transcript_observations") or []
                 ),
+                "nonblocking_disagreements": list(
+                    resolution.get("nonblocking_disagreements") or []
+                ),
+                "equivalent_or_alternate_representations": list(
+                    resolution.get("equivalent_or_alternate_representations") or []
+                ),
+                "resolution_confidence": str(
+                    resolution.get("resolution_confidence") or "unresolved"
+                ),
+                "automatic_usable": resolution.get("automatic_usable") is True,
+                "verified_usable": resolution.get("verified_usable") is True,
                 "resolution_reason": resolution.get("reason"),
                 "transcript_mapping": dict(resolution.get("transcript_mapping") or {}),
                 "selected_observation": resolution.get("selected_observation"),
@@ -5056,6 +5239,9 @@ class ACMGEvidencePipeline:
         for call in calls:
             features = _features_for_call(call)
             call_arguments = call.arguments or {}
+            identity_provider_role = IDENTITY_PROVIDER_ROLES.get(call.tool_name)
+            if identity_provider_role:
+                features.setdefault("identity_provider_role", identity_provider_role)
             if call.tool_name in {
                 "ClinGen_get_dosage_sensitivity",
                 "ClinGen_get_actionability_adult",
@@ -5140,11 +5326,10 @@ class ACMGEvidencePipeline:
                 "gnomad_get_site_callability",
             } and isinstance(call.arguments, dict):
                 features.setdefault("dataset", call.arguments.get("dataset"))
-            if (
-                call.tool_name
-                in {"gnomad_get_variant", "gnomad_get_variant_populations"}
-                and isinstance(call_arguments.get("_acmg_equivalence_validation"), dict)
-            ):
+            if call.tool_name in {
+                "gnomad_get_variant",
+                "gnomad_get_variant_populations",
+            } and isinstance(call_arguments.get("_acmg_equivalence_validation"), dict):
                 retry_coordinates = _gnomad_variant_coordinates(
                     call_arguments.get("variant_id")
                 )
@@ -5161,7 +5346,13 @@ class ACMGEvidencePipeline:
             if not identity_verified and _identity_conflicts(
                 expected_identity, observed_identity
             ):
-                features["identity_conflict"] = True
+                if (
+                    IDENTITY_PROVIDER_ROLES.get(call.tool_name)
+                    == "normalization_context"
+                ):
+                    features["nonblocking_identity_disagreement"] = True
+                else:
+                    features["identity_conflict"] = True
             fact_id, sandbox_hash = _stable_source_fact_id(
                 call.tool_name,
                 {**query_identity, "arguments": call.arguments or {}},
@@ -5800,7 +5991,11 @@ class ACMGEvidencePipeline:
                 "direct_gene",
                 "same_residue",
             }
-            if requirements_status != "complete" or not requirements_met or not target_linked:
+            if (
+                requirements_status != "complete"
+                or not requirements_met
+                or not target_linked
+            ):
                 # Incomplete and provider-linked records remain visible through
                 # SourceFacts/literature_candidates. They are leads, not cards.
                 continue
@@ -7859,6 +8054,7 @@ class ACMGEvidencePipeline:
         runtime_manifest = build_runtime_manifest(rule_context)
         guard_context = _build_guard_context(
             [],
+            criterion_reviews=criterion_reviews,
             variant_identity=variant_identity,
             runtime_manifest=runtime_manifest,
         )
@@ -8308,6 +8504,12 @@ class ACMGEvidencePipeline:
             for fact_id, fact in source_facts.items()
             if fact_is_strictly_verified(fact)
         }
+        if consequence_profile.get("verified_usable") is not True:
+            verified_source_fact_ids.difference_update(
+                str(fact_id)
+                for fact_id in consequence_profile.get("selected_source_fact_ids") or []
+                if fact_id
+            )
         known_source_fact_ids = set(source_facts)
         serialized = evidence_cards_to_result(
             cards,
@@ -8316,12 +8518,7 @@ class ACMGEvidencePipeline:
             known_source_fact_ids=known_source_fact_ids,
         )
         evidence_rows = aggregate_evidence_cards(
-            list(
-                {
-                    row["card_id"]: row
-                    for row in serialized["evidence_cards"]
-                }.values()
-            )
+            list({row["card_id"]: row for row in serialized["evidence_cards"]}.values())
         )
         variant_identity["consequence"] = list(
             consequence_profile.get("selected_transcript_terms") or []
@@ -8631,6 +8828,7 @@ class ACMGEvidencePipeline:
         runtime_manifest = build_runtime_manifest(rule_context)
         guard_context = _build_guard_context(
             evidence_rows,
+            criterion_reviews=criterion_reviews,
             variant_identity=variant_identity,
             runtime_manifest=runtime_manifest,
         )

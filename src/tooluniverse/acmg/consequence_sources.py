@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from .models import SourceFact, fact_identity_matches, fact_is_available
+from .source_adapters import explicit_allele_conflict
 
 
-CONSEQUENCE_CONFLICT_POLICY_VERSION = "2026-08-13-v3"
+CONSEQUENCE_CONFLICT_POLICY_VERSION = "2026-08-15-v5"
 
 
 CONSEQUENCE_METHODS = {
@@ -26,6 +27,22 @@ CONSEQUENCE_METHODS = {
     "gProfiler_annotate_snps": "aggregation",
 }
 
+CONSEQUENCE_PROVIDER_ROLES = {
+    "EnsemblVEP_annotate_hgvs": "authoritative",
+    "EnsemblVEP_annotate_rsid": "authoritative",
+    "ensembl_vep_region": "authoritative",
+    "VariantValidator_validate_variant": "authoritative",
+    "VariantValidator_format_genomic_to_transcripts": "authoritative",
+    "FAVOR_annotate_variant": "aggregation",
+    "OpenTargets_get_variant_info": "aggregation",
+    "OpenTargets_get_variant_transcript_consequences": "aggregation",
+    "GenomeNexus_annotate_variant": "aggregation",
+    "GenomeNexus_annotate_dbsnp": "aggregation",
+    "ProtVar_map_variant": "aggregation",
+    "Mutalyzer_normalize_variant": "normalization_context",
+    "gProfiler_annotate_snps": "normalization_context",
+}
+
 _PROVIDER_PRIORITY = {
     "EnsemblVEP_annotate_hgvs": 0,
     "VariantValidator_format_genomic_to_transcripts": 1,
@@ -40,6 +57,15 @@ _PROVIDER_PRIORITY = {
     "ProtVar_map_variant": 10,
     "gProfiler_annotate_snps": 11,
 }
+
+
+def _provider_role(row: dict[str, Any]) -> str:
+    return str(
+        row.get("provider_role")
+        or CONSEQUENCE_PROVIDER_ROLES.get(
+            str(row.get("provider") or ""), "normalization_context"
+        )
+    )
 
 
 def _text(value: Any) -> str:
@@ -63,28 +89,6 @@ def _terms(row: dict[str, Any]) -> list[str]:
     )
 
 
-def _term_sets_connected(rows: list[dict[str, Any]]) -> bool:
-    """Accept overlapping provider term sets without treating extras as conflict."""
-    term_sets = [
-        set(row.get("consequence_terms") or [])
-        for row in rows
-        if row.get("consequence_terms")
-    ]
-    if len(term_sets) < 2:
-        return True
-    connected = {0}
-    frontier = [0]
-    while frontier:
-        left_index = frontier.pop()
-        for right_index, right in enumerate(term_sets):
-            if right_index in connected:
-                continue
-            if term_sets[left_index] & right:
-                connected.add(right_index)
-                frontier.append(right_index)
-    return len(connected) == len(term_sets)
-
-
 def _protein_change(value: Any) -> str:
     """Compare protein changes independently of RefSeq/Ensembl accessions."""
     normalized = _text(value).casefold()
@@ -94,50 +98,84 @@ def _protein_change(value: Any) -> str:
 def _explicit_identity_mismatch(
     identity: dict[str, Any], observation: dict[str, Any]
 ) -> bool:
-    """Detect only explicit allele/build/gene disagreement.
+    """Detect only explicit allele/build disagreement.
 
     A different transcript is an expected annotation of the same genomic
     allele and is deliberately not part of this check.
     """
-    expected_gene = _text(identity.get("gene")).casefold()
-    observed_gene = _text(observation.get("gene")).casefold()
-    if expected_gene and observed_gene and expected_gene != observed_gene:
-        return True
-    expected_build = _text(identity.get("build")).casefold()
-    observed_build = _text(observation.get("build")).casefold()
-    if expected_build and observed_build and expected_build != observed_build:
-        return True
-    expected = identity.get("coordinates")
-    observed = observation.get("allele")
-    if not isinstance(expected, dict) or not isinstance(observed, dict):
-        return False
-    keys = ("chr", "pos", "ref", "alt")
-    comparable = [key for key in keys if expected.get(key) and observed.get(key)]
-    return bool(
-        comparable
-        and any(
-            _text(expected.get(key)).casefold()
-            != _text(observed.get(key)).casefold()
-            for key in comparable
-        )
+    return explicit_allele_conflict(
+        identity,
+        {
+            "build": observation.get("build"),
+            "coordinates": observation.get("allele") or {},
+        },
     )
 
 
-def _conflict_class(
-    identity: dict[str, Any], observation: dict[str, Any]
-) -> str:
+def _conflict_class(identity: dict[str, Any], observation: dict[str, Any]) -> str:
     match_rank = int(observation.get("_match_rank", 99))
+    if _explicit_identity_mismatch(identity, observation):
+        return (
+            "hard_identity_conflict"
+            if _provider_role(observation) == "authoritative"
+            else "nonblocking_allele_disagreement"
+        )
     if match_rank >= 3:
-        if _explicit_identity_mismatch(identity, observation):
-            return "hard_identity_conflict"
-        if _text(observation.get("transcript")) or _text(
-            observation.get("hgvs_c")
-        ).split(":", 1)[0]:
+        if (
+            _text(observation.get("transcript"))
+            or _text(observation.get("hgvs_c")).split(":", 1)[0]
+        ):
             return "alternate_transcript_observation"
         return ""
-    if observation.get("identity_status") == "conflict":
-        return "hard_identity_conflict"
     return ""
+
+
+def _equivalent_or_alternate_representations(
+    observations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep provider HGVS labels without treating string differences as vetoes."""
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for observation in observations:
+        for representation_type in ("hgvs_c", "hgvs_g"):
+            value = _text(observation.get(representation_type))
+            if not value:
+                continue
+            key = (str(observation.get("provider") or ""), representation_type, value)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(
+                {
+                    "provider": observation.get("provider"),
+                    "source_fact_id": observation.get("source_fact_id"),
+                    "provider_role": _provider_role(observation),
+                    "representation_type": representation_type,
+                    "value": value,
+                    "transcript_match_status": observation.get(
+                        "transcript_match_status"
+                    ),
+                }
+            )
+    return rows
+
+
+def _gene_match_status(identity: dict[str, Any], observation: dict[str, Any]) -> str:
+    expected = _text(identity.get("gene")).casefold()
+    observed = _text(observation.get("gene")).casefold()
+    if not observed:
+        return "unknown"
+    if not expected:
+        return "unresolved"
+    return "matched" if observed == expected else "alternate_annotation"
+
+
+def _target_binding_status(gene_match_status: str, transcript_match_status: str) -> str:
+    if transcript_match_status in {"exact", "mane_mapped", "version_compatible"}:
+        return "matched" if gene_match_status != "alternate_annotation" else "partial"
+    if transcript_match_status in {"other", "other_canonical"}:
+        return "alternate_transcript"
+    return "unknown"
 
 
 def _transcript_match(row: dict[str, Any], selected_transcript: str) -> tuple[str, int]:
@@ -153,12 +191,14 @@ def _transcript_match(row: dict[str, Any], selected_transcript: str) -> tuple[st
         _versioned(value) == selected_versioned for value in candidates if value
     ):
         return "exact", 0
-    if selected_base and any(
-        _base(value) == selected_base for value in candidates if value
-    ):
-        return "version_compatible", 2
     if selected_base and mane and _base(mane) == selected_base:
         return "mane_mapped", 1
+    if selected_base and any(
+        _base(value) == selected_base
+        for value in (transcript, hgvsc_transcript)
+        if value
+    ):
+        return "version_compatible", 2
     if row.get("canonical") is True or row.get("is_canonical") is True:
         return "other_canonical", 3
     return "other", 4
@@ -191,18 +231,35 @@ def consequence_observations(
                 }
             ]
         if not rows:
-            hard_conflict = fact.identity_status == "conflict"
+            hard_conflict = bool(
+                fact.identity_status == "conflict"
+                and _explicit_identity_mismatch(
+                    identity,
+                    {
+                        "build": fact.result_identity.get("build"),
+                        "allele": fact.result_identity.get("coordinates") or {},
+                    },
+                )
+            )
             observations.append(
                 {
                     "source_fact_id": fact.fact_id,
                     "provider": fact.tool_name,
                     "provider_version": fact.provider_version,
                     "annotation_method": CONSEQUENCE_METHODS[fact.tool_name],
+                    "provider_role": CONSEQUENCE_PROVIDER_ROLES[fact.tool_name],
                     "query_representation": dict(fact.request_arguments),
                     "identity_status": (fact.identity_status),
+                    "allele_match_status": fact.identity_status,
+                    "gene_match_status": "unknown",
+                    "transcript_match_status": "unknown",
+                    "target_binding_status": "unknown",
                     "selected_transcript_status": "unknown",
                     "source_available": False,
                     "limitation": "no_transcript_consequence_rows",
+                    "observation_role": (
+                        "hard_conflict" if hard_conflict else "unavailable"
+                    ),
                     "conflict_class": (
                         "hard_identity_conflict" if hard_conflict else ""
                     ),
@@ -224,6 +281,7 @@ def consequence_observations(
                 "provider": fact.tool_name,
                 "provider_version": fact.provider_version,
                 "annotation_method": CONSEQUENCE_METHODS[fact.tool_name],
+                "provider_role": CONSEQUENCE_PROVIDER_ROLES[fact.tool_name],
                 "query_representation": dict(fact.request_arguments),
                 "build": (
                     fact.result_identity.get("build")
@@ -235,7 +293,15 @@ def consequence_observations(
                 or features.get("coordinates")
                 or {},
                 "gene": _text(row.get("gene") or features.get("gene")),
+                "provider_gene_label": _text(
+                    row.get("provider_gene_label")
+                    or features.get("provider_gene_label")
+                ),
                 "transcript": transcript,
+                "provider_transcript_label": _text(
+                    row.get("provider_transcript_label")
+                    or features.get("provider_transcript_label")
+                ),
                 "mane_select": row.get("mane_select"),
                 "hgvs_c": _text(row.get("hgvsc") or row.get("hgvs_c")),
                 "hgvs_p": _text(row.get("hgvsp") or row.get("hgvs_p")),
@@ -247,6 +313,7 @@ def consequence_observations(
                 or row.get("protein_position"),
                 "canonical": row.get("canonical") or row.get("is_canonical"),
                 "identity_status": (fact.identity_status),
+                "allele_match_status": fact.identity_status,
                 "selected_transcript_status": match_status,
                 "source_available": bool(
                     fact_is_available(fact)
@@ -257,7 +324,19 @@ def consequence_observations(
                 "_match_rank": match_rank,
                 "_provider_rank": _PROVIDER_PRIORITY.get(fact.tool_name, 99),
             }
+            observation["gene_match_status"] = _gene_match_status(identity, observation)
+            observation["transcript_match_status"] = match_status
+            observation["target_binding_status"] = _target_binding_status(
+                observation["gene_match_status"], match_status
+            )
             observation["conflict_class"] = _conflict_class(identity, observation)
+            observation["observation_role"] = (
+                "hard_conflict"
+                if observation["conflict_class"] == "hard_identity_conflict"
+                else "alternate_transcript"
+                if observation["conflict_class"] == "alternate_transcript_observation"
+                else "context_only"
+            )
             observations.append(observation)
     return sorted(
         observations,
@@ -275,21 +354,30 @@ def resolve_consequence_observations(
     observations: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Select one transcript-bound consequence without majority voting."""
+
+    def clean(row: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in row.items() if not key.startswith("_")}
+
+    def observations_compatible(left: dict[str, Any], right: dict[str, Any]) -> bool:
+        left_terms = set(left.get("consequence_terms") or [])
+        right_terms = set(right.get("consequence_terms") or [])
+        if left_terms and right_terms and not left_terms.intersection(right_terms):
+            return False
+        left_protein = _protein_change(left.get("hgvs_p"))
+        right_protein = _protein_change(right.get("hgvs_p"))
+        return not (left_protein and right_protein and left_protein != right_protein)
+
     identity_conflicts = [
         row
         for row in observations
         if row.get("conflict_class") == "hard_identity_conflict"
-        or (
-            not row.get("conflict_class")
-            and row.get("identity_status") == "conflict"
-            and int(row.get("_match_rank", 99)) <= 2
-        )
     ]
     alternate_transcripts = [
-        {key: value for key, value in row.items() if not key.startswith("_")}
+        clean(row)
         for row in observations
         if row.get("conflict_class") == "alternate_transcript_observation"
     ]
+    representations = _equivalent_or_alternate_representations(observations)
     if identity_conflicts:
         return {
             "status": "identity_conflict",
@@ -308,20 +396,24 @@ def resolve_consequence_observations(
                 for row in identity_conflicts
             ],
             "failures": [],
-            "hard_identity_conflicts": [
-                {key: value for key, value in row.items() if not key.startswith("_")}
-                for row in identity_conflicts
-            ],
+            "hard_identity_conflicts": [clean(row) for row in identity_conflicts],
             "selected_transcript_conflicts": [],
             "alternate_transcript_observations": alternate_transcripts,
+            "nonblocking_disagreements": [],
+            "equivalent_or_alternate_representations": representations,
+            "resolution_confidence": "unresolved",
+            "automatic_usable": False,
+            "verified_usable": False,
         }
     ready = [
         row
         for row in observations
-        if row.get("source_available") is True and int(row.get("_match_rank", 99)) <= 2
+        if row.get("source_available") is True
+        and int(row.get("_match_rank", 99)) <= 2
+        and _provider_role(row) in {"authoritative", "aggregation"}
     ]
     failures = [
-        {key: value for key, value in row.items() if not key.startswith("_")}
+        clean(row)
         for row in observations
         if row.get("source_available") is not True
         and row.get("conflict_class") != "alternate_transcript_observation"
@@ -338,61 +430,106 @@ def resolve_consequence_observations(
             "hard_identity_conflicts": [],
             "selected_transcript_conflicts": [],
             "alternate_transcript_observations": alternate_transcripts,
+            "nonblocking_disagreements": [],
+            "equivalent_or_alternate_representations": representations,
+            "resolution_confidence": "unresolved",
+            "automatic_usable": False,
+            "verified_usable": False,
         }
 
     best_rank = min(int(row["_match_rank"]) for row in ready)
     best = [row for row in ready if int(row["_match_rank"]) == best_rank]
-    term_sets = {
-        tuple(row.get("consequence_terms") or [])
-        for row in best
-        if row.get("consequence_terms")
-    }
-    protein_values = {
-        _protein_change(row.get("hgvs_p")) for row in best if _text(row.get("hgvs_p"))
-    }
-    conflicts: list[dict[str, Any]] = []
-    if not _term_sets_connected(best):
-        conflicts.append(
-            {
-                "type": "selected_transcript_consequence_conflict",
-                "values": [list(value) for value in sorted(term_sets)],
-                "source_fact_ids": sorted({str(row["source_fact_id"]) for row in best}),
-            }
-        )
-    if len(protein_values) > 1:
-        conflicts.append(
-            {
-                "type": "selected_transcript_protein_consequence_conflict",
-                "values": sorted(protein_values),
-                "source_fact_ids": sorted({str(row["source_fact_id"]) for row in best}),
-            }
-        )
-    if conflicts:
+    authoritative = [row for row in best if _provider_role(row) == "authoritative"]
+    selection_pool = (
+        authoritative
+        or [row for row in best if _provider_role(row) == "aggregation"]
+        or best
+    )
+    selected = min(selection_pool, key=lambda row: int(row.get("_provider_rank", 99)))
+    blocking_conflicts: list[dict[str, Any]] = []
+    nonblocking_disagreements: list[dict[str, Any]] = []
+    corroborating_rows: list[dict[str, Any]] = []
+    for row in best:
+        if row is selected:
+            continue
+        if observations_compatible(selected, row):
+            corroborating_rows.append(row)
+            continue
+        disagreement = {
+            "type": "selected_transcript_provider_disagreement",
+            "selected_source_fact_id": selected.get("source_fact_id"),
+            "other_source_fact_id": row.get("source_fact_id"),
+            "selected_provider": selected.get("provider"),
+            "other_provider": row.get("provider"),
+            "selected_consequence_terms": list(selected.get("consequence_terms") or []),
+            "other_consequence_terms": list(row.get("consequence_terms") or []),
+            "selected_hgvs_p": selected.get("hgvs_p"),
+            "other_hgvs_p": row.get("hgvs_p"),
+        }
+        if (
+            _provider_role(selected) == "authoritative"
+            and _provider_role(row) == "authoritative"
+        ):
+            disagreement["type"] = "selected_transcript_conflict"
+            blocking_conflicts.append(disagreement)
+            row["observation_role"] = "hard_conflict"
+        else:
+            nonblocking_disagreements.append(disagreement)
+            row["observation_role"] = "disputed"
+    if blocking_conflicts:
         return {
             "status": "identity_conflict",
             "reason": "identity_bound_consequence_sources_disagree",
             "selected_observation": None,
             "selected_source_fact_ids": [],
             "corroborating_source_fact_ids": [],
-            "conflicts": conflicts,
+            "conflicts": blocking_conflicts,
             "failures": failures,
             "hard_identity_conflicts": [],
-            "selected_transcript_conflicts": conflicts,
+            "selected_transcript_conflicts": blocking_conflicts,
             "alternate_transcript_observations": alternate_transcripts,
+            "nonblocking_disagreements": nonblocking_disagreements,
+            "equivalent_or_alternate_representations": representations,
+            "resolution_confidence": "unresolved",
+            "automatic_usable": False,
+            "verified_usable": False,
         }
 
-    selected = min(best, key=lambda row: int(row.get("_provider_rank", 99)))
+    selected["observation_role"] = "selected"
+    for row in corroborating_rows:
+        row["observation_role"] = "corroborating"
     selected_id = str(selected["source_fact_id"])
     corroborating = sorted(
         {
             str(row["source_fact_id"])
-            for row in best
+            for row in corroborating_rows
             if str(row["source_fact_id"]) != selected_id
         }
     )
-    clean_selected = {
-        key: value for key, value in selected.items() if not key.startswith("_")
-    }
+    selected_is_authoritative = _provider_role(selected) == "authoritative"
+    target_binding_partial = selected.get("target_binding_status") == "partial"
+    if target_binding_partial:
+        nonblocking_disagreements.append(
+            {
+                "type": "selected_provider_target_binding_partial",
+                "source_fact_id": selected_id,
+                "provider": selected.get("provider"),
+                "gene_match_status": selected.get("gene_match_status"),
+                "transcript_match_status": selected.get("transcript_match_status"),
+            }
+        )
+    authoritative_corroboration = any(
+        _provider_role(row) == "authoritative" for row in corroborating_rows
+    )
+    if selected_is_authoritative and nonblocking_disagreements:
+        confidence = "disputed"
+    elif selected_is_authoritative and authoritative_corroboration:
+        confidence = "authoritative_corroborated"
+    elif selected_is_authoritative:
+        confidence = "authoritative_single_source"
+    else:
+        confidence = "source_backed_only"
+    clean_selected = clean(selected)
     ensembl_transcripts = {
         _text(row.get("transcript"))
         for row in best
@@ -411,6 +548,13 @@ def resolve_consequence_observations(
         "hard_identity_conflicts": [],
         "selected_transcript_conflicts": [],
         "alternate_transcript_observations": alternate_transcripts,
+        "nonblocking_disagreements": nonblocking_disagreements,
+        "equivalent_or_alternate_representations": representations,
+        "resolution_confidence": confidence,
+        "automatic_usable": True,
+        "verified_usable": bool(
+            selected_is_authoritative and not nonblocking_disagreements
+        ),
         "transcript_mapping": {
             "requested": identity.get("transcript"),
             "selected": selected.get("transcript"),
@@ -448,7 +592,9 @@ def profile_features_from_resolution(resolution: dict[str, Any]) -> dict[str, An
 
 
 __all__ = [
+    "CONSEQUENCE_CONFLICT_POLICY_VERSION",
     "CONSEQUENCE_METHODS",
+    "CONSEQUENCE_PROVIDER_ROLES",
     "consequence_observations",
     "profile_features_from_resolution",
     "resolve_consequence_observations",

@@ -213,7 +213,7 @@ from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_has
 
 check(
     "v3_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-3.1",
+    ACMG_RUNTIME_VERSION == "evidence-automation-3.2",
     ACMG_RUNTIME_VERSION,
 )
 
