@@ -191,7 +191,7 @@ EvidenceCard.
 Promoted PVS1 cards are eligible for Tavtigian odds in the evidence estimates
 only.
 
-EvidenceCards use the v3 contract: tool-proposed `criterion` and `strength`,
+EvidenceCards use the v4 contract: tool-proposed `criterion` and `strength`,
 `evidence_status`, rule and strength provenance, verification dimensions,
 scenario identity, correlation keys, and automatic/verified/user calculation
 roles. The collector returns broad source-backed `automatic_bayesian`, strict

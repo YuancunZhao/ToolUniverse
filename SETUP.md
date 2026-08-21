@@ -21,7 +21,7 @@ Install the exact validated runtime commit instead of a floating branch:
 ```text
 Repository: https://github.com/YuancunZhao/ToolUniverse
 Branch:     codex/acmg-on-tooluniverse-1.4
-Commit:     4321a546bb1953a14b8238cfe84fbb86647d2a8f
+Commit:     94343d3d495395aaf61ec552c992ff772ecf9fdc
 ```
 
 This commit passed the then-current ACMG/SpliceAI/provider suite, MCP registration
@@ -32,7 +32,7 @@ The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
-The branch documentation below describes the validated v3 interface. The
+The branch documentation below describes the validated v4 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
 The working branch may describe newer `1.4.1+acmg.6` interfaces before a new
@@ -43,7 +43,7 @@ until the full exact-SHA gate is repeated.
 
 Copy this sentence into another AI agent:
 
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `4321a546bb1953a14b8238cfe84fbb86647d2a8f` for my current AI client. Preserve unrelated MCP servers and skills.
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `94343d3d495395aaf61ec552c992ff772ecf9fdc` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
 
@@ -57,7 +57,7 @@ existing `tooluniverse` entry:
   "args": [
     "--refresh",
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@4321a546bb1953a14b8238cfe84fbb86647d2a8f",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@94343d3d495395aaf61ec552c992ff772ecf9fdc",
     "tooluniverse"
   ],
   "env": {
@@ -105,7 +105,7 @@ Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 Then run:
 
 ```bash
-TOOLUNIVERSE_COMMIT="4321a546bb1953a14b8238cfe84fbb86647d2a8f"
+TOOLUNIVERSE_COMMIT="94343d3d495395aaf61ec552c992ff772ecf9fdc"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
 : "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
@@ -192,7 +192,7 @@ The principal outputs are:
 - `limitations`
 
 Evidence-card inclusion is represented by
-`calculation_roles.automatic|verified|user_selected`. v3 does not dual-write
+`calculation_roles.automatic|verified|user_selected`. v4 does not dual-write
 the retired preview/counting fields.
 
 `guard_context` is a compact self-checking contract. Its `context_hash` covers
@@ -247,7 +247,7 @@ other sources.
 
 Database classifications, actionability, constraint metrics, phenotype
 matches, and uncalibrated predictor outputs remain visible source assertions.
-Only their underlying facts can become EvidenceCards through the v3 criterion
+Only their underlying facts can become EvidenceCards through the v4 criterion
 matrix; PP5/BP6 remain deprecated.
 
 Provider contracts worth checking:
@@ -371,7 +371,7 @@ First verify that the exact commit starts:
 
 ```bash
 uvx --refresh --from \
-  git+https://github.com/YuancunZhao/ToolUniverse.git@4321a546bb1953a14b8238cfe84fbb86647d2a8f \
+  git+https://github.com/YuancunZhao/ToolUniverse.git@94343d3d495395aaf61ec552c992ff772ecf9fdc \
   tooluniverse --help
 ```
 
@@ -408,7 +408,7 @@ This gate retries CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and the
 live BRCA2 collector once. It validates stable identity and response structure,
 records URLs, elapsed time, and errors, and exits nonzero if any required
 source still fails. It deliberately does not pin mutable scores or record
-counts. The fork-only `ACMG v3 release candidate` GitHub Actions workflow runs
+counts. The fork-only `ACMG v4 release candidate` GitHub Actions workflow runs
 the same exact-SHA gate when manually dispatched with `run_online_smoke=true`.
 
 If `execute_tool`, `get_tool_info`, or `list_tools` is unavailable, stop the

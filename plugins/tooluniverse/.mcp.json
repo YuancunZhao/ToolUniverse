@@ -5,7 +5,7 @@
       "args": [
         "--refresh",
         "--from",
-        "git+https://github.com/YuancunZhao/ToolUniverse.git@4321a546bb1953a14b8238cfe84fbb86647d2a8f",
+        "git+https://github.com/YuancunZhao/ToolUniverse.git@94343d3d495395aaf61ec552c992ff772ecf9fdc",
         "tooluniverse"
       ],
       "env": {

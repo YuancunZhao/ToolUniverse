@@ -1,4 +1,4 @@
-# ACMG Evidence Collector v3
+# ACMG Evidence Collector v4
 
 `ACMG_evidence_collector` is an automated evidence workbench for germline small
 variants. It exhaustively collects traceable facts, maps them through ClinGen
@@ -68,7 +68,7 @@ publication, or re-fetchable report anchor is required for the verified
 estimate. The collector never transmits private clinical observations to
 external providers without an explicit caller action.
 
-## SourceFact v3
+## SourceFact v4
 
 Every attempted source remains visible, including successes, empty responses,
 failures, stale versions, incomplete extraction, and identity conflicts. Each
@@ -143,7 +143,7 @@ consequence, splice-site, reading-frame/NMD, LoF disease-mechanism, and
 downgrade decision tree. HIGH impact, frameshift, stop-gained, LOFTEE HC,
 constraint, or a database label cannot fill missing PVS1 facts.
 
-## EvidenceCard v3
+## EvidenceCard v4
 
 No-information criteria appear only in `criterion_reviews`; the runtime does
 not fabricate placeholder cards. Every EvidenceCard has source facts and one
@@ -336,9 +336,9 @@ returned context object unchanged. Tool discovery, schema lookup, shell/Python
 parsing, temporary files, source imports, and manual provider retries are not
 part of that path.
 
-## v2 to v3 migration
+## v3 to v4 migration
 
-The v3 runtime does not dual-write old evidence-gate fields. Migrate broad
+The v4 runtime does not dual-write old evidence-gate fields. Migrate broad
 preview consumers to `automatic_bayesian`, strict consumers to
 `verified_bayesian`, and card inclusion checks to
 `calculation_roles.automatic|verified|user_selected`. Replace the former
