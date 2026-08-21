@@ -49,7 +49,11 @@
         },
         "rows": {
           "type": "integer",
-          "description": "Number of results to return (default: 10, max: 50)."
+          "description": "Number of results to return per page (default: 10, max: 50). Requests above 50 are reduced to 50 and the response metadata says so -- use 'start' to retrieve the rest."
+        },
+        "start": {
+          "type": "integer",
+          "description": "Zero-based index of the first result to return, for paging through a result set larger than one page (e.g. start=50 returns results 51-100). Default: 0. The response metadata reports 'total_count' and the 'start' value to use for the next page."
         },
         "sort_by": {
           "type": [
@@ -82,49 +86,26 @@
     "return_schema": {
       "oneOf": [
         {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "pdb_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "4-character PDB identifier"
-                  },
-                  "score": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Search relevance score"
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string"
-                },
-                "total_count": {
-                  "type": "integer",
-                  "description": "Total matching structures in PDB"
-                },
-                "returned": {
-                  "type": "integer"
-                }
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pdb_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "4-character PDB identifier"
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Search relevance score"
               }
             }
-          },
-          "required": [
-            "data"
-          ]
+          }
         },
         {
           "type": "object",
@@ -139,7 +120,9 @@
         }
       ]
     },
-    "aliases": ["RCSB_search"]
+    "aliases": [
+      "RCSB_search"
+    ]
   },
   {
     "name": "RCSBAdvSearch_search_by_motif",
@@ -161,7 +144,11 @@
         },
         "rows": {
           "type": "integer",
-          "description": "Number of results to return (default: 10, max: 50)."
+          "description": "Number of results to return per page (default: 10, max: 50). Requests above 50 are reduced to 50 and the response metadata says so -- use 'start' to retrieve the rest."
+        },
+        "start": {
+          "type": "integer",
+          "description": "Zero-based index of the first result to return, for paging through a result set larger than one page (e.g. start=50 returns results 51-100). Default: 0. The response metadata reports 'total_count' and the 'start' value to use for the next page."
         }
       },
       "required": [
@@ -187,68 +174,40 @@
     "return_schema": {
       "oneOf": [
         {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "pdb_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "4-character PDB identifier"
-                  },
-                  "entity_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Polymer entity number within the PDB entry"
-                  },
-                  "identifier": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Full identifier (PDB_ID + entity, e.g., '1A1F_3')"
-                  },
-                  "score": {
-                    "type": [
-                      "number",
-                      "null"
-                    ],
-                    "description": "Match score"
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string"
-                },
-                "total_count": {
-                  "type": "integer"
-                },
-                "returned": {
-                  "type": "integer"
-                },
-                "pattern": {
-                  "type": "string"
-                },
-                "pattern_type": {
-                  "type": "string"
-                }
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pdb_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "4-character PDB identifier"
+              },
+              "entity_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Polymer entity number within the PDB entry"
+              },
+              "identifier": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Full identifier (PDB_ID + entity, e.g., '1A1F_3')"
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Match score"
               }
             }
-          },
-          "required": [
-            "data"
-          ]
+          }
         },
         {
           "type": "object",

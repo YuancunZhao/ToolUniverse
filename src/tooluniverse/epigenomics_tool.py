@@ -21,6 +21,7 @@ import time
 import requests
 from typing import Dict, Any, Optional
 from .base_tool import BaseTool
+from .ncbi_eutils_tool import esearch_query_disclosure
 from .tool_registry import register_tool
 
 ENCODE_BASE_URL = "https://www.encodeproject.org"
@@ -32,6 +33,22 @@ ENSEMBL_REST_URL = "https://rest.ensembl.org"
 # occasionally 503. Exponential backoff with jitter.
 _RETRY_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 _MAX_RETRIES = 3
+
+
+def _encode_empty_result_note(biosample: Any = None) -> str:
+    """Explain a genuinely empty ENCODE result, hinting at ontology spelling."""
+    note = (
+        "No matching ENCODE experiments. The filters are applied as given -- "
+        "this is a real zero-result answer, not a dropped filter."
+    )
+    if biosample:
+        note += (
+            f" ENCODE requires exact ontology names, so check biosample='{biosample}' "
+            "(e.g. 'K562', 'HepG2', 'liver', 'brain', 'breast epithelium', 'MCF-7'; "
+            "'breast' must be spelled 'breast epithelium' or 'mammary gland'). "
+            "Use GEO_search_chipseq_datasets for disease-based searches."
+        )
+    return note
 
 
 def _inject_ncbi_api_key(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +84,33 @@ def _request_with_backoff(url: str, *, timeout: int, **kwargs) -> requests.Respo
         time.sleep(delay)
     last_resp.raise_for_status()
     return last_resp
+
+
+def _geo_search_metadata(query, term, organism, esearch):
+    """Response metadata for a GEO dataset search, including GEO's own report
+    that it did not run the query as asked.
+
+    Fix-54A-1: ``search_term`` reported the term as SUBMITTED, but GEO's
+    esearch drops phrases it cannot match and answers the remainder, so the
+    field naming the executed query was the one field stating it wrongly.
+    Measured: query "breast cancer zzzqqqxyz nonexistentterm12345" returned
+    total 205972 -- identical to "breast cancer" alone -- with both nonsense
+    phrases in errorlist.phrasesnotfound and nothing said to the caller.
+
+    Shared by the four ``_geo_*_search`` methods, which differ only in the
+    ``term`` they build; stated once so the disclosure cannot be added to three
+    of them and forgotten in the fourth.
+    """
+    metadata = {
+        "source": "NCBI GEO (ncbi.nlm.nih.gov/geo)",
+        "query": query,
+        "search_term": term,
+        "organism": organism,
+    }
+    disclosure = esearch_query_disclosure(esearch, source="GEO")
+    if disclosure:
+        metadata["query_disclosure"] = disclosure
+    return metadata
 
 
 @register_tool("EpigenomicsTool")
@@ -168,7 +212,16 @@ class EpigenomicsTool(BaseTool):
     # =========================================================================
 
     def _encode_search(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Generic ENCODE search helper."""
+        """Generic ENCODE search helper.
+
+        ENCODE answers a facet combination that matches nothing with HTTP 404
+        carrying a perfectly valid body ({"total": 0, "@graph": [],
+        "notification": "No results found"}). Treating that as a transport
+        error made callers either retry with a filter removed -- returning
+        another species' experiments under the requested organism -- or report
+        a genuine zero-result query as "API HTTP error: 404". Parse the body,
+        as encode_tool.py::_http_get already does.
+        """
         url = f"{ENCODE_BASE_URL}/search/"
         params["format"] = "json"
         response = _request_with_backoff(
@@ -177,6 +230,14 @@ class EpigenomicsTool(BaseTool):
             headers={"Accept": "application/json"},
             timeout=self.timeout,
         )
+        if response.status_code == 404:
+            try:
+                body = response.json()
+            except ValueError:
+                response.raise_for_status()
+            else:
+                if isinstance(body, dict) and "@graph" in body:
+                    return body
         response.raise_for_status()
         return response.json()
 
@@ -223,36 +284,23 @@ class EpigenomicsTool(BaseTool):
         limit = arguments.get("limit", 25)
         params["limit"] = min(int(limit), 100)
 
-        # Feature-70A-003: ambiguous/non-leaf biosample terms (e.g. "heart") combined with
-        # the organism filter can produce HTTP 404 from ENCODE. Fall back without
-        # the organism filter in that case.
-        # Feature-79E: if biosample_term_name is not a valid ENCODE ontology term
-        # (e.g. disease names like "AML"), both attempts 404; return empty with hint.
-        try:
-            raw = self._encode_search(params)
-        except Exception:
-            fallback_params = {
-                k: v
-                for k, v in params.items()
-                if k != "replicates.library.biosample.organism.scientific_name"
+        # A zero-result combination now comes back as total 0 rather than an
+        # exception. Retrying without the organism filter used to answer
+        # "human midbrain H3K4me3" with four Mus musculus embryo experiments
+        # while still reporting organism="Homo sapiens", so no filter is
+        # dropped here -- an empty answer is reported as empty.
+        raw = self._encode_search(params)
+        if not raw.get("@graph"):
+            return {
+                "status": "success",
+                "data": [],
+                "metadata": {
+                    "source": "ENCODE",
+                    "total": 0,
+                    "organism": organism,
+                    "note": _encode_empty_result_note(biosample),
+                },
             }
-            try:
-                raw = self._encode_search(fallback_params)
-            except Exception:
-                return {
-                    "status": "success",
-                    "data": [],
-                    "metadata": {
-                        "source": "ENCODE",
-                        "total": 0,
-                        "note": f"No results for biosample='{biosample}'. "
-                        "ENCODE requires exact ontology names for cell lines or tissues "
-                        "(e.g., 'K562', 'HepG2', 'liver', 'brain', 'breast epithelium', 'MCF-7'). "
-                        "Common anatomy terms like 'breast' must be spelled as ENCODE uses them "
-                        "(try 'breast epithelium', 'mammary gland', or a cell line like 'MCF-7'). "
-                        "Use GEO_search_chipseq_datasets for disease-based searches.",
-                    },
-                }
 
         experiments = []
         for exp in raw.get("@graph", []):
@@ -370,30 +418,19 @@ class EpigenomicsTool(BaseTool):
         limit = arguments.get("limit", 25)
         params["limit"] = min(int(limit), 100)
 
-        # Feature-70A-003: biosample+organism combos can 404; fall back without organism.
-        try:
-            raw = self._encode_search(params)
-        except Exception:
-            fallback_params = {
-                k: v
-                for k, v in params.items()
-                if k != "replicates.library.biosample.organism.scientific_name"
+        # No filter is dropped on an empty result -- see _encode_search.
+        raw = self._encode_search(params)
+        if not raw.get("@graph"):
+            return {
+                "status": "success",
+                "data": [],
+                "metadata": {
+                    "source": "ENCODE",
+                    "total": 0,
+                    "organism": organism,
+                    "note": _encode_empty_result_note(biosample),
+                },
             }
-            try:
-                raw = self._encode_search(fallback_params)
-            except Exception:
-                return {
-                    "status": "success",
-                    "data": [],
-                    "metadata": {
-                        "source": "ENCODE",
-                        "total": 0,
-                        "note": f"No results for biosample='{biosample}'. "
-                        "ENCODE requires exact ontology names for cell lines or tissues "
-                        "(e.g., 'K562', 'HepG2', 'liver', 'brain', 'breast epithelium', 'MCF-7'). "
-                        "Use GEO_search_atacseq_datasets for disease-based searches.",
-                    },
-                }
 
         experiments = []
         for exp in raw.get("@graph", []):
@@ -598,6 +635,8 @@ class EpigenomicsTool(BaseTool):
         total = int(esearch.get("count", 0))
         ids = esearch.get("idlist", [])
 
+        metadata = _geo_search_metadata(query, term, organism, esearch)
+
         datasets = []
         if ids:
             summary_result = self._geo_esummary(ids)
@@ -628,12 +667,7 @@ class EpigenomicsTool(BaseTool):
                 "total": total,
                 "datasets": datasets,
             },
-            "metadata": {
-                "source": "NCBI GEO (ncbi.nlm.nih.gov/geo)",
-                "query": query,
-                "search_term": term,
-                "organism": organism,
-            },
+            "metadata": metadata,
         }
 
     def _geo_chipseq_search(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -652,6 +686,8 @@ class EpigenomicsTool(BaseTool):
         esearch = search_result.get("esearchresult", {})
         total = int(esearch.get("count", 0))
         ids = esearch.get("idlist", [])
+
+        metadata = _geo_search_metadata(query, term, organism, esearch)
 
         datasets = []
         if ids:
@@ -682,12 +718,7 @@ class EpigenomicsTool(BaseTool):
                 "total": total,
                 "datasets": datasets,
             },
-            "metadata": {
-                "source": "NCBI GEO (ncbi.nlm.nih.gov/geo)",
-                "query": query,
-                "search_term": term,
-                "organism": organism,
-            },
+            "metadata": metadata,
         }
 
     def _geo_dataset_details(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -752,6 +783,8 @@ class EpigenomicsTool(BaseTool):
         total = int(esearch.get("count", 0))
         ids = esearch.get("idlist", [])
 
+        metadata = _geo_search_metadata(query, term, organism, esearch)
+
         datasets = []
         if ids:
             summary_result = self._geo_esummary(ids)
@@ -780,12 +813,7 @@ class EpigenomicsTool(BaseTool):
                 "total": total,
                 "datasets": datasets,
             },
-            "metadata": {
-                "source": "NCBI GEO (ncbi.nlm.nih.gov/geo)",
-                "query": query,
-                "search_term": term,
-                "organism": organism,
-            },
+            "metadata": metadata,
         }
 
     def _geo_atacseq_search(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -804,6 +832,8 @@ class EpigenomicsTool(BaseTool):
         total = int(esearch.get("count", 0))
         ids = esearch.get("idlist", [])
 
+        metadata = _geo_search_metadata(query, term, organism, esearch)
+
         datasets = []
         if ids:
             summary_result = self._geo_esummary(ids)
@@ -832,12 +862,7 @@ class EpigenomicsTool(BaseTool):
                 "total": total,
                 "datasets": datasets,
             },
-            "metadata": {
-                "source": "NCBI GEO (ncbi.nlm.nih.gov/geo)",
-                "query": query,
-                "search_term": term,
-                "organism": organism,
-            },
+            "metadata": metadata,
         }
 
     def _encode_rnaseq_search(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -875,29 +900,8 @@ class EpigenomicsTool(BaseTool):
             params["replicates.library.biosample.organism.scientific_name"] = organism
         params["limit"] = min(int(limit), 100)
 
-        try:
-            raw = self._encode_search(params)
-        except Exception:
-            # Fall back without organism filter (mirrors histone search fix)
-            fallback = {
-                k: v
-                for k, v in params.items()
-                if k != "replicates.library.biosample.organism.scientific_name"
-            }
-            try:
-                raw = self._encode_search(fallback)
-            except Exception:
-                return {
-                    "status": "success",
-                    "data": {"total": 0, "experiments": []},
-                    "metadata": {
-                        "source": "ENCODE",
-                        "note": (
-                            f"No results for biosample='{biosample}'. "
-                            "ENCODE requires exact ontology names (e.g., 'K562', 'HepG2', 'liver')."
-                        ),
-                    },
-                }
+        # No filter is dropped on an empty result -- see _encode_search.
+        raw = self._encode_search(params)
 
         # If no results and assay was 'total RNA-seq', retry with 'polyA plus RNA-seq'
         # Some cell lines (e.g. HeLa-S3) have no total RNA-seq but have polyA plus RNA-seq.

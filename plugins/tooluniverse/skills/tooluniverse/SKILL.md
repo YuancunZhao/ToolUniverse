@@ -107,6 +107,7 @@ These reminders are for fast pattern recognition during routing. Detailed `❌ W
 | "research", "profile", "**drug**", "medication", "therapeutic agent", "tell me about [drug]" | `Skill(skill="tooluniverse-drug-research")` |
 | "**literature review**", "papers about", "publications on", "research articles", "recent studies" | `Skill(skill="tooluniverse-literature-deep-research")` |
 | "research", "profile", "**target**", "protein target", "gene target", "target validation" | `Skill(skill="tooluniverse-target-research")` |
+| "**gene liability**", "gene safety score", "knockout safety", "knockdown safety", "on-target toxicity", "safe to inhibit [gene]" | `Skill(skill="tooluniverse-gene-liability")` |
 | "**peptide target**", "**deorphanize**", "deorphanization", "**peptide off-target**", "what does [peptide] bind", "target of a peptide", "orphan peptide", "peptide doesn't bind [target]", "binds in [species] but not", "find the receptor for [peptide]" | `Skill(skill="tooluniverse-peptide-target-deorphanization")` |
 
 ### 3. Clinical Decision Support
@@ -291,7 +292,7 @@ say 结构变异、拷贝数变异、缺失、重复、倒位或易位.
 | "**custom tool**", "add my own tool", "local tool", "create tool", "extend ToolUniverse" | `Skill(skill="tooluniverse-custom-tool")` |
 | "**SDK**", "Python SDK", "build AI scientist", "programmatic access", "**import tooluniverse**", "**coding API**", "**tu build**", "**typed wrappers**" | `Skill(skill="tooluniverse-sdk")` |
 | "**install skills**", "missing skills", "skill not found", "add skills" | `Skill(skill="tooluniverse-install-skills")` |
-| "**self-review**", "check my work", "definition of done", "evaluation rubric", "success criteria", "grading criteria", "LLM-as-judge" | `Skill(skill="tooluniverse-self-review")` |
+| "**self-review**", "eval current work", "evaluate this work", "check my work", "is this complete", "definition of done", "evaluation rubric", "success criteria", "grading criteria", "LLM-as-judge" | `Skill(skill="tooluniverse-self-review")` |
 
 ---
 
@@ -311,10 +312,15 @@ say 结构变异、拷贝数变异、缺失、重复、倒位或易位.
 3. **Specificity Rule**: More specific beats general.
    - "cancer treatment" → precision-oncology (not disease-research)
 
-4. **Data Type Rule**: "get/retrieve/fetch" → retrieval skills.
+4. **Evaluation Intent Rule**: Route requests to review existing/current work to
+   `tooluniverse-self-review`, but do not route requests to create or run an eval suite,
+   grader, test, or benchmark there. Those are implementation tasks. Within self-review,
+   plain "eval" is qualitative; scoring requires an explicit score/grade/points request.
+
+5. **Data Type Rule**: "get/retrieve/fetch" → retrieval skills.
    - "get compound structure" → chemical-compound-retrieval (not drug-research)
 
-5. **Still ambiguous**: Ask user with AskUserQuestion.
+6. **Still ambiguous**: Ask user with AskUserQuestion.
 
 ---
 

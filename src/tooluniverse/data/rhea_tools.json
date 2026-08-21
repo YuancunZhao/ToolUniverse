@@ -14,7 +14,14 @@
             "integer",
             "null"
           ],
-          "description": "Maximum number of results (default 20, max 50)."
+          "description": "Maximum number of reactions to return per page (default 20, max 1000). This caps the page only; `metadata.total_results` reports the full result-set size."
+        },
+        "offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Number of matching reactions to skip before returning a page (default 0). Combine with `limit` and `metadata.has_more` to page through large result sets."
         }
       },
       "required": [
@@ -37,55 +44,33 @@
     "return_schema": {
       "oneOf": [
         {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "rhea_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Rhea reaction identifier (e.g., RHEA:14293)"
-                  },
-                  "equation": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Chemical equation with compound names"
-                  },
-                  "ec_numbers": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "description": "Enzyme Commission numbers (semicolon-separated)"
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string"
-                },
-                "query": {
-                  "type": "string"
-                },
-                "total_results": {
-                  "type": "integer"
-                }
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rhea_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Rhea reaction identifier (e.g., RHEA:14293)"
+              },
+              "equation": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Chemical equation with compound names"
+              },
+              "ec_numbers": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Enzyme Commission numbers (semicolon-separated)"
               }
             }
-          },
-          "required": [
-            "data"
-          ]
+          }
         },
         {
           "type": "object",
@@ -116,7 +101,14 @@
             "integer",
             "null"
           ],
-          "description": "Maximum number of results (default 20, max 50)."
+          "description": "Maximum number of reactions to return per page (default 20, max 1000). This caps the page only; `metadata.total_results` reports the full result-set size."
+        },
+        "offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Number of matching reactions to skip before returning a page (default 0). Combine with `limit` and `metadata.has_more` to page through large result sets."
         }
       },
       "required": [
@@ -139,52 +131,30 @@
     "return_schema": {
       "oneOf": [
         {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "rhea_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "equation": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "ec_numbers": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string"
-                },
-                "ec_number": {
-                  "type": "string"
-                },
-                "total_results": {
-                  "type": "integer"
-                }
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rhea_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "equation": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ec_numbers": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
-          },
-          "required": [
-            "data"
-          ]
+          }
         },
         {
           "type": "object",
@@ -215,7 +185,14 @@
             "integer",
             "null"
           ],
-          "description": "Maximum number of results (default 20, max 50)."
+          "description": "Maximum number of reactions to return per page (default 20, max 1000). This caps the page only; `metadata.total_results` reports the full result-set size."
+        },
+        "offset": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Number of matching reactions to skip before returning a page (default 0). Combine with `limit` and `metadata.has_more` to page through large result sets."
         }
       },
       "required": [
@@ -238,58 +215,36 @@
     "return_schema": {
       "oneOf": [
         {
-          "type": "object",
-          "properties": {
-            "data": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "rhea_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "equation": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "chebi_ids": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "ec_numbers": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                }
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "source": {
-                  "type": "string"
-                },
-                "chebi_id": {
-                  "type": "string"
-                },
-                "total_results": {
-                  "type": "integer"
-                }
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rhea_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "equation": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "chebi_ids": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ec_numbers": {
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             }
-          },
-          "required": [
-            "data"
-          ]
+          }
         },
         {
           "type": "object",

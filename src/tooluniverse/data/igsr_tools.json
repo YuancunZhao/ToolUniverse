@@ -43,7 +43,12 @@
           "type": "object",
           "properties": {
             "total": {
-              "type": "integer"
+              "type": "integer",
+              "description": "Total number of matching records in IGSR, independent of the `limit` page size."
+            },
+            "returned": {
+              "type": "integer",
+              "description": "Number of records included in this response (at most `limit`)."
             },
             "populations": {
               "type": "array",
@@ -108,7 +113,10 @@
         "operation": "search_populations",
         "limit": 5
       }
-    ]
+    ],
+    "fields": {
+      "operation": "search_populations"
+    }
   },
   {
     "name": "IGSR_search_samples",
@@ -161,7 +169,12 @@
           "type": "object",
           "properties": {
             "total": {
-              "type": "integer"
+              "type": "integer",
+              "description": "Total number of matching records in IGSR, independent of the `limit` page size."
+            },
+            "returned": {
+              "type": "integer",
+              "description": "Number of records included in this response (at most `limit`)."
             },
             "samples": {
               "type": "array",
@@ -229,7 +242,10 @@
         "sample_name": "NA12878",
         "limit": 1
       }
-    ]
+    ],
+    "fields": {
+      "operation": "search_samples"
+    }
   },
   {
     "name": "IGSR_list_data_collections",
@@ -261,7 +277,12 @@
           "type": "object",
           "properties": {
             "total": {
-              "type": "integer"
+              "type": "integer",
+              "description": "Total number of matching records in IGSR, independent of the `limit` page size."
+            },
+            "returned": {
+              "type": "integer",
+              "description": "Number of records included in this response (at most `limit`)."
             },
             "collections": {
               "type": "array",
@@ -318,6 +339,9 @@
         "operation": "list_data_collections",
         "limit": 20
       }
-    ]
+    ],
+    "fields": {
+      "operation": "list_data_collections"
+    }
   }
 ]

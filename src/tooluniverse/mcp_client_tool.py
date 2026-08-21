@@ -15,7 +15,45 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from .base_tool import BaseTool
 from .tool_registry import register_tool
+from .logging_config import get_logger
 import os
+
+logger = get_logger(__name__)
+
+
+def _unwrap_mcp_tool_result(result: Any) -> Any:
+    """Return the value of a standard MCP tools/call response when unambiguous."""
+    if not isinstance(result, dict):
+        return result
+
+    content = result.get("content")
+    if result.get("isError"):
+        error_parts = [
+            str(item.get("text"))
+            for item in content or []
+            if isinstance(item, dict)
+            and item.get("type") == "text"
+            and item.get("text") is not None
+        ]
+        detail: Any = "\n".join(error_parts) or result.get("structuredContent")
+        return {"status": "error", "error": detail or "remote MCP tool failed"}
+
+    structured = result.get("structuredContent")
+    if structured is not None:
+        return structured
+
+    if not isinstance(content, list) or len(content) != 1:
+        return result
+    item = content[0]
+    if not isinstance(item, dict) or item.get("type") != "text":
+        return result
+    text = item.get("text")
+    if not isinstance(text, str):
+        return result
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
 
 
 class BaseMCPClient:
@@ -24,7 +62,14 @@ class BaseMCPClient:
     Provides session management, request handling, and async cleanup patterns.
     """
 
-    def __init__(self, server_url: str, transport: str = "http", timeout: int = 30):
+    def __init__(
+        self,
+        server_url: str,
+        transport: str = "http",
+        timeout: int = 30,
+        headers: Optional[Dict[str, str]] = None,
+        auth_env: str = "",
+    ):
         self.server_url = os.path.expandvars(server_url)
         # Normalize transport for backward compatibility: treat 'stdio' as HTTP
         normalized_transport = (
@@ -35,6 +80,21 @@ class BaseMCPClient:
         self.transport = normalized_transport
         self.timeout = timeout
         self.session = None
+        self.header_templates = dict(headers or {})
+        self.auth_env = auth_env
+        self.headers = {}
+        for name, value in self.header_templates.items():
+            expanded_name = str(name).strip()
+            expanded_value = os.path.expandvars(str(value)).strip()
+            if not expanded_name or "\r" in expanded_name or "\n" in expanded_name:
+                raise ValueError("Invalid MCP header name")
+            if "\r" in expanded_value or "\n" in expanded_value:
+                raise ValueError("Invalid MCP header value")
+            self.headers[expanded_name] = expanded_value
+        if auth_env:
+            token = os.getenv(auth_env, "").strip()
+            if token:
+                self.headers["Authorization"] = f"Bearer {token}"
 
         # Validate transport (accept 'stdio' via normalization above)
         supported_transports = ["http", "websocket"]
@@ -49,10 +109,14 @@ class BaseMCPClient:
     def _get_mcp_endpoint(self, path: str) -> str:
         """Get the full MCP endpoint URL"""
         if self.transport == "http":
-            base_url = self.server_url.rstrip("/")
-            if not base_url.endswith("/mcp"):
-                base_url += "/mcp"
-            return urljoin(base_url + "/", path)
+            base_url = self.server_url
+            if not base_url.rstrip("/").endswith("/mcp"):
+                # Preserve the legacy generated endpoint for bare server URLs,
+                # but keep an explicitly configured /mcp slash shape exact.
+                base_url = base_url.rstrip("/") + "/mcp/"
+            if not path:
+                return base_url
+            return urljoin(base_url.rstrip("/") + "/", path)
         return self.server_url
 
     async def _make_mcp_request(
@@ -61,7 +125,9 @@ class BaseMCPClient:
         """Make an MCP JSON-RPC request"""
         if self.transport == "http":
             endpoint = self._get_mcp_endpoint("")
-            async with streamablehttp_client(endpoint, timeout=self.timeout) as (
+            async with streamablehttp_client(
+                endpoint, headers=self.headers or None, timeout=self.timeout
+            ) as (
                 read_stream,
                 write_stream,
                 _,
@@ -150,11 +216,13 @@ class MCPClientTool(BaseTool, BaseMCPClient):
             server_url=tool_config.get("server_url", "http://localhost:8000"),
             transport=tool_config.get("transport", "http"),
             timeout=tool_config.get("timeout", 600),
+            headers=tool_config.get("headers"),
+            auth_env=tool_config.get("auth_env", ""),
         )
 
         # Debug logging for transport configuration
         tool_name = tool_config.get("name", "Unknown")
-        print(
+        logger.debug(
             f"MCP Tool Init: {tool_name} -> transport={self.transport}, server={self.server_url}"
         )
 
@@ -325,7 +393,7 @@ class MCPProxyTool(MCPClientTool):
         async def _run_async():
             try:
                 result = await self.call_tool(self.target_tool_name, arguments)
-                return result
+                return _unwrap_mcp_tool_result(result)
             except Exception as e:
                 return {"status": "error", "error": str(e)}
             finally:
@@ -391,7 +459,7 @@ class MCPServerDiscovery:
             return tool_configs
 
         except Exception as e:
-            print(f"Error discovering tools from MCP server {server_url}: {e}")
+            logger.error(f"Error discovering tools from MCP server {server_url}: {e}")
             return []
         finally:
             await client._close_session()
@@ -485,6 +553,8 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
             server_url=tool_config.get("server_url", "http://localhost:8000"),
             transport=tool_config.get("transport", "http"),
             timeout=tool_config.get("timeout", 5),
+            headers=tool_config.get("headers"),
+            auth_env=tool_config.get("auth_env", ""),
         )
 
         self.auto_register = tool_config.get("auto_register", True)
@@ -494,15 +564,15 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
         )  # None means load all
 
         # Debug logging
-        print(
+        logger.debug(
             f"MCPAutoLoaderTool '{tool_config.get('name', 'Unknown')}' initialized with:"
         )
-        print(f"  - server_url: {self.server_url}")
-        print(f"  - transport: {self.transport}")
-        print(f"  - auto_register: {self.auto_register}")
-        print(f"  - tool_prefix: {self.tool_prefix}")
-        print(f"  - selected_tools: {self.selected_tools}")
-        print(f"  - timeout: {self.timeout}")
+        logger.debug(f"  - server_url: {self.server_url}")
+        logger.debug(f"  - transport: {self.transport}")
+        logger.debug(f"  - auto_register: {self.auto_register}")
+        logger.debug(f"  - tool_prefix: {self.tool_prefix}")
+        logger.debug(f"  - selected_tools: {self.selected_tools}")
+        logger.debug(f"  - timeout: {self.timeout}")
 
         self._discovered_tools = {}
         self._registered_tools = {}
@@ -560,6 +630,11 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
                 ),
             }
 
+            if self.header_templates:
+                config["headers"] = dict(self.header_templates)
+            if self.auth_env:
+                config["auth_env"] = self.auth_env
+
             configs.append(config)
 
         return configs
@@ -598,11 +673,11 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
             # Discover tools
             discovered = await self.discover_tools()
 
-            print(
+            logger.info(
                 f"🔍 MCPAutoLoaderTool discovered {len(discovered)} tools from MCP server:"
             )
             for tool_name, tool_info in discovered.items():
-                print(
+                logger.info(
                     f"  📋 {tool_name}: {tool_info.get('description', 'No description')}"
                 )
 
@@ -610,11 +685,11 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
             if self.auto_register:
                 registered_count = self.register_tools_in_engine(engine)
 
-                print(
+                logger.info(
                     f"✅ MCPAutoLoaderTool registered {registered_count} tools with prefix '{self.tool_prefix}':"
                 )
                 for registered_name in self._registered_tools.keys():
-                    print(f"  🔧 {registered_name}")
+                    logger.info(f"  🔧 {registered_name}")
 
                 return {
                     "discovered_count": len(discovered),
@@ -623,7 +698,7 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
                     "registered_tools": list(self._registered_tools.keys()),
                 }
             else:
-                print(
+                logger.info(
                     "ℹ️  MCPAutoLoaderTool auto_register is disabled. Tools not registered automatically."
                 )
                 return {
@@ -632,7 +707,10 @@ class MCPAutoLoaderTool(BaseTool, BaseMCPClient):
                     "configs": self.generate_proxy_tool_configs(),
                 }
         except Exception as e:
-            print(f"❌ MCPAutoLoaderTool auto-load failed: {str(e)}")
+            # The engine emits one concise, actionable availability message.
+            # Keep the full exception chain at debug level for diagnostics instead
+            # of printing a second, vague failure to ordinary SDK users.
+            logger.debug("MCPAutoLoaderTool auto-load failed", exc_info=True)
             raise Exception(f"Auto-load failed: {str(e)}")
 
     def run(self, arguments):
