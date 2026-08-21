@@ -1,4 +1,4 @@
-"""Disease-isolated CSpec/VCEP scenario evaluation for ACMG v3."""
+"""Disease-isolated CSpec/VCEP scenario evaluation for ACMG v4."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def _scenario_card_id(
 ) -> str:
     payload = f"{card_id}:{scenario_id}:{rule_hash}:{evaluation_status}"
     digest = hashlib.sha256(payload.encode()).hexdigest()[:20]
-    return f"acmg-card:v3:{digest}"
+    return f"acmg-card:v4:{digest}"
 
 
 def _walk(value: Any, *, path: str = "") -> list[tuple[str, Any]]:
@@ -99,7 +99,6 @@ def _numeric_values(row: dict[str, Any], keys: set[str]) -> list[tuple[str, floa
     for path, value in _walk(
         {
             "observed_facts": row.get("observed_facts"),
-            "input_values": row.get("input_values"),
         }
     ):
         normalized_key = _normalized(path.rsplit(".", 1)[-1])
@@ -132,7 +131,6 @@ def _predictor_condition(
     for path, value in _walk(
         {
             "observed_facts": row.get("observed_facts"),
-            "input_values": row.get("input_values"),
         }
     ):
         normalized_path = _normalized(path)
@@ -340,7 +338,6 @@ def _protein_position(row: dict[str, Any]) -> tuple[str, int] | None:
     for container in (
         row.get("variant_identity"),
         row.get("observed_facts"),
-        row.get("input_values"),
     ):
         if not isinstance(container, dict):
             continue
@@ -403,7 +400,6 @@ def _variant_type_condition(row: dict[str, Any], allowed: Any) -> dict[str, Any]
         {
             "variant_identity": row.get("variant_identity"),
             "observed_facts": row.get("observed_facts"),
-            "input_values": row.get("input_values"),
         }
     ):
         if any(
@@ -719,7 +715,6 @@ def _clone_for_scenario(
             f"Online ClinGen CSpec {specification_id} {contract_version}; "
             f"condition evaluation={evaluation.get('status')}"
         ).strip()
-        cloned["clinvar_rule_applied"] = cloned["rule_basis"]
         cloned["rule_id"] = str(contract.get("rule_id") or "")
         cloned["rule_version"] = str(contract.get("version") or "")
         verification = str(criterion_contract.get("verification") or "")
@@ -745,7 +740,7 @@ def _clone_for_scenario(
             }
             cloned["llm_suggestion"] = llm_suggestion
         cloned["strength_source"] = "dynamic_cspec"
-        facts = dict(cloned.get("observed_facts") or cloned.get("input_values") or {})
+        facts = dict(cloned.get("observed_facts") or {})
         facts["cspec_contract_applied"] = {
             "specification_id": contract.get("specification_id"),
             "version": contract.get("version"),

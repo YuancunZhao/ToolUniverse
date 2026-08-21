@@ -433,8 +433,7 @@ default_tool_files = {
     # New Life Science Tools
     "hca_tools": os.path.join(current_dir, "data", "hca_tools.json"),
     "iedb_tools": os.path.join(current_dir, "data", "iedb_tools.json"),
-    # PathwayCommons server is unresponsive (connection refused as of 2026-03)
-    # Archived at: src/tooluniverse/data/broken_apis/pathway_commons_tools.json
+    # PathwayCommons server is currently unresponsive; keep disabled until restored.
     # "pathway_commons_tools": os.path.join(current_dir, "data", "pathway_commons_tools.json"),
     "biomodels_tools": os.path.join(current_dir, "data", "biomodels_tools.json"),
     # BioThings APIs (MyGene, MyVariant, MyChem)
@@ -798,7 +797,6 @@ default_tool_files = {
     # MyDisease.info - BioThings disease annotation aggregator (MONDO, DO, CTD, HPO, DisGeNET)
     "mydisease": os.path.join(current_dir, "data", "mydisease_tools.json"),
     # EBI OxO - Ontology cross-reference mappings across biomedical databases
-    # Archived at: src/tooluniverse/data/broken_apis/oxo_tools.json
     # EBI retired the OxO service (all endpoints hang); use OLS (ols_* tools) instead.
     # "oxo": os.path.join(current_dir, "data", "oxo_tools.json"),
     # InterPro Domain Architecture - Protein domain positions, structure mapping, clan members
@@ -1189,7 +1187,6 @@ default_tool_files = {
     # Smithsonian Open Access - 5M+ digitized museum objects from 19 Smithsonian institutions
     # Library of Congress - 21M+ digitized historical items (photos, maps, manuscripts)
     # SoilGrids REST API officially paused by ISRIC (no restoration timeline)
-    # Archived at: src/tooluniverse/data/broken_apis/soilgrids_tools.json
     # "soilgrids": os.path.join(current_dir, "data", "soilgrids_tools.json"),
     # US Treasury Fiscal Data - national debt, exchange rates, interest rates, debt breakdown
     # Chronicling America - historic US newspaper search (LOC, 1777-1963)

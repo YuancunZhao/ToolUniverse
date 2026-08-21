@@ -35,7 +35,7 @@ exact-Git-SHA installation smoke test.
 The branch documentation below describes the validated v3 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
-The working branch may describe newer `1.4.0+acmg.5` interfaces before a new
+The working branch may describe newer `1.4.1+acmg.6` interfaces before a new
 validated SHA is published; the pinned commit above remains the install target
 until the full exact-SHA gate is repeated.
 
@@ -146,12 +146,8 @@ package must expose exactly these eight ACMG-specific tools:
 - `ACMG_functional_evidence`
 - `ACMG_literature_evidence`
 - `ACMG_guard_final_answer`
-- `ACMG_overlay_gate_assess_variant`
 
 `ACMG_evidence_collector` is the single full-pipeline entry point.
-`ACMG_overlay_gate_assess_variant` is only a thin compatibility alias with the
-same parameters and return structure. It has no separate mode or business
-logic.
 
 ## Current collector interface
 
@@ -382,10 +378,8 @@ uvx --refresh --from \
 After restarting the client:
 
 1. Find `ACMG_evidence_collector`.
-2. Confirm all eight ACMG tools are registered.
-3. Inspect `ACMG_evidence_collector` and
-   `ACMG_overlay_gate_assess_variant`; their parameter and return schemas must
-   match.
+2. Confirm all seven ACMG tools are registered.
+3. Inspect `ACMG_evidence_collector` and its parameter and return schema.
 4. Confirm the removed inputs and outputs listed above are absent.
 5. Execute the harmless summary request shown earlier.
 6. Confirm provider failures remain represented in `source_facts` and
@@ -406,7 +400,7 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.0+acmg.5 \
+  --expected-version 1.4.1+acmg.6 \
   --online-providers
 ```
 

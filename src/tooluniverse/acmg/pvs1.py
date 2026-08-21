@@ -723,29 +723,23 @@ def _card(
     contract: dict[str, Any] | None,
     steps: list[str],
 ) -> EvidenceCard:
-    input_values: dict[str, Any] = {
+    observed_facts: dict[str, Any] = {
+        **facts,
         "consequence_profile": profile,
-        "pvs1_facts": facts,
     }
     card = EvidenceCard(
         criterion="PVS1",
         strength=strength,
-        input_source="PVS1 decision tree facts",
-        input_values=input_values,
-        clinvar_rule_applied=RULE_BASIS,
+        source_label="PVS1 decision tree facts",
+        observed_facts=observed_facts,
+        rule_basis=RULE_BASIS,
         rule_id=RULE_ID,
         rule_version=RULE_VERSION,
         rule_reference=RULE_REFERENCE,
-        rule_basis=RULE_BASIS,
-        observed_facts={
-            "lof_mechanism": facts.get("lof_mechanism"),
-            "transcript": facts.get("transcript"),
-            "spliceai_profile": facts.get("spliceai_profile"),
-        },
         provenance_chain=[str(step) for step in steps if step],
     )
     if contract is not None:
-        input_values["cspec_contract_applied"] = dict(contract)
+        observed_facts["cspec_contract_applied"] = dict(contract)
     return card
 
 

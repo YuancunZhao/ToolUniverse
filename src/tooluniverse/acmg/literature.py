@@ -210,9 +210,9 @@ def literature_evidence(
             EvidenceCard(
                 criterion="PS4",
                 strength=strength or "not_assessed",
-                input_source="Document-backed case evidence",
-                input_values=dict(fact),
-                clinvar_rule_applied=(
+                source_label="Document-backed case evidence",
+                observed_facts=dict(fact),
+                rule_basis=(
                     str(rule_override.get("primary_reference") or "")
                     if dynamic and isinstance(rule_override, dict)
                     else "ACMG/AMP PS4; strength requires user review"

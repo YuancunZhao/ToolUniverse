@@ -111,7 +111,7 @@ def test_high_heterogeneity_contribution_is_capped_at_one_point():
         inheritance_mode="autosomal_dominant",
     )
     assert card.strength == "PS2_Moderate"
-    assert card.input_values["total_points"] == 1.0
+    assert card.observed_facts["total_points"] == 1.0
 
 
 def test_recessive_de_novo_without_second_pathogenic_variant_downgrades_one_level():

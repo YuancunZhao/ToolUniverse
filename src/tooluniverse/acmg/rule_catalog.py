@@ -9,7 +9,7 @@ MONDO_RESOLUTION_POLICY_VERSION = "2026-08-13-v3"
 CSPEC_SCENARIO_POLICY_VERSION = "2026-08-13-v3"
 USER_DECISION_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
 IDENTITY_VERIFICATION_POLICY = {
-    "version": "2026-08-15-v3",
+    "version": "2026-08-21-v4",
     "cross_provider_minimum": 2,
     "single_provider_fallback": "variantvalidator_complete_allele",
     "single_provider_required_fields": [

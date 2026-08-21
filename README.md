@@ -75,8 +75,8 @@ and calculates automatic, verified, per-scenario, and user-selected Bayesian
 review estimates. It never returns ToolUniverse's own five-tier final
 classification.
 
-The fork version is `1.4.0+acmg.5`, based on upstream commit
-`089eb8e6308fc64ae5af3de4bfbec32b5cf07b61`. Ordinary users should keep using
+The fork version is `1.4.1+acmg.6`, based on upstream commit
+`1aaaf00d1a9a91c21ae09d014fe19bf46fa82917`. Ordinary users should keep using
 the upstream installation commands above. Enhanced ACMG deployments must use
 the exact validated Git SHA and matching Skill bundle documented in
 [SETUP.md](SETUP.md).

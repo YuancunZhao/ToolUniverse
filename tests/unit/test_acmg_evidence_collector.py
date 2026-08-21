@@ -1634,7 +1634,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
     splice_pp3 = next(
         row
         for row in result["evidence_cards"]
-        if row["criterion"] == "PP3" and row["input_source"] == "SpliceAI"
+        if row["criterion"] == "PP3" and row["source_label"] == "SpliceAI"
     )
     assert splice_pp3["strength"] == "PP3_Supporting"
     assert splice_pp3["rule_version"] == "2023.1"
@@ -1647,7 +1647,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
     }
     assert splice_profile["max_delta_events"] == ["acceptor_gain"]
     assert (
-        splice_pp3["input_values"]["spliceai_profile"]["delta_scores"]
+        splice_pp3["observed_facts"]["spliceai_profile"]["delta_scores"]
         == splice_profile["delta_scores"]
     )
     pm2 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM2")
@@ -2376,7 +2376,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
         for fact in result["source_facts"]
     )
     for card in result["evidence_cards"]:
-        assert "input_values" not in card
+        assert "observed_facts" not in card
         assert card["criterion"]
         assert card["route"]
         assert "calculation_roles" in card
@@ -2429,7 +2429,7 @@ def test_full_mode_preserves_complete_payloads():
     assert result["response_detail"] == "full"
     assert any("features" in fact for fact in result["source_facts"])
     pm2 = next(row for row in result["evidence_cards"] if row["criterion"] == "PM2")
-    assert pm2["input_values"]
+    assert pm2["observed_facts"]
     assert result["compatibility_report"]["compatible_evidence"]
     assert "compatibility_exclusions" in result["automatic_bayesian"]
     assert any("observed_facts" in review for review in result["criterion_reviews"])

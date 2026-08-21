@@ -247,7 +247,7 @@ def test_cspec_contract_establishes_mechanism_without_facts():
         rule_override=_cspec_override(lof_mechanism_established=True),
     )
     assert card.strength == "PVS1"
-    assert "cspec_contract_applied" in card.input_values
+    assert "cspec_contract_applied" in card.observed_facts
 
 
 def test_non_coding_biotype_fails_closed():

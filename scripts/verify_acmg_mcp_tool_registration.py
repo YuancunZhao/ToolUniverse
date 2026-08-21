@@ -16,7 +16,6 @@ TOOLS_DIR = ROOT / "src" / "tooluniverse" / "tools"
 
 COLLECTOR_NAMES = {
     "ACMG_evidence_collector",
-    "ACMG_overlay_gate_assess_variant",
 }
 REQUIRED_COLLECTOR_RETURN_FIELDS = {
     "status",

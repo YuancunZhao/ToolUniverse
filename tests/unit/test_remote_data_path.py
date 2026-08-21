@@ -48,11 +48,11 @@ class RemoteDataPathTests(unittest.TestCase):
         ):
             self.assertEqual(
                 self.resolve("counts.h5ad", allowed_suffixes={".h5ad"}),
-                self.dataset,
+                self.dataset.resolve(),
             )
             self.assertEqual(
                 self.resolve(str(self.dataset), allowed_suffixes={".h5ad"}),
-                self.dataset,
+                self.dataset.resolve(),
             )
 
     def test_rejects_urls_traversal_and_symlink_escapes(self):
@@ -266,7 +266,7 @@ class ScrubletPathBoundaryTests(unittest.TestCase):
 
         self.assertEqual(
             fake_scanpy.read_h5ad.call_args_list,
-            [mock.call(dataset, backed="r"), mock.call(dataset)],
+            [mock.call(dataset.resolve(), backed="r"), mock.call(dataset.resolve())],
         )
         fake_scanpy.pp.scrublet.assert_called_once_with(
             fake_adata, expected_doublet_rate=0.06

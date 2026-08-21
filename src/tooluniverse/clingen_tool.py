@@ -28,6 +28,55 @@ ACTIONABILITY_PEDIATRIC_URL = (
 )
 EREPO_BASE_URL = "https://erepo.clinicalgenome.org/evrepo/api"
 CSPEC_API_BASE_URL = "https://cspec.genome.network/cspec/api"
+_MAX_PUBLISHED = 100
+_EREPO_MATCH_LIMIT = 5000
+
+
+def _clean(value: Any) -> Optional[str]:
+    """Normalize a filter argument to a non-blank string, or None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _variant_query_param(variant: Any) -> tuple[str, str]:
+    """Map a ClinGen variant identifier to the server-side filter it supports."""
+    value = str(variant).strip()
+    caid = value.upper().removeprefix("CAR:")
+    if re.fullmatch(r"CA\d+", caid):
+        return "caid", caid
+    if value.isdigit():
+        return "variationId", value
+    return "hgvs", value
+
+
+def _published(
+    rows: List[Dict[str, Any]], narrow_hint: str, total_is_capped: bool = False
+) -> Dict[str, Any]:
+    """Publish a capped listing with its returned count and disclosure."""
+    published = rows[:_MAX_PUBLISHED]
+    result: Dict[str, Any] = {
+        "data": published,
+        "total": len(rows),
+        "returned": len(published),
+    }
+    if total_is_capped:
+        result["truncated"] = True
+        result["truncation_note"] = (
+            f"The request reached the {_EREPO_MATCH_LIMIT}-row cap, so `total` "
+            "is a lower bound. "
+            f"`data` contains the first {len(published)} rows. {narrow_hint}"
+        )
+    elif len(published) < len(rows):
+        result["truncated"] = True
+        result["truncation_note"] = (
+            f"`total` is the full count; `data` contains the first "
+            f"{len(published)} rows. {narrow_hint}"
+        )
+    else:
+        result["truncated"] = False
+    return result
 
 
 @register_tool("ClinGenTool")
@@ -262,8 +311,10 @@ class ClinGenTool(BaseTool):
 
             return {
                 "status": "success",
-                "data": curations[:100],  # Limit to first 100 for performance
-                "total": len(curations),
+                **_published(
+                    curations,
+                    "Pass `gene` to narrow to one gene's curations.",
+                ),
                 "source": "ClinGen Gene-Disease Validity",
             }
         except requests.exceptions.Timeout:
@@ -355,8 +406,10 @@ class ClinGenTool(BaseTool):
 
             return {
                 "status": "success",
-                "data": curations[:100],  # Limit for performance
-                "total": len(curations),
+                **_published(
+                    curations,
+                    "Pass `gene` to narrow to one gene's curations.",
+                ),
                 "include_regions": include_regions,
                 "source": "ClinGen Dosage Sensitivity",
             }
@@ -547,6 +600,7 @@ class ClinGenTool(BaseTool):
                 ("Pediatric", ACTIONABILITY_PEDIATRIC_URL),
             ]
             results = {"Adult": [], "Pediatric": []}
+            failures: Dict[str, str] = {}
             with ThreadPoolExecutor(max_workers=len(contexts)) as executor:
                 futures = {
                     executor.submit(
@@ -558,18 +612,36 @@ class ClinGenTool(BaseTool):
                     context = futures[future]
                     try:
                         results[context] = future.result()
-                    except Exception:
-                        # Continue with other context if one fails
-                        pass
+                    except Exception as exc:
+                        failures[context] = f"{type(exc).__name__}: {exc}"
 
-            return {
-                "status": "success",
-                "data": results,
+            response: Dict[str, Any] = {
                 "gene_searched": gene,
-                "adult_count": len(results["Adult"]),
-                "pediatric_count": len(results["Pediatric"]),
                 "source": "ClinGen Clinical Actionability",
             }
+            if failures:
+                response["failed_contexts"] = failures
+            if len(failures) == len(contexts):
+                response["status"] = "error"
+                response["error"] = (
+                    f"All ClinGen actionability contexts failed to fetch for "
+                    f"{gene}; see failed_contexts. No count can be reported."
+                )
+                return response
+
+            response.update(
+                status="success",
+                data=results,
+                adult_count=len(results["Adult"]),
+                pediatric_count=len(results["Pediatric"]),
+            )
+            if failures:
+                response["note"] = (
+                    f"Partial result: {', '.join(sorted(failures))} could not be "
+                    "fetched, so its count of 0 means 'not retrieved', not "
+                    "'no curation exists'. Retry for a complete answer."
+                )
+            return response
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
@@ -672,15 +744,17 @@ class ClinGenTool(BaseTool):
         with no server-side filter and filters client-side -- confirmed live
         this routinely took 2-5+ minutes (and sometimes hung past a 300s
         client timeout) even for a gene with zero curated variants. The
-        classifications endpoint (no /all) supports server-side gene=/
-        variant= filtering and returns in ~1s -- confirmed live for both a
-        curated gene (PAH) and an uncurated one (empty result, still ~1s).
+        classifications endpoint (no /all) supports real server-side filtering.
         Calling it with neither gene nor variant set is just as unbounded as
-        classifications/all (confirmed live: also hangs past 30s with no
-        params), so require at least one.
+        classifications/all, so require at least one filter.
+
+        Variant filters are sent using the server parameter that matches their
+        identifier (CAID, Variation ID, or HGVS), while the complete applied
+        criteria remain in the normalized row returned by this ACMG-aware
+        adapter.
         """
-        gene = arguments.get("gene")
-        variant = arguments.get("variant")
+        gene = _clean(arguments.get("gene"))
+        variant = _clean(arguments.get("variant"))
         if not gene and not variant:
             return {
                 "status": "error",
@@ -693,11 +767,12 @@ class ClinGenTool(BaseTool):
                 ),
             }
         try:
-            params = {}
+            params: Dict[str, Any] = {"matchLimit": _EREPO_MATCH_LIMIT}
             if gene:
                 params["gene"] = gene
             if variant:
-                params["variant"] = variant
+                variant_key, variant_value = _variant_query_param(variant)
+                params[variant_key] = variant_value
 
             response = requests.get(
                 f"{EREPO_BASE_URL}/classifications", params=params, timeout=self.timeout
@@ -706,39 +781,36 @@ class ClinGenTool(BaseTool):
             payload = response.json()
             items = payload.get("variantInterpretations", [])
 
-            # The upstream `variant=` param resolves to that variant's gene
-            # and returns every variant for the gene, not just the one
-            # requested (confirmed live: variant=CA114360 returns 25 PAH
-            # rows, not 1) -- narrow back down to an exact match on the
-            # variant's own identifiers/HGVS forms.
-            if variant:
-                variant_str = str(variant).upper()
-                items = [
-                    item
-                    for item in items
-                    if variant_str in str(item.get("caid", "")).upper()
-                    or variant_str == str(item.get("variationId", "")).upper()
-                    or any(variant_str in h.upper() for h in item.get("hgvs") or [])
-                ]
-
             data = [self._flatten_classification(item) for item in items]
 
             result = {
                 "status": "success",
-                "data": data[:100],
-                "total": len(data),
+                **_published(
+                    data,
+                    "Pass `variant` (a ClinGen CAID, a ClinVar VariationID or an "
+                    "HGVS/protein-change string) to retrieve a specific row.",
+                    total_is_capped=len(data) >= _EREPO_MATCH_LIMIT,
+                ),
                 "source": "ClinGen Evidence Repository",
             }
             if not data:
-                queried = f"gene '{gene}'" if gene else f"variant '{variant}'"
-                result["note"] = (
-                    f"No variant classifications found for {queried}. "
-                    "The ClinGen Evidence Repository only contains variants "
-                    "curated by Variant Curation Expert Panels (VCEPs). "
-                    "Not all genes have active VCEPs. Try ClinGen_get_gene_validity "
-                    "for gene-disease validity or clinvar_search_variants for "
-                    "ClinVar variant classifications."
-                )
+                if gene:
+                    result["note"] = (
+                        f"No variant classifications found for gene '{gene}'. "
+                        "The ClinGen Evidence Repository only contains variants "
+                        "curated by Variant Curation Expert Panels (VCEPs), and "
+                        "not all genes have an active VCEP. Try "
+                        "ClinGen_get_gene_validity for gene-disease validity or "
+                        "ClinVar_search_variants for ClinVar classifications."
+                    )
+                else:
+                    result["note"] = (
+                        f"No variant classification found for variant '{variant}', "
+                        f"queried as `{variant_key}` server-side across the "
+                        "Evidence Repository, so the variant is genuinely "
+                        "uncurated rather than merely missing from a page of "
+                        "results."
+                    )
             return result
         except requests.exceptions.Timeout:
             return {"status": "error", "error": f"Timeout after {self.timeout}s"}

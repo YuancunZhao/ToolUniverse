@@ -78,8 +78,6 @@ DEAD_POINTERS_FIXED_IN_ROUND_55 = [
 def _registered_tool_names():
     names = set()
     for path in DATA_DIR.rglob("*.json"):
-        if "broken_apis" in path.parts:
-            continue
         try:
             configs = json.loads(path.read_text())
         except (ValueError, UnicodeDecodeError):
@@ -123,8 +121,6 @@ def _guidance_strings():
 
     def sources():
         for path in DATA_DIR.rglob("*.json"):
-            if "broken_apis" in path.parts:
-                continue
             try:
                 configs = json.loads(path.read_text())
             except (ValueError, UnicodeDecodeError):

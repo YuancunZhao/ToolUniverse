@@ -6,7 +6,7 @@ into a temporary directory, then runs the same offline behavior checks against
 that installed copy in a subprocess whose ``tooluniverse`` resolves to the
 installed files:
 
-- collector entry point and backward-compatible alias are discoverable;
+- collector entry point and six evidence/guard tools are discoverable;
 - the five evidence group tools are discoverable and their Python wrapper
   parameters are covered by the installed JSON schemas;
 - ``ACMG_guard_final_answer`` blocks five-tier labels;
@@ -88,7 +88,6 @@ tu.load_tools()
 names = {tool.get("name") for tool in tu.all_tools}
 expected_tools = {
     "ACMG_evidence_collector",
-    "ACMG_overlay_gate_assess_variant",
     "ACMG_population_evidence",
     "ACMG_computational_evidence",
     "ACMG_clinical_evidence",
@@ -97,7 +96,7 @@ expected_tools = {
     "ACMG_guard_final_answer",
 }
 check(
-    "eight_acmg_tools_discoverable",
+    "seven_acmg_tools_discoverable",
     expected_tools <= names,
     "missing: " + ",".join(sorted(expected_tools - names)),
 )
@@ -105,7 +104,7 @@ check(
 data_path = Path(tooluniverse.__file__).parent / "data" / "acmg_overlay_gate_tools.json"
 configs = json.loads(data_path.read_text())
 by_name = {row["name"]: row for row in configs}
-check("config_has_eight_tools", len(configs) == 8, f"count={len(configs)}")
+check("config_has_seven_tools", len(configs) == 7, f"count={len(configs)}")
 schema_hash = hashlib.sha256(
     json.dumps(configs, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 ).hexdigest()
@@ -121,7 +120,6 @@ ignored = {"stream_callback", "use_cache", "validate"}
 schema_gaps = []
 for name in (
     "ACMG_evidence_collector",
-    "ACMG_overlay_gate_assess_variant",
     "ACMG_population_evidence",
     "ACMG_computational_evidence",
     "ACMG_clinical_evidence",
@@ -136,20 +134,13 @@ for name in (
 check("group_wrapper_schema_consistent", not schema_gaps, ";".join(schema_gaps))
 
 collector_required = set(by_name["ACMG_evidence_collector"]["return_schema"]["required"])
-alias_required = set(
-    by_name["ACMG_overlay_gate_assess_variant"]["return_schema"]["required"]
-)
 check(
-    "collector_alias_return_fields_converged",
-    collector_required == alias_required
-    and "consequence_profile" in collector_required,
+    "collector_return_fields_declared",
+    "consequence_profile" in collector_required,
     "",
 )
 collector_parameters = set(
     by_name["ACMG_evidence_collector"]["parameter"]["properties"]
-)
-alias_parameters = set(
-    by_name["ACMG_overlay_gate_assess_variant"]["parameter"]["properties"]
 )
 removed_inputs = {"literature_facts", "spliceai_dl", "mode"}
 removed_outputs = {
@@ -161,30 +152,21 @@ removed_outputs = {
     "validated_subset_bayesian",
 }
 check(
-    "collector_alias_parameter_fields_converged",
-    collector_parameters == alias_parameters,
-    "",
-)
-check(
     "removed_input_fields_absent",
-    not (removed_inputs & (collector_parameters | alias_parameters)),
-    ",".join(sorted(removed_inputs & (collector_parameters | alias_parameters))),
+    not (removed_inputs & collector_parameters),
+    ",".join(sorted(removed_inputs & collector_parameters)),
 )
 collector_outputs = set(
     by_name["ACMG_evidence_collector"]["return_schema"]["properties"]
 )
-alias_outputs = set(
-    by_name["ACMG_overlay_gate_assess_variant"]["return_schema"]["properties"]
-)
 check(
     "removed_output_fields_absent",
-    not (removed_outputs & (collector_outputs | alias_outputs)),
-    ",".join(sorted(removed_outputs & (collector_outputs | alias_outputs))),
+    not (removed_outputs & collector_outputs),
+    ",".join(sorted(removed_outputs & collector_outputs)),
 )
 check(
     "runtime_manifest_declared",
-    "runtime_manifest" in collector_required
-    and "runtime_manifest" in alias_required,
+    "runtime_manifest" in collector_required,
     "",
 )
 v3_outputs = {
@@ -199,7 +181,7 @@ v3_outputs = {
 }
 check(
     "v3_output_contract_declared",
-    v3_outputs <= collector_outputs and v3_outputs <= alias_outputs,
+    v3_outputs <= collector_outputs,
     "missing: " + ",".join(sorted(v3_outputs - collector_outputs)),
 )
 check(
@@ -212,8 +194,8 @@ from tooluniverse.acmg.guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_
 from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_hash
 
 check(
-    "v3_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-3.2",
+    "v4_runtime_version",
+    ACMG_RUNTIME_VERSION == "evidence-automation-4",
     ACMG_RUNTIME_VERSION,
 )
 

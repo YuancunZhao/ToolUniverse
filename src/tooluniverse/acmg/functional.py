@@ -36,9 +36,9 @@ def _not_assessed(reason: str, values: dict[str, Any]) -> EvidenceCard:
     return EvidenceCard(
         criterion="PS3/BS3",
         strength="not_assessed",
-        input_source="Document-backed functional assay",
-        input_values=values,
-        clinvar_rule_applied="Brnich et al. 2019 OddsPath framework",
+        source_label="Document-backed functional assay",
+        observed_facts=values,
+        rule_basis="Brnich et al. 2019 OddsPath framework",
         provenance_chain=[reason],
         source_case_ids=[str(values.get("assay_instance_id") or "")],
     )
@@ -126,9 +126,9 @@ def _assess_assay(assay: dict[str, Any]) -> EvidenceCard:
         return EvidenceCard(
             criterion="PS3/BS3",
             strength="not_met",
-            input_source="Document-backed functional assay",
-            input_values=dict(assay),
-            clinvar_rule_applied="Brnich et al. 2019 OddsPath framework",
+            source_label="Document-backed functional assay",
+            observed_facts=dict(assay),
+            rule_basis="Brnich et al. 2019 OddsPath framework",
             provenance_chain=[
                 f"PS3/BS3: reported OddsPath={odds_path:g} does not cross a calibrated boundary"
             ],
@@ -137,9 +137,9 @@ def _assess_assay(assay: dict[str, Any]) -> EvidenceCard:
     return EvidenceCard(
         criterion=criterion,
         strength=strength,
-        input_source="Document-backed functional assay",
-        input_values=dict(assay),
-        clinvar_rule_applied="Brnich et al. 2019 OddsPath framework",
+        source_label="Document-backed functional assay",
+        observed_facts=dict(assay),
+        rule_basis="Brnich et al. 2019 OddsPath framework",
         provenance_chain=[
             f"PS3/BS3: {direction} assay with reported OddsPath={odds_path:g} -> {strength}"
         ],
@@ -233,12 +233,12 @@ def _pm1_card(
             criterion="PM1",
             strength=strength,
             evidence_status="rule_mapped",
-            input_source="Verified ClinGen CSpec with EBI protein mapping",
-            input_values={
+            source_label="Verified ClinGen CSpec with EBI protein mapping",
+            observed_facts={
                 **observed,
                 "cspec_contract_applied": dict(criterion_contract),
             },
-            clinvar_rule_applied=str(contract.get("primary_reference") or ""),
+            rule_basis=str(contract.get("primary_reference") or ""),
             provenance_chain=[
                 "PM1: exact verified CSpec protein region contract matched"
             ],
@@ -263,9 +263,9 @@ def _pm1_card(
         criterion="PM1",
         strength="PM1",
         evidence_status="source_backed_candidate",
-        input_source="EBI Proteins / InterPro",
-        input_values={**observed, "missing_requirements": missing},
-        clinvar_rule_applied="ACMG/AMP 2015 PM1 source-backed candidate policy",
+        source_label="EBI Proteins / InterPro",
+        observed_facts={**observed, "missing_requirements": missing},
+        rule_basis="ACMG/AMP 2015 PM1 source-backed candidate policy",
         strength_source="acmg_2015_default_candidate",
         rule_source={
             "type": "generic_acmg_candidate",

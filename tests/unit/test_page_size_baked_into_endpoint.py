@@ -137,8 +137,6 @@ def test_no_endpoint_hardcodes_a_paging_value_its_own_schema_declares():
     )
     offenders = []
     for path in DATA_DIR.rglob("*.json"):
-        if "broken_apis" in path.parts:
-            continue
         try:
             configs = json.loads(path.read_text())
         except (ValueError, UnicodeDecodeError):

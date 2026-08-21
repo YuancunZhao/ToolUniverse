@@ -19,7 +19,7 @@ from .tool_registry import register_tool
 def _source_fact_ids(
     collector_result: Any,
 ) -> tuple[set[str] | None, set[str] | None]:
-    """Extract known and strictly verified v3 fact IDs in one pass."""
+    """Extract known and strictly verified v4 fact IDs in one pass."""
     if not isinstance(collector_result, dict):
         return None, None
     facts = collector_result.get("source_facts")
@@ -61,18 +61,6 @@ class ACMGEvidenceCollector(BaseTool):
         return ACMGEvidencePipeline(self.tooluniverse).run(arguments)
 
 
-@register_tool("ACMG_overlay_gate_assess_variant")
-class ACMGOverlayGateTool(BaseTool):
-    """Backward-compatible thin alias for the evidence collector."""
-
-    def __init__(self, tool_config: dict[str, Any], tooluniverse: Any | None = None):
-        super().__init__(tool_config)
-        self.tooluniverse = tooluniverse
-
-    def run(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        return ACMGEvidencePipeline(self.tooluniverse).run(dict(arguments))
-
-
 @register_tool("ACMGEvidenceGroupTool")
 class ACMGEvidenceGroupTool(BaseTool):
     """Dispatch one public evidence group to its shared pure rule function."""
@@ -89,9 +77,17 @@ class ACMGEvidenceGroupTool(BaseTool):
         super().__init__(tool_config)
         self.operation = str(tool_config.get("fields", {}).get("operation", ""))
 
+    def validate_parameters(self, arguments: dict[str, Any]):
+        """Validate caller fields without exposing the fixed dispatch operation."""
+        payload = dict(arguments or {})
+        payload.pop("operation", None)
+        return super().validate_parameters(payload)
+
     def run(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(arguments, dict):
             return {"status": "error", "error": "arguments must be an object"}
+        arguments = dict(arguments)
+        arguments.pop("operation", None)
         target = self._OPERATIONS.get(self.operation)
         if target is None:
             return {
@@ -105,9 +101,16 @@ class ACMGEvidenceGroupTool(BaseTool):
 class ACMGGuardFinalAnswerTool(BaseTool):
     """Enforce EvidenceCard support and block final five-tier labels."""
 
+    def validate_parameters(self, arguments: dict[str, Any]):
+        payload = dict(arguments or {})
+        payload.pop("operation", None)
+        return super().validate_parameters(payload)
+
     def run(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(arguments, dict):
             return {"status": "error", "error": "arguments must be an object"}
+        arguments = dict(arguments)
+        arguments.pop("operation", None)
         answer_text = str(arguments.get("final_answer_text") or "")
         cards = arguments.get("evidence_cards")
         collector_result = arguments.get("collector_result")
@@ -155,5 +158,4 @@ __all__ = [
     "ACMGEvidenceCollector",
     "ACMGEvidenceGroupTool",
     "ACMGGuardFinalAnswerTool",
-    "ACMGOverlayGateTool",
 ]

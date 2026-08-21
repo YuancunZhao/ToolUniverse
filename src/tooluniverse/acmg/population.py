@@ -248,18 +248,12 @@ def population_evidence(
             "rule_id": PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID,
             "version": PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION,
         }
-    applied_rule_label = (
-        "ClinGen CSpec population-frequency condition"
-        if has_cspec_threshold and gnomad_ac > 0
-        else "ClinGen SVI PM2 Recommendation v1.0"
-    )
     cards.append(
         EvidenceCard(
             criterion="PM2",
             strength=pm2_strength,
-            input_source=population_source or "gnomAD",
-            input_values=pm2_values,
-            clinvar_rule_applied=applied_rule_label,
+            source_label=population_source or "gnomAD",
+            observed_facts=pm2_values,
             rule_basis=(
                 "Applicable released CSpec population-frequency condition."
                 if has_cspec_threshold and gnomad_ac > 0
@@ -342,15 +336,15 @@ def population_evidence(
         EvidenceCard(
             criterion="BA1",
             strength=ba1_strength,
-            input_source=f"{population_source or 'gnomAD'} / ClinGen BA1 exception catalog",
-            input_values={
+            source_label=f"{population_source or 'gnomAD'} / ClinGen BA1 exception catalog",
+            observed_facts={
                 **audit_values,
                 "af_global": gnomad_af_global,
                 "af_popmax": gnomad_af_popmax,
                 "ba1_exception": ba1_exception,
                 "ba1_exception_verified": ba1_exception_verified,
             },
-            clinvar_rule_applied="ACMG/AMP 2015; ClinGen BA1 exception guidance",
+            rule_basis="ACMG/AMP 2015; ClinGen BA1 exception guidance",
             provenance_chain=[ba1_reason],
         )
     )
@@ -373,14 +367,14 @@ def population_evidence(
         EvidenceCard(
             criterion="BS1",
             strength=bs1_strength,
-            input_source=f"{population_source or 'gnomAD'} and disease-specific frequency model",
-            input_values={
+            source_label=f"{population_source or 'gnomAD'} and disease-specific frequency model",
+            observed_facts={
                 **audit_values,
                 "af_popmax": gnomad_af_popmax,
                 "an": gnomad_an,
                 "maximum_credible_af": bs1_maximum_credible_af,
             },
-            clinvar_rule_applied="ACMG/AMP 2015; disease-specific frequency required",
+            rule_basis="ACMG/AMP 2015; disease-specific frequency required",
             provenance_chain=[bs1_reason],
         )
     )
@@ -399,7 +393,7 @@ def _mark_cspec_contract(
     criteria = rule_override.get("criteria")
     if not isinstance(criteria, dict) or not isinstance(criteria.get(criterion), dict):
         return
-    card.input_values["cspec_contract_applied"] = {
+    card.observed_facts["cspec_contract_applied"] = {
         "specification_id": rule_override.get("specification_id"),
         "version": rule_override.get("version"),
     }

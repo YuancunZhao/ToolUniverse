@@ -1,4 +1,4 @@
-"""Conflict and Bayesian summaries for ACMG v3 EvidenceCards."""
+"""Conflict and Bayesian summaries for ACMG v4 EvidenceCards."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def compute_bayesian_score(
             )
             continue
         dynamic_odds = None
-        for container_key in ("observed_facts", "input_values"):
+        for container_key in ("observed_facts",):
             container = row.get(container_key)
             if not isinstance(container, dict):
                 continue

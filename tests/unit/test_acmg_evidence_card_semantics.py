@@ -22,9 +22,9 @@ def _card(
         criterion=criterion,
         strength=strength,
         evidence_status=evidence_status,
-        input_source="fixture",
-        input_values={},
-        clinvar_rule_applied="fixture rule",
+        source_label="fixture",
+        observed_facts={},
+        rule_basis="fixture rule",
         provenance_chain=["fixture"],
         source_fact_ids=["source-1"] if source else [],
         rule_source={
@@ -84,9 +84,9 @@ def test_empty_placeholder_card_is_not_serialized():
     card = EvidenceCard(
         criterion="PM1",
         strength="not_assessed",
-        input_source="fixture",
-        input_values={},
-        clinvar_rule_applied="fixture",
+        source_label="fixture",
+        observed_facts={},
+        rule_basis="fixture",
     )
     assert evidence_cards_to_result([card])["evidence_cards"] == []
 
@@ -97,9 +97,9 @@ def test_explicit_bad_atom_remains_visible_as_excluded_card():
         strength="not_assessed",
         evidence_status="excluded",
         exclusion_reason="duplicate_case",
-        input_source="fixture",
-        input_values={},
-        clinvar_rule_applied="fixture",
+        source_label="fixture",
+        observed_facts={},
+        rule_basis="fixture",
         source_fact_ids=["source-1"],
     )
     row = evidence_cards_to_result([card], known_source_fact_ids={"source-1"})[
@@ -117,7 +117,7 @@ def test_serialized_card_id_is_v3_and_stable():
         [_card("PM2", "PM2_Supporting")], known_source_fact_ids={"source-1"}
     )["evidence_cards"][0]
     assert first["card_id"] == second["card_id"]
-    assert first["card_id"].startswith("acmg-card:v3:")
+    assert first["card_id"].startswith("acmg-card:v4:")
     assert {
         "assessment_status",
         "suggested_criterion",

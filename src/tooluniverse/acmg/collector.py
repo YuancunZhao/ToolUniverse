@@ -1762,7 +1762,7 @@ def _compact_source_fact(fact: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compact_evidence_card(card: dict[str, Any]) -> dict[str, Any]:
-    source = str(card.get("input_source") or "")
+    source = str(card.get("source_label") or "")
     route = {
         "REVEL": "missense_revel",
         "SpliceAI": "spliceai_splice",
@@ -6085,12 +6085,12 @@ class ACMGEvidencePipeline:
                 EvidenceCard(
                     criterion=criterion or "UNMAPPED",
                     strength=strength or "not_assessed",
-                    input_source=(
+                    source_label=(
                         "Built-in literature rule extractor"
                         if extraction_method == "rule_extracted"
                         else "Host LLM literature proposal"
                     ),
-                    input_values={
+                    observed_facts={
                         **values,
                         "anchor_status": anchor_status,
                         "semantic_status": semantic_status,
@@ -6111,7 +6111,7 @@ class ACMGEvidencePipeline:
                         "locator": fact.locator,
                         "excerpt": fact.excerpt,
                     },
-                    clinvar_rule_applied=(
+                    rule_basis=(
                         "Deterministic literature fact mapped to the versioned ACMG "
                         "v3 candidate policy"
                         if extraction_method == "rule_extracted"
@@ -7036,9 +7036,8 @@ class ACMGEvidencePipeline:
             EvidenceCard(
                 criterion=criterion,
                 strength=criterion,
-                input_source="Consequence resolver + EBI Proteins",
-                input_values=common,
-                clinvar_rule_applied=rule_text,
+                source_label="Consequence resolver + EBI Proteins",
+                rule_basis=rule_text,
                 evidence_status="source_backed_candidate",
                 strength_source="acmg_2015_default_candidate",
                 rule_source={
@@ -8356,9 +8355,9 @@ class ACMGEvidencePipeline:
         )
         splice_facts = self._facts_for_tool(source_facts, "SpliceAI_predict_splice")
         for card in computational_cards:
-            if card.input_source == "SpliceAI":
+            if card.source_label == "SpliceAI":
                 fact_ids = [fact.fact_id for fact in splice_facts[:1]]
-            elif card.input_source == "REVEL":
+            elif card.source_label == "REVEL":
                 fact_ids = [fact.fact_id for fact in predictor_facts[:1]]
             else:
                 fact_ids = []

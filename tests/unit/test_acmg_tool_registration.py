@@ -9,9 +9,6 @@ from pathlib import Path
 
 from tooluniverse.tool_registry import lazy_import_tool
 from tooluniverse.tools.ACMG_evidence_collector import ACMG_evidence_collector
-from tooluniverse.tools.ACMG_overlay_gate_assess_variant import (
-    ACMG_overlay_gate_assess_variant,
-)
 
 
 def test_acmg_summary_imports_without_legacy_overlay_package():
@@ -276,18 +273,10 @@ def test_public_runtime_tools_dispatch_through_tooluniverse():
             "arguments": {"variant": "NM_000000.0:c.1A>G"},
         }
     )
-    legacy = runtime.run_one_function(
-        {
-            "name": "ACMG_overlay_gate_assess_variant",
-            "arguments": {"variant": "NM_000000.0:c.1A>G"},
-        }
-    )
-
     assert population["evidence_cards"][0]["calculation_roles"]["automatic"] is False
     assert population["evidence_cards"][0]["calculation_roles"]["verified"] is False
     assert guard["status"] == "BLOCK"
     assert collector["execution_status"] == "error"
-    assert legacy["execution_status"] == "error"
 
 
 def test_group_tool_schemas_cover_python_wrapper_parameters():
@@ -347,19 +336,19 @@ def test_collector_wrapper_parameters_match_public_schemas():
     )
     by_name = {row["name"]: row for row in configs}
     ignored = {"stream_callback", "use_cache", "validate"}
-    for name in ("ACMG_evidence_collector", "ACMG_overlay_gate_assess_variant"):
+    for name in ("ACMG_evidence_collector",):
         wrapper = getattr(tools, name)
         parameters = set(inspect.signature(wrapper).parameters) - ignored
         assert parameters == set(by_name[name]["parameter"]["properties"])
 
 
-def test_public_config_is_converged_to_eight_runtime_tools():
+def test_public_config_is_converged_to_seven_acmg_runtime_tools():
     path = Path("src/tooluniverse/data/acmg_overlay_gate_tools.json")
     configs = json.loads(path.read_text())
-    assert len(configs) == 8
+    assert len(configs) == 7
 
 
-def test_collector_and_alias_require_the_same_runtime_result_fields():
+def test_collector_runtime_result_fields():
     configs = json.loads(
         Path("src/tooluniverse/data/acmg_overlay_gate_tools.json").read_text()
     )
@@ -367,18 +356,6 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
 
     collector_required = set(
         by_name["ACMG_evidence_collector"]["return_schema"]["required"]
-    )
-    alias_required = set(
-        by_name["ACMG_overlay_gate_assess_variant"]["return_schema"]["required"]
-    )
-    assert collector_required == alias_required
-    assert (
-        by_name["ACMG_evidence_collector"]["parameter"]
-        == by_name["ACMG_overlay_gate_assess_variant"]["parameter"]
-    )
-    assert (
-        by_name["ACMG_evidence_collector"]["return_schema"]
-        == by_name["ACMG_overlay_gate_assess_variant"]["return_schema"]
     )
     assert "consequence_profile" in collector_required
     assert {
@@ -400,9 +377,7 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
     assert set(build_schema["enum"]) == {"GRCh37", "GRCh38", "hg19", "hg38"}
     assert "default" not in build_schema
     collector_signature = inspect.signature(ACMG_evidence_collector)
-    alias_signature = inspect.signature(ACMG_overlay_gate_assess_variant)
     assert collector_signature.parameters["genome_build"].default is None
-    assert alias_signature.parameters["genome_build"].default is None
     workflow_statuses = by_name["ACMG_evidence_collector"]["return_schema"][
         "properties"
     ]["workflow_status"]["enum"]
@@ -411,45 +386,44 @@ def test_collector_and_alias_require_the_same_runtime_result_fields():
     )
 
 
-def test_collector_and_alias_expose_literature_and_decision_workbench_inputs():
+def test_collector_exposes_literature_and_decision_workbench_inputs():
     configs = json.loads(
         Path("src/tooluniverse/data/acmg_overlay_gate_tools.json").read_text()
     )
     by_name = {row["name"]: row for row in configs}
-    for name in ("ACMG_evidence_collector", "ACMG_overlay_gate_assess_variant"):
-        parameter = by_name[name]["parameter"]
-        assert {
-            "literature_proposals",
-            "cspec_proposals",
-            "evidence_decisions",
-        } <= set(parameter["properties"])
-        assert "literature_facts" not in parameter["properties"]
-        proposal_items = parameter["properties"]["literature_proposals"]["items"]
-        assert "criterion" not in proposal_items["required"]
-        assert "suggested_strength" not in proposal_items["required"]
-        assert {
-            "review_request_id",
-            "document_hash",
-            "reading_manifest",
-        } <= set(proposal_items["properties"])
-        reading_status = proposal_items["properties"]["reading_manifest"]["properties"][
-            "status"
-        ]
-        assert set(reading_status["enum"]) == {
-            "complete",
-            "partial",
-            "abstract_only",
-            "unavailable",
-        }
-        assert {
-            "segregation",
-            "phenotype_specificity",
-            "healthy_observation",
-            "allelic_phase",
-            "alternative_cause",
-            "prior_variant",
-            "region_hotspot",
-            "protein_length_repeat",
-            "rna_splicing",
-        } <= set(proposal_items["properties"]["fact_type"]["enum"])
-        assert "allOf" not in parameter
+    parameter = by_name["ACMG_evidence_collector"]["parameter"]
+    assert {
+        "literature_proposals",
+        "cspec_proposals",
+        "evidence_decisions",
+    } <= set(parameter["properties"])
+    assert "literature_facts" not in parameter["properties"]
+    proposal_items = parameter["properties"]["literature_proposals"]["items"]
+    assert "criterion" not in proposal_items["required"]
+    assert "suggested_strength" not in proposal_items["required"]
+    assert {
+        "review_request_id",
+        "document_hash",
+        "reading_manifest",
+    } <= set(proposal_items["properties"])
+    reading_status = proposal_items["properties"]["reading_manifest"]["properties"][
+        "status"
+    ]
+    assert set(reading_status["enum"]) == {
+        "complete",
+        "partial",
+        "abstract_only",
+        "unavailable",
+    }
+    assert {
+        "segregation",
+        "phenotype_specificity",
+        "healthy_observation",
+        "allelic_phase",
+        "alternative_cause",
+        "prior_variant",
+        "region_hotspot",
+        "protein_length_repeat",
+        "rna_splicing",
+    } <= set(proposal_items["properties"]["fact_type"]["enum"])
+    assert "allOf" not in parameter

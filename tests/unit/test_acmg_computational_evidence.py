@@ -100,7 +100,7 @@ def test_cadd_is_retained_as_audit_but_cannot_replace_revel():
 
     assert result["evidence_cards"] == []
     raw = _pp3_bp4_card(cadd_phred=26.0)
-    assert raw.input_values["cadd_phred"] == 26.0
+    assert raw.observed_facts["cadd_phred"] == 26.0
     assert raw.strength == "not_assessed"
 
 
@@ -130,7 +130,7 @@ def test_canonical_splice_profile_emits_review_only_pvs1_route():
     assert next(card for card in cards if card.criterion == "PVS1").strength == (
         "not_assessed"
     )
-    splice_card = next(card for card in cards if card.input_source == "SpliceAI")
+    splice_card = next(card for card in cards if card.source_label == "SpliceAI")
     assert splice_card.strength == "not_assessed"
 
 
@@ -154,11 +154,11 @@ def test_spliceai_general_svi_candidate_boundaries(score, criterion, strength):
         variant_type="intron_variant",
     )
 
-    card = next(card for card in cards if card.input_source == "SpliceAI")
+    card = next(card for card in cards if card.source_label == "SpliceAI")
     assert card.criterion == criterion
     assert card.strength == strength
-    assert card.input_values["spliceai_scores"]["DS_AG"] == score
-    assert card.input_values["spliceai_profile"]["max_delta_channels"] == ["DS_AG"]
+    assert card.observed_facts["spliceai_scores"]["DS_AG"] == score
+    assert card.observed_facts["spliceai_profile"]["max_delta_channels"] == ["DS_AG"]
 
 
 def test_missense_keeps_revel_and_spliceai_as_separate_candidates():
@@ -172,7 +172,7 @@ def test_missense_keeps_revel_and_spliceai_as_separate_candidates():
         variant_type="missense_variant",
     )
 
-    assert [(card.input_source, card.criterion) for card in cards] == [
+    assert [(card.source_label, card.criterion) for card in cards] == [
         ("REVEL", "PP3"),
         ("SpliceAI", "PP3"),
     ]
@@ -192,8 +192,8 @@ def test_spliceai_reports_all_delta_channels_and_trigger_event():
         variant_type="intron_variant",
     )
 
-    card = next(card for card in cards if card.input_source == "SpliceAI")
-    profile = card.input_values["spliceai_profile"]
+    card = next(card for card in cards if card.source_label == "SpliceAI")
+    profile = card.observed_facts["spliceai_profile"]
     assert card.strength == "PP3_Supporting"
     assert profile["delta_scores"] == {
         "DS_AG": 0.0,
@@ -219,14 +219,14 @@ def test_spliceai_scalar_only_is_audit_only_and_conflicts_fail_closed():
         variant_type="intron_variant",
     )
 
-    scalar_card = next(card for card in scalar_only if card.input_source == "SpliceAI")
+    scalar_card = next(card for card in scalar_only if card.source_label == "SpliceAI")
     conflict_card = next(
-        card for card in conflicting if card.input_source == "SpliceAI"
+        card for card in conflicting if card.source_label == "SpliceAI"
     )
     assert scalar_card.strength == "not_assessed"
-    assert scalar_card.input_values["spliceai_profile"]["status"] == "unavailable"
+    assert scalar_card.observed_facts["spliceai_profile"]["status"] == "unavailable"
     assert conflict_card.strength == "not_assessed"
-    assert conflict_card.input_values["spliceai_profile"]["status"] == "conflicting"
+    assert conflict_card.observed_facts["spliceai_profile"]["status"] == "conflicting"
 
 
 @pytest.mark.parametrize(
@@ -254,7 +254,7 @@ def test_spliceai_missing_walker_metadata_is_not_assessed(missing_key):
         variant_type="intron_variant",
     )
 
-    card = next(card for card in cards if card.input_source == "SpliceAI")
+    card = next(card for card in cards if card.source_label == "SpliceAI")
     assert card.strength == "not_assessed"
 
 
@@ -273,7 +273,7 @@ def test_internal_synonymous_variant_can_use_strict_walker_path():
         },
     )
 
-    card = next(card for card in cards if card.input_source == "SpliceAI")
+    card = next(card for card in cards if card.source_label == "SpliceAI")
     assert (card.criterion, card.strength) == ("PP3", "PP3_Supporting")
 
 
@@ -295,7 +295,7 @@ def test_bp7_supporting_follows_walker_bp4_for_synonymous_variant():
     assert [
         (card.criterion, card.strength)
         for card in cards
-        if card.input_source == "SpliceAI"
+        if card.source_label == "SpliceAI"
     ] == [
         ("BP4", "BP4_Supporting"),
         ("BP7", "BP7_Supporting"),
@@ -336,7 +336,7 @@ def test_canonical_derived_context_emits_only_pvs1_route():
         variant_type="splice_donor_variant",
     )
 
-    splice_card = next(card for card in cards if card.input_source == "SpliceAI")
+    splice_card = next(card for card in cards if card.source_label == "SpliceAI")
     assert splice_card.strength == "not_assessed"
     assert (
         next(card for card in cards if card.criterion == "PVS1").strength
@@ -365,6 +365,6 @@ def test_locally_reviewed_cspec_can_override_revel_threshold():
     assert card.strength == "PP3_Moderate"
     assert card.rule_id == "fixture-cspec-rule"
     assert (
-        card.input_values["cspec_contract_applied"]["specification_id"]
+        card.observed_facts["cspec_contract_applied"]["specification_id"]
         == "fixture-cspec"
     )

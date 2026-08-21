@@ -11,6 +11,7 @@ import unittest
 import tempfile
 import shutil
 import importlib
+import hashlib
 from pathlib import Path
 import pytest
 
@@ -218,6 +219,21 @@ class TestSDKIntegration(unittest.TestCase):
 
         except ImportError as e:
             self.fail(f"Tools import failed: {e}")
+
+    def test_sdk_generation_is_idempotent_in_temp_dir(self):
+        """Repeated generation does not rewrite or add wrapper files."""
+        def snapshot():
+            return {
+                path.relative_to(self.temp_dir).as_posix(): hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+                for path in Path(self.temp_dir).rglob("*")
+                if path.is_file()
+            }
+
+        before = snapshot()
+        generate_tools(output_dir=Path(self.temp_dir))
+        self.assertEqual(before, snapshot())
 
     def test_sdk_function_calling_integration(self):
         """Test SDK function calling integration."""

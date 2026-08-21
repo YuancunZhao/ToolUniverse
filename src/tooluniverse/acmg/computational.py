@@ -162,9 +162,9 @@ def computational_evidence(
             EvidenceCard(
                 criterion="PP3/BP4",
                 strength="not_assessed" if not variant_type else "not_applicable",
-                input_source="REVEL",
-                input_values={"variant_type": variant_type, **audit_scores},
-                clinvar_rule_applied="Pejaver 2022 (PMID:36413997)",
+                source_label="REVEL",
+                observed_facts={"variant_type": variant_type, **audit_scores},
+                rule_basis="Pejaver 2022 (PMID:36413997)",
                 provenance_chain=[
                     "PP3/BP4: the fixed REVEL calibration applies only to explicit missense variants"
                 ],
@@ -187,9 +187,9 @@ def computational_evidence(
         card = EvidenceCard(
             criterion="PP3/BP4",
             strength="not_assessed",
-            input_source="REVEL",
-            input_values=audit_scores,
-            clinvar_rule_applied="Pejaver 2022 (PMID:36413997)",
+            source_label="REVEL",
+            observed_facts=audit_scores,
+            rule_basis="Pejaver 2022 (PMID:36413997)",
             provenance_chain=["PP3/BP4: no REVEL score was returned by the provider"],
         )
         return [
@@ -234,9 +234,9 @@ def computational_evidence(
     card = EvidenceCard(
         criterion=criterion,
         strength=strength,
-        input_source="REVEL",
-        input_values=audit_scores,
-        clinvar_rule_applied="Pejaver 2022 Table 2 (PMID:36413997)",
+        source_label="REVEL",
+        observed_facts=audit_scores,
+        rule_basis="Pejaver 2022 Table 2 (PMID:36413997)",
         provenance_chain=[
             f"PP3/BP4: fixed REVEL={revel_score:.3f} -> {strength}; other predictors are audit-only"
         ],
@@ -330,9 +330,9 @@ def _splice_prediction_cards(
     card = EvidenceCard(
         criterion=criterion,
         strength=strength,
-        input_source="SpliceAI",
-        input_values={**audit_scores, "splice_context": dict(splice_context)},
-        clinvar_rule_applied="ClinGen SVI splicing recommendations (Walker et al. 2023)",
+        source_label="SpliceAI",
+        observed_facts={**audit_scores, "splice_context": dict(splice_context)},
+        rule_basis="ClinGen SVI splicing recommendations (Walker et al. 2023)",
         provenance_chain=[reason],
         rule_id=str(SPLICEAI_RULE["rule_id"]),
         rule_version=str(SPLICEAI_RULE["version"]),
@@ -376,9 +376,9 @@ def _bp7_after_walker_bp4(
     return EvidenceCard(
         criterion="BP7",
         strength="BP7_Supporting",
-        input_source="SpliceAI",
-        input_values={**audit_scores, "splice_context": dict(splice_context)},
-        clinvar_rule_applied="ClinGen SVI splicing recommendations (Walker et al. 2023)",
+        source_label="SpliceAI",
+        observed_facts={**audit_scores, "splice_context": dict(splice_context)},
+        rule_basis="ClinGen SVI splicing recommendations (Walker et al. 2023)",
         provenance_chain=[reason],
         rule_id=str(rule.get("rule_id") or ""),
         rule_version=str(rule.get("version") or ""),
@@ -441,7 +441,7 @@ def _apply_cspec_provenance(
 ) -> None:
     if not applied or not isinstance(rule_override, dict):
         return
-    card.input_values["cspec_contract_applied"] = {
+    card.observed_facts["cspec_contract_applied"] = {
         "specification_id": rule_override.get("specification_id"),
         "version": rule_override.get("version"),
     }
@@ -492,9 +492,9 @@ def _pvs1_splice_route(
         EvidenceCard(
             criterion="PVS1",
             strength="not_assessed",
-            input_source="SpliceAI route context",
-            input_values={"spliceai_profile": dict(spliceai_profile)},
-            clinvar_rule_applied="ClinGen SVI PVS1 decision tree",
+            source_label="SpliceAI route context",
+            observed_facts={"spliceai_profile": dict(spliceai_profile)},
+            rule_basis="ClinGen SVI PVS1 decision tree",
             provenance_chain=[
                 "PVS1: transcript, observed RNA outcome, NMD, rescue, and LoF mechanism facts are required"
             ],

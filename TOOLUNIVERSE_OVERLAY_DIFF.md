@@ -1,10 +1,10 @@
 # ToolUniverse ACMG Overlay Diff
 
 Comparison baseline:
-`upstream/main@089eb8e6308fc64ae5af3de4bfbec32b5cf07b61` to
+`upstream/main@1aaaf00d1a9a91c21ae09d014fe19bf46fa82917` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.0+acmg.5`. Files unrelated to the ACMG runtime,
+The package version is `1.4.1+acmg.6`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -15,7 +15,6 @@ The fork adds an evidence-only ClinGen/SVI extension around upstream
 ToolUniverse variant providers. The public runtime is intentionally limited to:
 
 - `ACMG_evidence_collector`
-- `ACMG_overlay_gate_assess_variant` (backward-compatible alias)
 - `ACMG_population_evidence`
 - `ACMG_computational_evidence`
 - `ACMG_clinical_evidence`
@@ -232,7 +231,7 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-15-v3` adds automatic/verified candidate policies and retains
+Collector schema `2026-08-21-v4` adds automatic/verified candidate policies and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level

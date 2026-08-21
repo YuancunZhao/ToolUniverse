@@ -169,14 +169,14 @@ def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                     default=str,
                 ).encode()
             ).hexdigest()[:20]
-            representative["card_id"] = f"acmg-card:v3:{digest}"
+            representative["card_id"] = f"acmg-card:v4:{digest}"
         representatives.append(representative)
     return [*passthrough, *representatives]
 
 
 def _semantic_ids(row: dict[str, Any], key: str) -> set[str]:
     values: list[Any] = [row.get(key)]
-    for container_key in ("observed_facts", "input_values"):
+    for container_key in ("observed_facts",):
         container = row.get(container_key)
         if isinstance(container, dict):
             values.append(container.get(key))
@@ -190,7 +190,7 @@ def _semantic_ids(row: dict[str, Any], key: str) -> set[str]:
 
 
 def _contract_exclusions(row: dict[str, Any]) -> set[str]:
-    for container_key in ("observed_facts", "input_values"):
+    for container_key in ("observed_facts",):
         container = row.get(container_key)
         if not isinstance(container, dict):
             continue

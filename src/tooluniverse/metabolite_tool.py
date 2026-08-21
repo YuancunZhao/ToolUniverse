@@ -5,7 +5,6 @@ Replaces the broken HMDB direct API (blocked by Cloudflare).
 Uses PubChem as the primary compound data source and CTD for
 disease associations.
 
-Broken HMDB API archived at: src/tooluniverse/data/broken_apis/hmdb_rest.json
 """
 
 import re

@@ -54,8 +54,6 @@ def is_effectively_empty(value) -> bool:
 def load_configs(pattern=None, type_filter=None):
     """Yield (tool_name, config) for tools matching the filters."""
     for file_path in sorted(DATA_DIR.glob("**/*.json")):
-        if "broken_apis" in file_path.parts:
-            continue
         try:
             content = json.load(open(file_path))
         except Exception:

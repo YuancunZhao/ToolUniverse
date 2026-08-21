@@ -56,7 +56,7 @@ def _clinvar_tool() -> ClinVarSearchVariants:
     return ClinVarSearchVariants({"fields": {"endpoint": "/esearch.fcgi"}})
 
 
-def test_clinvar_variant_name_normalizes_transcript_hgvs():
+def test_clinvar_variant_name_preserves_exact_transcript_hgvs():
     tool = _clinvar_tool()
     with patch.object(
         tool,
@@ -77,8 +77,8 @@ def test_clinvar_variant_name_normalizes_transcript_hgvs():
         )
     term = request.call_args_list[0].args[1]["term"]
     assert "HBB[gene]" in term
-    assert "c.20A>T[Variant name]" in term
-    assert "Glu7Val[Variant name]" in term
+    assert '"NM_000518.5:c.20A>T"[Variant name]' in term
+    assert '"NP_000509.1:p.Glu7Val"[Variant name]' in term
 
 
 def test_clingen_flattens_current_erepo_evidence_codes():
@@ -331,7 +331,10 @@ def test_clingen_variant_classification_is_server_filtered():
     ) as request:
         result = tool.run({"gene": "PAH"})
     assert request.call_args.args[0].endswith("/classifications")
-    assert request.call_args.kwargs["params"] == {"gene": "PAH"}
+    assert request.call_args.kwargs["params"] == {
+        "gene": "PAH",
+        "matchLimit": 5000,
+    }
     assert result["data"][0]["HGNC Gene Symbol"] == "PAH"
     assert tool.run({})["status"] == "error"
 
@@ -431,6 +434,7 @@ def test_ebi_interactions_runtime_default_matches_schema():
     )
     payload = [
         {
+            "accession": "P04637",
             "interactions": [
                 {
                     "accession1": "P04637",
@@ -438,7 +442,7 @@ def test_ebi_interactions_runtime_default_matches_schema():
                     "experiments": index,
                 }
                 for index in range(60)
-            ]
+            ],
         }
     ]
     with patch(

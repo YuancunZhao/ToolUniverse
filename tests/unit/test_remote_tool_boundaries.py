@@ -131,7 +131,7 @@ class Macs3BoundaryTests(unittest.TestCase):
         self.assertEqual(result["n_peaks"], 1)
         self.assertEqual(result["top_peaks"][0]["chrom"], "chr1")
         command = run.call_args.args[0]
-        self.assertIn(str(self.treatment), command)
+        self.assertIn(str(self.treatment.resolve()), command)
         self.assertIn("--nomodel", command)
         self.assertIn("147", command)
         self.assertNotIn(str(self.root), repr(result))
@@ -256,7 +256,7 @@ class ChrombpnetBoundaryTests(unittest.TestCase):
             ):
                 self.assertIs(module._get_model(), load_model.return_value)
             load_model.assert_called_once_with(
-                str(reviewed), compile=False, safe_mode=True
+                str(reviewed.resolve()), compile=False, safe_mode=True
             )
 
     def test_invalid_sequences_fail_before_model_loading(self):
@@ -978,7 +978,14 @@ class StandaloneFastmcpSecurityTests(unittest.TestCase):
         module = self._load_security()
         with mock.patch.dict(
             os.environ, {"TOOLUNIVERSE_API_TOKEN": "synthetic"}, clear=True
-        ), mock.patch.dict(sys.modules, {"fastmcp": None}):
+        ), mock.patch.dict(
+            sys.modules,
+            {
+                "fastmcp": None,
+                "fastmcp.server": None,
+                "fastmcp.server.auth": None,
+            },
+        ):
             with self.assertRaises(RuntimeError):
                 module.get_fastmcp_token_auth()
 

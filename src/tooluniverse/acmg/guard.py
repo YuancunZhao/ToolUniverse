@@ -19,7 +19,7 @@ from .rule_catalog import ACMG_CRITERIA, is_valid_strength_for_criterion
 
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
-GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-15-v3-light"
+GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-21-v4-light"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",

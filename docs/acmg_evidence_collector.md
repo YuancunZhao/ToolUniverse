@@ -346,5 +346,5 @@ readiness booleans with SourceFact verification dimensions and EvidenceCard
 `evidence_status`. No-information criteria are represented in
 `criterion_reviews` rather than empty EvidenceCards.
 
-The eight public ACMG MCP tool names are unchanged, and
-`ACMG_overlay_gate_assess_variant` remains a thin collector alias.
+The ACMG runtime exposes seven public MCP tools. The collector is the single
+full-pipeline entry point; there is no compatibility alias.

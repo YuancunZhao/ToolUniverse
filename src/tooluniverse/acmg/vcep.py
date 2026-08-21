@@ -447,12 +447,12 @@ def parse_vcep_assertions(
                     criterion=criterion,
                     strength=strength,
                     evidence_status="expert_panel_applied",
-                    input_source="ClinGen Evidence Repository VCEP",
-                    input_values={
+                    source_label="ClinGen Evidence Repository VCEP",
+                    observed_facts={
                         "assertion": assertion,
                         "applied_criterion": criterion_row,
                     },
-                    clinvar_rule_applied="Released VCEP variant curation",
+                    rule_basis="Released VCEP variant curation",
                     strength_source="vcep_applied_criterion",
                     rule_source={
                         "type": "vcep_assertion",

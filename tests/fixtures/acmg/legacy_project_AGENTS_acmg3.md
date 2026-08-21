@@ -1,14 +1,12 @@
-# ACMG Guard — DO NOT REMOVE
+# ACMG Guard — managed migration fixture
 
-You are operating with ToolUniverse ACMG gate enforcement (v3 evidence-only runtime, commit 07973c6, version 1.4.0+acmg.3).
+You are operating with ToolUniverse ACMG evidence enforcement (v4 evidence-only runtime).
 
-## ACMG TOOLS (use only these 8)
+## ACMG TOOLS (use only these 7)
 
 - ACMG_evidence_collector — the single full-pipeline entry point
 - ACMG_population_evidence, ACMG_computational_evidence,
   ACMG_clinical_evidence, ACMG_functional_evidence, ACMG_literature_evidence
-- ACMG_overlay_gate_assess_variant — thin compatibility alias of the
-  collector (same parameters and return structure, no separate logic)
 - ACMG_guard_final_answer — fail-closed guard for final wording
 
 All tools run through execute_tool in compact MCP mode.
@@ -61,8 +59,6 @@ All tools run through execute_tool in compact MCP mode.
    → Review cards, then re-call the collector with evidence_decisions
      (accept / reject card_id; strength_override must preserve criterion
      direction and include a reason) for user-selected estimates.
-   → ACMG_overlay_gate_assess_variant is only a thin compatibility alias —
-     never call it as a separate route or expect different behavior.
 
 7. NEVER invoke read_skill, slash commands (/tooluniverse-acmg-*), or
    run_skill for ACMG criterion evaluation. Use the MCP tools instead.

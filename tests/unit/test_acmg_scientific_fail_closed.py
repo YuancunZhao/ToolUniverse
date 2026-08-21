@@ -238,7 +238,7 @@ def test_pm3_phase_unknown_likely_pathogenic_is_quarter_point():
     card = _card(cards, "PM3")
     assert card.strength == "not_met"
     assert card.evidence_status == "not_met"
-    assert card.input_values["total_points"] == 0.25
+    assert card.observed_facts["total_points"] == 0.25
 
 
 def test_pm3_homozygous_points_are_capped_at_one():
@@ -256,7 +256,7 @@ def test_pm3_homozygous_points_are_capped_at_one():
     )
     card = _card(cards, "PM3")
     assert card.strength == "PM3"
-    assert card.input_values["total_points"] == 1.0
+    assert card.observed_facts["total_points"] == 1.0
 
 
 def test_removed_functional_boolean_inputs_are_rejected():
@@ -337,7 +337,7 @@ def test_pm1_domain_overlap_is_visible_as_source_backed_candidate():
     )
 
     assert card.strength == "PM1"
-    assert card.input_values["protein_context"]["overlapping_features"]
+    assert card.observed_facts["protein_context"]["overlapping_features"]
     assert card.evidence_status == "source_backed_candidate"
     assert card.rule_source["type"] == "generic_acmg_candidate"
 
@@ -354,7 +354,7 @@ def test_pm1_exact_reviewed_contract_can_suggest_configured_strength():
 
     assert card.strength == "PM1_Moderate"
     assert card.rule_id == "fixture-pm1-rule"
-    assert card.input_values["cspec_contract_applied"]["protein_accession"] == (
+    assert card.observed_facts["cspec_contract_applied"]["protein_accession"] == (
         "P22607"
     )
     assert card.evidence_status == "rule_mapped"

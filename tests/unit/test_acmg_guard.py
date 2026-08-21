@@ -19,9 +19,9 @@ def _candidate_pp3() -> dict:
         card_id="fixture",
         criterion="PP3",
         strength="PP3_Supporting",
-        input_source="REVEL",
-        input_values={"revel_score": 0.7},
-        clinvar_rule_applied="ClinGen SVI Pejaver 2022",
+        source_label="REVEL",
+        observed_facts={"revel_score": 0.7},
+        rule_basis="ClinGen SVI Pejaver 2022",
         evidence_status="rule_mapped",
         strength_source="versioned_rule",
         rule_source={"type": "versioned_svi"},
@@ -151,7 +151,7 @@ def test_guard_does_not_misread_protein_hgvs_p_value_or_group_b():
     result = guard_acmg_answer(
         (
             "PP3 remains a candidate for p.Arg249Gln; card "
-            "acmg-card:v3:9b2cb01d1d06d28379a9, p-value=0.01, group B control."
+            "acmg-card:v4:9b2cb01d1d06d28379a9, p-value=0.01, group B control."
         ),
         [_candidate_pp3()],
         known_source_fact_ids={"fixture-source"},

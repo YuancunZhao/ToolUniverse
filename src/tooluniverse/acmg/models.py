@@ -1,4 +1,4 @@
-"""Shared ACMG v3 facts and evidence contracts.
+"""Shared ACMG v4 facts and evidence contracts.
 
 Facts are never hidden merely because one verification dimension is incomplete.
 Evidence display, automatic calculation, and strict calculation are independent
@@ -65,9 +65,9 @@ VERIFIED_EVIDENCE_POLICY_VERSION = "2026-08-08-v3"
 class EvidenceCard:
     criterion: str
     strength: str
-    input_source: str
-    input_values: dict[str, Any]
-    clinvar_rule_applied: str
+    source_label: str
+    observed_facts: dict[str, Any]
+    rule_basis: str
     card_id: str = ""
     evidence_status: str = ""
     strength_source: str = ""
@@ -85,8 +85,6 @@ class EvidenceCard:
     source_pmids: list[str] = field(default_factory=list)
     source_case_ids: list[str] = field(default_factory=list)
     source_fact_ids: list[str] = field(default_factory=list)
-    observed_facts: dict[str, Any] = field(default_factory=dict)
-    rule_basis: str = ""
     exclusion_reason: str = ""
     origin: str = "deterministic_svi"
     llm_suggestion: dict[str, Any] = field(default_factory=dict)
@@ -330,7 +328,7 @@ def _default_dimensions(
     has_known_sources: bool,
     has_verified_sources: bool,
 ) -> dict[str, str]:
-    values = card.input_values if isinstance(card.input_values, dict) else {}
+    values = card.observed_facts if isinstance(card.observed_facts, dict) else {}
     anchor = str(values.get("anchor_status") or "")
     semantic = str(values.get("semantic_status") or "")
     dimensions = {
@@ -375,8 +373,8 @@ def _stable_card_id(card: EvidenceCard, evidence_status: str) -> str:
         "criterion": card.criterion,
         "strength": card.strength,
         "evidence_status": evidence_status,
-        "input_source": card.input_source,
-        "input_values": card.input_values,
+        "source_label": card.source_label,
+        "observed_facts": card.observed_facts,
         "rule_id": card.rule_id,
         "rule_version": card.rule_version,
         "source_fact_ids": sorted(card.source_fact_ids),
@@ -384,7 +382,7 @@ def _stable_card_id(card: EvidenceCard, evidence_status: str) -> str:
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:20]
-    return f"acmg-card:v3:{digest}"
+    return f"acmg-card:v4:{digest}"
 
 
 def evidence_cards_to_result(
@@ -470,7 +468,7 @@ def evidence_cards_to_result(
                 ),
                 "rule_id": card.rule_id,
                 "version": card.rule_version,
-                "reference": card.rule_reference or card.clinvar_rule_applied,
+                "reference": card.rule_reference or card.rule_basis,
             }
         strength_source = card.strength_source or (
             "versioned_rule"
@@ -482,10 +480,8 @@ def evidence_cards_to_result(
             {
                 "card_id": _stable_card_id(card, evidence_status),
                 "evidence_status": evidence_status,
-                "observed_facts": dict(card.observed_facts or card.input_values),
-                "rule_basis": card.rule_basis
-                or card.rule_reference
-                or card.clinvar_rule_applied,
+                "observed_facts": dict(card.observed_facts),
+                "rule_basis": card.rule_basis or card.rule_reference,
                 "strength_source": strength_source,
                 "rule_source": rule_source,
                 "verification_dimensions": dimensions,

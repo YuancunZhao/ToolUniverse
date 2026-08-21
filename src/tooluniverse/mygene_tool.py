@@ -216,6 +216,8 @@ class MyVariantTool(BaseTool):
             return self._query_variants(arguments)
         elif operation == "get_variant":
             return self._get_variant(arguments)
+        elif operation == "get_metadata":
+            return self._get_metadata(arguments)
         else:
             return {"status": "error", "error": f"Unknown operation: {operation}"}
 
@@ -296,6 +298,36 @@ class MyVariantTool(BaseTool):
             .get("fields", {})
             .get("default", "dbsnp,clinvar,cadd,gnomad_genome,dbnsfp")
         )
+
+    def _get_metadata(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Return version metadata for one MyVariant annotation source."""
+        source = str(arguments.get("source") or "dbnsfp").strip()
+        try:
+            response = requests.get(
+                f"{self.MYVARIANT_BASE_URL}/metadata", timeout=self.timeout
+            )
+            response.raise_for_status()
+            payload = response.json()
+            source_data = payload.get("src", {}).get(source)
+            if not isinstance(source_data, dict):
+                return {
+                    "status": "error",
+                    "error": f"Unknown MyVariant metadata source: {source}",
+                    "build_version": payload.get("build_version"),
+                }
+            return {
+                "status": "success",
+                "source": source,
+                "version": source_data.get("version"),
+                "build_version": payload.get("build_version"),
+                "build_date": payload.get("build_date"),
+                "metadata": source_data,
+            }
+        except requests.RequestException as exc:
+            return {
+                "status": "error",
+                "error": f"MyVariant.info metadata request failed: {exc}",
+            }
 
     def _get_variant(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """

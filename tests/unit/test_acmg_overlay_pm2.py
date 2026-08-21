@@ -35,8 +35,8 @@ def test_population_card_preserves_frequency_and_callability_audit_fields():
         ),
         "PM2",
     )
-    assert card.input_values["population_details"]["dataset"] == "gnomad_r4"
-    assert card.input_values["callability_metrics"]["over_20"] == 0.98
+    assert card.observed_facts["population_details"]["dataset"] == "gnomad_r4"
+    assert card.observed_facts["callability_metrics"]["over_20"] == 0.98
     assert card.evidence_status == "source_backed_candidate"
     assert card.rule_source["type"] == "fork_candidate_policy"
     assert "versioned site-coverage adequacy assessment" in card.missing_requirements
@@ -87,7 +87,7 @@ def test_pm2_extremely_rare_observation_preserves_supporting_candidate():
     assert card.strength == "PM2_Supporting"
     assert card.evidence_status == "source_backed_candidate"
     assert card.verification_dimensions["extraction_status"] == "unresolved"
-    assert card.input_values["af_global"] == 4.1e-6
+    assert card.observed_facts["af_global"] == 4.1e-6
     assert "maximum credible allele frequency" in card.caveats[0]
     assert "not a deterministic ClinGen SVI PM2 threshold" in card.rule_basis
     assert card.missing_requirements == [
@@ -126,7 +126,9 @@ def test_pm2_observed_variant_uses_cspec_frequency_rule_before_callability():
     assert card.rule_evaluation["comparison"] == "<="
     assert card.rule_evaluation["status"] == "condition_not_met"
     assert "coverage" not in card.rule_evaluation["primary_reason"].casefold()
-    assert card.clinvar_rule_applied == "ClinGen CSpec population-frequency condition"
+    assert card.rule_basis == (
+        "Applicable released CSpec population-frequency condition."
+    )
     assert "released CSpec" in card.rule_basis
 
 

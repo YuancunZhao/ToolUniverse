@@ -59,6 +59,7 @@ managed_start='<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_START -->'
 managed_end='<!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_END -->'
 legacy_acmg_instruction_hashes=(
   "7ee16edb16ecabbb976f72289b3973c4cae978e0fc2c56a9a03cddd57996251a"
+  "fd7ed2ccba58fe1280842cb44223a703de05d89cdeddcede61d2197020505614"
 )
 home_dir="${HOME:-}"
 if [ "$dest" = "/" ] || [ "$dest" = "$repo_root" ] \

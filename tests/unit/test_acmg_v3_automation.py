@@ -677,9 +677,9 @@ def test_caller_clinical_observation_is_automatic_only_and_conflicts_fail_closed
         criterion="PS2",
         strength="PS2",
         evidence_status="source_backed_candidate",
-        input_source="clinical observation",
-        input_values={},
-        clinvar_rule_applied="fork candidate policy",
+        source_label="clinical observation",
+        observed_facts={},
+        rule_basis="fork candidate policy",
         strength_source="acmg_base_candidate",
         rule_source={"type": "fork_candidate_policy"},
         rule_id="acmg-v3-clinical-candidate",
@@ -779,8 +779,8 @@ def test_pp1_pp4_clingen_points_are_coupled_and_capped():
     by_criterion = {card.criterion: card for card in cards}
     assert by_criterion["PP4"].strength == "PP4_Strong"
     assert by_criterion["PP1"].strength == "PP1_Supporting"
-    assert by_criterion["PP1"].input_values["raw_points"] == 2.0
-    assert by_criterion["PP1"].input_values["combined_pp1_pp4_points_capped"] == 5.0
+    assert by_criterion["PP1"].observed_facts["raw_points"] == 2.0
+    assert by_criterion["PP1"].observed_facts["combined_pp1_pp4_points_capped"] == 5.0
     assert by_criterion["PP1"].rule_id == "clingen-svi-pp1-pp4-bs4"
 
 
@@ -811,7 +811,7 @@ def test_homogeneous_locus_uses_pp4_without_positive_pp1_double_counting():
     by_criterion = {card.criterion: card for card in cards}
     assert by_criterion["PP4"].strength == "PP4_Strong"
     assert by_criterion["PP1"].evidence_status == "not_met"
-    assert by_criterion["PP1"].input_values["raw_points"] == 0.0
+    assert by_criterion["PP1"].observed_facts["raw_points"] == 0.0
     assert any("homogeneous locus" in caveat for caveat in by_criterion["PP1"].caveats)
 
 
@@ -853,9 +853,9 @@ def test_unknown_independence_is_retained_but_only_one_de_novo_atom_is_counted()
         inheritance_mode="autosomal dominant", de_novo_probands=rows
     )
     ps2 = next(card for card in cards if card.criterion == "PS2")
-    assert ps2.input_values["total_points"] == 1.0
-    assert ps2.input_values["counted_case_ids"] == ["case-1"]
-    assert ps2.input_values["uncounted_unknown_independence_case_ids"] == ["case-2"]
+    assert ps2.observed_facts["total_points"] == 1.0
+    assert ps2.observed_facts["counted_case_ids"] == ["case-1"]
+    assert ps2.observed_facts["uncounted_unknown_independence_case_ids"] == ["case-2"]
     assert ps2.evidence_status == "source_backed_candidate"
 
 
@@ -877,7 +877,7 @@ def test_observation_id_is_the_atomic_case_identifier_fallback():
         )
         if card.criterion == "PS2"
     )
-    assert ps2.input_values["counted_case_ids"] == ["observation-only-de-novo"]
+    assert ps2.observed_facts["counted_case_ids"] == ["observation-only-de-novo"]
 
     pm3_observation = _clinical_atom(
         "observation-only-pm3",
@@ -899,7 +899,7 @@ def test_observation_id_is_the_atomic_case_identifier_fallback():
         )
         if card.criterion == "PM3"
     )
-    assert pm3.input_values["counted_case_ids"] == ["observation-only-pm3"]
+    assert pm3.observed_facts["counted_case_ids"] == ["observation-only-pm3"]
 
 
 def test_numeric_case_control_observation_is_mapped_and_null_result_is_not_met():
@@ -966,7 +966,7 @@ def test_all_28_criteria_have_one_v3_machine_contract():
 
 def _scenario_row() -> dict:
     return {
-        "card_id": "acmg-card:v3:generic",
+        "card_id": "acmg-card:v4:generic",
         "criterion": "PP3",
         "strength": "PP3",
         "evidence_status": "rule_mapped",
@@ -1217,7 +1217,7 @@ def test_cspec_candidate_has_automatic_estimate_but_no_verified_estimate():
     assert candidate["automatic_bayesian"]["included_card_ids"]
     assert candidate["verified_bayesian"]["status"] == "not_calculated"
     assert candidate["rule_execution_trace"][0]["status"] == "condition_met"
-    assert result["scenario_cards"][0]["card_id"].startswith("acmg-card:v3:")
+    assert result["scenario_cards"][0]["card_id"].startswith("acmg-card:v4:")
     repeated = build_scenario_results(
         [_scenario_row()],
         _scenario_context("candidate"),
@@ -1259,7 +1259,7 @@ def test_user_selected_score_uses_only_compatibility_accepted_cards():
     first["criterion"] = "PM2"
     first["strength"] = "PM2_Supporting"
     second = deepcopy(first)
-    second["card_id"] = "acmg-card:v3:duplicate"
+    second["card_id"] = "acmg-card:v4:duplicate"
     second["source_fact_ids"] = ["predictor-fact-2"]
     score, report = _apply_evidence_decisions(
         [first, second],
@@ -1277,7 +1277,7 @@ def test_user_selected_score_uses_only_compatibility_accepted_cards():
 def test_user_selected_cross_scenario_mix_fails_closed():
     generic = _scenario_row()
     disease_scenario = deepcopy(generic)
-    disease_scenario["card_id"] = "acmg-card:v3:disease-scenario"
+    disease_scenario["card_id"] = "acmg-card:v4:disease-scenario"
     disease_scenario["scenario_id"] = "cspec:test"
     disease_scenario["source_fact_ids"] = ["predictor-fact-2"]
     score, report = _apply_evidence_decisions(
@@ -1370,7 +1370,7 @@ def test_matching_vcep_assertion_merges_with_cspec_and_wins_duplicate_criterion(
     vcep_card = deepcopy(_scenario_row())
     vcep_card.update(
         {
-            "card_id": "acmg-card:v3:vcep",
+            "card_id": "acmg-card:v4:vcep",
             "scenario_id": "vcep:test",
             "evidence_status": "expert_panel_applied",
             "rule_source": {"type": "vcep_assertion"},

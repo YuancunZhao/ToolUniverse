@@ -218,9 +218,9 @@ def _excluded_atom(
         criterion=criterion,
         strength="not_assessed",
         evidence_status="excluded",
-        input_source=str(row.get("source_type") or "clinical observation"),
-        input_values=dict(row),
-        clinvar_rule_applied=rule_reference,
+        source_label=str(row.get("source_type") or "clinical observation"),
+        observed_facts=dict(row),
+        rule_basis=rule_reference,
         source_fact_ids=_source_ids(row),
         source_case_ids=[str(row.get("observation_id") or "")],
         caveats=[reason],
@@ -367,15 +367,15 @@ def _de_novo_cards(
                     if strength != "not_met"
                     else "not_met"
                 ),
-                input_source="Atomic de novo observations",
-                input_values={
+                source_label="Atomic de novo observations",
+                observed_facts={
                     "total_points": total,
                     "relationship": relationship,
                     "records": [row for row, _points in rows],
                     "counted_case_ids": case_ids,
                     "uncounted_unknown_independence_case_ids": uncounted_case_ids,
                 },
-                clinvar_rule_applied=rule,
+                    rule_basis=rule,
                 rule_id="clingen-svi-de-novo",
                 rule_version="1.1",
                 rule_reference=rule,
@@ -513,14 +513,14 @@ def _pm3_cards(
                     if strength != "not_met"
                     else "not_met"
                 ),
-                input_source="Atomic recessive-case observations",
-                input_values={
+                source_label="Atomic recessive-case observations",
+                observed_facts={
                     "total_points": total,
                     "records": [row for row, _points in valid],
                     "counted_case_ids": case_ids,
                     "uncounted_unknown_independence_case_ids": uncounted_case_ids,
                 },
-                clinvar_rule_applied=rule,
+                    rule_basis=rule,
                 rule_id="clingen-svi-pm3",
                 rule_version="1.0",
                 rule_reference=rule,
@@ -610,9 +610,9 @@ def _generic_observation_card(observation: dict[str, Any]) -> EvidenceCard:
         criterion=proposed,
         strength=strength if evidence_status != "excluded" else "not_assessed",
         evidence_status=evidence_status,
-        input_source=str(observation.get("source_type") or "clinical observation"),
-        input_values=dict(observation),
-        clinvar_rule_applied=str(
+        source_label=str(observation.get("source_type") or "clinical observation"),
+        observed_facts=dict(observation),
+        rule_basis=str(
             values.get("rule_reference")
             or "ACMG/AMP 2015 source-backed candidate policy"
         ),
@@ -775,14 +775,14 @@ def _pp1_pp4_card(
         criterion=criterion,
         strength=strength or "not_met",
         evidence_status=evidence_status,
-        input_source="Atomic phenotype and co-segregation observations",
-        input_values={
+        source_label="Atomic phenotype and co-segregation observations",
+        observed_facts={
             "records": rows,
             "raw_points": raw_points,
             "allocated_bayesian_points": allocated_points,
             "combined_pp1_pp4_points_capped": combined_points,
         },
-        clinvar_rule_applied=_PP1_PP4_REFERENCE,
+        rule_basis=_PP1_PP4_REFERENCE,
         strength_source="clingen_svi_pp1_pp4_point_allocation",
         rule_source={
             "type": "versioned_svi",

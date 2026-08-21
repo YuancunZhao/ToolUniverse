@@ -1,4 +1,4 @@
-"""MetaCyc BioCyc-account authentication (revival from broken_apis).
+"""MetaCyc BioCyc-account authentication regression.
 
 BioCyc gates its web services behind a free account. The tool now logs in
 (POST email+password -> session cookie) and carries that session on every
