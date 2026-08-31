@@ -108,6 +108,10 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "user_selected_bayesian",
         "ACMG_guard_final_answer",
         "`reviewer` and `decided_at` are optional",
+        "already-loaded execution guidance",
+        "Preserve the original `gene;NM_:c.(p.)` string",
+        "`clinical_context.zygosity`",
+        "repeat the same two calls independently",
     )
     forbidden_tokens = (
         "abstract-only or unavailable material remains a source lead",
@@ -126,6 +130,23 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         normalized_text = " ".join(text.split())
         assert all(token in normalized_text for token in required_tokens)
         assert not any(token in normalized_text for token in forbidden_tokens)
+
+
+def test_acmg_quick_start_keeps_the_two_call_no_file_contract():
+    text = " ".join(
+        Path("skills/tooluniverse-acmg-variant-classification/QUICK_START.md")
+        .read_text(encoding="utf-8")
+        .split()
+    )
+
+    for token in (
+        "one collector call and one Guard call",
+        "execution guidance, not another capability to call",
+        "clinical_context.zygosity",
+        "guard_context",
+    ):
+        assert token in text
+    assert "write the result to a file" in text
 
 
 def test_active_skills_do_not_depend_on_retired_acmg_routing_core():
@@ -220,10 +241,16 @@ def test_acmg_evidence_collector_has_public_tool_config():
     path = Path("src/tooluniverse/data/acmg_overlay_gate_tools.json")
     configs = json.loads(path.read_text())
     matching = [c for c in configs if c.get("name") == "ACMG_evidence_collector"]
+    alias = next(
+        row for row in configs if row.get("name") == "ACMG_overlay_gate_assess_variant"
+    )
 
     assert len(matching) == 1
     assert matching[0]["type"] == "ACMG_evidence_collector"
     assert "collects and displays evidence" in matching[0]["description"]
+    assert alias["type"] == "ACMG_evidence_collector"
+    assert alias["parameter"] == matching[0]["parameter"]
+    assert alias["return_schema"] == matching[0]["return_schema"]
 
 
 def test_all_evidence_runtime_tools_have_public_configs():
@@ -336,16 +363,19 @@ def test_collector_wrapper_parameters_match_public_schemas():
     )
     by_name = {row["name"]: row for row in configs}
     ignored = {"stream_callback", "use_cache", "validate"}
-    for name in ("ACMG_evidence_collector",):
+    for name in (
+        "ACMG_evidence_collector",
+        "ACMG_overlay_gate_assess_variant",
+    ):
         wrapper = getattr(tools, name)
         parameters = set(inspect.signature(wrapper).parameters) - ignored
         assert parameters == set(by_name[name]["parameter"]["properties"])
 
 
-def test_public_config_is_converged_to_seven_acmg_runtime_tools():
+def test_public_config_exposes_eight_acmg_runtime_tools():
     path = Path("src/tooluniverse/data/acmg_overlay_gate_tools.json")
     configs = json.loads(path.read_text())
-    assert len(configs) == 7
+    assert len(configs) == 8
 
 
 def test_collector_runtime_result_fields():

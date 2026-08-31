@@ -10,6 +10,7 @@ import re
 import requests
 from typing import Dict, Any, Optional, Tuple
 from .base_tool import BaseTool
+from .http_utils import request_with_retry
 from .tool_registry import register_tool
 
 
@@ -61,6 +62,25 @@ _CALLSET_ALTERNATIVES = {
     "exome": "dataset='gnomad_r4' (GRCh38) or dataset='gnomad_r2_1' (GRCh37)",
     "genome": "dataset='gnomad_r4' or dataset='gnomad_r3' (GRCh38)",
 }
+
+_TRANSIENT_GRAPHQL_MESSAGES = (
+    "service overloaded",
+    "temporarily unavailable",
+    "timeout",
+    "timed out",
+)
+
+
+def _retryable_graphql_response(response: requests.Response) -> bool:
+    """Retry gnomAD's transient GraphQL errors even when HTTP status is 200."""
+    try:
+        errors = response.json().get("errors") or []
+    except (AttributeError, TypeError, ValueError):
+        return False
+    messages = " ".join(
+        str(row.get("message") or "") for row in errors if isinstance(row, dict)
+    ).casefold()
+    return any(token in messages for token in _TRANSIENT_GRAPHQL_MESSAGES)
 
 
 def _dataset_family(dataset: Optional[str]) -> Tuple[str, Optional[Tuple[str, ...]]]:
@@ -216,11 +236,23 @@ class gnomADGraphQLTool(BaseTool):
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute GraphQL query with given arguments."""
+        attempt_trace: list[dict[str, Any]] = []
+
+        def request_audit() -> dict[str, Any]:
+            return {
+                "retry_attempts": max(0, len(attempt_trace) - 1),
+                "retry_trace": list(attempt_trace),
+            }
+
         try:
-            response = self.session.post(
+            response = request_with_retry(
+                self.session,
+                "POST",
                 self.endpoint_url,
                 json={"query": self.query_schema, "variables": arguments},
                 timeout=self.timeout,
+                retry_response=_retryable_graphql_response,
+                attempt_trace=attempt_trace,
             )
             status_code = getattr(response, "status_code", None)
             response.raise_for_status()
@@ -232,6 +264,32 @@ class gnomADGraphQLTool(BaseTool):
                 first = errors[0] if isinstance(errors, list) and errors else None
                 msg = first.get("message") if isinstance(first, dict) else None
                 msg = msg or "gnomAD GraphQL query returned errors"
+                tool_name = str(self.tool_config.get("name") or "")
+                variant_id = str(
+                    (arguments or {}).get("variant_id")
+                    or (arguments or {}).get("variantId")
+                    or ""
+                )
+                valid_variant_id = bool(
+                    re.fullmatch(r"(?:chr)?[^-]+-\d+-[A-Za-z]+-[A-Za-z]+", variant_id)
+                )
+                if (
+                    tool_name
+                    in {"gnomad_get_variant", "gnomad_get_variant_populations"}
+                    and valid_variant_id
+                    and "variant not found" in msg.casefold()
+                ):
+                    return {
+                        "status": "no_hit",
+                        "error": msg,
+                        "url": getattr(response, "url", self.endpoint_url),
+                        "status_code": status_code,
+                        "detail": errors[:3],
+                        "data": None,
+                        "population_observation_status": "not_observed",
+                        "attempted_representation": variant_id,
+                        **request_audit(),
+                    }
                 return {
                     "status": "error",
                     "error": msg,
@@ -239,6 +297,7 @@ class gnomADGraphQLTool(BaseTool):
                     "status_code": status_code,
                     "detail": errors[:3],
                     "data": None,
+                    **request_audit(),
                 }
 
             data = result.get("data")
@@ -255,12 +314,20 @@ class gnomADGraphQLTool(BaseTool):
                     "url": getattr(response, "url", self.endpoint_url),
                     "status_code": status_code,
                     "data": None,
+                    "population_observation_status": "not_observed",
+                    "attempted_representation": str(
+                        (arguments or {}).get("variant_id")
+                        or (arguments or {}).get("variantId")
+                        or ""
+                    ),
+                    **request_audit(),
                 }
 
             return {
                 "status": "success",
                 "data": data,
                 "url": getattr(response, "url", self.endpoint_url),
+                **request_audit(),
             }
 
         except requests.exceptions.HTTPError as e:
@@ -274,6 +341,7 @@ class gnomADGraphQLTool(BaseTool):
                 "status_code": getattr(resp, "status_code", None),
                 "detail": (getattr(resp, "text", "") or "")[:500] or None,
                 "data": None,
+                **request_audit(),
             }
         except (requests.exceptions.RequestException, ValueError) as e:
             return {
@@ -283,6 +351,7 @@ class gnomADGraphQLTool(BaseTool):
                 "status_code": None,
                 "detail": None,
                 "data": None,
+                **request_audit(),
             }
         except Exception as e:
             return {
@@ -292,6 +361,7 @@ class gnomADGraphQLTool(BaseTool):
                 "status_code": None,
                 "detail": None,
                 "data": None,
+                **request_audit(),
             }
 
 
@@ -471,6 +541,8 @@ class gnomADGetVariantPopulations(gnomADGraphQLTool):
                 "error": f"No variant found for variant_id '{variant_id}' in dataset '{dataset}'",
                 "url": result.get("url"),
                 "data": None,
+                "population_observation_status": "not_observed",
+                "attempted_representation": str(variant_id),
             }
 
         data = {

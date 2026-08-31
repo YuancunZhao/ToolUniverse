@@ -6,12 +6,12 @@ into a temporary directory, then runs the same offline behavior checks against
 that installed copy in a subprocess whose ``tooluniverse`` resolves to the
 installed files:
 
-- collector entry point and six evidence/guard tools are discoverable;
+- all eight public ACMG tools, including the thin overlay alias, are discoverable;
 - the five evidence group tools are discoverable and their Python wrapper
   parameters are covered by the installed JSON schemas;
 - ``ACMG_guard_final_answer`` blocks five-tier labels;
 - the PMM2 rs104894531 multi-allele regression input fails closed with an
-  explicit ambiguity reason and zero downstream evidence calls (offline
+  explicit ambiguity reason and zero downstream evidence-provider calls (offline
   fixture executor, no network);
 - the installed runtime version, tool registry, and packaged data files are
   consistent with the source tree release.
@@ -94,9 +94,10 @@ expected_tools = {
     "ACMG_functional_evidence",
     "ACMG_literature_evidence",
     "ACMG_guard_final_answer",
+    "ACMG_overlay_gate_assess_variant",
 }
 check(
-    "seven_acmg_tools_discoverable",
+    "eight_acmg_tools_discoverable",
     expected_tools <= names,
     "missing: " + ",".join(sorted(expected_tools - names)),
 )
@@ -104,7 +105,7 @@ check(
 data_path = Path(tooluniverse.__file__).parent / "data" / "acmg_overlay_gate_tools.json"
 configs = json.loads(data_path.read_text())
 by_name = {row["name"]: row for row in configs}
-check("config_has_seven_tools", len(configs) == 7, f"count={len(configs)}")
+check("config_has_eight_tools", len(configs) == 8, f"count={len(configs)}")
 schema_hash = hashlib.sha256(
     json.dumps(configs, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 ).hexdigest()
@@ -195,7 +196,7 @@ from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_has
 
 check(
     "v4_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-4",
+    ACMG_RUNTIME_VERSION == "evidence-automation-4.2",
     ACMG_RUNTIME_VERSION,
 )
 
@@ -317,10 +318,11 @@ evidence_source_tools = {
 }
 called = set(fixture.calls)
 check(
-    "pmm2_zero_downstream_calls",
+    "pmm2_no_evidence_provider_calls",
     not (called & evidence_source_tools)
     and called
     <= {
+        "HGNC_fetch_gene_by_symbol",
         "NCBIVariation_rsid_lookup",
         "EnsemblVEP_variant_recoder",
         "VariantValidator_gene2transcripts",

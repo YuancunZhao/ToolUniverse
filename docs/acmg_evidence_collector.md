@@ -31,6 +31,14 @@ selecting the first or most pathogenic-looking record. Consequences on other
 transcripts remain visible as `alternate_transcript_observation` and do not
 veto an exact RefSeq/MANE selected-transcript result.
 
+The submitted variant and gene are preserved separately from normalized query
+forms. A unique HGNC previous-symbol/alias match is disclosed as
+`resolved_gene`; when an unknown submitted symbol conflicts with a unique
+transcript mapping, the transcript mapping may correct it explicitly. Only a
+confirmed submitted-gene/transcript-gene mismatch blocks collection. A
+parenthesized submitted protein HGVS and `clinical_context.zygosity` are echoed
+rather than silently removed.
+
 ## Inputs
 
 The collector accepts:
@@ -95,6 +103,12 @@ raw-result hash remain auditable.
 and `provider_contract_malformed`, with the attempted representation,
 retryability, dataset/release, and provider message. A technical failure is
 never treated as evidence that a variant or publication is absent.
+For gnomAD, 429/5xx and GraphQL overload responses use the shared bounded retry
+path. ACMG performs one frequency request containing overall and population
+frequencies; only a true `no_hit` permits one equivalent-representation retry.
+Same-site callability remains a separate query so a well-covered `no_hit` can
+support a limited PM2 Supporting candidate instead of being confused with a
+provider failure.
 
 ## Consequence and prediction collection
 
@@ -122,6 +136,9 @@ automatic view, but not the verified view. The resulting
 selected/corroborating facts, nonblocking disagreements, failures, conflicts,
 resolution confidence, calculation usability, mapping reason, and missing
 requirements.
+If every provider is empty for a well-formed deep-intronic transcript HGVS, the
+input itself remains visible as an automatic-only `intron_variant` observation.
+It does not enter the verified view and cannot by itself activate PP3 or PVS1.
 
 MyVariant and related providers retain all available REVEL, CADD,
 AlphaMissense, SIFT, PolyPhen-2 HDIV, MetaRNN, GERP, phyloP, phastCons, VEST4,
@@ -308,8 +325,9 @@ full CSpec documents, repeated atomic-card payloads, and raw provider payloads.
 When every literature row has the same provider, that provider appears once in
 `literature_candidate_defaults`; consumers merge the defaults into each compact
 `literature_candidates` row.
-Repeated source failures are grouped by provider and failure code; complete
-attempt records remain in full mode. Representative CFTR, GP1BA, MAT1A, and
+Provider failures are indexed by tool and attempted representation, including
+the actual HTTP retry count; complete attempt records remain in full mode.
+Representative CFTR, GP1BA, MAT1A, and
 BRCA2 summaries stay below 40 KB without truncating cards, predictors, or
 literature candidates. Full mode retains
 normalized facts, excerpts, rule content, provenance, and raw-result hashes
@@ -346,5 +364,6 @@ readiness booleans with SourceFact verification dimensions and EvidenceCard
 `evidence_status`. No-information criteria are represented in
 `criterion_reviews` rather than empty EvidenceCards.
 
-The ACMG runtime exposes seven public MCP tools. The collector is the single
-full-pipeline entry point; there is no compatibility alias.
+The ACMG runtime exposes eight public MCP tools. The collector is the single
+full-pipeline entry point; `ACMG_overlay_gate_assess_variant` remains a thin
+compatibility alias with no separate evidence logic.

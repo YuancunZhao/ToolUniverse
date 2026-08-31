@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tooluniverse.acmg.collector import ACMGEvidencePipeline
+from tooluniverse.acmg.models import SourceFact
 from tooluniverse.acmg.population import population_evidence
 
 
@@ -225,6 +227,73 @@ def test_verified_non_exception_can_suggest_ba1():
 def test_pm2_no_data():
     """No gnomAD data leaves PM2 unassessed."""
     assert _card(population_evidence(), "PM2").strength == "not_assessed"
+
+
+def test_gnomad_no_hit_with_callability_is_pm2_candidate():
+    cards = population_evidence(
+        population_observation_status="not_observed",
+        effective_af_for_rule=0.0,
+        callability_available=True,
+        callability_metrics={"mean": 80, "over_20": 0.99},
+        population_details={"dataset": "gnomad_r4", "callset": "genome"},
+    )
+    pm2 = _card(cards, "PM2")
+    assert pm2.strength == "PM2_Supporting"
+    assert pm2.evidence_status == "source_backed_candidate"
+    assert pm2.observed_facts["population_observation_status"] == "not_observed"
+    assert pm2.rule_evaluation["effective_af_for_rule"] == 0.0
+    assert pm2.rule_evaluation["status"] == "unresolved"
+
+
+def test_collector_population_inputs_preserve_gnomad_no_hit_with_callability():
+    no_hit = SourceFact(
+        fact_id="gnomad-no-hit",
+        tool_name="gnomad_get_variant",
+        status="no_hit",
+        query_identity={},
+        result_identity={
+            "coordinates": {"chr": "1", "pos": 10, "ref": "A", "alt": "G"},
+            "build": "GRCh38",
+        },
+        features={
+            "dataset": "gnomad_r4",
+            "population_observation_status": "not_observed",
+        },
+        raw_result_hash="hash-no-hit",
+        provider_version="gnomad_r4",
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
+    )
+    callability = SourceFact(
+        fact_id="gnomad-callability",
+        tool_name="gnomad_get_site_callability",
+        status="success",
+        query_identity={},
+        result_identity={
+            "locus": {"chr": "1", "pos": 10},
+            "build": "GRCh38",
+        },
+        features={
+            "dataset": "gnomad_r4",
+            "callset": "genome",
+            "callsets": {"genome": {"mean": 80, "over_20": 0.99}},
+        },
+        raw_result_hash="hash-callability",
+        provider_version="gnomad_r4",
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
+    )
+    inputs, fact_ids = ACMGEvidencePipeline._population_inputs(
+        {no_hit.fact_id: no_hit, callability.fact_id: callability}
+    )
+    assert inputs["population_observation_status"] == "not_observed"
+    assert inputs["effective_af_for_rule"] == 0.0
+    assert inputs["callability_available"] is True
+    assert fact_ids == ["gnomad-no-hit", "gnomad-callability"]
 
 
 def test_pm2_missing_af_is_not_assessed():

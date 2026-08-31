@@ -187,8 +187,7 @@ def explicit_allele_conflict(
     return bool(
         comparable
         and any(
-            _norm(expected_coordinates.get(key))
-            != _norm(observed_coordinates.get(key))
+            _norm(expected_coordinates.get(key)) != _norm(observed_coordinates.get(key))
             for key in comparable
         )
     )
@@ -327,6 +326,16 @@ def source_fact_ready(
     expected_identity: dict[str, Any],
 ) -> tuple[dict[str, Any], bool, bool]:
     """Return (provider identity, identity verified, assessment ready)."""
+    if tool_name == "MARRVEL_get_omim_phenotypes":
+        expected_gene = _norm(expected_identity.get("gene"))
+        observed_gene = _norm(features.get("query_gene") or features.get("gene"))
+        identity_verified = bool(expected_gene and observed_gene == expected_gene)
+        return (
+            {"gene": features.get("query_gene") or features.get("gene")},
+            identity_verified,
+            identity_verified and isinstance(features.get("omim_associations"), list),
+        )
+
     if tool_name == "ClinGen_search_cspec":
         observed_identity = {"gene": features.get("gene")}
         expected_gene = str(expected_identity.get("gene") or "").strip().upper()
@@ -741,7 +750,7 @@ def _source_category(tool_name: str) -> str:
         return "population"
     if any(token in name for token in ("literature", "pubmed", "pmc")):
         return "literature"
-    if "clingen" in name or "g2p" in name:
+    if "clingen" in name or "g2p" in name or "marrvel" in name:
         return "disease_context"
     if "ebiproteins" in name or "interpro" in name or "uniprot" in name:
         return "protein_context"
@@ -1643,11 +1652,27 @@ def _myvariant_fields(raw: dict[str, Any], payload: dict[str, Any]) -> dict[str,
 
 
 def _population_fields(payload: dict[str, Any]) -> dict[str, Any]:
-    callsets = {
-        name: payload[name]
-        for name in ("exome", "genome")
-        if isinstance(payload.get(name), dict)
-    }
+    callsets: dict[str, dict[str, Any]] = {}
+    for name in ("exome", "genome"):
+        raw_callset = payload.get(name)
+        if not isinstance(raw_callset, dict):
+            continue
+        callset = dict(raw_callset)
+        populations = []
+        for row in raw_callset.get("populations") or []:
+            if not isinstance(row, dict):
+                continue
+            population = dict(row)
+            ac = population.get("ac")
+            an = population.get("an")
+            if isinstance(ac, (int, float)) and isinstance(an, (int, float)) and an:
+                population["af"] = ac / an
+            else:
+                population["af"] = None
+            populations.append(population)
+        if populations:
+            callset["populations"] = populations
+        callsets[name] = callset
     selected_name = next(
         (
             name
@@ -1672,6 +1697,10 @@ def _population_fields(payload: dict[str, Any]) -> dict[str, Any]:
             "dataset",
             "build",
             "reference_genome",
+            "population_observation_status",
+            "attempted_representation",
+            "error",
+            "status",
         },
     )
     features.update(
@@ -2342,6 +2371,8 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
             "variant_search": rows if isinstance(rows, list) else [],
             "provider_version": "gnomAD GraphQL variant search",
         }
+    elif tool_name == "MARRVEL_get_omim_phenotypes":
+        features = _marrvel_omim_fields(payload)
     elif tool_name == "ensembl_lookup_gene":
         features = _ensembl_lookup_fields(payload_dict)
     elif tool_name in {
@@ -2427,6 +2458,10 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
 
     if isinstance(payload_dict, dict):
         features.update(_identity_fields(raw, payload_dict))
+    if category == "population":
+        features.update(
+            _copy(raw, {"status_code", "retry_attempts", "retry_trace", "error"})
+        )
     for key, value in raw.items():
         lowered = key.casefold()
         if lowered in _CONCLUSION_KEYS or any(
@@ -2605,6 +2640,53 @@ def _gnomad_region_variants_fields(payload: dict[str, Any]) -> dict[str, Any]:
             "provider_version": "gnomAD GraphQL region variants",
         }
     )
+
+
+def _marrvel_omim_fields(payload: Any) -> dict[str, Any]:
+    """Normalize MARRVEL OMIM rows without turning them into ACMG evidence."""
+    rows = payload if isinstance(payload, list) else []
+    if isinstance(payload, dict):
+        rows = payload.get("phenotypes") or payload.get("data") or []
+    associations: list[dict[str, Any]] = []
+    inheritance_map = {
+        "autosomal dominant": "AD",
+        "autosomal recessive": "AR",
+        "x-linked dominant": "XLD",
+        "x-linked recessive": "XLR",
+        "x linked dominant": "XLD",
+        "x linked recessive": "XLR",
+        "mitochondrial": "MT",
+    }
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        inheritance = str(
+            row.get("phenotypeInheritance")
+            or row.get("inheritance")
+            or row.get("modeOfInheritance")
+            or ""
+        ).strip()
+        associations.append(
+            _drop_empty(
+                {
+                    "phenotype_name": row.get("phenotype") or row.get("phenotype_name"),
+                    "phenotype_mim": row.get("phenotypeMimNumber")
+                    or row.get("phenotype_mim"),
+                    "gene_mim": row.get("mimNumber") or row.get("gene_mim"),
+                    "inheritance": inheritance,
+                    "inheritance_enum": inheritance_map.get(
+                        inheritance.casefold(), "candidate"
+                    ),
+                    "phenotypic_series": row.get("phenotypicSeries")
+                    or row.get("phenotypic_series"),
+                }
+            )
+        )
+    return {
+        "omim_associations": associations,
+        "provider_version": "MARRVEL OMIM phenotype endpoint",
+        "review_only": True,
+    }
 
 
 __all__ = [

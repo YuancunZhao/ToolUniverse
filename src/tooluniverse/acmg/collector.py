@@ -15,11 +15,16 @@ from collections.abc import Callable
 from typing import Any
 
 from .clinical import clinical_evidence
-from .compatibility import aggregate_evidence_cards, resolve_evidence_compatibility
+from .compatibility import (
+    aggregate_evidence_cards,
+    resolve_automatic_and_verified_compatibility,
+    resolve_evidence_compatibility,
+)
 from .computational import computational_evidence
 from .consequence import build_consequence_profile, consequence_applicability
 from .consequence_sources import (
     CONSEQUENCE_METHODS,
+    apply_input_intronic_fallback,
     consequence_observations,
     profile_features_from_resolution,
     resolve_consequence_observations,
@@ -38,6 +43,7 @@ from .models import (
     fact_is_available,
     fact_is_strictly_verified,
     is_automatic_evidence,
+    is_substantive_evidence_card,
 )
 from .functional import functional_evidence
 from .guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_hash
@@ -69,6 +75,7 @@ from .rule_catalog import (
     IDENTITY_PROVIDER_ROLES,
     IDENTITY_VERIFICATION_POLICY,
     MONDO_RESOLUTION_POLICY_VERSION,
+    SPLICEAI_RULE,
     criterion_use_matrix,
     is_valid_strength_for_criterion,
     rule_for_criterion,
@@ -1160,7 +1167,7 @@ def _literature_review_state(
                 "expected_identity": {
                     "variant": identity.get("validated_hgvs_c")
                     or identity.get("hgvs_c"),
-                    "gene": arguments.get("gene") or identity.get("gene"),
+                    "gene": identity.get("gene") or arguments.get("gene"),
                     "disease": arguments.get("disease"),
                     "inheritance": arguments.get("inheritance")
                     or arguments.get("inheritance_mode"),
@@ -1243,7 +1250,7 @@ def _recoverable_gaps(
     if consequence_profile.get("annotation_status") != "resolved":
         gaps.append(
             {
-                "code": "selected_transcript_missing",
+                "code": "selected_transcript_annotation_missing",
                 "status": "unresolved",
                 "handled_internally": True,
                 "recovery_status": "exhausted",
@@ -1901,6 +1908,45 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             key: row.get(key) for key in keys if row.get(key) not in (None, "", [], {})
         }
 
+    def compact_source_assertion(row: dict[str, Any]) -> dict[str, Any]:
+        compact_row = pick(
+            row,
+            "source_type",
+            "source_fact_ids",
+            "query_scope",
+            "record_count",
+            "identity_status",
+            "calculation_roles",
+            "notice",
+        )
+        if row.get("query_scope") != "variant":
+            compact_row["complete_assertion_in"] = "full response source_assertions"
+            return compact_row
+        features = row.get("reviewable_features")
+        features = features if isinstance(features, dict) else {}
+        assertion_index = pick(
+            features,
+            "variation_id",
+            "clinvar_variation_id",
+            "caid",
+            "rsid",
+            "hgvs_c",
+            "hgvs_g",
+            "hgvs_p",
+            "gene",
+            "transcript",
+            "review_status",
+            "conditions",
+            "date",
+            "last_evaluated",
+        )
+        if assertion_index:
+            compact_row["assertion_index"] = assertion_index
+        conclusions = _compact_normalized_value(row.get("quarantined_conclusions"))
+        if conclusions:
+            compact_row["quarantined_conclusions"] = conclusions
+        return compact_row
+
     compact = {
         key: result.get(key)
         for key in (
@@ -1909,6 +1955,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "coverage_status",
             "variant_scope",
             "clinical_context",
+            "omim_context",
             "runtime_manifest",
             "guard_context",
             "recoverable_gaps",
@@ -1926,11 +1973,18 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         compact["variant_identity"] = pick(
             variant_identity,
             "input_variant",
+            "submitted_variant",
+            "normalized_query_representation",
             "identity_verified",
             "hgvs_c",
             "hgvs_g",
             "hgvs_p",
+            "submitted_hgvs_p",
             "gene",
+            "submitted_gene",
+            "resolved_gene",
+            "gene_resolution_status",
+            "gene_resolution_basis",
             "transcript",
             "build",
             "coordinates",
@@ -1970,8 +2024,6 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "error",
             "excluded_candidates",
         )
-        if compact_normalization:
-            compact["variant_identity"]["normalization"] = compact_normalization
         compact["variant"] = {
             **pick(
                 full_variant,
@@ -2022,6 +2074,25 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         for value in consequence_profile.get("selected_source_fact_ids") or []
         if value
     )
+    omim_context = result.get("omim_context")
+    if isinstance(omim_context, dict):
+        referenced_source_ids.update(
+            str(value) for value in omim_context.get("source_fact_ids") or [] if value
+        )
+        compact["omim_context"] = {
+            **pick(
+                omim_context,
+                "status",
+                "query_gene",
+                "resolved_gene",
+                "source_fact_ids",
+                "association_count",
+                "provider_version",
+                "review_only",
+                "notice",
+            ),
+            "associations": list(omim_context.get("associations") or []),
+        }
     referenced_source_ids.update(
         str(value)
         for row in result.get("prior_variant_candidates") or []
@@ -2034,81 +2105,104 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         for fact in result.get("source_facts") or []
         if isinstance(fact, dict) and fact.get("fact_id") in referenced_source_ids
     ]
-    failure_groups: dict[tuple[Any, ...], dict[str, Any]] = {}
+    compact["source_facts"] = compact_source_facts
+    compact["provider_failure_defaults"] = {
+        "status": "unavailable",
+        "failure_code": "provider_failed",
+        "message": "Provider request failed.",
+        "retryable": True,
+    }
+    failure_rows: dict[str, dict[str, Any]] = {}
     for fact in result.get("source_facts") or []:
-        if not isinstance(fact, dict) or fact.get("fact_id") in referenced_source_ids:
+        if not isinstance(fact, dict):
             continue
         failure = fact.get("failure_details")
-        if fact.get("status") in {"success", "no_hit"} and not failure:
-            continue
         failure = failure if isinstance(failure, dict) else {}
-        group_key = (
-            fact.get("tool_name"),
-            fact.get("status"),
-            failure.get("failure_code"),
-            failure.get("dataset"),
-            failure.get("release"),
-            failure.get("retryable"),
+        if not failure and fact.get("status") not in {"failed", "unavailable"}:
+            continue
+        representation = failure.get("attempted_representation") or fact.get(
+            "request_arguments"
         )
-        if group_key not in failure_groups:
-            failure_groups[group_key] = {
-                "fact_id": fact.get("fact_id"),
-                "tool_name": fact.get("tool_name"),
-                "status": fact.get("status"),
-                "attempt_count": 0,
-            }
-            for key in ("failure_code", "retryable", "dataset", "release"):
-                if failure.get(key) not in (None, "", [], {}):
-                    failure_groups[group_key][key] = failure.get(key)
-        failure_groups[group_key]["attempt_count"] += 1
-    compact["source_facts"] = compact_source_facts
-    compact_failure_groups: dict[tuple[Any, ...], dict[str, Any]] = {}
-    for row in failure_groups.values():
-        group_key = (row.get("failure_code") or row.get("status"),)
-        group = compact_failure_groups.setdefault(
-            group_key,
+        query_representation: Any = None
+        query_fingerprint = ""
+        if representation not in (None, "", {}):
+            canonical_query = json.dumps(
+                representation,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+            query_fingerprint = hashlib.sha256(canonical_query.encode()).hexdigest()
+            if len(canonical_query) > 160:
+                query_representation = f"sha256:{query_fingerprint}; full=source_facts"
+            elif isinstance(representation, dict):
+                query_representation = "; ".join(
+                    f"{key}={json.dumps(value, ensure_ascii=False, separators=(',', ':'))}"
+                    for key, value in sorted(representation.items())
+                )
+            else:
+                query_representation = representation
+        row = {
+            "tool_name": fact.get("tool_name"),
+            **pick(
+                failure,
+                "status_code",
+                "dataset",
+                "release",
+                "retry_attempts",
+            ),
+            **(
+                {"query_representation": query_representation}
+                if query_representation is not None
+                else {}
+            ),
+            **(
+                {"failure_code": failure.get("failure_code")}
+                if failure.get("failure_code") not in (None, "", "provider_failed")
+                else {}
+            ),
+            **(
+                {"status": fact.get("status")}
+                if fact.get("status") not in (None, "", "unavailable")
+                else {}
+            ),
+            **(
+                {"message": failure.get("message")}
+                if failure.get("message") not in (None, "", "Provider request failed.")
+                else {}
+            ),
+            **(
+                {"retryable": failure.get("retryable")}
+                if failure.get("retryable") is False
+                else {}
+            ),
+        }
+        row_key = json.dumps(
+            [row, query_fingerprint], sort_keys=True, separators=(",", ":")
+        )
+        grouped = failure_rows.setdefault(row_key, {**row, "source_fact_ids": []})
+        if fact.get("fact_id"):
+            grouped["source_fact_ids"].append(fact["fact_id"])
+    compact["provider_failures"] = []
+    for row in failure_rows.values():
+        fact_ids = row.pop("source_fact_ids")
+        compact["provider_failures"].append(
             {
-                "failure_code": group_key[0],
-                "tools": [],
-                "attempt_count": 0,
-                "datasets": [],
-                "releases": [],
-            },
+                **row,
+                **(
+                    {"source_fact_id": fact_ids[0]}
+                    if len(fact_ids) == 1
+                    else {"source_fact_ids": fact_ids}
+                ),
+            }
         )
-        group["tools"].append(row.get("tool_name"))
-        group["attempt_count"] += int(row.get("attempt_count") or 0)
-        for key, target in (("dataset", "datasets"), ("release", "releases")):
-            value = row.get(key)
-            if value and value not in group[target]:
-                group[target].append(value)
-    compact["provider_failures"] = [
-        {key: value for key, value in row.items() if value not in (None, "", [])}
-        for row in compact_failure_groups.values()
-    ]
     compact["evidence_cards"] = [
         _compact_evidence_card(card)
         for card in result.get("evidence_cards") or []
         if isinstance(card, dict)
     ]
     compact["source_assertions"] = [
-        {
-            **pick(
-                row,
-                "source_type",
-                "quarantined_conclusions",
-                "calculation_roles",
-                "notice",
-            ),
-            **(
-                {
-                    "reviewable_features": _compact_normalized_value(
-                        row.get("reviewable_features")
-                    )
-                }
-                if _compact_normalized_value(row.get("reviewable_features"))
-                else {}
-            ),
-        }
+        compact_source_assertion(row)
         for row in result.get("source_assertions") or []
         if isinstance(row, dict)
     ]
@@ -2160,16 +2254,21 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         for row in result.get("literature_candidates") or []
         if isinstance(row, dict)
     ]
-    candidate_sources = {
-        row.get("source")
-        for row in compact_literature_candidates
-        if row.get("source")
-    }
-    if len(candidate_sources) == 1:
-        common_source = candidate_sources.pop()
-        compact["literature_candidate_defaults"] = {"source": common_source}
+    candidate_defaults: dict[str, Any] = {}
+    for key in ("source", "match_class", "full_text_status"):
+        counts: dict[Any, int] = {}
         for row in compact_literature_candidates:
-            row.pop("source", None)
+            value = row.get(key)
+            if value is not None:
+                counts[value] = counts.get(value, 0) + 1
+        if counts:
+            common = max(counts, key=counts.get)
+            candidate_defaults[key] = common
+            for row in compact_literature_candidates:
+                if row.get(key) == common:
+                    row.pop(key, None)
+    if candidate_defaults:
+        compact["literature_candidate_defaults"] = candidate_defaults
     compact["literature_candidates"] = compact_literature_candidates
     if isinstance(consequence_profile, dict):
 
@@ -2458,6 +2557,7 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
         if isinstance(row, dict)
     ]
     compact["criterion_reviews"] = []
+    compact["criterion_review_defaults"] = {"route_status": "insufficient_information"}
     for review in result.get("criterion_reviews") or []:
         if not isinstance(review, dict):
             continue
@@ -2467,7 +2567,10 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
             "route_status",
             "pending_request_ids",
             "missing_requirements",
+            "decision_context",
         )
+        if compact_review.get("route_status") == "insufficient_information":
+            compact_review.pop("route_status")
         if review.get("evidence_status") not in {
             "no_information",
             "excluded",
@@ -2518,13 +2621,25 @@ def _compact_result(result: dict[str, Any]) -> dict[str, Any]:
     if isinstance(rule_context, dict):
         specification = rule_context.get("applicable_specification")
         contract = rule_context.get("executable_contract")
+        disease_context = rule_context.get("disease_context")
+        compact_disease_context = (
+            dict(disease_context)
+            if isinstance(disease_context, dict)
+            else disease_context
+        )
+        if (
+            isinstance(compact_disease_context, dict)
+            and "omim_context" in compact_disease_context
+        ):
+            compact_disease_context.pop("omim_context", None)
+            compact_disease_context["omim_context_in"] = "omim_context"
         trimmed_context = {
             "vcep_discovered": rule_context.get("vcep_discovered") is True,
             "cspec_status": rule_context.get("cspec_status"),
             "applied_contract_id": rule_context.get("applied_contract_id"),
             "applied_contract_version": rule_context.get("applied_contract_version"),
             "cspec_content_hash": rule_context.get("cspec_content_hash"),
-            "disease_context": rule_context.get("disease_context"),
+            "disease_context": compact_disease_context,
             "unmatched_reasons": list(rule_context.get("unmatched_reasons") or []),
             "fallback_policy": rule_context.get("fallback_policy"),
             "multiple_applicable_specifications": rule_context.get(
@@ -2695,7 +2810,6 @@ def _source_failure_details(
         and call.tool_name
         in {
             "gnomad_get_variant",
-            "gnomad_get_variant_populations",
             "gnomad_get_site_callability",
         }
     ):
@@ -2730,6 +2844,8 @@ def _source_failure_details(
             "failure_code": failure_code,
             "message": message,
             "retryable": retryable,
+            "status_code": features.get("status_code"),
+            "retry_attempts": features.get("retry_attempts"),
             "attempted_representation": _attempted_representation(arguments),
             "dataset": arguments.get("dataset") or features.get("dataset"),
             "release": features.get("release") or features.get("provider_version"),
@@ -3187,9 +3303,13 @@ def _fact_matches_route(fact: SourceFact, route: str) -> bool:
     if route == "dynamic_cspec":
         return tool == "ClinGen_search_cspec"
     if route == "disease_context":
-        return tool.startswith("ClinGen_") or tool.startswith("HPO_")
+        return (
+            tool.startswith("ClinGen_")
+            or tool.startswith("HPO_")
+            or tool == "MARRVEL_get_omim_phenotypes"
+        )
     if route == "population":
-        return tool in {"gnomad_get_variant", "gnomad_get_variant_populations"}
+        return tool == "gnomad_get_variant"
     if route == "callability":
         return tool == "gnomad_get_site_callability"
     if route == "computational":
@@ -3213,6 +3333,41 @@ def _fact_matches_route(fact: SourceFact, route: str) -> bool:
 
 
 class ACMGEvidencePipeline:
+    @staticmethod
+    def _omim_context(source_facts: dict[str, SourceFact], gene: str) -> dict[str, Any]:
+        """Expose OMIM disease associations as auditable context only."""
+        facts = [
+            fact
+            for fact in source_facts.values()
+            if fact.tool_name == "MARRVEL_get_omim_phenotypes"
+        ]
+        if not facts:
+            return {
+                "status": "not_queried",
+                "query_gene": gene,
+                "source_fact_ids": [],
+                "associations": [],
+                "review_only": True,
+            }
+        fact = facts[-1]
+        associations = fact.features.get("omim_associations")
+        associations = associations if isinstance(associations, list) else []
+        return {
+            "status": fact.status,
+            "query_gene": str(fact.features.get("query_gene") or gene or ""),
+            "resolved_gene": str(fact.features.get("gene") or gene or ""),
+            "source_fact_ids": [fact.fact_id],
+            "associations": associations,
+            "association_count": len(associations),
+            "provider_version": fact.provider_version,
+            "provenance": list(fact.provenance),
+            "review_only": True,
+            "notice": (
+                "OMIM associations provide disease and inheritance context; "
+                "they do not directly create ACMG evidence or select a VCEP."
+            ),
+        }
+
     """Run the evidence-only ACMG workflow with an injected ToolUniverse."""
 
     def __init__(
@@ -3393,11 +3548,44 @@ class ACMGEvidencePipeline:
         elif protein_input:
             requested_gene = protein_gene
         calls: list[SourceCall] = []
+        submitted_gene = requested_gene or gene.strip()
+        resolved_gene = submitted_gene
+        gene_resolution_status = "not_provided" if not submitted_gene else "unresolved"
+        gene_resolution_basis = ""
+        if submitted_gene:
+            hgnc_call = self._call(
+                "HGNC_fetch_gene_by_symbol", {"symbol": submitted_gene}, "identity"
+            )
+            calls.append(hgnc_call)
+            hgnc_result = hgnc_call.result if isinstance(hgnc_call.result, dict) else {}
+            hgnc_data = hgnc_result.get("data")
+            hgnc_metadata = hgnc_result.get("metadata")
+            hgnc_data = hgnc_data if isinstance(hgnc_data, dict) else {}
+            hgnc_metadata = hgnc_metadata if isinstance(hgnc_metadata, dict) else {}
+            approved_symbol = str(hgnc_data.get("symbol") or "").strip()
+            if hgnc_call.status == "success" and approved_symbol:
+                resolved_gene = approved_symbol
+                requested_gene = approved_symbol
+                gene_resolution_status = (
+                    "matched"
+                    if _normalize_text(approved_symbol)
+                    == _normalize_text(submitted_gene)
+                    else "resolved_alias"
+                )
+                gene_resolution_basis = str(
+                    hgnc_metadata.get("resolution_relation") or "hgnc_approved_symbol"
+                )
+            elif hgnc_call.status == "failed":
+                gene_resolution_status = "provider_failed"
         canonical_variant = provider_variant
         selected_transcript = transcript.strip()
         normalization: dict[str, Any] = {
             "input_variant": requested_variant,
             "input_gene": gene.strip(),
+            "submitted_gene": submitted_gene,
+            "resolved_gene": resolved_gene,
+            "gene_resolution_status": gene_resolution_status,
+            "gene_resolution_basis": gene_resolution_basis,
             "genome_build": genome_build,
             "provider_query_variant": provider_variant,
         }
@@ -3428,6 +3616,10 @@ class ACMGEvidencePipeline:
                 "hgvs_c": requested_variant,
                 "build": genome_build,
                 "gene": requested_gene or gene.strip(),
+                "submitted_gene": submitted_gene,
+                "resolved_gene": resolved_gene,
+                "gene_resolution_status": gene_resolution_status,
+                "gene_resolution_basis": gene_resolution_basis,
                 "transcript": selected_transcript,
                 "input_variant": requested_variant,
                 "normalization": normalization,
@@ -3868,6 +4060,10 @@ class ACMGEvidencePipeline:
             "hgvs_g": canonical_variant if ":g." in canonical_variant else "",
             "build": genome_build,
             "gene": requested_gene or gene.strip(),
+            "submitted_gene": submitted_gene,
+            "resolved_gene": resolved_gene,
+            "gene_resolution_status": gene_resolution_status,
+            "gene_resolution_basis": gene_resolution_basis,
             "transcript": selected_transcript,
             "input_variant": requested_variant,
             "normalization": normalization,
@@ -3909,6 +4105,8 @@ class ACMGEvidencePipeline:
                     "assembly",
                     "genome_build",
                 }:
+                    if key in {"gene", "transcript"} and identity.get(key):
+                        continue
                     identity[key] = (
                         coordinates(features[key])
                         if key == "coordinates_grch37"
@@ -3928,13 +4126,80 @@ class ACMGEvidencePipeline:
             if IDENTITY_PROVIDER_ROLES.get(call.tool_name) == "authoritative"
             and has_variant_identity(observed)
         ]
-        conflicts = any(
-            _identity_conflicts(left, right)
-            for index, (_, left) in enumerate(authoritative_rows)
-            for _, right in authoritative_rows[index + 1 :]
-        ) or any(
-            explicit_allele_conflict(identity, observed)
+        transcript_genes = {
+            str(observed.get("gene") or "").strip()
             for _, observed in authoritative_rows
+            if observed.get("gene")
+            and (
+                not selected_transcript
+                or not observed.get("transcript")
+                or _normalize_text(observed.get("transcript"))
+                == _normalize_text(selected_transcript)
+            )
+        }
+        transcript_genes.discard("")
+        transcript_mapping_genes = {
+            str(candidate.get("gene") or "").strip()
+            for candidate in normalization.get("transcript_candidates") or []
+            if isinstance(candidate, dict)
+            and candidate.get("gene")
+            and (
+                not selected_transcript
+                or _normalize_text(candidate.get("reference"))
+                == _normalize_text(selected_transcript)
+            )
+        }
+        transcript_mapping_genes.discard("")
+        correction_candidates = (
+            transcript_mapping_genes
+            if len(transcript_mapping_genes) == 1
+            else transcript_genes
+            if not submitted_gene and len(transcript_genes) == 1
+            else set()
+        )
+        if (
+            gene_resolution_status in {"unresolved", "provider_failed"}
+            and len(correction_candidates) == 1
+        ):
+            resolved_gene = next(iter(correction_candidates))
+            requested_gene = resolved_gene
+            gene_resolution_status = "corrected_from_transcript"
+            gene_resolution_basis = "authoritative_selected_transcript"
+            identity.update(
+                {
+                    "gene": resolved_gene,
+                    "resolved_gene": resolved_gene,
+                    "gene_resolution_status": gene_resolution_status,
+                    "gene_resolution_basis": gene_resolution_basis,
+                }
+            )
+            normalization.update(
+                {
+                    "resolved_gene": resolved_gene,
+                    "gene_resolution_status": gene_resolution_status,
+                    "gene_resolution_basis": gene_resolution_basis,
+                }
+            )
+        gene_resolution_conflict = bool(
+            transcript_genes
+            and resolved_gene
+            and all(
+                _normalize_text(candidate) != _normalize_text(resolved_gene)
+                for candidate in transcript_genes
+            )
+            and gene_resolution_status in {"matched", "resolved_alias"}
+        )
+        conflicts = (
+            any(
+                _identity_conflicts(left, right)
+                for index, (_, left) in enumerate(authoritative_rows)
+                for _, right in authoritative_rows[index + 1 :]
+            )
+            or any(
+                explicit_allele_conflict(identity, observed)
+                for _, observed in authoritative_rows
+            )
+            or gene_resolution_conflict
         )
 
         matching_component: set[int] = set()
@@ -3973,9 +4238,7 @@ class ACMGEvidencePipeline:
             )
             and has_variant_identity(observed)
         ]
-        positive_identities = [
-            observed for _, observed in authoritative_rows
-        ]
+        positive_identities = [observed for _, observed in authoritative_rows]
         requested_gene_key = _normalize_text(requested_gene)
         selected_transcript_key = _normalize_text(selected_transcript)
         target_binding_differences = [
@@ -4186,8 +4449,13 @@ class ACMGEvidencePipeline:
             normalization["protein_identity_status"] = "unresolved"
         identity["normalization"] = normalization
         if conflicts:
-            normalization["error"] = "provider_identity_conflict"
-            identity["identity_error"] = "provider_identity_conflict"
+            conflict_reason = (
+                "gene_transcript_identity_conflict"
+                if gene_resolution_conflict
+                else "provider_identity_conflict"
+            )
+            normalization["error"] = conflict_reason
+            identity["identity_error"] = conflict_reason
             identity["identity_conflict"] = True
         return calls, identity
 
@@ -4199,7 +4467,7 @@ class ACMGEvidencePipeline:
         myvariant_id = _myvariant_id_from_hgvs_g(
             str(identity.get("hgvs_g_grch37") or "")
         )
-        gene = str(arguments.get("gene") or identity.get("gene") or "")
+        gene = str(identity.get("gene") or arguments.get("gene") or "")
         build = str(identity.get("build") or "GRCh38")
         gnomad_dataset = "gnomad_r2_1" if build == "GRCh37" else "gnomad_r4"
         splice_genome = "37" if build == "GRCh37" else "38"
@@ -4240,11 +4508,6 @@ class ACMGEvidencePipeline:
                         "population",
                     ),
                     (
-                        "gnomad_get_variant_populations",
-                        {"variant_id": variant_id, "dataset": gnomad_dataset},
-                        "population",
-                    ),
-                    (
                         "gnomad_get_site_callability",
                         {
                             "chrom": str(coords["chr"]),
@@ -4255,6 +4518,14 @@ class ACMGEvidencePipeline:
                         "population",
                     ),
                 ]
+            )
+        if gene:
+            specs.append(
+                (
+                    "MARRVEL_get_omim_phenotypes",
+                    {"symbol": gene},
+                    "disease_context",
+                )
             )
         if isinstance(coords, dict) and all(
             str(coords.get(key) or "") for key in ("chr", "pos", "ref", "alt")
@@ -4625,13 +4896,14 @@ class ACMGEvidencePipeline:
         annotation = dict(diagnostics or {})
         observations = consequence_observations(identity, source_facts)
         resolution = resolve_consequence_observations(identity, observations)
+        resolution = apply_input_intronic_fallback(identity, observations, resolution)
         profile_features = profile_features_from_resolution(resolution)
         profile = build_consequence_profile(
             identity,
             profile_features,
             source_fact_ids=list(resolution.get("selected_source_fact_ids") or []),
         )
-        clean_observations = [
+        clean_observations = list(resolution.get("observations") or []) or [
             {key: value for key, value in row.items() if not key.startswith("_")}
             for row in observations
         ]
@@ -4829,7 +5101,7 @@ class ACMGEvidencePipeline:
         )
         mapping = self._select_protein_mapping(
             _features_for_call(mapping_call),
-            gene=str(arguments.get("gene") or identity.get("gene") or ""),
+            gene=str(identity.get("gene") or arguments.get("gene") or ""),
             profile=profile,
             protein_accession_hint=str(arguments.get("protein_accession") or ""),
         )
@@ -4947,7 +5219,6 @@ class ACMGEvidencePipeline:
                 call.tool_name
                 not in {
                     "gnomad_get_variant",
-                    "gnomad_get_variant_populations",
                     "EnsemblVEP_annotate_rsid",
                     "EnsemblVEP_annotate_hgvs",
                 }
@@ -4972,7 +5243,7 @@ class ACMGEvidencePipeline:
         harvested_rsid: str = "",
     ) -> tuple[list[SourceCall], str | None]:
         """Resolve ClinVar through ordered, identity-bound representations."""
-        gene = str(arguments.get("gene") or identity.get("gene") or "")
+        gene = str(identity.get("gene") or arguments.get("gene") or "")
         rsid = str(identity.get("rsid") or "") or harvested_rsid
         expected_c = str(
             identity.get("validated_hgvs_c")
@@ -5114,9 +5385,8 @@ class ACMGEvidencePipeline:
         retryable = [
             call
             for call in calls
-            if call.tool_name
-            in {"gnomad_get_variant", "gnomad_get_variant_populations"}
-            and call.status in {"failed", "unavailable", "no_hit"}
+            if call.tool_name == "gnomad_get_variant"
+            and call.status == "no_hit"
             and isinstance(call.arguments, dict)
         ]
         rsid = str(identity.get("rsid") or "")
@@ -5252,6 +5522,13 @@ class ACMGEvidencePipeline:
             elif call.tool_name.startswith("HPO_"):
                 features.setdefault("hpo_term", call_arguments.get("term_id"))
                 features.setdefault("query", call_arguments.get("query"))
+            elif call.tool_name == "MARRVEL_get_omim_phenotypes":
+                features.setdefault(
+                    "query_gene",
+                    call_arguments.get("symbol")
+                    or call_arguments.get("gene_symbol")
+                    or call_arguments.get("gene"),
+                )
             elif call.tool_name in {
                 "LitVar_search_variants",
                 "LitVar_get_variant_publications",
@@ -5322,14 +5599,12 @@ class ACMGEvidencePipeline:
                 expected_identity = {"coordinates": identity.get("coordinates")}
             if call.tool_name in {
                 "gnomad_get_variant",
-                "gnomad_get_variant_populations",
                 "gnomad_get_site_callability",
             } and isinstance(call.arguments, dict):
                 features.setdefault("dataset", call.arguments.get("dataset"))
-            if call.tool_name in {
-                "gnomad_get_variant",
-                "gnomad_get_variant_populations",
-            } and isinstance(call_arguments.get("_acmg_equivalence_validation"), dict):
+            if call.tool_name == "gnomad_get_variant" and isinstance(
+                call_arguments.get("_acmg_equivalence_validation"), dict
+            ):
                 retry_coordinates = _gnomad_variant_coordinates(
                     call_arguments.get("variant_id")
                 )
@@ -5343,6 +5618,26 @@ class ACMGEvidencePipeline:
                 features,
                 expected_identity,
             )
+            if (
+                call.tool_name == "gnomad_get_variant"
+                and call.status == "no_hit"
+                and isinstance(call.arguments, dict)
+            ):
+                no_hit_coordinates = _gnomad_variant_coordinates(
+                    call.arguments.get("variant_id")
+                )
+                if no_hit_coordinates:
+                    features["population_observation_status"] = "not_observed"
+                    features["attempted_representation"] = str(
+                        call.arguments.get("variant_id") or ""
+                    )
+                    features.setdefault("dataset", call.arguments.get("dataset"))
+                    observed_identity = {
+                        "coordinates": no_hit_coordinates,
+                        "build": identity.get("build") or "",
+                    }
+                    identity_verified = bool(observed_identity.get("build"))
+                    ready = True
             if not identity_verified and _identity_conflicts(
                 expected_identity, observed_identity
             ):
@@ -5423,6 +5718,13 @@ class ACMGEvidencePipeline:
                 source_status=(
                     "available"
                     if call.status == "success"
+                    or (
+                        call.status == "no_hit"
+                        and call.tool_name
+                        in {
+                            "gnomad_get_variant",
+                        }
+                    )
                     else "unavailable"
                     if call.status == "no_hit"
                     else "failed"
@@ -5608,7 +5910,7 @@ class ACMGEvidencePipeline:
             or arguments.get("variant")
             or ""
         )
-        expected_gene = str(arguments.get("gene") or identity.get("gene") or "")
+        expected_gene = str(identity.get("gene") or arguments.get("gene") or "")
         documents: dict[tuple[str, str], SourceCall] = {}
         for item in submitted:
             if not isinstance(item, dict):
@@ -6322,10 +6624,8 @@ class ACMGEvidencePipeline:
         observation: dict[str, Any] = {}
         source = ""
         source_fact: SourceFact | None = None
-        preferred_sources = (
-            "gnomad_get_variant_populations",
-            "gnomad_get_variant",
-        )
+        population_observation_status = "observed"
+        preferred_sources = ("gnomad_get_variant",)
         for tool_name in preferred_sources:
             for fact in source_facts.values():
                 if fact.tool_name != tool_name or not _fact_usable(fact):
@@ -6338,6 +6638,23 @@ class ACMGEvidencePipeline:
                     break
             if observation:
                 break
+        if not source_fact:
+            for tool_name in preferred_sources:
+                for fact in source_facts.values():
+                    if (
+                        fact.tool_name == tool_name
+                        and fact.status == "no_hit"
+                        and fact.features.get("population_observation_status")
+                        == "not_observed"
+                        and fact.identity_status == "matched"
+                    ):
+                        observation = fact.features
+                        source = tool_name
+                        source_fact = fact
+                        population_observation_status = "not_observed"
+                        break
+                if source_fact:
+                    break
         source_fact_ids = [source_fact.fact_id] if source_fact else []
         callability_metrics: dict[str, Any] = {}
         if source_fact:
@@ -6354,6 +6671,15 @@ class ACMGEvidencePipeline:
                     continue
                 locus = fact.result_identity.get("locus")
                 callsets = fact.features.get("callsets")
+                if not callset and isinstance(callsets, dict):
+                    callset = next(
+                        (
+                            name
+                            for name in ("genome", "exome")
+                            if isinstance(callsets.get(name), dict)
+                        ),
+                        "",
+                    )
                 if (
                     isinstance(locus, dict)
                     and locus.get("chr") == frequency_coordinates.get("chr")
@@ -6389,6 +6715,10 @@ class ACMGEvidencePipeline:
                 "gnomad_an": _integer(observation, "AN", "an"),
                 "coverage_adequate": None,
                 "callability_available": len(source_fact_ids) > 1,
+                "population_observation_status": population_observation_status,
+                "effective_af_for_rule": (
+                    0.0 if population_observation_status == "not_observed" else None
+                ),
                 "maximum_credible_af": maximum_credible_af,
                 "ba1_exception": (
                     ba1_contract.get("exception") is True
@@ -7121,7 +7451,7 @@ class ACMGEvidencePipeline:
             identity.get("validated_hgvs_c") or identity.get("hgvs_c") or ""
         )
         values["expected_gene"] = str(
-            arguments.get("gene") or identity.get("gene") or ""
+            identity.get("gene") or arguments.get("gene") or ""
         )
         return values
 
@@ -7150,7 +7480,7 @@ class ACMGEvidencePipeline:
             if _fact_usable(fact):
                 ready_by_category[category] = ready_by_category.get(category, 0) + 1
         has_coordinates = isinstance(identity.get("coordinates"), dict)
-        has_gene = bool(arguments.get("gene") or identity.get("gene"))
+        has_gene = bool(identity.get("gene") or arguments.get("gene"))
         is_missense = consequence_profile.get("protein_effect") == "missense"
         pm1_applicable = (
             consequence_applicability(
@@ -7172,7 +7502,7 @@ class ACMGEvidencePipeline:
             ],
             "population": (
                 [
-                    {"gnomad_get_variant", "gnomad_get_variant_populations"},
+                    {"gnomad_get_variant"},
                     {"gnomad_get_site_callability"},
                 ]
                 if has_coordinates
@@ -7200,6 +7530,7 @@ class ACMGEvidencePipeline:
                     {"ClinGen_get_dosage_sensitivity"},
                     {"ClinGen_get_actionability_adult"},
                     {"ClinGen_get_actionability_pediatric"},
+                    {"MARRVEL_get_omim_phenotypes"},
                 ]
                 if has_gene
                 else []
@@ -7247,14 +7578,28 @@ class ACMGEvidencePipeline:
                 if groups
                 else bool(selected) or not required
             )
-            source_available = (
-                all(
-                    any(
-                        fact.tool_name in alternatives and _fact_usable(fact)
+
+            def source_available_for(alternatives: set[str]) -> bool:
+                if any(
+                    fact.tool_name in alternatives and _fact_usable(fact)
+                    for fact in source_facts.values()
+                ):
+                    return True
+                return bool(
+                    category == "population"
+                    and alternatives == {"gnomad_get_variant"}
+                    and any(
+                        fact.tool_name in alternatives
+                        and fact.status == "no_hit"
+                        and fact.identity_status == "matched"
+                        and fact.features.get("population_observation_status")
+                        == "not_observed"
                         for fact in source_facts.values()
                     )
-                    for alternatives in groups
                 )
+
+            source_available = (
+                all(source_available_for(alternatives) for alternatives in groups)
                 if groups
                 else ready_by_category.get(category, 0) > 0
             )
@@ -7371,16 +7716,47 @@ class ACMGEvidencePipeline:
 
     @staticmethod
     def _source_assertions(
-        calls: list[SourceCall], supplied: Any
+        calls: list[SourceCall],
+        supplied: Any,
+        source_facts: dict[str, SourceFact] | None = None,
     ) -> list[dict[str, Any]]:
+        source_facts = source_facts or {}
         leads = []
         for call in calls:
             if call.category != "source_assertion" or call.status != "success":
                 continue
+            features = _features_for_call(call)
+            linked_facts = [
+                fact
+                for fact in source_facts.values()
+                if fact.tool_name == call.tool_name
+                and dict(fact.request_arguments) == dict(call.arguments or {})
+            ]
+            list_sizes = [
+                len(value) for value in features.values() if isinstance(value, list)
+            ]
+            variant_scoped = bool(
+                set(features)
+                & {
+                    "variation_id",
+                    "clinvar_variation_id",
+                    "caid",
+                    "rsid",
+                    "hgvs_c",
+                    "hgvs_g",
+                    "variant_id",
+                }
+            )
             leads.append(
                 {
                     "source_type": call.tool_name,
-                    "reviewable_features": _features_for_call(call),
+                    "source_fact_ids": [fact.fact_id for fact in linked_facts],
+                    "query_scope": "variant" if variant_scoped else "gene",
+                    "record_count": max(list_sizes, default=1 if features else 0),
+                    "identity_status": next(
+                        (fact.identity_status for fact in linked_facts), "unknown"
+                    ),
+                    "reviewable_features": features,
                     "quarantined_conclusions": _quarantined_conclusions(call.result),
                     "calculation_roles": {"automatic": False, "verified": False},
                     "notice": "Source assertion only; not automatically adopted as ACMG evidence.",
@@ -7743,6 +8119,8 @@ class ACMGEvidencePipeline:
                 evidence_status = "source_backed_candidate"
             elif "not_met" in row_evidence_statuses:
                 evidence_status = "not_met"
+            elif "not_applicable" in row_evidence_statuses:
+                evidence_status = "not_applicable"
             elif "excluded" in row_evidence_statuses:
                 evidence_status = "excluded"
             else:
@@ -7813,11 +8191,14 @@ class ACMGEvidencePipeline:
             missing = {
                 str(value)
                 for row in criterion_rows
-                for value in (
-                    row.get("observed_facts", {}).get("missing_requirements", [])
-                    if isinstance(row.get("observed_facts"), dict)
-                    else []
-                )
+                for value in [
+                    *(
+                        row.get("observed_facts", {}).get("missing_requirements", [])
+                        if isinstance(row.get("observed_facts"), dict)
+                        else []
+                    ),
+                    *(row.get("missing_requirements") or []),
+                ]
                 if value
             }
             if (
@@ -7831,8 +8212,19 @@ class ACMGEvidencePipeline:
                 }
                 and not missing
             ):
+                fallback_requirements = list(required)
+                if (
+                    criterion == "PVS1"
+                    and consequence_profile.get("annotation_status") == "resolved"
+                    and consequence_profile.get("selected_transcript_terms")
+                ):
+                    fallback_requirements = [
+                        value
+                        for value in fallback_requirements
+                        if value != "selected-transcript consequence"
+                    ]
                 missing.update(
-                    required
+                    fallback_requirements
                     or ["No deterministic structured fact contract was satisfied."]
                 )
             missing.update(f"context:{name}" for name in missing_context)
@@ -7857,7 +8249,10 @@ class ACMGEvidencePipeline:
             ]
             if evidence_status == "deprecated":
                 route_status = "deprecated"
-            elif applicability["status"] == "not_applicable":
+            elif (
+                applicability["status"] == "not_applicable"
+                or evidence_status == "not_applicable"
+            ):
                 route_status = "not_applicable"
             elif validated_proposals:
                 route_status = "proposal_validated"
@@ -7869,6 +8264,36 @@ class ACMGEvidencePipeline:
                 route_status = "candidate_available"
             else:
                 route_status = "insufficient_information"
+            spliceai_decision_context: dict[str, Any] = {}
+            if criterion in {"PP3", "BP4"}:
+                for row in criterion_rows:
+                    observed = row.get("observed_facts")
+                    observed = observed if isinstance(observed, dict) else {}
+                    scores = observed.get("spliceai_scores")
+                    if row.get("card_id") or not isinstance(scores, dict):
+                        continue
+                    spliceai_decision_context = {
+                        "selected_transcript_scores": {
+                            key: scores.get(key)
+                            for key in (
+                                "DS_AG",
+                                "DS_AL",
+                                "DS_DG",
+                                "DS_DL",
+                                "DP_AG",
+                                "DP_AL",
+                                "DP_DG",
+                                "DP_DL",
+                            )
+                            if scores.get(key) is not None
+                        },
+                        "selected_transcript_max_delta_score": observed.get(
+                            "spliceai_max_delta"
+                        ),
+                        "thresholds": dict(SPLICEAI_RULE.get("thresholds") or {}),
+                        "reason": row.get("reason"),
+                    }
+                    break
             reviews.append(
                 {
                     "criterion": criterion,
@@ -7879,7 +8304,11 @@ class ACMGEvidencePipeline:
                     "consequence_reason": applicability["reason"],
                     "evidence_status": evidence_status,
                     "route_status": route_status,
-                    "evidence_card_ids": [row.get("card_id") for row in criterion_rows],
+                    "evidence_card_ids": [
+                        row.get("card_id")
+                        for row in criterion_rows
+                        if row.get("card_id")
+                    ],
                     "candidate_source_fact_ids": candidate_source_fact_ids,
                     "pending_request_ids": sorted(
                         value for value in set(pending_request_ids) if value
@@ -7901,6 +8330,19 @@ class ACMGEvidencePipeline:
                         use_contract.get("required_context") or []
                     ),
                     "missing_requirements": sorted(missing),
+                    "decision_trace": list(
+                        dict.fromkeys(
+                            str(step)
+                            for row in criterion_rows
+                            for step in row.get("provenance_chain", [])
+                            if step
+                        )
+                    ),
+                    **(
+                        {"decision_context": spliceai_decision_context}
+                        if spliceai_decision_context
+                        else {}
+                    ),
                 }
             )
         return reviews
@@ -7941,9 +8383,18 @@ class ACMGEvidencePipeline:
         limitations = [limitation_code]
         variant_identity = {
             "input_variant": variant,
+            "submitted_variant": variant,
             "hgvs_c": (identity or {}).get("hgvs_c") or variant,
             "gene": (identity or {}).get("gene"),
+            "submitted_gene": (identity or {}).get("submitted_gene"),
+            "resolved_gene": (identity or {}).get("resolved_gene")
+            or (identity or {}).get("gene"),
+            "gene_resolution_status": (identity or {}).get("gene_resolution_status"),
+            "gene_resolution_basis": (identity or {}).get("gene_resolution_basis"),
             "transcript": (identity or {}).get("transcript"),
+            "submitted_hgvs_p": ((identity or {}).get("normalization") or {}).get(
+                "submitted_hgvs_p"
+            ),
             "normalization": (identity or {}).get("normalization", {}),
             "normalization_error": (identity or {}).get("identity_error"),
             "candidates": list(
@@ -8057,6 +8508,10 @@ class ACMGEvidencePipeline:
             variant_identity=variant_identity,
             runtime_manifest=runtime_manifest,
         )
+        omim_context = self._omim_context(
+            source_facts,
+            str((identity or {}).get("gene") or ""),
+        )
         return {
             "status": "not_applicable" if not_applicable else "error",
             "execution_status": "not_run" if not_applicable else "error",
@@ -8066,11 +8521,12 @@ class ACMGEvidencePipeline:
             "variant_identity": variant_identity,
             "variant_scope": dict(variant_scope or {}),
             "clinical_context": clinical_context,
+            "omim_context": omim_context,
             "response_detail": "full",
             "consequence_profile": consequence_profile,
             "coverage_summary": coverage,
             "source_facts": [fact.to_dict() for fact in source_facts.values()],
-            "source_assertions": self._source_assertions(calls, None),
+            "source_assertions": self._source_assertions(calls, None, source_facts),
             "prior_variant_candidates": [],
             "literature_candidates": literature_candidates,
             "literature_review": literature_review,
@@ -8214,7 +8670,7 @@ class ACMGEvidencePipeline:
             consequence_diagnostics,
         )
 
-        resolved_gene = str(arguments.get("gene") or identity.get("gene") or "")
+        resolved_gene = str(identity.get("gene") or arguments.get("gene") or "")
         cspec_call = (
             self._call("ClinGen_search_cspec", {"gene": resolved_gene}, "rule_context")
             if resolved_gene
@@ -8325,6 +8781,9 @@ class ACMGEvidencePipeline:
             consequence_diagnostics,
         )
         consequence_profile["protein_mapping"] = protein_mapping
+        omim_context = self._omim_context(source_facts, resolved_gene)
+        if isinstance(rule_context.get("disease_context"), dict):
+            rule_context["disease_context"]["omim_context"] = omim_context
         cspec_facts = self._facts_for_tool(source_facts, "ClinGen_search_cspec")
         rule_context["source_fact_ids"] = [fact.fact_id for fact in cspec_facts]
         rule_context["applicability_matching"] = (
@@ -8479,13 +8938,24 @@ class ACMGEvidencePipeline:
 
         variant_identity = {
             "input_variant": identity.get("input_variant") or variant,
-            "gene": arguments.get("gene") or identity.get("gene"),
+            "submitted_variant": identity.get("input_variant") or variant,
+            "gene": identity.get("gene") or arguments.get("gene"),
+            "submitted_gene": identity.get("submitted_gene") or arguments.get("gene"),
+            "resolved_gene": identity.get("resolved_gene") or identity.get("gene"),
+            "gene_resolution_status": identity.get("gene_resolution_status"),
+            "gene_resolution_basis": identity.get("gene_resolution_basis"),
             "transcript": arguments.get("transcript") or identity.get("transcript"),
             "hgvs_c": identity.get("validated_hgvs_c")
             or identity.get("hgvs_c")
             or variant,
             "hgvs_g": identity.get("hgvs_g"),
             "hgvs_p": identity.get("hgvs_p"),
+            "submitted_hgvs_p": (identity.get("normalization") or {}).get(
+                "submitted_hgvs_p"
+            ),
+            "normalized_query_representation": (
+                identity.get("normalization") or {}
+            ).get("provider_query_variant"),
             "rsid": identity.get("rsid"),
             "consequence": arguments.get("consequence") or identity.get("consequence"),
             "coordinates": identity.get("coordinates"),
@@ -8519,6 +8989,23 @@ class ACMGEvidencePipeline:
         evidence_rows = aggregate_evidence_cards(
             list({row["card_id"]: row for row in serialized["evidence_cards"]}.values())
         )
+        criterion_review_rows = [
+            {
+                "criterion": card.criterion,
+                "evidence_status": (
+                    card.strength
+                    if card.strength in {"not_applicable", "deprecated"}
+                    else "no_information"
+                ),
+                "observed_facts": dict(card.observed_facts),
+                "missing_requirements": list(card.missing_requirements),
+                "caveats": list(card.caveats),
+                "reason": next(iter(card.provenance_chain), ""),
+                "provenance_chain": list(card.provenance_chain),
+            }
+            for card in cards
+            if not is_substantive_evidence_card(card)
+        ]
         variant_identity["consequence"] = list(
             consequence_profile.get("selected_transcript_terms") or []
         )
@@ -8631,11 +9118,12 @@ class ACMGEvidencePipeline:
             for row in evidence_rows
             if str(row.get("card_id") or "") in default_card_ids
         ]
-        compatibility = resolve_evidence_compatibility(
-            default_rows,
-            known_source_fact_ids=known_source_fact_ids,
-            eligibility="automatic",
-            calculation_role="automatic",
+        compatibility, verified_compatibility = (
+            resolve_automatic_and_verified_compatibility(
+                default_rows,
+                known_source_fact_ids=known_source_fact_ids,
+                verified_source_fact_ids=verified_source_fact_ids,
+            )
         )
         compatible_ids = {
             str(row.get("card_id") or "")
@@ -8672,12 +9160,6 @@ class ACMGEvidencePipeline:
             for row in compatibility["excluded_evidence"]
             if row.get("card_id")
         ]
-        verified_compatibility = resolve_evidence_compatibility(
-            default_rows,
-            verified_source_fact_ids=verified_source_fact_ids,
-            eligibility="verified",
-            calculation_role="verified",
-        )
         verified_ids = {
             str(row.get("card_id") or "")
             for row in verified_compatibility["compatible_evidence"]
@@ -8786,7 +9268,7 @@ class ACMGEvidencePipeline:
             and row.get("recovery_status") != "exhausted"
             and row.get("code")
             in {
-                "selected_transcript_missing",
+                "selected_transcript_annotation_missing",
                 "exon_structure_missing",
                 "nmd_facts_missing",
                 "protein_context_missing",
@@ -8802,7 +9284,7 @@ class ACMGEvidencePipeline:
             workflow_status = "evidence_ready"
         literature_review["workflow_status"] = workflow_status
         criterion_reviews = self._criterion_reviews(
-            evidence_rows,
+            [*evidence_rows, *criterion_review_rows],
             consequence_profile,
             rule_context,
             source_facts,
@@ -8840,6 +9322,7 @@ class ACMGEvidencePipeline:
             "variant_identity": variant_identity,
             "variant_scope": variant_scope,
             "clinical_context": clinical_context,
+            "omim_context": omim_context,
             "response_detail": "full",
             "consequence_profile": consequence_profile,
             "rule_context": rule_context,
@@ -8851,7 +9334,9 @@ class ACMGEvidencePipeline:
             "coverage_summary": coverage,
             "source_facts": [fact.to_dict() for fact in source_facts.values()],
             "source_assertions": self._source_assertions(
-                source_calls, arguments.get("source_outputs_or_leads")
+                source_calls,
+                arguments.get("source_outputs_or_leads"),
+                source_facts,
             ),
             "prior_variant_candidates": prior_variant_candidates,
             "literature_candidates": literature_candidates,

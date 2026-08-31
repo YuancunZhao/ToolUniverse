@@ -7,6 +7,7 @@ without changing individual tool return formats.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Mapping, Optional, Sequence, Union
 import time
 import random
@@ -38,6 +39,8 @@ def request_with_retry(
     max_attempts: int = 3,
     backoff_seconds: float = 0.5,
     max_retry_after_seconds: float = 30.0,
+    retry_response: Callable[[requests.Response], bool] | None = None,
+    attempt_trace: list[dict[str, Any]] | None = None,
 ) -> requests.Response:
     """
     Make an HTTP request with small exponential backoff on transient failures.
@@ -57,21 +60,44 @@ def request_with_retry(
     attempts = max(1, int(max_attempts))
     retry_status_set = set(retry_statuses)
     last_exc: Optional[BaseException] = None
+    method_request = getattr(session, m.casefold(), None)
 
     for attempt in range(attempts):
         try:
-            resp = session.request(
-                m,
-                url,
-                params=params,
-                headers=headers,
-                json=json,
-                data=data,
-                timeout=timeout,
+            resp = (
+                method_request(
+                    url,
+                    params=params,
+                    headers=headers,
+                    json=json,
+                    data=data,
+                    timeout=timeout,
+                )
+                if callable(method_request)
+                else session.request(
+                    m,
+                    url,
+                    params=params,
+                    headers=headers,
+                    json=json,
+                    data=data,
+                    timeout=timeout,
+                )
             )
 
-            if resp.status_code in retry_status_set and attempt < attempts - 1:
-                retry_after_header = resp.headers.get("Retry-After")
+            retryable_response = resp.status_code in retry_status_set or bool(
+                retry_response and retry_response(resp)
+            )
+            if attempt_trace is not None:
+                attempt_trace.append(
+                    {
+                        "attempt": attempt + 1,
+                        "status_code": resp.status_code,
+                        "retryable": retryable_response,
+                    }
+                )
+            if retryable_response and attempt < attempts - 1:
+                retry_after_header = getattr(resp, "headers", {}).get("Retry-After")
                 if retry_after_header:
                     try:
                         sleep_s = max(0.0, float(retry_after_header))
@@ -94,6 +120,14 @@ def request_with_retry(
 
         except requests.exceptions.RequestException as e:
             last_exc = e
+            if attempt_trace is not None:
+                attempt_trace.append(
+                    {
+                        "attempt": attempt + 1,
+                        "error": type(e).__name__,
+                        "retryable": True,
+                    }
+                )
             if attempt < attempts - 1:
                 _jittered_sleep(backoff_seconds, attempt)
                 continue

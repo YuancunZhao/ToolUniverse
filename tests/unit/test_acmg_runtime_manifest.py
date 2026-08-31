@@ -120,8 +120,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-automation-4"
-    assert manifest["collector_schema_version"] == "2026-08-21-v4"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-4.2"
+    assert manifest["collector_schema_version"] == "2026-08-25-v4.2"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {

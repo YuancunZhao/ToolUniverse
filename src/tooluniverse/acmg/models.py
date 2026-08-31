@@ -57,8 +57,11 @@ HARD_EXCLUSION_DIMENSIONS = {
     "disease_match_status": {"mismatch"},
     "independence_status": {"overlapping"},
 }
-AUTOMATIC_EVIDENCE_POLICY_VERSION = "2026-08-08-v3"
-VERIFIED_EVIDENCE_POLICY_VERSION = "2026-08-08-v3"
+AUTOMATIC_EVIDENCE_POLICY_VERSION = "2026-08-25-v4.2"
+VERIFIED_EVIDENCE_POLICY_VERSION = "2026-08-25-v4.2"
+NON_EVIDENCE_STRENGTHS = frozenset(
+    {"", "not_assessed", "not_applicable", "indeterminate", "deprecated"}
+)
 
 
 @dataclass
@@ -385,6 +388,29 @@ def _stable_card_id(card: EvidenceCard, evidence_status: str) -> str:
     return f"acmg-card:v4:{digest}"
 
 
+def is_substantive_evidence_card(card: EvidenceCard | dict[str, Any]) -> bool:
+    """Return whether a row represents an actual evidence result, not a placeholder."""
+    if isinstance(card, EvidenceCard):
+        strength = card.strength
+        explicit_exclusion = bool(
+            card.evidence_status == "excluded"
+            and card.exclusion_reason
+            and card.source_fact_ids
+        )
+    elif isinstance(card, dict):
+        strength = str(card.get("strength") or "")
+        explicit_exclusion = bool(
+            card.get("evidence_status") == "excluded"
+            and card.get("exclusion_reason")
+            and card.get("source_fact_ids")
+        )
+    else:
+        return False
+    if explicit_exclusion:
+        return True
+    return strength not in NON_EVIDENCE_STRENGTHS
+
+
 def evidence_cards_to_result(
     cards: list[EvidenceCard],
     *,
@@ -397,6 +423,8 @@ def evidence_cards_to_result(
     known = known_source_fact_ids or set()
     verified = verified_source_fact_ids or set()
     for card in cards:
+        if not is_substantive_evidence_card(card):
+            continue
         if variant_identity and not card.variant_identity:
             card.variant_identity = dict(variant_identity)
         rule = (
@@ -432,7 +460,7 @@ def evidence_cards_to_result(
         if (
             not evidence_status
             and not strength_supported
-            and card.strength not in {"not_met", "not_applicable", "deprecated"}
+            and card.strength != "not_met"
         ):
             # Criteria without a substantive result are represented only in
             # criterion_reviews; pure v3 does not serialize placeholder cards.
@@ -522,5 +550,6 @@ __all__ = [
     "fact_is_available",
     "fact_is_strictly_verified",
     "is_automatic_evidence",
+    "is_substantive_evidence_card",
     "is_verified_evidence",
 ]

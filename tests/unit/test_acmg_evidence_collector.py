@@ -17,6 +17,7 @@ from tooluniverse.acmg_runtime_tools import (
 from tooluniverse.acmg.collector import (
     ACMGEvidencePipeline,
     SourceCall,
+    _compact_result,
     _literature_candidate_index,
     _literature_review_state,
 )
@@ -781,7 +782,9 @@ def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
 
     assert len(result["literature_candidates"]) == 101
     assert result["literature_candidate_defaults"] == {
-        "source": "PubMed_search_articles"
+        "source": "PubMed_search_articles",
+        "match_class": "gene_disease_background",
+        "full_text_status": "abstract_only",
     }
     assert all("source" not in row for row in result["literature_candidates"])
     assert sum(card["criterion"] == "PS4" for card in result["evidence_cards"]) <= 1
@@ -822,6 +825,182 @@ def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
     public_calls = {call["name"] for call, _kwargs in runtime.calls}
     assert not public_calls.intersection(
         {"list_tools", "get_tool_info", "Bash", "write_file"}
+    )
+
+
+class _RTELToolUniverse:
+    def __init__(self, hgvs_c: str, hgvs_p: str = ""):
+        self.calls = []
+        self.hgvs_c = hgvs_c
+        self.hgvs_p = hgvs_p
+
+    def run_one_function(self, call, **kwargs):
+        self.calls.append((call, kwargs))
+        name = call["name"]
+        if name == "HGNC_fetch_gene_by_symbol":
+            submitted = call["arguments"]["symbol"]
+            return {
+                "status": "success",
+                "data": {"symbol": "RTEL1", "prev_symbol": ["RTEL"]},
+                "metadata": {
+                    "resolution_relation": (
+                        "prev_symbol" if submitted == "RTEL" else "approved_symbol"
+                    )
+                },
+            }
+        if name == "VariantValidator_gene2transcripts":
+            return {
+                "status": "success",
+                "data": [
+                    {
+                        "current_symbol": "RTEL1",
+                        "transcripts": [
+                            {
+                                "reference": "NM_001283009.2",
+                                "annotations": {"mane_select": True},
+                            }
+                        ],
+                    }
+                ],
+            }
+        if name == "VariantValidator_validate_variant":
+            return {
+                "status": "success",
+                "reviewable_features": {
+                    "validated_hgvs_c": self.hgvs_c,
+                    "hgvs_c": self.hgvs_c,
+                    "hgvs_g": "NC_000020.11:g.63700000G>A",
+                    "chr": "20",
+                    "pos": 63700000,
+                    "ref": "G",
+                    "alt": "A",
+                    "build": "GRCh38",
+                    "gene": "RTEL1",
+                    "transcript": "NM_001283009.2",
+                    "hgvs_p": self.hgvs_p,
+                    "provider_version": "VariantValidator fixture",
+                },
+            }
+        if name == "EnsemblVEP_variant_recoder":
+            return {
+                "status": "success",
+                "reviewable_features": {
+                    "chr": "20",
+                    "pos": 63700000,
+                    "ref": "G",
+                    "alt": "A",
+                    "hgvs_c": self.hgvs_c,
+                    "hgvs_g": "NC_000020.11:g.63700000G>A",
+                    "gene": "RTEL1",
+                    "transcript": "NM_001283009.2",
+                    "provider_version": "Ensembl Variant Recoder fixture",
+                },
+            }
+        if name == "EnsemblVEP_annotate_hgvs" and self.hgvs_p:
+            return {
+                "status": "success",
+                "reviewable_features": {
+                    "chr": "20",
+                    "pos": 63700000,
+                    "ref": "G",
+                    "alt": "A",
+                    "build": "GRCh38",
+                    "vep_transcript_candidates": [
+                        {
+                            "gene": "RTEL1",
+                            "transcript": "NM_001283009.2",
+                            "mane_select": "NM_001283009.2",
+                            "hgvsc": self.hgvs_c,
+                            "hgvsp": self.hgvs_p,
+                            "consequence": ["missense_variant"],
+                        }
+                    ],
+                    "provider_version": "Ensembl VEP fixture",
+                },
+            }
+        if name == "PubMed_search_articles":
+            return {
+                "status": "success",
+                "data": [{"pmid": str(8_000_000 + index)} for index in range(155)],
+                "metadata": {"total": 155, "source": "PubMed fixture"},
+            }
+        if name == "LitVar_search_variants":
+            return {
+                "status": "success",
+                "data": {
+                    "articles": [
+                        {"pmid": str(9_000_000 + index)} for index in range(50)
+                    ]
+                },
+                "metadata": {"total": 50},
+            }
+        if name == "gnomad_get_variant":
+            return {"status": "no_hit", "data": None}
+        if name == "gnomad_get_site_callability":
+            return {"status": "unavailable", "reason": "fixture unavailable"}
+        return {"status": "unavailable", "reason": "fixture has no result"}
+
+
+def test_rtel_alias_and_deep_intronic_input_remain_visible_without_overreach():
+    runtime = _RTELToolUniverse("NM_001283009.2:c.2852-68G>A")
+    result = _make_tool(runtime).run(
+        {
+            "variant": "RTEL;NM_001283009.2:c.2852-68G>A",
+            "gene": "RTEL",
+            "transcript": "NM_001283009.2",
+        }
+    )
+
+    identity = result["variant_identity"]
+    assert identity["submitted_variant"] == "RTEL;NM_001283009.2:c.2852-68G>A"
+    assert identity["submitted_gene"] == "RTEL"
+    assert identity["resolved_gene"] == "RTEL1"
+    assert identity["gene_resolution_status"] == "resolved_alias"
+    assert result["consequence_profile"]["selected_transcript_terms"] == [
+        "intron_variant"
+    ]
+    assert result["consequence_profile"]["automatic_usable"] is True
+    assert result["consequence_profile"]["verified_usable"] is False
+    assert not {"PP3", "PVS1"}.intersection(_automatic_criteria(result))
+    assert len(result["literature_candidates"]) == 205
+    assert (
+        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
+        < 40_000
+    )
+
+
+def test_rtel_protein_suffix_and_heterozygous_context_are_preserved():
+    runtime = _RTELToolUniverse(
+        "NM_001283009.2:c.3718G>C", "NP_001269938.1:p.Ala1240Pro"
+    )
+    submitted = "RTEL1;NM_001283009.2:c.3718G>C(p.Ala1240Pro)"
+    result = _make_tool(runtime).run(
+        {
+            "variant": submitted,
+            "gene": "RTEL1",
+            "transcript": "NM_001283009.2",
+            "clinical_context": {"zygosity": "heterozygous"},
+        }
+    )
+
+    identity = result["variant_identity"]
+    assert identity["submitted_variant"] == submitted
+    assert identity["submitted_hgvs_p"] == "p.Ala1240Pro"
+    assert identity["hgvs_p"].endswith("p.Ala1240Pro")
+    assert result["clinical_context"]["values"]["zygosity"] == "heterozygous"
+    queried = [
+        call["arguments"].get("variant_description")
+        for call, _kwargs in runtime.calls
+        if call["name"] == "VariantValidator_validate_variant"
+    ]
+    assert queried == ["NM_001283009.2:c.3718G>C"]
+    assert len(result["literature_candidates"]) == 205
+    assert (
+        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
+        < 40_000
+    )
+    assert (
+        len(json.dumps(result["guard_context"], separators=(",", ":")).encode()) < 5_000
     )
 
 
@@ -1229,6 +1408,7 @@ def test_collector_fails_closed_when_identity_cannot_be_normalized():
         item if isinstance(item, str) else item[0]["name"] for item in runtime.calls
     }
     assert called_names == {
+        "HGNC_fetch_gene_by_symbol",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",
         "EnsemblVEP_annotate_hgvs",
@@ -1250,7 +1430,11 @@ def test_gene_coding_shorthand_uses_variantvalidator_mane_resolution():
         "NM_000059.4"
     )
     assert isinstance(result["variant_identity"]["excluded_candidates"], list)
-    names = [call[0]["name"] for call in runtime.calls]
+    names = [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ]
     assert names[:3] == [
         "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
@@ -1275,7 +1459,11 @@ def test_gene_transcript_coding_input_is_validated_directly():
     assert result["status"] == "degraded"
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
     assert result["variant"]["normalization"]["input_kind"] == ("gene_transcript_hgvs")
-    assert [call[0]["name"] for call in runtime.calls][:3] == [
+    assert [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ][:3] == [
         "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",
@@ -1290,7 +1478,11 @@ def test_gene_protein_input_uses_vep_then_mane_projection():
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
     assert result["variant"]["normalization"]["input_kind"] == ("gene_protein_hgvs")
     assert result["variant"]["normalization"]["formatter_candidates"]
-    assert [call[0]["name"] for call in runtime.calls][:4] == [
+    assert [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ][:4] == [
         "EnsemblVEP_variant_recoder",
         "VariantValidator_format_genomic_to_transcripts",
         "VariantValidator_validate_variant",
@@ -1310,13 +1502,22 @@ def test_genomic_input_uses_variantformatter_mane_projection():
     assert result["variant"]["normalization"]["transcript_source"] == (
         "VariantValidator_format_genomic_to_transcripts"
     )
-    names = [call[0]["name"] for call in runtime.calls]
+    names = [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ]
     assert names[:3] == [
         "VariantValidator_format_genomic_to_transcripts",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",
     ]
-    assert runtime.calls[0][0]["arguments"]["variant_description"] == (
+    formatter_call = next(
+        call
+        for call, _kwargs in runtime.calls
+        if call["name"] == "VariantValidator_format_genomic_to_transcripts"
+    )
+    assert formatter_call["arguments"]["variant_description"] == (
         "NC_000013.11:g.32316461T>A"
     )
 
@@ -1333,9 +1534,12 @@ def test_compact_genomic_input_is_adapted_for_variantformatter():
 
     assert result["status"] == "degraded"
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
-    assert runtime.calls[0][0]["arguments"]["variant_description"] == (
-        "13-32316461-T-A"
+    formatter_call = next(
+        call
+        for call, _kwargs in runtime.calls
+        if call["name"] == "VariantValidator_format_genomic_to_transcripts"
     )
+    assert formatter_call["arguments"]["variant_description"] == ("13-32316461-T-A")
 
 
 def test_rsid_is_recoded_before_variant_validation():
@@ -1344,7 +1548,11 @@ def test_rsid_is_recoded_before_variant_validation():
 
     assert result["status"] == "degraded"
     assert result["variant"]["hgvs_c"] == "NM_000059.4:c.5946delT"
-    names = [call[0]["name"] for call in runtime.calls]
+    names = [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ]
     # NCBI refsnp is tried first; the fixture has no result for it, so the
     # Ensembl recoder fallback resolves the rsID as before.
     assert names[:4] == [
@@ -1498,6 +1706,7 @@ def test_multi_allele_rsid_fails_closed_with_alternatives_and_no_downstream_call
     called = {call[0]["name"] for call in runtime.calls}
     assert not (called & evidence_source_tools)
     assert called <= {
+        "HGNC_fetch_gene_by_symbol",
         "NCBIVariation_rsid_lookup",
         "EnsemblVEP_variant_recoder",
         "VariantValidator_gene2transcripts",
@@ -1516,7 +1725,8 @@ def test_missing_mane_transcript_stops_before_evidence_sources():
     assert result["evidence_cards"] == []
     assert _automatic_criteria(result) == set()
     assert [call[0]["name"] for call in runtime.calls] == [
-        "VariantValidator_gene2transcripts"
+        "HGNC_fetch_gene_by_symbol",
+        "VariantValidator_gene2transcripts",
     ]
 
 
@@ -1534,7 +1744,11 @@ def test_provider_gene_mismatch_is_a_nonblocking_target_binding_difference():
         row["gene_match_status"] == "alternate_annotation" for row in differences
     )
     assert _automatic_criteria(result) == set()
-    assert [call[0]["name"] for call in runtime.calls][:3] == [
+    assert [
+        call[0]["name"]
+        for call in runtime.calls
+        if call[0]["name"] != "HGNC_fetch_gene_by_symbol"
+    ][:3] == [
         "VariantValidator_gene2transcripts",
         "VariantValidator_validate_variant",
         "EnsemblVEP_variant_recoder",
@@ -1554,7 +1768,7 @@ def test_conflicting_explicit_transcript_blocks_identity_verification():
     assert result["status"] == "error"
     assert result["error"] == "variant_identity_unverified"
     assert result["variant"]["normalization_error"] == "transcript_identity_mismatch"
-    assert [call[0]["name"] for call in runtime.calls] == []
+    assert [call[0]["name"] for call in runtime.calls] == ["HGNC_fetch_gene_by_symbol"]
 
 
 def test_gene_only_provider_output_cannot_verify_variant_identity():
@@ -1682,6 +1896,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "variant_identity",
         "variant_scope",
         "clinical_context",
+        "omim_context",
         "response_detail",
         "consequence_profile",
         "rule_context",
@@ -2163,7 +2378,7 @@ def test_consequence_empty_transcript_result_falls_back_to_genomic_hgvs():
     assert diagnostics["attempted_representations"][0]["outcome"] == ("queried")
 
 
-def test_consequence_all_representations_empty_reports_exact_limitation():
+def test_deep_intronic_input_is_visible_when_all_providers_are_empty():
     runtime = _ConsequenceFallbackToolUniverse(["empty", "empty", "empty"])
     pipeline = ACMGEvidencePipeline(runtime)
     identity = _consequence_identity()
@@ -2183,10 +2398,14 @@ def test_consequence_all_representations_empty_reports_exact_limitation():
         "favor_grch38",
         "opentargets_transcripts",
     } <= representations
-    assert profile["status"] == "unavailable"
-    assert profile["annotation_status"] == "unavailable"
+    assert profile["status"] == "resolved"
+    assert profile["annotation_status"] == "resolved"
+    assert profile["selected_transcript_terms"] == ["intron_variant"]
+    assert profile["automatic_usable"] is True
+    assert profile["verified_usable"] is False
+    assert profile["selected_source_fact_ids"] == []
     assert profile["annotation_reason"] == (
-        "no_identity_bound_selected_transcript_consequence"
+        "selected_transcript_intronic_hgvs_input_observation"
     )
 
 
@@ -2414,6 +2633,33 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
         "observed_facts" not in review and "required_facts" not in review
         for review in result["criterion_reviews"]
     )
+
+
+def test_summary_keeps_gene_level_assertion_count_without_large_record_list():
+    records = [{"gene": f"GENE{index}"} for index in range(4_914)]
+    result = _compact_result(
+        {
+            "final_classification_allowed": False,
+            "source_assertions": [
+                {
+                    "source_type": "clingen_variant_classifications",
+                    "query_scope": "gene",
+                    "record_count": len(records),
+                    "reviewable_features": {"records": records},
+                }
+            ],
+        }
+    )
+
+    assert result["source_assertions"] == [
+        {
+            "source_type": "clingen_variant_classifications",
+            "query_scope": "gene",
+            "record_count": 4_914,
+            "complete_assertion_in": "full response source_assertions",
+        }
+    ]
+    assert "GENE4913" not in json.dumps(result)
 
 
 def test_full_mode_preserves_complete_payloads():
@@ -3259,6 +3505,7 @@ def test_collector_source_specs_use_registered_provider_contracts():
         "ClinGen_get_actionability_adult",
         "ClinGen_get_actionability_pediatric",
         "ClinGen_get_variant_classifications",
+        "MARRVEL_get_omim_phenotypes",
         "LitVar_search_variants",
         "LitVar_get_variant_publications",
         "PubMed_search_articles",
@@ -3461,7 +3708,7 @@ class _GnomadRetryToolUniverse:
                     }
                 },
             }
-        if name in {"gnomad_get_variant", "gnomad_get_variant_populations"}:
+        if name == "gnomad_get_variant":
             return {
                 "status": "success",
                 "variant_id": "17-4934364-AA-AC",
@@ -3484,8 +3731,8 @@ def test_gnomad_representation_retry_requires_unique_hgvs_equivalence():
         SourceCall(
             "gnomad_get_variant",
             "population",
-            "failed",
-            error="representation not found",
+            "no_hit",
+            result={"status": "no_hit", "data": None},
             arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
         )
     ]
@@ -3507,12 +3754,35 @@ def test_gnomad_representation_retry_requires_unique_hgvs_equivalence():
     assert retry_fact.failure_details == {}
 
 
+def test_gnomad_transport_failure_does_not_trigger_representation_search():
+    identity = {
+        "build": "GRCh38",
+        "coordinates": {"chr": "17", "pos": 4934365, "ref": "A", "alt": "C"},
+    }
+    initial = [
+        SourceCall(
+            "gnomad_get_variant",
+            "population",
+            "failed",
+            error="timeout",
+            arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
+        )
+    ]
+
+    assert (
+        ACMGEvidencePipeline(
+            _GnomadRetryToolUniverse()
+        )._gnomad_representation_retry_calls(initial, identity)
+        == []
+    )
+
+
 def test_gnomad_failure_details_distinguish_transport_and_malformed_contract():
     identity = {
         "build": "GRCh38",
         "coordinates": {"chr": "17", "pos": 4934365, "ref": "A", "alt": "C"},
     }
-    calls = [
+    failed = [
         SourceCall(
             "gnomad_get_variant",
             "population",
@@ -3520,24 +3790,27 @@ def test_gnomad_failure_details_distinguish_transport_and_malformed_contract():
             error="timeout",
             arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
         ),
+    ]
+    malformed = [
         SourceCall(
-            "gnomad_get_variant_populations",
+            "gnomad_get_variant",
             "population",
             "success",
             result={"status": "success", "unexpected": []},
             arguments={"variant_id": "17-4934365-A-C", "dataset": "gnomad_r4"},
         ),
     ]
-    facts = ACMGEvidencePipeline._source_facts(calls, identity)
-    codes = {
-        fact.tool_name: fact.failure_details.get("failure_code")
-        for fact in facts.values()
-    }
+    failed_fact = next(
+        iter(ACMGEvidencePipeline._source_facts(failed, identity).values())
+    )
+    malformed_fact = next(
+        iter(ACMGEvidencePipeline._source_facts(malformed, identity).values())
+    )
 
-    assert codes == {
-        "gnomad_get_variant": "provider_failed",
-        "gnomad_get_variant_populations": "provider_contract_malformed",
-    }
+    assert failed_fact.failure_details["failure_code"] == "provider_failed"
+    assert malformed_fact.failure_details["failure_code"] == (
+        "provider_contract_malformed"
+    )
 
 
 class _PVS1ToolUniverse(_FakeToolUniverse):
@@ -3920,9 +4193,12 @@ def test_pvs1_exon_lof_frequent_gate_via_ensembl_and_gnomad():
     names = [call[0]["name"] for call in runtime.calls]
     assert "ensembl_lookup_gene" in names
     assert "gnomad_get_region_variants" in names
-    pvs1 = next(row for row in result["evidence_cards"] if row["criterion"] == "PVS1")
-    assert pvs1["strength"] == "not_applicable"
-    assert pvs1["calculation_roles"]["automatic"] is False
+    assert not any(row["criterion"] == "PVS1" for row in result["evidence_cards"])
+    pvs1 = next(
+        row for row in result["criterion_reviews"] if row["criterion"] == "PVS1"
+    )
+    assert pvs1["evidence_status"] == "not_applicable"
+    assert pvs1["route_status"] == "not_applicable"
     assert any(
-        "frequent" in step and "gnomAD" in step for step in pvs1["provenance_chain"]
+        "frequent" in step and "gnomAD" in step for step in pvs1["decision_trace"]
     )

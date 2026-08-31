@@ -14,6 +14,9 @@ genomic coordinate.
 
 ## Normal path: exactly two tool calls
 
+This Skill is already-loaded execution guidance, not a capability to invoke.
+Do not call `skill:...` or rediscover either ACMG tool.
+
 1. Call the known `ACMG_evidence_collector` directly with the supplied variant
    context and `response_detail="summary"`.
 2. If `workflow_status` reports an identity/scope block, report that correction
@@ -29,6 +32,22 @@ Python commands, write temporary files, inspect site-packages, directly import
 the Guard, or repeat provider calls already performed by the collector. The
 collector handles consequence fallbacks, literature retrieval and extraction,
 VCEP/CSpec discovery, deduplication, conflict checks, and scoring internally.
+For multiple variants, repeat the same two calls independently for each
+variant; do not combine their cards or Guard contexts.
+
+Call the compact MCP surface with this exact shape:
+
+```json
+{"tool_name":"ACMG_evidence_collector","arguments":{"variant":"<original user string>","gene":"<submitted gene if any>","clinical_context":{"zygosity":"<if supplied>"},"response_detail":"summary"}}
+```
+
+Preserve the original `gene;NM_:c.(p.)` string in `variant`. Put a supplied
+heterozygous/homozygous state in `clinical_context.zygosity`; do not strip it or
+silently rewrite the submitted gene. Then pass the returned context unchanged:
+
+```json
+{"tool_name":"ACMG_guard_final_answer","arguments":{"final_answer_text":"<draft evidence-only answer>","guard_context":{"<exact collector guard_context>":"..."}}}
+```
 
 Optional `literature_proposals` and `cspec_proposals` are supplemental
 reproducibility inputs, not normal completion requirements. Optional
@@ -98,5 +117,5 @@ expert assertion, never as ToolUniverse's own conclusion.
   criterion claims and ToolUniverse-authored five-tier labels, while allowing
   clearly attributed VCEP/ClinVar assertions.
 
-See [QUICK_START.md](QUICK_START.md) for the exact compact-MCP and Reasonix call
-shapes.
+[QUICK_START.md](QUICK_START.md) contains the same two calls for copy/paste, but
+reading it is not a prerequisite for a normal evaluation.

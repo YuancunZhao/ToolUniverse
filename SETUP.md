@@ -35,7 +35,7 @@ exact-Git-SHA installation smoke test.
 The branch documentation below describes the validated v4 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
-The working branch may describe newer `1.4.1+acmg.6` interfaces before a new
+The working branch may describe newer `1.4.1+acmg.8` interfaces before a new
 validated SHA is published; the pinned commit above remains the install target
 until the full exact-SHA gate is repeated.
 
@@ -146,8 +146,10 @@ package must expose exactly these eight ACMG-specific tools:
 - `ACMG_functional_evidence`
 - `ACMG_literature_evidence`
 - `ACMG_guard_final_answer`
+- `ACMG_overlay_gate_assess_variant` (thin collector alias)
 
-`ACMG_evidence_collector` is the single full-pipeline entry point.
+`ACMG_evidence_collector` is the canonical full-pipeline entry point; the alias
+uses the same implementation and input/output schemas.
 
 ## Current collector interface
 
@@ -213,6 +215,12 @@ using the returned `guard_context` unchanged. It requires no capability
 listing, `get_tool_info`, shell/Python parsing, temporary files, source imports,
 or file-write permissions. See the installed classification Skill's
 `QUICK_START.md` for native compact-MCP and Reasonix call shapes.
+
+Pass the user's original `GENE;NM_:c.(p.)` string as `variant`. Do not silently
+replace an alias or remove the protein suffix; the result reports submitted and
+resolved identities separately. Put a supplied heterozygous/homozygous state
+in `clinical_context.zygosity`. For multiple variants, repeat the same two
+calls independently for each variant.
 
 ### 1. Initial collection
 
@@ -378,7 +386,7 @@ uvx --refresh --from \
 After restarting the client:
 
 1. Find `ACMG_evidence_collector`.
-2. Confirm all seven ACMG tools are registered.
+2. Confirm all eight ACMG tools are registered.
 3. Inspect `ACMG_evidence_collector` and its parameter and return schema.
 4. Confirm the removed inputs and outputs listed above are absent.
 5. Execute the harmless summary request shown earlier.
@@ -400,7 +408,7 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.1+acmg.6 \
+  --expected-version 1.4.1+acmg.8 \
   --online-providers
 ```
 
@@ -408,8 +416,8 @@ This gate retries CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and the
 live BRCA2 collector once. It validates stable identity and response structure,
 records URLs, elapsed time, and errors, and exits nonzero if any required
 source still fails. It deliberately does not pin mutable scores or record
-counts. The fork-only `ACMG v4 release candidate` GitHub Actions workflow runs
-the same exact-SHA gate when manually dispatched with `run_online_smoke=true`.
+counts. It is an explicit maintainer/agent check; this repository does not
+automatically run a release workflow or create a GitHub release.
 
 If `execute_tool`, `get_tool_info`, or `list_tools` is unavailable, stop the
 ACMG assessment and report `ToolUniverse MCP execution unavailable`. Do not

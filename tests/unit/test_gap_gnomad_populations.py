@@ -174,3 +174,12 @@ def test_graphql_error_path_propagates():
     result = _make_tool(payload).run({"variant_id": "bad-id"})
     assert result["status"] == "error"
     assert "Variant not found" in result["error"]
+
+
+def test_valid_variant_not_found_graphql_error_is_no_hit():
+    """A valid allele query can establish a population no-hit observation."""
+    payload = {"errors": [{"message": "Variant not found"}]}
+    result = _make_tool(payload).run({"variant_id": "1-55051215-G-GA"})
+    assert result["status"] == "no_hit"
+    assert result["population_observation_status"] == "not_observed"
+    assert result["attempted_representation"] == "1-55051215-G-GA"

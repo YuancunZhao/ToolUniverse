@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@1aaaf00d1a9a91c21ae09d014fe19bf46fa82917` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.1+acmg.6`. Files unrelated to the ACMG runtime,
+The package version is `1.4.1+acmg.8`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -204,7 +204,7 @@ as `{card_id, criterion, reason}`, Bayesian included/excluded card IDs, and
 criterion-review decision fields without repeated observed facts). A common
 literature provider is factored into `literature_candidate_defaults` rather
 than repeated on every candidate row. The
-representative compact UTF-8 JSON regression ceiling is 100 KB;
+representative compact UTF-8 JSON regression ceiling is 40 KB;
 `response_detail="full"` restores complete payloads. A review-only
 `clinical_context` (zygosity,
 parental origin, phase, phenotype, second-allele status) is echoed for human
@@ -221,9 +221,9 @@ fingerprint and actual import path. `--online-providers` adds an opt-in,
 two-attempt gate for CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and a
 live BRCA2 collector while asserting only stable identity and response shape.
 The Guard smoke uses a complete `collector_result`, covering serialized
-known-SourceFact binding. A fork-only candidate-branch workflow runs offline
-release gates on every candidate push and exposes the live gate through
-`workflow_dispatch`; it does not publish packages, tags, or releases.
+known-SourceFact binding. These checks are invoked explicitly; the retired
+candidate-release workflow is not restored, and ordinary commits do not
+publish packages, tags, or releases.
 
 Collector results include a compact `runtime_manifest` with ToolUniverse
 version, evidence-automation runtime version, collector schema version, a stable
@@ -231,7 +231,7 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-21-v4` adds automatic/verified candidate policies and retains
+Collector schema `2026-08-25-v4.2` adds automatic/verified candidate policies and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level

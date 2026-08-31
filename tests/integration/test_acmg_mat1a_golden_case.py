@@ -218,8 +218,11 @@ def test_mat1a_broad_and_validated_evidence_workflow():
     candidates = initial["literature_candidates"]
     assert {row["pmid"] for row in candidates} == {"26933843", "28748147"}
     assert len(candidates) == 2
+    default_match_class = initial.get("literature_candidate_defaults", {}).get(
+        "match_class"
+    )
     assert all(
-        row["match_class"]
+        row.get("match_class", default_match_class)
         in {
             "exact_variant_match",
             "equivalent_variant_match",

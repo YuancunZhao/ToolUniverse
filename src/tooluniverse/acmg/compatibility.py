@@ -10,7 +10,7 @@ from typing import Any
 from .models import is_automatic_evidence, is_verified_evidence
 
 
-COMPATIBILITY_POLICY_VERSION = "2026-08-13-v3-light"
+COMPATIBILITY_POLICY_VERSION = "2026-08-25-v4.2"
 EVIDENCE_AGGREGATION_POLICY_VERSION = "2026-08-13-v1"
 
 
@@ -92,9 +92,7 @@ def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             ),
         )
         representative = copy.deepcopy(ordered[0])
-        representative["source_fact_ids"] = _merged_strings(
-            ordered, "source_fact_ids"
-        )
+        representative["source_fact_ids"] = _merged_strings(ordered, "source_fact_ids")
         representative["source_pmids"] = sorted(
             {
                 *(_merged_strings(ordered, "source_pmids")),
@@ -105,9 +103,7 @@ def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
                 ),
             }
         )
-        representative["source_case_ids"] = _merged_strings(
-            ordered, "source_case_ids"
-        )
+        representative["source_case_ids"] = _merged_strings(ordered, "source_case_ids")
         if representative["source_pmids"] and not representative.get("source_pmid"):
             representative["source_pmid"] = representative["source_pmids"][0]
         correlation_keys: dict[str, list[str]] = {}
@@ -120,11 +116,7 @@ def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
             key: sorted(set(values)) for key, values in correlation_keys.items()
         }
         original_ids = sorted(
-            {
-                str(row.get("card_id") or "")
-                for row in members
-                if row.get("card_id")
-            }
+            {str(row.get("card_id") or "") for row in members if row.get("card_id")}
         )
         representative["aggregation"] = {
             "policy_version": EVIDENCE_AGGREGATION_POLICY_VERSION,
@@ -439,9 +431,46 @@ def resolve_evidence_compatibility(
     }
 
 
+def resolve_automatic_and_verified_compatibility(
+    rows: list[dict[str, Any]],
+    *,
+    known_source_fact_ids: set[str],
+    verified_source_fact_ids: set[str],
+    scenario_id: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Resolve conflicts once; strict evidence can only narrow the automatic set."""
+    automatic = resolve_evidence_compatibility(
+        rows,
+        known_source_fact_ids=known_source_fact_ids,
+        eligibility="automatic",
+        calculation_role="automatic",
+        scenario_id=scenario_id,
+    )
+    verified = resolve_evidence_compatibility(
+        automatic["compatible_evidence"],
+        verified_source_fact_ids=verified_source_fact_ids,
+        eligibility="verified",
+        calculation_role="verified",
+        scenario_id=scenario_id,
+    )
+    inherited_exclusions = []
+    for row in automatic["excluded_evidence"]:
+        inherited = copy.deepcopy(row)
+        roles = dict(inherited.get("calculation_roles") or {})
+        roles["verified"] = False
+        inherited["calculation_roles"] = roles
+        inherited_exclusions.append(inherited)
+    verified["excluded_evidence"] = [
+        *inherited_exclusions,
+        *verified["excluded_evidence"],
+    ]
+    return automatic, verified
+
+
 __all__ = [
     "COMPATIBILITY_POLICY_VERSION",
     "EVIDENCE_AGGREGATION_POLICY_VERSION",
     "aggregate_evidence_cards",
+    "resolve_automatic_and_verified_compatibility",
     "resolve_evidence_compatibility",
 ]

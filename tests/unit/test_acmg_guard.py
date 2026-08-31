@@ -159,6 +159,30 @@ def test_guard_does_not_misread_protein_hgvs_p_value_or_group_b():
     assert result["status"] == "PASS"
 
 
+def test_guard_blocks_predictor_majority_or_consensus_claims():
+    for text in (
+        "多数预测软件提示良性，PP3 仍列为候选。",
+        "Predictor consensus supports pathogenicity; PP3 is listed.",
+        "The majority of computational predictors supports benign impact; PP3 is listed.",
+    ):
+        result = guard_acmg_answer(
+            text,
+            [_candidate_pp3()],
+            known_source_fact_ids={"fixture-source"},
+        )
+        assert result["status"] == "BLOCK", text
+
+
+def test_guard_allows_individual_scores_and_versioned_thresholds():
+    result = guard_acmg_answer(
+        "REVEL=0.70 reaches the versioned PP3 threshold; SIFT=0.01 is listed separately.",
+        [_candidate_pp3()],
+        known_source_fact_ids={"fixture-source"},
+    )
+
+    assert result["status"] == "PASS"
+
+
 def test_guard_expands_combined_criterion_codes():
     card = deepcopy(_candidate_pp3())
     card["criterion"] = "PS2/PM6"

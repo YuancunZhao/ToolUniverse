@@ -21,8 +21,9 @@ from . import (
 )
 
 
-ACMG_RUNTIME_VERSION = "evidence-automation-4"
-COLLECTOR_SCHEMA_VERSION = "2026-08-21-v4"
+ACMG_RUNTIME_VERSION = "evidence-automation-4.2"
+COLLECTOR_SCHEMA_VERSION = "2026-08-25-v4.2"
+OMIM_CONTEXT_POLICY_VERSION = "2026-08-21-v1"
 UPSTREAM_BASE_COMMIT = "1aaaf00d1a9a91c21ae09d014fe19bf46fa82917"
 BAYESIAN_PRIOR = 0.1
 
@@ -84,6 +85,7 @@ def _ruleset_payload() -> dict[str, Any]:
             "verified_policy_version": models.VERIFIED_EVIDENCE_POLICY_VERSION,
             "automatic_evidence_statuses": sorted(models.AUTOMATIC_EVIDENCE_STATUSES),
             "verified_evidence_statuses": sorted(models.VERIFIED_EVIDENCE_STATUSES),
+            "non_evidence_strengths": sorted(models.NON_EVIDENCE_STRENGTHS),
             "hard_exclusion_dimensions": {
                 key: sorted(values)
                 for key, values in sorted(models.HARD_EXCLUSION_DIMENSIONS.items())
@@ -118,6 +120,31 @@ def _ruleset_payload() -> dict[str, Any]:
                 ],
                 "provider_failure_is_absence": False,
             },
+            "gnomad_no_hit_policy": {
+                "version": population.GNOMAD_NO_HIT_POLICY_VERSION,
+                "transport_retry_version": (
+                    population.GNOMAD_TRANSPORT_RETRY_POLICY_VERSION
+                ),
+                "requires_valid_variant_representation": True,
+                "requires_same_site_callability": True,
+                "no_hit_is_not_provider_failure": True,
+                "representation_retry_only_after_no_hit": True,
+                "frequency_query_count": 1,
+                "effective_af_for_rule": 0.0,
+            },
+            "gene_resolution_policy": {
+                "version": rule_catalog.GENE_RESOLUTION_POLICY_VERSION,
+                "approved_symbol": "matched",
+                "unique_previous_or_alias_symbol": "resolved_alias",
+                "unique_transcript_gene_fallback": "corrected_from_transcript",
+                "explicit_gene_transcript_conflict": "fail_closed",
+            },
+            "omim_context_policy": {
+                "version": OMIM_CONTEXT_POLICY_VERSION,
+                "source": "MARRVEL_get_omim_phenotypes",
+                "review_only": True,
+                "does_not_select_cspec": True,
+            },
             "mondo_resolution_policy": {
                 "version": rule_catalog.MONDO_RESOLUTION_POLICY_VERSION,
                 "envelope": "terms",
@@ -141,6 +168,10 @@ def _ruleset_payload() -> dict[str, Any]:
                 "single_aggregation_selected_transcript": "automatic_only",
                 "selection": "exact_refseq_then_mane_then_version_compatible",
                 "majority_vote": False,
+                "input_fallback_version": (
+                    consequence_sources.INPUT_CONSEQUENCE_FALLBACK_POLICY_VERSION
+                ),
+                "deep_intronic_input": "automatic_only",
             },
             "spliceai_scope_policy": {
                 "version": spliceai.SPLICEAI_SCOPE_POLICY_VERSION,
@@ -254,6 +285,7 @@ __all__ = [
     "ACMG_RUNTIME_VERSION",
     "BAYESIAN_PRIOR",
     "COLLECTOR_SCHEMA_VERSION",
+    "OMIM_CONTEXT_POLICY_VERSION",
     "UPSTREAM_BASE_COMMIT",
     "build_runtime_manifest",
     "ruleset_hash",

@@ -8,8 +8,9 @@ from typing import Any
 MONDO_RESOLUTION_POLICY_VERSION = "2026-08-13-v3"
 CSPEC_SCENARIO_POLICY_VERSION = "2026-08-13-v3"
 USER_DECISION_SCENARIO_POLICY_VERSION = "2026-08-09-v3"
+GENE_RESOLUTION_POLICY_VERSION = "2026-08-25-v1"
 IDENTITY_VERIFICATION_POLICY = {
-    "version": "2026-08-21-v4",
+    "version": "2026-08-25-v4.2",
     "cross_provider_minimum": 2,
     "single_provider_fallback": "variantvalidator_complete_allele",
     "single_provider_required_fields": [

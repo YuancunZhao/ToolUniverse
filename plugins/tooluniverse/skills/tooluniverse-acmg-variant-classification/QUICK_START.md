@@ -3,6 +3,10 @@
 Normal evaluation uses one collector call and one Guard call. Do not discover
 the already-known tools or write the result to a file.
 
+The Skill is execution guidance, not another capability to call. Preserve an
+original `GENE;NM_:c.(p.)` input string in `variant`; if zygosity was supplied,
+place it in `clinical_context.zygosity`.
+
 ## Native compact MCP
 
 Call `execute_tool`:
@@ -19,6 +23,10 @@ Call `execute_tool`:
   }
 }
 ```
+
+For example, do not shorten
+`RTEL1;NM_001283009.2:c.3718G>C(p.Ala1240Pro)`: pass it unchanged and add
+`"clinical_context":{"zygosity":"heterozygous"}` when that was reported.
 
 Draft the evidence-only response from the returned `evidence_cards`, source
 indexes, VCEP/CSpec scenarios, estimates, conflicts, and limitations. Then call

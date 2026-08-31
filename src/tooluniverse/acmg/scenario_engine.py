@@ -9,7 +9,10 @@ import operator
 import re
 from typing import Any
 
-from .compatibility import aggregate_evidence_cards, resolve_evidence_compatibility
+from .compatibility import (
+    aggregate_evidence_cards,
+    resolve_automatic_and_verified_compatibility,
+)
 from .rule_catalog import CSPEC_SCENARIO_POLICY_VERSION, is_valid_strength_for_criterion
 from .summary import compute_bayesian_score, detect_conflicts
 
@@ -908,19 +911,13 @@ def build_scenario_results(
         if scenario_id != "generic-svi":
             scenario_cards.extend(copy.deepcopy(scenario_rows))
 
-        automatic_compatibility = resolve_evidence_compatibility(
-            scenario_rows,
-            known_source_fact_ids=known_source_fact_ids,
-            eligibility="automatic",
-            calculation_role="automatic",
-            scenario_id=scenario_id,
-        )
-        verified_compatibility = resolve_evidence_compatibility(
-            scenario_rows,
-            verified_source_fact_ids=verified_source_fact_ids,
-            eligibility="verified",
-            calculation_role="verified",
-            scenario_id=scenario_id,
+        automatic_compatibility, verified_compatibility = (
+            resolve_automatic_and_verified_compatibility(
+                scenario_rows,
+                known_source_fact_ids=known_source_fact_ids,
+                verified_source_fact_ids=verified_source_fact_ids,
+                scenario_id=scenario_id,
+            )
         )
         automatic_score = compute_bayesian_score(
             automatic_compatibility["compatible_evidence"],

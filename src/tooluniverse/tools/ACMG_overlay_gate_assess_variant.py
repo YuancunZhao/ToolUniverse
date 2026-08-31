@@ -1,14 +1,14 @@
 """
-ACMG_evidence_collector
+ACMG_overlay_gate_assess_variant
 
-Primary ToolUniverse ACMG evidence collector for germline variant review. Accepts transcript HGVS...
+Thin backward-compatible alias for ACMG_evidence_collector. Parameters and return structure are i...
 """
 
 from typing import Any, Optional, Callable
 from ._shared_client import get_shared_client
 
 
-def ACMG_evidence_collector(
+def ACMG_overlay_gate_assess_variant(
     variant: str,
     gene: Optional[str] = None,
     transcript: Optional[str] = None,
@@ -29,7 +29,7 @@ def ACMG_evidence_collector(
     validate: bool = True,
 ) -> dict[str, Any]:
     """
-    Primary ToolUniverse ACMG evidence collector for germline variant review. Accepts transcript HGVS...
+    Thin backward-compatible alias for ACMG_evidence_collector. Parameters and return structure are i...
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ def ACMG_evidence_collector(
     }
     return get_shared_client().run_one_function(
         {
-            "name": "ACMG_evidence_collector",
+            "name": "ACMG_overlay_gate_assess_variant",
             "arguments": _args,
         },
         stream_callback=stream_callback,
@@ -106,4 +106,4 @@ def ACMG_evidence_collector(
     )
 
 
-__all__ = ["ACMG_evidence_collector"]
+__all__ = ["ACMG_overlay_gate_assess_variant"]

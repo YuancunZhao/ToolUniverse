@@ -32,6 +32,7 @@ from .ACMG_evidence_collector import ACMG_evidence_collector
 from .ACMG_functional_evidence import ACMG_functional_evidence
 from .ACMG_guard_final_answer import ACMG_guard_final_answer
 from .ACMG_literature_evidence import ACMG_literature_evidence
+from .ACMG_overlay_gate_assess_variant import ACMG_overlay_gate_assess_variant
 from .ACMG_population_evidence import ACMG_population_evidence
 from .ADA_get_standards_section import ADA_get_standards_section
 from .ADA_list_standards_sections import ADA_list_standards_sections
@@ -3321,6 +3322,7 @@ __all__ = [
     "ACMG_functional_evidence",
     "ACMG_guard_final_answer",
     "ACMG_literature_evidence",
+    "ACMG_overlay_gate_assess_variant",
     "ACMG_population_evidence",
     "ADA_get_standards_section",
     "ADA_list_standards_sections",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tooluniverse.acmg.compatibility import (
     aggregate_evidence_cards,
+    resolve_automatic_and_verified_compatibility,
     resolve_evidence_compatibility,
 )
 from tooluniverse.acmg.rule_catalog import rule_for_criterion
@@ -220,6 +221,22 @@ def test_conflicting_independent_functional_assays_both_exit_bayesian():
     assert {row["reason"] for row in resolved["excluded_evidence"]} == {
         "unresolved_directional_conflict"
     }
+
+
+def test_verified_compatibility_is_always_a_subset_of_automatic():
+    rows = [_row("pp3", "PP3"), _row("bp4", "BP4")]
+    known = {fact_id for row in rows for fact_id in row["source_fact_ids"]}
+
+    automatic, verified = resolve_automatic_and_verified_compatibility(
+        rows,
+        known_source_fact_ids=known,
+        verified_source_fact_ids=known,
+    )
+
+    automatic_ids = {row["card_id"] for row in automatic["compatible_evidence"]}
+    verified_ids = {row["card_id"] for row in verified["compatible_evidence"]}
+    assert automatic_ids == set()
+    assert verified_ids <= automatic_ids
 
 
 def test_rule_scenarios_do_not_mix():

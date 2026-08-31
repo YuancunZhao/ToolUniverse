@@ -19,7 +19,7 @@ from .rule_catalog import ACMG_CRITERIA, is_valid_strength_for_criterion
 
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
-GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-21-v4-light"
+GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-25-v4.2-light"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",
@@ -44,7 +44,7 @@ _REVIEW_ROUTE_STATUSES = {
     "not_applicable",
     "deprecated",
 }
-_REVIEW_EVIDENCE_STATUSES = {*EVIDENCE_STATUSES, "no_information"}
+_REVIEW_EVIDENCE_STATUSES = {*EVIDENCE_STATUSES, "no_information", "not_applicable"}
 _CRITERION_REVIEW_FIELDS = {"criterion", "route_status", "evidence_status"}
 
 
@@ -82,9 +82,7 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
         if not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{64}", value) is None:
             return False, f"guard_context {key} must be a SHA-256 hex digest"
     claims = context.get("claims")
-    if not isinstance(claims, list) or not all(
-        isinstance(row, dict) for row in claims
-    ):
+    if not isinstance(claims, list) or not all(isinstance(row, dict) for row in claims):
         return False, "guard_context claims must be an array of objects"
     card_ids: list[str] = []
     for row in claims:
@@ -97,8 +95,7 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
         missing_claim_fields = sorted(_GUARD_CLAIM_FIELDS - set(row))
         if missing_claim_fields:
             return False, (
-                "guard_context claim missing fields: "
-                + ", ".join(missing_claim_fields)
+                "guard_context claim missing fields: " + ", ".join(missing_claim_fields)
             )
         card_id = row.get("card_id")
         if not isinstance(card_id, str) or not card_id:
@@ -121,18 +118,30 @@ def validate_guard_context(context: Any) -> tuple[bool, str]:
     if not isinstance(review_claims, list) or not all(
         isinstance(row, dict) for row in review_claims
     ):
-        return False, "guard_context criterion_review_claims must be an array of objects"
+        return (
+            False,
+            "guard_context criterion_review_claims must be an array of objects",
+        )
     review_criteria: list[str] = []
     for row in review_claims:
         if set(row) != _CRITERION_REVIEW_FIELDS:
             return False, "guard_context criterion review claim fields are invalid"
         criterion = str(row.get("criterion") or "")
         if criterion not in ACMG_CRITERIA:
-            return False, "guard_context criterion review claim criterion is unsupported"
+            return (
+                False,
+                "guard_context criterion review claim criterion is unsupported",
+            )
         if str(row.get("route_status") or "") not in _REVIEW_ROUTE_STATUSES:
-            return False, "guard_context criterion review claim route_status is unsupported"
+            return (
+                False,
+                "guard_context criterion review claim route_status is unsupported",
+            )
         if str(row.get("evidence_status") or "") not in _REVIEW_EVIDENCE_STATUSES:
-            return False, "guard_context criterion review claim evidence_status is unsupported"
+            return (
+                False,
+                "guard_context criterion review claim evidence_status is unsupported",
+            )
         review_criteria.append(criterion)
     if len(review_criteria) != len(set(review_criteria)):
         return False, "guard_context criterion review claims must be unique"
@@ -194,7 +203,11 @@ def _referenceable_card(
     codes = _criterion_codes(row.get("criterion"))
     status = str(row.get("evidence_status") or "")
     strength = str(row.get("strength") or "")
-    if not codes or not str(row.get("card_id") or "") or status not in EVIDENCE_STATUSES:
+    if (
+        not codes
+        or not str(row.get("card_id") or "")
+        or status not in EVIDENCE_STATUSES
+    ):
         return False
     if validated_claim:
         return str(row.get("role") or "") in _GUARD_ROLES
@@ -220,9 +233,7 @@ def _referenceable_card(
         return False
     if status in {"not_met", "excluded", "deprecated"}:
         return bool(strength)
-    rule_valid = any(
-        is_valid_strength_for_criterion(code, strength) for code in codes
-    )
+    rule_valid = any(is_valid_strength_for_criterion(code, strength) for code in codes)
     return rule_valid
 
 
@@ -295,6 +306,35 @@ def _strip_attributed_external_assertions(answer_text: str) -> str:
     return "\n".join(retained)
 
 
+def _has_predictor_majority_claim(answer_text: str) -> bool:
+    normalized = _normalized_label_text(answer_text)
+    english = bool(
+        re.search(
+            r"(?:MAJORITY|CONSENSUS).{0,32}(?:PREDICTOR|IN SILICO|COMPUTATIONAL)"
+            r".{0,32}(?:BENIGN|PATHOGENIC)",
+            normalized,
+        )
+        or re.search(
+            r"(?:PREDICTOR|IN SILICO|COMPUTATIONAL).{0,32}(?:MAJORITY|CONSENSUS)"
+            r".{0,32}(?:BENIGN|PATHOGENIC)",
+            normalized,
+        )
+    )
+    chinese = unicodedata.normalize("NFKC", str(answer_text or ""))
+    return english or bool(
+        re.search(
+            r"(?:多数|大多数|共识).{0,16}(?:预测(?:软件|工具|器)|计算预测)"
+            r".{0,16}(?:支持|提示|倾向).{0,8}(?:良性|致病)",
+            chinese,
+        )
+        or re.search(
+            r"(?:预测(?:软件|工具|器)|计算预测).{0,16}(?:多数|大多数|共识)"
+            r".{0,16}(?:支持|提示|倾向).{0,8}(?:良性|致病)",
+            chinese,
+        )
+    )
+
+
 def guard_acmg_answer(
     answer_text: str,
     evidence_cards: list[EvidenceCard | dict[str, Any]],
@@ -316,7 +356,9 @@ def guard_acmg_answer(
     normalized_answer = unicodedata.normalize("NFKC", str(answer_text or ""))
     answer_upper = _normalized_label_text(normalized_answer)
     cited_like_codes = set(
-        re.findall(r"(?<![A-Z0-9])(?:PVS|PS|PM|PP|BA|BS|BP)\d+(?![A-Z0-9])", answer_upper)
+        re.findall(
+            r"(?<![A-Z0-9])(?:PVS|PS|PM|PP|BA|BS|BP)\d+(?![A-Z0-9])", answer_upper
+        )
     )
     known_criteria = set(ACMG_CRITERIA)
     cited_codes = cited_like_codes & known_criteria
@@ -367,6 +409,12 @@ def guard_acmg_answer(
         reasons.append(
             "Final five-tier ACMG labels are not allowed in the evidence-collection "
             "runtime. This tool collects and evaluates evidence only."
+        )
+
+    if _has_predictor_majority_claim(normalized_answer):
+        reasons.append(
+            "Predictor majority or consensus claims are not allowed. Report "
+            "individual scores or a versioned PP3/BP4 threshold instead."
         )
 
     cards_used = [

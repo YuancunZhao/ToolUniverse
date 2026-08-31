@@ -8,11 +8,11 @@
       "properties": {
         "variant": {
           "type": "string",
-          "description": "Transcript HGVS, gene;transcript:c. HGVS, genomic HGVS/VCF-like variant, rsID, gene plus c. shorthand, or gene plus p. HGVS, e.g. NM_000142.5:c.1075+95C>G, BRCA2;NM_000059.4:c.5946delT, rs80359550, BRCA2 c.5946delT, or BRCA2 p.Ser1982ArgfsTer22. Coding shorthand uses VariantValidator MANE resolution; protein shorthand uses Ensembl VEP followed by MANE projection."
+          "description": "Original caller-supplied variant string. Accepts transcript HGVS, gene;transcript:c. HGVS with an optional (p.) suffix, genomic HGVS/VCF-like input, rsID, gene plus c. shorthand, or gene plus p. HGVS. The original string and submitted protein expression are preserved while provider queries use normalized representations."
         },
         "gene": {
           "type": "string",
-          "description": "Gene symbol, if known."
+          "description": "Submitted gene symbol, if known. Current HGNC symbols are retained; a uniquely resolved previous symbol or alias is reported separately rather than silently replacing the submitted value."
         },
         "transcript": {
           "type": "string",
@@ -28,7 +28,12 @@
         },
         "genome_build": {
           "type": "string",
-          "enum": ["GRCh38", "GRCh37", "hg38", "hg19"],
+          "enum": [
+            "GRCh38",
+            "GRCh37",
+            "hg38",
+            "hg19"
+          ],
           "description": "Genome assembly. hg19/hg38 normalize to GRCh37/GRCh38; coordinate inputs without an explicit or accession-inferred build fail closed."
         },
         "source_outputs_or_leads": {
@@ -42,53 +47,194 @@
           "items": {
             "type": "object",
             "properties": {
-              "fact_id": {"type": "string", "minLength": 1},
-              "fact_type": {"type": "string", "enum": ["case_control", "case_series", "de_novo", "pm3", "recessive_allelic", "functional", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "prior_variant", "mechanism", "region_hotspot", "protein_length_repeat", "rna_splicing"]},
-              "pmid": {"type": "string"},
-              "pmcid": {"type": "string"},
-              "doi": {"type": "string"},
-              "review_request_id": {"type": "string"},
-              "document_hash": {"type": "string"},
-              "locator": {"type": "string", "minLength": 1},
-              "excerpt": {"type": "string", "minLength": 1},
-              "variant_identity": {"type": "string", "minLength": 1},
-              "gene": {"type": "string", "minLength": 1},
-              "values": {"type": "object"},
+              "fact_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fact_type": {
+                "type": "string",
+                "enum": [
+                  "case_control",
+                  "case_series",
+                  "de_novo",
+                  "pm3",
+                  "recessive_allelic",
+                  "functional",
+                  "segregation",
+                  "phenotype_specificity",
+                  "healthy_observation",
+                  "allelic_phase",
+                  "alternative_cause",
+                  "prior_variant",
+                  "mechanism",
+                  "region_hotspot",
+                  "protein_length_repeat",
+                  "rna_splicing"
+                ]
+              },
+              "pmid": {
+                "type": "string"
+              },
+              "pmcid": {
+                "type": "string"
+              },
+              "doi": {
+                "type": "string"
+              },
+              "review_request_id": {
+                "type": "string"
+              },
+              "document_hash": {
+                "type": "string"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "excerpt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "variant_identity": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gene": {
+                "type": "string",
+                "minLength": 1
+              },
+              "values": {
+                "type": "object"
+              },
               "field_excerpts": {
                 "type": "object",
-                "additionalProperties": {"type": "string", "minLength": 1}
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
-              "criterion": {"type": "string", "minLength": 1},
-              "suggested_strength": {"type": "string", "minLength": 1},
-              "interpretation": {"type": "string", "minLength": 1},
-              "confidence": {"type": ["number", "string"]},
-              "questions": {"type": "array", "items": {"type": "string"}},
+              "criterion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "suggested_strength": {
+                "type": "string",
+                "minLength": 1
+              },
+              "interpretation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "reading_manifest": {
                 "type": "object",
                 "properties": {
-                  "status": {"type": "string", "enum": ["complete", "partial", "abstract_only", "unavailable"]},
-                  "sections_read": {"type": "array", "items": {"type": "string"}},
-                  "tables_read": {"type": "array", "items": {"type": "string"}},
-                  "figures_read": {"type": "array", "items": {"type": "string"}},
-                  "supplements_read": {"type": "array", "items": {"type": "string"}},
-                  "variant_match_locations": {"type": "array", "items": {"type": "string"}},
-                  "limitations": {"type": "array", "items": {"type": "string"}}
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "complete",
+                      "partial",
+                      "abstract_only",
+                      "unavailable"
+                    ]
+                  },
+                  "sections_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tables_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "figures_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "supplements_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "variant_match_locations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "limitations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 },
-                "required": ["status"],
+                "required": [
+                  "status"
+                ],
                 "additionalProperties": false
               },
               "extractor": {
                 "type": "object",
                 "properties": {
-                  "name": {"type": "string", "minLength": 1},
-                  "version": {"type": "string", "minLength": 1}
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 },
-                "required": ["name", "version"],
+                "required": [
+                  "name",
+                  "version"
+                ],
                 "additionalProperties": false
               }
             },
-            "required": ["fact_id", "fact_type", "locator", "excerpt", "variant_identity", "gene", "values", "field_excerpts", "interpretation", "confidence", "extractor"],
-            "anyOf": [{"required": ["pmid"]}, {"required": ["pmcid"]}],
+            "required": [
+              "fact_id",
+              "fact_type",
+              "locator",
+              "excerpt",
+              "variant_identity",
+              "gene",
+              "values",
+              "field_excerpts",
+              "interpretation",
+              "confidence",
+              "extractor"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "pmid"
+                ]
+              },
+              {
+                "required": [
+                  "pmcid"
+                ]
+              }
+            ],
             "additionalProperties": false
           }
         },
@@ -98,27 +244,77 @@
           "items": {
             "type": "object",
             "properties": {
-              "specification_id": {"type": "string", "minLength": 1},
-              "version": {"type": "string", "minLength": 1},
-              "content_hash": {"type": "string", "minLength": 1},
-              "criterion": {"type": "string", "minLength": 1},
-              "locator": {"type": "string"},
-              "excerpt": {"type": "string", "minLength": 1},
-              "structured_interpretation": {"type": "object"},
-              "suggested_strength": {"type": "string", "minLength": 1},
-              "interpretation": {"type": "string", "minLength": 1},
-              "confidence": {"type": ["number", "string"]},
+              "specification_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "minLength": 1
+              },
+              "criterion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "structured_interpretation": {
+                "type": "object"
+              },
+              "suggested_strength": {
+                "type": "string",
+                "minLength": 1
+              },
+              "interpretation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
               "extractor": {
                 "type": "object",
                 "properties": {
-                  "name": {"type": "string", "minLength": 1},
-                  "version": {"type": "string", "minLength": 1}
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 },
-                "required": ["name", "version"],
+                "required": [
+                  "name",
+                  "version"
+                ],
                 "additionalProperties": false
               }
             },
-            "required": ["specification_id", "version", "content_hash", "criterion", "excerpt", "structured_interpretation", "suggested_strength", "interpretation", "confidence", "extractor"],
+            "required": [
+              "specification_id",
+              "version",
+              "content_hash",
+              "criterion",
+              "excerpt",
+              "structured_interpretation",
+              "suggested_strength",
+              "interpretation",
+              "confidence",
+              "extractor"
+            ],
             "additionalProperties": false
           }
         },
@@ -128,14 +324,35 @@
           "items": {
             "type": "object",
             "properties": {
-              "card_id": {"type": "string", "minLength": 1},
-              "decision": {"type": "string", "enum": ["accept", "reject"]},
-              "strength_override": {"type": "string", "minLength": 1},
-              "reason": {"type": "string"},
-              "reviewer": {"type": "string"},
-              "decided_at": {"type": "string"}
+              "card_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "accept",
+                  "reject"
+                ]
+              },
+              "strength_override": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string"
+              },
+              "reviewer": {
+                "type": "string"
+              },
+              "decided_at": {
+                "type": "string"
+              }
             },
-            "required": ["card_id", "decision"],
+            "required": [
+              "card_id",
+              "decision"
+            ],
             "additionalProperties": false
           }
         },
@@ -144,16 +361,31 @@
         },
         "clinical_context": {
           "type": "object",
-          "description": "Review-only clinical context. Explicit HPO terms trigger term/gene/disease lookups; all matches remain PP4 review context and never generate PP4 automatically.",
+          "description": "Review-only clinical context, including caller-supplied zygosity. Explicit HPO terms trigger term/gene/disease lookups; all matches remain PP4 review context and never generate PP4 automatically.",
           "properties": {
-            "zygosity": {"type": "string"},
-            "parental_origin": {"type": "string"},
-            "phase": {"type": "string"},
-            "phenotype": {"type": ["string", "array"]},
-            "second_allele_status": {"type": "string"},
+            "zygosity": {
+              "type": "string"
+            },
+            "parental_origin": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string"
+            },
+            "phenotype": {
+              "type": [
+                "string",
+                "array"
+              ]
+            },
+            "second_allele_status": {
+              "type": "string"
+            },
             "hpo_terms": {
               "type": "array",
-              "items": {"type": "string"},
+              "items": {
+                "type": "string"
+              },
               "description": "HPO identifiers in HP:0001250, HP_0001250, or bare numeric form."
             }
           },
@@ -165,21 +397,66 @@
           "items": {
             "type": "object",
             "properties": {
-              "observation_id": {"type": "string", "minLength": 1},
-              "observation_type": {"type": "string", "enum": ["de_novo", "recessive_case", "segregation", "phenotype_specificity", "healthy_observation", "allelic_phase", "alternative_cause", "functional_assay", "case_control", "case_series"]},
-              "source_type": {"type": "string", "enum": ["user_report", "lab_report", "pedigree", "publication", "external_database", "other"]},
-              "source_id": {"type": "string", "minLength": 1},
-              "locator": {"type": "string"},
-              "excerpt": {"type": "string"},
-              "values": {"type": "object"}
+              "observation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "observation_type": {
+                "type": "string",
+                "enum": [
+                  "de_novo",
+                  "recessive_case",
+                  "segregation",
+                  "phenotype_specificity",
+                  "healthy_observation",
+                  "allelic_phase",
+                  "alternative_cause",
+                  "functional_assay",
+                  "case_control",
+                  "case_series"
+                ]
+              },
+              "source_type": {
+                "type": "string",
+                "enum": [
+                  "user_report",
+                  "lab_report",
+                  "pedigree",
+                  "publication",
+                  "external_database",
+                  "other"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object"
+              }
             },
-            "required": ["observation_id", "observation_type", "source_type", "source_id", "values"],
+            "required": [
+              "observation_id",
+              "observation_type",
+              "source_type",
+              "source_id",
+              "values"
+            ],
             "additionalProperties": false
           }
         },
         "response_detail": {
           "type": "string",
-          "enum": ["summary", "full"],
+          "enum": [
+            "summary",
+            "full"
+          ],
           "default": "summary",
           "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
         }
@@ -201,67 +478,267 @@
             "not_applicable"
           ]
         },
-        "execution_status": {"type": "string"},
-        "coverage_status": {"type": "string"},
+        "execution_status": {
+          "type": "string"
+        },
+        "coverage_status": {
+          "type": "string"
+        },
         "provider_failures": {
           "type": "array",
-          "description": "Summary-only provider failure groups with tool names, failure code, attempts, dataset and release.",
-          "items": {"type": "object"}
+          "description": "Summary-only provider failure rows keyed by tool and query representation, with SourceFact IDs, failure code, HTTP status, retryability, dataset/release, and the actual transport retry count.",
+          "items": {
+            "type": "object"
+          }
         },
         "variant": {
           "type": "object"
         },
-        "variant_identity": {"type": "object"},
+        "variant_identity": {
+          "type": "object",
+          "description": "Submitted and normalized identity diagnostics. submitted_variant/submitted_gene/submitted_hgvs_p remain caller values; resolved_gene and gene_resolution_status disclose HGNC or transcript-based normalization.",
+          "properties": {
+            "submitted_variant": {
+              "type": "string"
+            },
+            "normalized_query_representation": {
+              "type": "string"
+            },
+            "submitted_gene": {
+              "type": "string"
+            },
+            "resolved_gene": {
+              "type": "string"
+            },
+            "gene_resolution_status": {
+              "type": "string",
+              "enum": [
+                "not_provided",
+                "matched",
+                "resolved_alias",
+                "corrected_from_transcript",
+                "unresolved",
+                "provider_failed"
+              ]
+            },
+            "gene_resolution_basis": {
+              "type": "string"
+            },
+            "submitted_hgvs_p": {
+              "type": "string"
+            },
+            "hgvs_p": {
+              "type": "string"
+            }
+          }
+        },
         "variant_scope": {
           "type": "object",
           "description": "Pre-provider build and small-variant/SV scope decision."
         },
         "clinical_context": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "Review-only clinical context echo; never evidence."
+        },
+        "omim_context": {
+          "type": "object",
+          "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
         },
         "consequence_profile": {
           "type": "object",
           "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
           "properties": {
-            "annotation_status": {"type": "string", "enum": ["resolved", "empty", "unavailable", "identity_conflict"]},
-            "attempted_representations": {"type": "array", "items": {"type": "object"}},
-            "annotation_reason": {"type": "string"},
-            "observations": {"type": "array", "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.", "items": {"type": "object"}},
-            "selected_provider": {"type": "string"},
-            "selected_source_fact_ids": {"type": "array", "items": {"type": "string"}},
-            "corroborating_source_fact_ids": {"type": "array", "items": {"type": "string"}},
-            "provider_failures": {"type": "array", "items": {"type": "object"}},
-            "provider_conflicts": {"type": "array", "items": {"type": "object"}},
-            "hard_identity_conflicts": {"type": "array", "items": {"type": "object"}},
-            "selected_transcript_conflicts": {"type": "array", "items": {"type": "object"}},
-            "alternate_transcript_observations": {"type": "array", "items": {"type": "object"}},
-            "nonblocking_disagreements": {"type": "array", "items": {"type": "object"}},
-            "equivalent_or_alternate_representations": {"type": "array", "description": "Provider HGVS descriptions retained as normalization or alternate representations; string differences alone are non-veto context.", "items": {"type": "object"}},
-            "resolution_confidence": {"type": "string", "enum": ["authoritative_single_source", "authoritative_corroborated", "source_backed_only", "disputed", "unresolved"]},
-            "automatic_usable": {"type": "boolean"},
-            "verified_usable": {"type": "boolean"},
-            "spliceai_profile": {"type": "object", "description": "Identity-selected transcript SpliceAI four-channel profile plus separately named provider-global maximum context."},
-            "spliceai_scores": {"type": "object"},
-            "spliceai_max_delta": {"type": ["number", "null"], "description": "Maximum of the selected-transcript DS_AG, DS_AL, DS_DG, and DS_DL values."},
-            "spliceai_trigger_channel": {"type": "string"},
-            "resolution_reason": {"type": "string"},
-            "transcript_mapping": {"type": "object"},
-            "selected_observation": {"type": ["object", "null"]},
-            "missing_requirements": {"type": "array", "items": {"type": "string"}},
-            "hgvs_operation": {"type": "string"},
-            "splice_positions": {"type": "array", "items": {"type": "integer"}},
-            "canonical_site_type": {"type": "string", "enum": ["donor", "acceptor", "ambiguous", "none"]},
-            "canonical_motif_effect": {"type": "string", "enum": ["disrupted", "potentially_preserved", "unknown", "not_applicable"]},
-            "canonical_motif_effect_reason": {"type": "string"},
-            "canonical_motif_sequence_status": {"type": "string", "description": "REF/ALT or HGVS sequence-level motif status; functional native-site loss is reported separately in spliceai_profile."},
-            "canonical_motif_sequence_reason": {"type": "string"},
-            "genomic_position": {"type": ["integer", "null"]},
-            "genomic_ref": {"type": "string"},
-            "genomic_alt": {"type": "string"}
+            "annotation_status": {
+              "type": "string",
+              "enum": [
+                "resolved",
+                "empty",
+                "unavailable",
+                "identity_conflict"
+              ]
+            },
+            "attempted_representations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "annotation_reason": {
+              "type": "string"
+            },
+            "observations": {
+              "type": "array",
+              "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "selected_provider": {
+              "type": "string"
+            },
+            "selected_source_fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "corroborating_source_fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "provider_failures": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "provider_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "hard_identity_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "selected_transcript_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "alternate_transcript_observations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "nonblocking_disagreements": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "equivalent_or_alternate_representations": {
+              "type": "array",
+              "description": "Provider HGVS descriptions retained as normalization or alternate representations; string differences alone are non-veto context.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "resolution_confidence": {
+              "type": "string",
+              "enum": [
+                "authoritative_single_source",
+                "authoritative_corroborated",
+                "source_backed_only",
+                "disputed",
+                "unresolved"
+              ]
+            },
+            "automatic_usable": {
+              "type": "boolean"
+            },
+            "verified_usable": {
+              "type": "boolean"
+            },
+            "spliceai_profile": {
+              "type": "object",
+              "description": "Identity-selected transcript SpliceAI four-channel profile plus separately named provider-global maximum context."
+            },
+            "spliceai_scores": {
+              "type": "object"
+            },
+            "spliceai_max_delta": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Maximum of the selected-transcript DS_AG, DS_AL, DS_DG, and DS_DL values."
+            },
+            "spliceai_trigger_channel": {
+              "type": "string"
+            },
+            "resolution_reason": {
+              "type": "string"
+            },
+            "transcript_mapping": {
+              "type": "object"
+            },
+            "selected_observation": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "missing_requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hgvs_operation": {
+              "type": "string"
+            },
+            "splice_positions": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "canonical_site_type": {
+              "type": "string",
+              "enum": [
+                "donor",
+                "acceptor",
+                "ambiguous",
+                "none"
+              ]
+            },
+            "canonical_motif_effect": {
+              "type": "string",
+              "enum": [
+                "disrupted",
+                "potentially_preserved",
+                "unknown",
+                "not_applicable"
+              ]
+            },
+            "canonical_motif_effect_reason": {
+              "type": "string"
+            },
+            "canonical_motif_sequence_status": {
+              "type": "string",
+              "description": "REF/ALT or HGVS sequence-level motif status; functional native-site loss is reported separately in spliceai_profile."
+            },
+            "canonical_motif_sequence_reason": {
+              "type": "string"
+            },
+            "genomic_position": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "genomic_ref": {
+              "type": "string"
+            },
+            "genomic_alt": {
+              "type": "string"
+            }
           }
         },
-        "rule_context": {"type": "object"},
+        "rule_context": {
+          "type": "object"
+        },
         "runtime_manifest": {
           "type": "object",
           "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
@@ -282,9 +759,15 @@
           "items": {
             "type": "object",
             "properties": {
-              "fact_id": {"type": "string"},
-              "tool_name": {"type": "string"},
-              "status": {"type": "string"},
+              "fact_id": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
               "failure_details": {
                 "type": "object",
                 "description": "Structured no-hit, identity-conflict, provider-failure, or malformed-contract diagnostics."
@@ -292,16 +775,25 @@
             }
           }
         },
-        "source_assertions": {"type": "array", "items": {"type": "object"}},
+        "source_assertions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
         "prior_variant_candidates": {
           "type": "array",
           "description": "Same-residue germline-compatible prior-variant leads. Database labels remain review-only until independently anchored literature facts validate PS1 or PM5.",
-          "items": {"type": "object"}
+          "items": {
+            "type": "object"
+          }
         },
         "literature_candidates": {
           "type": "array",
           "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
-          "items": {"type": "object"}
+          "items": {
+            "type": "object"
+          }
         },
         "literature_candidate_defaults": {
           "type": "object",
@@ -311,26 +803,70 @@
           "type": "object",
           "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
         },
-        "recoverable_gaps": {"type": "array", "items": {"type": "object"}},
+        "recoverable_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
         "workflow_status": {
           "type": "string",
-          "enum": ["collecting", "input_correction_required", "unsupported_variant_class", "consequence_recovery_required", "literature_review_required", "proposal_validation_required", "evidence_ready", "blocked_external_full_text"]
+          "enum": [
+            "collecting",
+            "input_correction_required",
+            "unsupported_variant_class",
+            "consequence_recovery_required",
+            "literature_review_required",
+            "proposal_validation_required",
+            "evidence_ready",
+            "blocked_external_full_text"
+          ]
         },
         "review_readiness": {
           "type": "object",
           "description": "Auditable evidence-review readiness. This is workflow completeness, not a five-tier classification."
         },
-        "next_actions": {"type": "array", "items": {"type": "object"}},
-        "predictor_scores": {"type": "object"},
+        "next_actions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "predictor_scores": {
+          "type": "object"
+        },
         "criterion_reviews": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "criterion": {"type": "string"},
-              "route_status": {"type": "string", "enum": ["assessed", "proposal_validated", "candidate_available", "review_pending", "insufficient_information", "not_applicable", "deprecated"]},
-              "candidate_source_fact_ids": {"type": "array", "items": {"type": "string"}},
-              "pending_request_ids": {"type": "array", "items": {"type": "string"}}
+              "criterion": {
+                "type": "string"
+              },
+              "route_status": {
+                "type": "string",
+                "enum": [
+                  "assessed",
+                  "proposal_validated",
+                  "candidate_available",
+                  "review_pending",
+                  "insufficient_information",
+                  "not_applicable",
+                  "deprecated"
+                ]
+              },
+              "candidate_source_fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pending_request_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         },
@@ -339,40 +875,119 @@
           "items": {
             "type": "object",
             "properties": {
-              "card_id": {"type": "string"},
-              "criterion": {"type": "string"},
-              "strength": {"type": "string"},
-              "evidence_status": {"type": "string", "enum": ["expert_panel_applied", "rule_mapped", "source_backed_candidate", "not_met", "excluded", "deprecated"]},
-              "strength_source": {"type": "string"},
-              "rule_source": {"type": "object"},
-              "verification_dimensions": {"type": "object"},
-              "calculation_roles": {"type": "object"},
-              "correlation_keys": {"type": "object"},
-              "scenario_id": {"type": "string"},
-              "source_fact_ids": {"type": "array", "items": {"type": "string"}},
-              "caveats": {"type": "array", "items": {"type": "string"}},
-              "missing_requirements": {"type": "array", "items": {"type": "string"}},
+              "card_id": {
+                "type": "string"
+              },
+              "criterion": {
+                "type": "string"
+              },
+              "strength": {
+                "type": "string"
+              },
+              "evidence_status": {
+                "type": "string",
+                "enum": [
+                  "expert_panel_applied",
+                  "rule_mapped",
+                  "source_backed_candidate",
+                  "not_met",
+                  "excluded",
+                  "deprecated"
+                ]
+              },
+              "strength_source": {
+                "type": "string"
+              },
+              "rule_source": {
+                "type": "object"
+              },
+              "verification_dimensions": {
+                "type": "object"
+              },
+              "calculation_roles": {
+                "type": "object"
+              },
+              "correlation_keys": {
+                "type": "object"
+              },
+              "scenario_id": {
+                "type": "string"
+              },
+              "source_fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "caveats": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missing_requirements": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "rule_evaluation": {
                 "type": "object",
                 "description": "Observed inputs, applicable rule and threshold, condition status, one primary reason, and secondary caveats."
               }
             },
-            "required": ["card_id", "criterion", "strength", "evidence_status", "scenario_id", "source_fact_ids"]
+            "required": [
+              "card_id",
+              "criterion",
+              "strength",
+              "evidence_status",
+              "scenario_id",
+              "source_fact_ids"
+            ]
           }
         },
         "conflict_report": {
           "type": "object"
         },
-        "compatibility_report": {"type": "object"},
-        "vcep_context": {"type": "object"},
-        "vcep_assertions": {"type": "array", "items": {"type": "object"}},
-        "rule_scenarios": {"type": "array", "items": {"type": "object"}},
-        "automatic_bayesian": {"type": "object"},
-        "verified_bayesian": {"type": "object"},
-        "scenario_estimates": {"type": "array", "items": {"type": "object"}},
-        "automation_report": {"type": "object"},
-        "user_selected_bayesian": {"type": "object"},
-        "decision_report": {"type": "object"},
+        "compatibility_report": {
+          "type": "object"
+        },
+        "vcep_context": {
+          "type": "object"
+        },
+        "vcep_assertions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "rule_scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "automatic_bayesian": {
+          "type": "object"
+        },
+        "verified_bayesian": {
+          "type": "object"
+        },
+        "scenario_estimates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "automation_report": {
+          "type": "object"
+        },
+        "user_selected_bayesian": {
+          "type": "object"
+        },
+        "decision_report": {
+          "type": "object"
+        },
         "limitations": {
           "type": "array",
           "items": {
@@ -391,6 +1006,7 @@
         "variant",
         "variant_identity",
         "variant_scope",
+        "omim_context",
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
@@ -422,6 +1038,1054 @@
         "limitations",
         "final_classification_allowed"
       ]
+    }
+  },
+  {
+    "name": "ACMG_overlay_gate_assess_variant",
+    "description": "Thin backward-compatible alias for ACMG_evidence_collector. Parameters and return structure are identical; the alias contains no independent assessment logic.",
+    "type": "ACMG_evidence_collector",
+    "parameter": {
+      "type": "object",
+      "properties": {
+        "variant": {
+          "type": "string",
+          "description": "Original caller-supplied variant string. Accepts transcript HGVS, gene;transcript:c. HGVS with an optional (p.) suffix, genomic HGVS/VCF-like input, rsID, gene plus c. shorthand, or gene plus p. HGVS. The original string and submitted protein expression are preserved while provider queries use normalized representations."
+        },
+        "gene": {
+          "type": "string",
+          "description": "Submitted gene symbol, if known. Current HGNC symbols are retained; a uniquely resolved previous symbol or alias is reported separately rather than silently replacing the submitted value."
+        },
+        "transcript": {
+          "type": "string",
+          "description": "Transcript accession or transcript context, if known."
+        },
+        "disease": {
+          "type": "string",
+          "description": "Disease name or MONDO identifier used to match an applicable ClinGen CSpec."
+        },
+        "inheritance": {
+          "type": "string",
+          "description": "Inheritance mode used to match an applicable ClinGen CSpec."
+        },
+        "genome_build": {
+          "type": "string",
+          "enum": [
+            "GRCh38",
+            "GRCh37",
+            "hg38",
+            "hg19"
+          ],
+          "description": "Genome assembly. hg19/hg38 normalize to GRCh37/GRCh38; coordinate inputs without an explicit or accession-inferred build fail closed."
+        },
+        "source_outputs_or_leads": {
+          "type": "array",
+          "description": "Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant, VEP, papers, labs, or other tools. These are normalized as traceable source leads; only identity-consistent, criterion-valid source-backed candidates may enter automatic Bayesian review, while verified Bayesian review remains stricter.",
+          "items": {}
+        },
+        "literature_proposals": {
+          "type": "array",
+          "description": "Optional supplemental literature facts or reproducibility input. The collector normally retrieves and extracts source-backed candidates itself; submitted proposals are re-anchored to the cited document and cannot override fact-type or strength rules.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fact_type": {
+                "type": "string",
+                "enum": [
+                  "case_control",
+                  "case_series",
+                  "de_novo",
+                  "pm3",
+                  "recessive_allelic",
+                  "functional",
+                  "segregation",
+                  "phenotype_specificity",
+                  "healthy_observation",
+                  "allelic_phase",
+                  "alternative_cause",
+                  "prior_variant",
+                  "mechanism",
+                  "region_hotspot",
+                  "protein_length_repeat",
+                  "rna_splicing"
+                ]
+              },
+              "pmid": {
+                "type": "string"
+              },
+              "pmcid": {
+                "type": "string"
+              },
+              "doi": {
+                "type": "string"
+              },
+              "review_request_id": {
+                "type": "string"
+              },
+              "document_hash": {
+                "type": "string"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "excerpt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "variant_identity": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gene": {
+                "type": "string",
+                "minLength": 1
+              },
+              "values": {
+                "type": "object"
+              },
+              "field_excerpts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "criterion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "suggested_strength": {
+                "type": "string",
+                "minLength": 1
+              },
+              "interpretation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reading_manifest": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "complete",
+                      "partial",
+                      "abstract_only",
+                      "unavailable"
+                    ]
+                  },
+                  "sections_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tables_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "figures_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "supplements_read": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "variant_match_locations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "limitations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              },
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "fact_id",
+              "fact_type",
+              "locator",
+              "excerpt",
+              "variant_identity",
+              "gene",
+              "values",
+              "field_excerpts",
+              "interpretation",
+              "confidence",
+              "extractor"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "pmid"
+                ]
+              },
+              {
+                "required": [
+                  "pmcid"
+                ]
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "cspec_proposals": {
+          "type": "array",
+          "description": "Optional supplemental interpretations of unresolved natural-language rules from an online ClinGen CSpec. ToolUniverse normally executes its finite condition evaluator first, then re-fetches and verifies the specification ID, version, content hash, criterion, and excerpt for any submitted proposal.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "specification_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_hash": {
+                "type": "string",
+                "minLength": 1
+              },
+              "criterion": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string",
+                "minLength": 1
+              },
+              "structured_interpretation": {
+                "type": "object"
+              },
+              "suggested_strength": {
+                "type": "string",
+                "minLength": 1
+              },
+              "interpretation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              },
+              "extractor": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "specification_id",
+              "version",
+              "content_hash",
+              "criterion",
+              "excerpt",
+              "structured_interpretation",
+              "suggested_strength",
+              "interpretation",
+              "confidence",
+              "extractor"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "evidence_decisions": {
+          "type": "array",
+          "description": "User decisions applied only to stable card IDs regenerated in this call. Accept or reject a card; an accepted card may use a direction-consistent standard strength override when a reason is supplied.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "card_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "decision": {
+                "type": "string",
+                "enum": [
+                  "accept",
+                  "reject"
+                ]
+              },
+              "strength_override": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string"
+              },
+              "reviewer": {
+                "type": "string"
+              },
+              "decided_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "card_id",
+              "decision"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "protein_accession": {
+          "type": "string"
+        },
+        "clinical_context": {
+          "type": "object",
+          "description": "Review-only clinical context, including caller-supplied zygosity. Explicit HPO terms trigger term/gene/disease lookups; all matches remain PP4 review context and never generate PP4 automatically.",
+          "properties": {
+            "zygosity": {
+              "type": "string"
+            },
+            "parental_origin": {
+              "type": "string"
+            },
+            "phase": {
+              "type": "string"
+            },
+            "phenotype": {
+              "type": [
+                "string",
+                "array"
+              ]
+            },
+            "second_allele_status": {
+              "type": "string"
+            },
+            "hpo_terms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "HPO identifiers in HP:0001250, HP_0001250, or bare numeric form."
+            }
+          },
+          "additionalProperties": true
+        },
+        "clinical_observations": {
+          "type": "array",
+          "description": "Structured caller-supplied case, family, phase, phenotype, assay, case-control, or case-series observations. These may create automatic source-backed candidates but enter the verified estimate only when independently re-anchored to a retrievable provider or document fact.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "observation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "observation_type": {
+                "type": "string",
+                "enum": [
+                  "de_novo",
+                  "recessive_case",
+                  "segregation",
+                  "phenotype_specificity",
+                  "healthy_observation",
+                  "allelic_phase",
+                  "alternative_cause",
+                  "functional_assay",
+                  "case_control",
+                  "case_series"
+                ]
+              },
+              "source_type": {
+                "type": "string",
+                "enum": [
+                  "user_report",
+                  "lab_report",
+                  "pedigree",
+                  "publication",
+                  "external_database",
+                  "other"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "locator": {
+                "type": "string"
+              },
+              "excerpt": {
+                "type": "string"
+              },
+              "values": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "observation_id",
+              "observation_type",
+              "source_type",
+              "source_id",
+              "values"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "response_detail": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ],
+          "default": "summary",
+          "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
+        }
+      },
+      "required": [
+        "variant"
+      ],
+      "additionalProperties": false
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "success",
+            "degraded",
+            "error",
+            "not_applicable"
+          ]
+        },
+        "execution_status": {
+          "type": "string"
+        },
+        "coverage_status": {
+          "type": "string"
+        },
+        "provider_failures": {
+          "type": "array",
+          "description": "Summary-only provider failure rows keyed by tool and query representation, with SourceFact IDs, failure code, HTTP status, retryability, dataset/release, and the actual transport retry count.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "variant": {
+          "type": "object"
+        },
+        "variant_identity": {
+          "type": "object",
+          "description": "Submitted and normalized identity diagnostics. submitted_variant/submitted_gene/submitted_hgvs_p remain caller values; resolved_gene and gene_resolution_status disclose HGNC or transcript-based normalization.",
+          "properties": {
+            "submitted_variant": {
+              "type": "string"
+            },
+            "normalized_query_representation": {
+              "type": "string"
+            },
+            "submitted_gene": {
+              "type": "string"
+            },
+            "resolved_gene": {
+              "type": "string"
+            },
+            "gene_resolution_status": {
+              "type": "string",
+              "enum": [
+                "not_provided",
+                "matched",
+                "resolved_alias",
+                "corrected_from_transcript",
+                "unresolved",
+                "provider_failed"
+              ]
+            },
+            "gene_resolution_basis": {
+              "type": "string"
+            },
+            "submitted_hgvs_p": {
+              "type": "string"
+            },
+            "hgvs_p": {
+              "type": "string"
+            }
+          }
+        },
+        "variant_scope": {
+          "type": "object",
+          "description": "Pre-provider build and small-variant/SV scope decision."
+        },
+        "clinical_context": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Review-only clinical context echo; never evidence."
+        },
+        "omim_context": {
+          "type": "object",
+          "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
+        },
+        "consequence_profile": {
+          "type": "object",
+          "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
+          "properties": {
+            "annotation_status": {
+              "type": "string",
+              "enum": [
+                "resolved",
+                "empty",
+                "unavailable",
+                "identity_conflict"
+              ]
+            },
+            "attempted_representations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "annotation_reason": {
+              "type": "string"
+            },
+            "observations": {
+              "type": "array",
+              "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "selected_provider": {
+              "type": "string"
+            },
+            "selected_source_fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "corroborating_source_fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "provider_failures": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "provider_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "hard_identity_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "selected_transcript_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "alternate_transcript_observations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "nonblocking_disagreements": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "equivalent_or_alternate_representations": {
+              "type": "array",
+              "description": "Provider HGVS descriptions retained as normalization or alternate representations; string differences alone are non-veto context.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "resolution_confidence": {
+              "type": "string",
+              "enum": [
+                "authoritative_single_source",
+                "authoritative_corroborated",
+                "source_backed_only",
+                "disputed",
+                "unresolved"
+              ]
+            },
+            "automatic_usable": {
+              "type": "boolean"
+            },
+            "verified_usable": {
+              "type": "boolean"
+            },
+            "spliceai_profile": {
+              "type": "object",
+              "description": "Identity-selected transcript SpliceAI four-channel profile plus separately named provider-global maximum context."
+            },
+            "spliceai_scores": {
+              "type": "object"
+            },
+            "spliceai_max_delta": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "description": "Maximum of the selected-transcript DS_AG, DS_AL, DS_DG, and DS_DL values."
+            },
+            "spliceai_trigger_channel": {
+              "type": "string"
+            },
+            "resolution_reason": {
+              "type": "string"
+            },
+            "transcript_mapping": {
+              "type": "object"
+            },
+            "selected_observation": {
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "missing_requirements": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hgvs_operation": {
+              "type": "string"
+            },
+            "splice_positions": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "canonical_site_type": {
+              "type": "string",
+              "enum": [
+                "donor",
+                "acceptor",
+                "ambiguous",
+                "none"
+              ]
+            },
+            "canonical_motif_effect": {
+              "type": "string",
+              "enum": [
+                "disrupted",
+                "potentially_preserved",
+                "unknown",
+                "not_applicable"
+              ]
+            },
+            "canonical_motif_effect_reason": {
+              "type": "string"
+            },
+            "canonical_motif_sequence_status": {
+              "type": "string",
+              "description": "REF/ALT or HGVS sequence-level motif status; functional native-site loss is reported separately in spliceai_profile."
+            },
+            "canonical_motif_sequence_reason": {
+              "type": "string"
+            },
+            "genomic_position": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "genomic_ref": {
+              "type": "string"
+            },
+            "genomic_alt": {
+              "type": "string"
+            }
+          }
+        },
+        "rule_context": {
+          "type": "object"
+        },
+        "runtime_manifest": {
+          "type": "object",
+          "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
+        },
+        "guard_context": {
+          "type": "object",
+          "description": "Compact self-checking claim contract for ACMG_guard_final_answer. Contains schema_version, variant_identity_hash, ruleset_hash, representative-card claims, criterion_review_claims, and context_hash; review claims permit accurate discussion but are not EvidenceCards or Bayesian inputs."
+        },
+        "coverage_summary": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "source_facts": {
+          "type": "array",
+          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "fact_id": {
+                "type": "string"
+              },
+              "tool_name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "failure_details": {
+                "type": "object",
+                "description": "Structured no-hit, identity-conflict, provider-failure, or malformed-contract diagnostics."
+              }
+            }
+          }
+        },
+        "source_assertions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "prior_variant_candidates": {
+          "type": "array",
+          "description": "Same-residue germline-compatible prior-variant leads. Database labels remain review-only until independently anchored literature facts validate PS1 or PM5.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "literature_candidates": {
+          "type": "array",
+          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "literature_candidate_defaults": {
+          "type": "object",
+          "description": "Common summary-only fields omitted from every literature candidate row to avoid repeated payload. Merge these defaults into each row when reading the compact index."
+        },
+        "literature_review": {
+          "type": "object",
+          "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
+        },
+        "recoverable_gaps": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "workflow_status": {
+          "type": "string",
+          "enum": [
+            "collecting",
+            "input_correction_required",
+            "unsupported_variant_class",
+            "consequence_recovery_required",
+            "literature_review_required",
+            "proposal_validation_required",
+            "evidence_ready",
+            "blocked_external_full_text"
+          ]
+        },
+        "review_readiness": {
+          "type": "object",
+          "description": "Auditable evidence-review readiness. This is workflow completeness, not a five-tier classification."
+        },
+        "next_actions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "predictor_scores": {
+          "type": "object"
+        },
+        "criterion_reviews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "criterion": {
+                "type": "string"
+              },
+              "route_status": {
+                "type": "string",
+                "enum": [
+                  "assessed",
+                  "proposal_validated",
+                  "candidate_available",
+                  "review_pending",
+                  "insufficient_information",
+                  "not_applicable",
+                  "deprecated"
+                ]
+              },
+              "candidate_source_fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pending_request_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "card_id": {
+                "type": "string"
+              },
+              "criterion": {
+                "type": "string"
+              },
+              "strength": {
+                "type": "string"
+              },
+              "evidence_status": {
+                "type": "string",
+                "enum": [
+                  "expert_panel_applied",
+                  "rule_mapped",
+                  "source_backed_candidate",
+                  "not_met",
+                  "excluded",
+                  "deprecated"
+                ]
+              },
+              "strength_source": {
+                "type": "string"
+              },
+              "rule_source": {
+                "type": "object"
+              },
+              "verification_dimensions": {
+                "type": "object"
+              },
+              "calculation_roles": {
+                "type": "object"
+              },
+              "correlation_keys": {
+                "type": "object"
+              },
+              "scenario_id": {
+                "type": "string"
+              },
+              "source_fact_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "caveats": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "missing_requirements": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rule_evaluation": {
+                "type": "object",
+                "description": "Observed inputs, applicable rule and threshold, condition status, one primary reason, and secondary caveats."
+              }
+            },
+            "required": [
+              "card_id",
+              "criterion",
+              "strength",
+              "evidence_status",
+              "scenario_id",
+              "source_fact_ids"
+            ]
+          }
+        },
+        "conflict_report": {
+          "type": "object"
+        },
+        "compatibility_report": {
+          "type": "object"
+        },
+        "vcep_context": {
+          "type": "object"
+        },
+        "vcep_assertions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "rule_scenarios": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "automatic_bayesian": {
+          "type": "object"
+        },
+        "verified_bayesian": {
+          "type": "object"
+        },
+        "scenario_estimates": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "automation_report": {
+          "type": "object"
+        },
+        "user_selected_bayesian": {
+          "type": "object"
+        },
+        "decision_report": {
+          "type": "object"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "final_classification_allowed": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "required": [
+        "status",
+        "execution_status",
+        "coverage_status",
+        "variant",
+        "variant_identity",
+        "variant_scope",
+        "omim_context",
+        "consequence_profile",
+        "rule_context",
+        "runtime_manifest",
+        "guard_context",
+        "coverage_summary",
+        "source_facts",
+        "source_assertions",
+        "prior_variant_candidates",
+        "literature_candidates",
+        "literature_review",
+        "recoverable_gaps",
+        "workflow_status",
+        "review_readiness",
+        "next_actions",
+        "predictor_scores",
+        "criterion_reviews",
+        "evidence_cards",
+        "conflict_report",
+        "compatibility_report",
+        "vcep_context",
+        "vcep_assertions",
+        "rule_scenarios",
+        "automatic_bayesian",
+        "verified_bayesian",
+        "scenario_estimates",
+        "automation_report",
+        "user_selected_bayesian",
+        "decision_report",
+        "limitations",
+        "final_classification_allowed"
+      ]
+    },
+    "fields": {
+      "operation": "collect_evidence"
+    },
+    "metadata": {
+      "tool_role": "backward-compatible evidence collector alias",
+      "ordinary_entrypoint": "ACMG_evidence_collector"
     }
   },
   {
@@ -502,16 +2166,24 @@
           "type": "object",
           "description": "Walker 2023 run provenance. Missing or incomplete metadata prevents a positive PP3/BP4 EvidenceCard while all available scores remain visible."
         },
-        "predictor_scores": {"type": "object"},
+        "predictor_scores": {
+          "type": "object"
+        },
         "variant_type": {
           "type": "string"
         },
         "consequence_terms": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {
+            "type": "string"
+          }
         },
-        "hgvs_c": {"type": "string"},
-        "hgvs_p": {"type": "string"}
+        "hgvs_c": {
+          "type": "string"
+        },
+        "hgvs_p": {
+          "type": "string"
+        }
       },
       "additionalProperties": false
     },
@@ -662,28 +2334,103 @@
               "direction"
             ],
             "properties": {
-              "gene_disease_mechanism": {"type": "string", "minLength": 1},
-              "assay_effect_consistent": {"type": "boolean", "const": true},
-              "assay_class": {"type": "string", "minLength": 1},
-              "assay_instance_id": {"type": "string", "minLength": 1},
-              "model_system": {"type": "string", "minLength": 1},
-              "disease_relevance": {"type": "boolean", "const": true},
-              "readout_name": {"type": "string", "minLength": 1},
-              "readout_unit": {"type": "string", "minLength": 1},
-              "normal_threshold": {"type": "string", "minLength": 1},
-              "abnormal_threshold": {"type": "string", "minLength": 1},
-              "variant_result": {"type": "string", "minLength": 1},
-              "positive_experimental_controls": {"type": ["array", "object", "integer"]},
-              "negative_experimental_controls": {"type": ["array", "object", "integer"]},
-              "technical_replicates": {"type": "integer", "minimum": 1},
-              "biological_replicates": {"type": "integer", "minimum": 1},
-              "pathogenic_validation_controls": {"type": "integer", "minimum": 1},
-              "benign_validation_controls": {"type": "integer", "minimum": 1},
-              "validation_control_provenance": {"type": "string", "minLength": 1},
-              "dynamic_range": {"type": "number", "exclusiveMinimum": 0},
-              "calibration_method": {"type": "string", "const": "reported_odds_path"},
-              "reported_odds_path": {"type": "number", "exclusiveMinimum": 0},
-              "direction": {"type": "string", "enum": ["damaging", "normal"]}
+              "gene_disease_mechanism": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assay_effect_consistent": {
+                "type": "boolean",
+                "const": true
+              },
+              "assay_class": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assay_instance_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model_system": {
+                "type": "string",
+                "minLength": 1
+              },
+              "disease_relevance": {
+                "type": "boolean",
+                "const": true
+              },
+              "readout_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "readout_unit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "normal_threshold": {
+                "type": "string",
+                "minLength": 1
+              },
+              "abnormal_threshold": {
+                "type": "string",
+                "minLength": 1
+              },
+              "variant_result": {
+                "type": "string",
+                "minLength": 1
+              },
+              "positive_experimental_controls": {
+                "type": [
+                  "array",
+                  "object",
+                  "integer"
+                ]
+              },
+              "negative_experimental_controls": {
+                "type": [
+                  "array",
+                  "object",
+                  "integer"
+                ]
+              },
+              "technical_replicates": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "biological_replicates": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "pathogenic_validation_controls": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "benign_validation_controls": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "validation_control_provenance": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dynamic_range": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "calibration_method": {
+                "type": "string",
+                "const": "reported_odds_path"
+              },
+              "reported_odds_path": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "damaging",
+                  "normal"
+                ]
+              }
             }
           }
         },
@@ -719,19 +2466,47 @@
           "items": {
             "type": "object",
             "properties": {
-              "fact_id": {"type": "string", "minLength": 1},
-              "source_pmid": {"type": "string"},
-              "source_pmcid": {"type": "string"},
-              "section_locator": {"type": "string", "minLength": 1},
+              "fact_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_pmid": {
+                "type": "string"
+              },
+              "source_pmcid": {
+                "type": "string"
+              },
+              "section_locator": {
+                "type": "string",
+                "minLength": 1
+              },
               "variant_identity": {},
-              "gene": {"type": "string"},
-              "case_count": {"type": "integer", "minimum": 1},
-              "control_count": {"type": "integer", "minimum": 1},
-              "odds_ratio": {"type": "number"},
-              "ci_lower": {"type": "number"},
-              "phenotype_consistent": {"type": "boolean"},
-              "cases_independent": {"type": "boolean"},
-              "extraction_method": {"type": "string"}
+              "gene": {
+                "type": "string"
+              },
+              "case_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "control_count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "odds_ratio": {
+                "type": "number"
+              },
+              "ci_lower": {
+                "type": "number"
+              },
+              "phenotype_consistent": {
+                "type": "boolean"
+              },
+              "cases_independent": {
+                "type": "boolean"
+              },
+              "extraction_method": {
+                "type": "string"
+              }
             },
             "required": [
               "fact_id",
@@ -758,8 +2533,17 @@
       },
       "allOf": [
         {
-          "if": {"required": ["case_control_facts"]},
-          "then": {"required": ["expected_variant", "expected_gene"]}
+          "if": {
+            "required": [
+              "case_control_facts"
+            ]
+          },
+          "then": {
+            "required": [
+              "expected_variant",
+              "expected_gene"
+            ]
+          }
         }
       ],
       "additionalProperties": false

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .models import SourceFact, fact_identity_matches, fact_is_available
@@ -9,6 +10,8 @@ from .source_adapters import explicit_allele_conflict
 
 
 CONSEQUENCE_CONFLICT_POLICY_VERSION = "2026-08-15-v5"
+INPUT_CONSEQUENCE_FALLBACK_POLICY_VERSION = "2026-08-25-v1"
+_INTRONIC_HGVS_RE = re.compile(r"c\.[*+-]?\d+(?P<offset>[+-]\d+)", re.IGNORECASE)
 
 
 CONSEQUENCE_METHODS = {
@@ -565,6 +568,70 @@ def resolve_consequence_observations(
     }
 
 
+def apply_input_intronic_fallback(
+    identity: dict[str, Any],
+    observations: list[dict[str, Any]],
+    resolution: dict[str, Any],
+) -> dict[str, Any]:
+    """Expose an identity-bound HGVS intron observation when providers are empty."""
+    if resolution.get("status") in {"resolved", "identity_conflict"}:
+        return resolution
+    hgvs_c = _text(identity.get("validated_hgvs_c") or identity.get("hgvs_c"))
+    transcript = _text(identity.get("transcript"))
+    offsets = [
+        int(match.group("offset")) for match in _INTRONIC_HGVS_RE.finditer(hgvs_c)
+    ]
+    if not transcript or not any(abs(offset) > 2 for offset in offsets):
+        return resolution
+    selected = {
+        "provider": "submitted_hgvs_syntax",
+        "provider_role": "input_context",
+        "annotation_method": "input_syntax",
+        "observation_role": "selected",
+        "gene": identity.get("gene"),
+        "transcript": transcript,
+        "hgvs_c": hgvs_c,
+        "consequence_terms": ["intron_variant"],
+        "allele_match_status": "matched",
+        "gene_match_status": "matched" if identity.get("gene") else "unknown",
+        "transcript_match_status": "exact",
+        "target_binding_status": "matched",
+        "limitation": "provider_consequence_unavailable_input_syntax_only",
+        "policy_version": INPUT_CONSEQUENCE_FALLBACK_POLICY_VERSION,
+    }
+    return {
+        **resolution,
+        "status": "resolved",
+        "reason": "selected_transcript_intronic_hgvs_input_observation",
+        "selected_observation": selected,
+        "selected_source_fact_ids": [],
+        "corroborating_source_fact_ids": [],
+        "conflicts": [],
+        "nonblocking_disagreements": [
+            {
+                "type": "provider_consequence_unavailable_input_syntax_used",
+                "hgvs_c": hgvs_c,
+            }
+        ],
+        "resolution_confidence": "source_backed_only",
+        "automatic_usable": True,
+        "verified_usable": False,
+        "transcript_mapping": {
+            "requested": transcript,
+            "selected": transcript,
+            "status": "exact",
+        },
+        "input_observation": selected,
+        "observations": [
+            *[
+                {key: value for key, value in row.items() if not key.startswith("_")}
+                for row in observations
+            ],
+            selected,
+        ],
+    }
+
+
 def profile_features_from_resolution(resolution: dict[str, Any]) -> dict[str, Any]:
     """Adapt a selected observation to the established profile builder."""
     selected = resolution.get("selected_observation")
@@ -593,8 +660,10 @@ def profile_features_from_resolution(resolution: dict[str, Any]) -> dict[str, An
 
 __all__ = [
     "CONSEQUENCE_CONFLICT_POLICY_VERSION",
+    "INPUT_CONSEQUENCE_FALLBACK_POLICY_VERSION",
     "CONSEQUENCE_METHODS",
     "CONSEQUENCE_PROVIDER_ROLES",
+    "apply_input_intronic_fallback",
     "consequence_observations",
     "profile_features_from_resolution",
     "resolve_consequence_observations",

@@ -14,6 +14,8 @@ PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-08-v3"
 PM2_RARE_OBSERVED_GLOBAL_AF_MAX = 0.0001
 PM2_RARE_OBSERVED_POPMAX_AF_MAX = 0.001
 PM2_DECISION_POLICY_VERSION = "2026-08-13-v3"
+GNOMAD_NO_HIT_POLICY_VERSION = "2026-08-25-v2"
+GNOMAD_TRANSPORT_RETRY_POLICY_VERSION = "2026-08-25-v1"
 _FREQUENCY_OPERATORS = {
     "<": operator.lt,
     "<=": operator.le,
@@ -43,6 +45,8 @@ def population_evidence(
     population_details: dict[str, Any] | None = None,
     callability_metrics: dict[str, Any] | None = None,
     rule_override: dict[str, Any] | None = None,
+    population_observation_status: str = "observed",
+    effective_af_for_rule: float | None = None,
 ) -> list[EvidenceCard]:
     """Evaluate population evidence without combining fields across providers."""
     gnomad_af_global = _finite_number(gnomad_af_global)
@@ -54,6 +58,8 @@ def population_evidence(
     ba1_exception_verified = ba1_exception_verified is True
     coverage_confirmed_adequate = coverage_adequate is True
     callability_available = callability_available is True or coverage_adequate is True
+    population_observation_status = str(population_observation_status or "observed")
+    absence_reported = population_observation_status == "not_observed"
     cards: list[EvidenceCard] = []
     frequency_complete = gnomad_af_global is not None
     audit_values = {
@@ -63,6 +69,8 @@ def population_evidence(
         "af_popmax": gnomad_af_popmax,
         "population_details": dict(population_details or {}),
         "callability_metrics": dict(callability_metrics or {}),
+        "population_observation_status": population_observation_status,
+        "effective_af_for_rule": effective_af_for_rule,
     }
     rare_observed_candidate = bool(
         gnomad_ac is not None
@@ -145,7 +153,36 @@ def population_evidence(
     }
     caveats: list[str] = []
     missing_requirements: list[str] = []
-    if not complete:
+    if absence_reported:
+        condition = "condition_met" if coverage_confirmed_adequate else "unresolved"
+        pm2_strength = "PM2_Supporting" if callability_available else "indeterminate"
+        pm2_status = (
+            "rule_mapped"
+            if coverage_confirmed_adequate
+            else "source_backed_candidate"
+            if callability_available
+            else "excluded"
+        )
+        pm2_reason = (
+            "PM2: gnomAD returned no variant record and the site has a versioned "
+            "adequate-coverage assessment"
+            if coverage_confirmed_adequate
+            else "PM2: gnomAD returned no variant record and callability metrics "
+            "are available, but no versioned adequacy policy was applied"
+            if callability_available
+            else "PM2: gnomAD returned no variant record, but site callability "
+            "was unavailable"
+        )
+        if callability_available and not coverage_confirmed_adequate:
+            caveats.append(
+                "No gnomAD variant record is treated as absence only in the "
+                "presence of a same-site callability response; adequacy remains "
+                "unresolved without a versioned policy."
+            )
+            missing_requirements = ["versioned site-coverage adequacy assessment"]
+        elif not callability_available:
+            missing_requirements = ["site callability metrics"]
+    elif not complete:
         pm2_strength = "not_assessed"
         pm2_status = "excluded"
         condition = "unresolved"
@@ -257,6 +294,10 @@ def population_evidence(
             rule_basis=(
                 "Applicable released CSpec population-frequency condition."
                 if has_cspec_threshold and gnomad_ac > 0
+                else "gnomAD no-hit plus same-site callability absence policy "
+                f"{GNOMAD_NO_HIT_POLICY_VERSION}; no-hit is not treated as "
+                "absence without callability."
+                if absence_reported
                 else "Fork review-only rare-observed PM2 candidate policy "
                 f"{PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION}; its AF filters "
                 "are not a deterministic ClinGen SVI PM2 threshold."
@@ -276,6 +317,13 @@ def population_evidence(
                     "ac": gnomad_ac,
                     "an": gnomad_an,
                 },
+                "population_observation_status": population_observation_status,
+                "effective_af_for_rule": (
+                    0.0 if absence_reported else effective_af_for_rule
+                ),
+                "absence_policy_version": (
+                    GNOMAD_NO_HIT_POLICY_VERSION if absence_reported else ""
+                ),
                 "rule_source": rule_source,
                 "threshold": cspec_frequency_threshold,
                 "comparison": (
@@ -299,6 +347,7 @@ def population_evidence(
                     "structured"
                     if coverage_confirmed_adequate
                     or (has_cspec_threshold and gnomad_ac > 0)
+                    or (absence_reported and callability_available)
                     else "unresolved"
                 ),
                 "version_status": (
