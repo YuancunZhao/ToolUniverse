@@ -14,36 +14,37 @@ deployment extension for the enhanced ACMG runtime; it is not a replacement for
 the standard upstream installation at
 <https://github.com/mims-harvard/ToolUniverse#install>.
 
-## Validated release
+## Validated installation target
 
 Install the exact validated runtime commit instead of a floating branch:
 
 ```text
 Repository: https://github.com/YuancunZhao/ToolUniverse
 Branch:     codex/acmg-on-tooluniverse-1.4
-Commit:     94343d3d495395aaf61ec552c992ff772ecf9fdc
+Commit:     b303cf58a6507534c96e1ed43cae8952f695f25f
 ```
 
-This commit passed the then-current ACMG/SpliceAI/provider suite, MCP registration
-checks, Skill mirror checks, wrapper/schema checks, and local plus exact-Git-SHA
-isolated installation smoke tests.
+This `1.4.1+acmg.8` commit passed 549 ACMG/SpliceAI/provider regression tests,
+MCP registration checks, Skill installer/mirror checks, wrapper/schema checks,
+and local plus remote exact-Git-SHA isolated installation smoke tests. The
+installed package exposes 2699 tools, including all eight ACMG tools, and its
+`direct_url.json` commit matches the SHA above. Live provider availability is
+not certified by these offline behavior checks; the optional online check below
+reports it separately. This is a branch build, not a tag or GitHub Release.
 
 The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
-The branch documentation below describes the validated v4 interface. The
+The branch documentation below describes the validated v4.2 interface. The
 dedicated pin-only commit that contains this text is not the runtime install
 target; installers must continue to use the exact validated runtime SHA above.
-The working branch may describe newer `1.4.1+acmg.8` interfaces before a new
-validated SHA is published; the pinned commit above remains the install target
-until the full exact-SHA gate is repeated.
 
 ## One-line installation prompt
 
 Copy this sentence into another AI agent:
 
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `94343d3d495395aaf61ec552c992ff772ecf9fdc` for my current AI client. Preserve unrelated MCP servers and skills.
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `b303cf58a6507534c96e1ed43cae8952f695f25f` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
 
@@ -57,7 +58,7 @@ existing `tooluniverse` entry:
   "args": [
     "--refresh",
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@94343d3d495395aaf61ec552c992ff772ecf9fdc",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@b303cf58a6507534c96e1ed43cae8952f695f25f",
     "tooluniverse"
   ],
   "env": {
@@ -105,7 +106,7 @@ Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 Then run:
 
 ```bash
-TOOLUNIVERSE_COMMIT="94343d3d495395aaf61ec552c992ff772ecf9fdc"
+TOOLUNIVERSE_COMMIT="b303cf58a6507534c96e1ed43cae8952f695f25f"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
 : "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
@@ -379,7 +380,7 @@ First verify that the exact commit starts:
 
 ```bash
 uvx --refresh --from \
-  git+https://github.com/YuancunZhao/ToolUniverse.git@94343d3d495395aaf61ec552c992ff772ecf9fdc \
+  git+https://github.com/YuancunZhao/ToolUniverse.git@b303cf58a6507534c96e1ed43cae8952f695f25f \
   tooluniverse --help
 ```
 
@@ -400,8 +401,8 @@ Network-dependent providers may produce a degraded or partial result. That is
 acceptable only when the failed/no-result sources and reasons remain visible;
 it is not acceptable to replace them with unverified manual evidence.
 
-Release-candidate maintainers must also run the opt-in live provider gate
-against the pushed 40-character candidate SHA:
+Maintainers and testing agents can separately run the opt-in live provider
+check against the pushed 40-character runtime SHA:
 
 ```bash
 python scripts/verify_acmg_install_smoke.py \
