@@ -100,6 +100,11 @@ class MCPGoldenToolUniverse(ToolUniverse, GoldenProviderFixture):
         fixture = self.fixture_response(call)
         if fixture is not None:
             return fixture
+        if call.get("name") != "execute_tool" and not str(
+            call.get("name") or ""
+        ).startswith("ACMG_"):
+            self.calls.append(deepcopy(call))
+            return {"status": "unavailable", "reason": "golden fixture has no result"}
         return super().run_one_function(call, **kwargs)
 
     def run_many_functions(
@@ -147,7 +152,7 @@ def _reviewed_result(
     )
 
 
-def test_brca2_golden_three_phase_evidence_workflow():
+def test_brca2_golden_three_phase_evidence_workflow(check_acmg_summary):
     fixture = GoldenProviderFixture()
     initial = ACMGEvidencePipeline(fixture).run(
         {**BASE_ARGUMENTS, "response_detail": "summary"}
@@ -179,7 +184,7 @@ def test_brca2_golden_three_phase_evidence_workflow():
     assert not initial["review_readiness"].get("pending_request_ids")
     assert initial["final_classification_allowed"] is False
     assert initial["runtime_manifest"]["acmg_runtime_version"] == (
-        "evidence-automation-4.2"
+        "evidence-automation-4.3"
     )
     assert len(initial["runtime_manifest"]["ruleset_hash"]) == 64
     assert validate_guard_context(initial["guard_context"]) == (True, "")
@@ -187,14 +192,7 @@ def test_brca2_golden_three_phase_evidence_workflow():
         initial["guard_context"]["ruleset_hash"]
         == initial["runtime_manifest"]["ruleset_hash"]
     )
-    assert (
-        len(
-            json.dumps(initial, ensure_ascii=False, separators=(",", ":")).encode(
-                "utf-8"
-            )
-        )
-        < 40_000
-    )
+    check_acmg_summary(initial)
     assert (
         len(
             json.dumps(
@@ -296,10 +294,27 @@ def _mcp_payload(result: Any) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
+@pytest.mark.parametrize("extra_literature", [0, 400])
+async def test_compact_mcp_execute_tool_runs_acmg_collector_offline(
+    extra_literature, check_acmg_summary
+):
     from fastmcp import Client
 
     runtime = MCPGoldenToolUniverse()
+    runtime.responses["PubMed_search_articles"]["data"] = [
+        *runtime.responses["PubMed_search_articles"]["data"]["articles"],
+    ]
+    runtime.responses["PubMed_search_articles"]["data"].extend(
+        [
+            {
+                "pmid": str(80000000 + i),
+                "doi": f"10.0000/mcp-size-fixture-{i}",
+                "title": "BRCA2 background fixture",
+                "abstract": "General gene background only.",
+            }
+            for i in range(extra_literature)
+        ]
+    )
     server = SMCP(
         name="ACMG golden MCP",
         tooluniverse_config=runtime,
@@ -307,6 +322,7 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
         search_enabled=False,
     )
     async with Client(server) as client:
+        calls = ["ACMG_evidence_collector"]
         response = await client.call_tool(
             "execute_tool",
             {
@@ -314,10 +330,33 @@ async def test_compact_mcp_execute_tool_runs_acmg_collector_offline():
                 "arguments": {**BASE_ARGUMENTS, "response_detail": "summary"},
             },
         )
-    payload = _mcp_payload(response)
+        payload = _mcp_payload(response)
+        size = check_acmg_summary(payload)
+        if extra_literature:
+            assert size > 40_000
+            assert {str(80000000 + i) for i in range(extra_literature)} <= {
+                row.get("pmid") for row in payload["literature_candidates"]
+            }
+        assert (
+            len(json.dumps(payload["guard_context"], separators=(",", ":")).encode())
+            < 5_000
+        )
+        calls.append("ACMG_guard_final_answer")
+        guarded = await client.call_tool(
+            "execute_tool",
+            {
+                "tool_name": "ACMG_guard_final_answer",
+                "arguments": {
+                    "final_answer_text": "BRCA2 evidence review; no final classification is issued.",
+                    "guard_context": payload["guard_context"],
+                },
+            },
+        )
+        assert _mcp_payload(guarded)["status"] == "PASS"
+        assert calls == ["ACMG_evidence_collector", "ACMG_guard_final_answer"]
     assert payload["execution_status"] == "success"
     assert payload["variant_identity"]["gene"] == "BRCA2"
     assert payload["runtime_manifest"]["collector_schema_version"] == (
-        "2026-08-25-v4.2"
+        "2026-08-31-v4.3"
     )
     assert payload["final_classification_allowed"] is False

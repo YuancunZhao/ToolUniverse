@@ -9,6 +9,18 @@ place it in `clinical_context.zygosity`.
 
 ## Native compact MCP
 
+Wait for the configured MCP response; a timeout is not a negative evidence
+result. Do not switch to a local CLI or repeat collection to warm a cache.
+Send the complete final response to Guard and return exactly the checked text
+after PASS. Population values are in `population_observations` even without a
+PM2 card; consequence summary groups use `shared`, `columns`, and `rows`.
+40 KB is a soft optimization target, not a failed-collection status. Use larger
+summaries directly with the same two calls; do not fetch full or write files
+just because of size. Referenced sources are in `source_facts`. Grouped
+`other_card_results.card_ids` retains every atomic result without resumming it.
+Give the evidence table, estimates, conflicts and important limitations; the
+complete background indexes remain in the tool result without being recited.
+
 Call `execute_tool`:
 
 ```json

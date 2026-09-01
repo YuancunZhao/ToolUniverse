@@ -59,6 +59,49 @@ def test_revel_pathogenic_intervals(revel_score, strength):
 
 
 @pytest.mark.parametrize(
+    ("revel", "splice", "expected"),
+    [
+        (0.967, 0.008, ["PP3_Strong"]),
+        (0.575, 0.017, []),
+        (0.1, 0.8, ["PP3_Supporting"]),
+        (0.967, 0.8, ["PP3_Strong", "PP3_Supporting"]),
+        (0.1, 0.017, ["BP4_Moderate"]),
+    ],
+)
+def test_protein_and_splicing_scope_do_not_cancel_independent_harm(
+    revel, splice, expected
+):
+    cards = computational_evidence(
+        variant_type="missense_variant",
+        revel_score=revel,
+        spliceai_run_metadata=_walker_metadata(splice),
+        spliceai_max_delta=splice,
+    )
+    assert [
+        card.strength for card in cards if card.strength.startswith(("PP3_", "BP4_"))
+    ] == expected
+    assert all(
+        card.rule_evaluation.get("prediction_mechanism")
+        in {"protein_effect", "splicing"}
+        for card in cards
+        if card.source_label in {"REVEL", "SpliceAI"}
+    )
+
+
+@pytest.mark.parametrize(
+    "variant_type",
+    ["inframe_insertion", "inframe_deletion", "frameshift_variant", "stop_lost"],
+)
+def test_protein_altering_variants_do_not_get_bp4_from_low_spliceai(variant_type):
+    cards = computational_evidence(
+        variant_type=variant_type,
+        spliceai_max_delta=0.017,
+        spliceai_run_metadata=_walker_metadata(0.017),
+    )
+    assert not any(card.strength.startswith("BP4") for card in cards)
+
+
+@pytest.mark.parametrize(
     ("revel_score", "strength"),
     [
         (0.003, "BP4_VeryStrong"),
@@ -364,7 +407,50 @@ def test_locally_reviewed_cspec_can_override_revel_threshold():
 
     assert card.strength == "PP3_Moderate"
     assert card.rule_id == "fixture-cspec-rule"
+    assert card.rule_evaluation["applied_cspec_condition"]["threshold"] == 0.7
     assert (
         card.observed_facts["cspec_contract_applied"]["specification_id"]
         == "fixture-cspec"
+    )
+    base = contract["criteria"]["PP3"]
+    for extra in (
+        {"deterministic_parse_status": "partial"},
+        {"regions": [{"start": 1, "end": 100}], "condition_logic": "all"},
+        {"variant_types": ["synonymous_variant"]},
+    ):
+        contract["criteria"]["PP3"] = {**base, **extra}
+        card = _pp3_bp4_card(revel_score=0.72, rule_override=contract)
+        assert card.rule_id != "fixture-cspec-rule"
+        assert "cspec_contract_applied" not in card.observed_facts
+
+
+@pytest.mark.parametrize("revel,applied", [(0.1, True), (0.575, False), (0.967, False)])
+def test_cspec_bp4_requires_both_protein_and_splicing_conditions(revel, applied):
+    contract = {
+        "specification_id": "combined-fixture",
+        "rule_id": "combined-fixture",
+        "version": "1",
+        "criteria": {
+            "BP4": {
+                "strength": "BP4_Strong",
+                "variant_types": ["missense_variant"],
+                "condition_logic": "all",
+                "predictor_rules": [
+                    {"predictor": "REVEL", "operator": "<=", "threshold": 0.2},
+                    {"predictor": "SpliceAI", "operator": "<=", "threshold": 0.05},
+                ],
+            }
+        },
+    }
+    cards = computational_evidence(
+        variant_type="missense_variant",
+        revel_score=revel,
+        spliceai_max_delta=0.017,
+        spliceai_run_metadata=_walker_metadata(0.017),
+        rule_override=contract,
+    )
+    splice = next(card for card in cards if card.source_label == "SpliceAI")
+    assert (splice.strength == "BP4_Strong") is applied
+    assert (
+        splice.rule_evaluation["protein_and_splicing_cspec_conditions_met"] is applied
     )

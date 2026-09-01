@@ -547,6 +547,13 @@
           "type": "object",
           "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
         },
+        "population_observations": {
+          "type": "array",
+          "description": "Independent allele/build/dataset/callset frequency, popmax subgroup, coverage and failure observations, including when no PM2/BA1/BS1 card exists. Never mix AF/AC/AN across datasets.",
+          "items": {
+            "type": "object"
+          }
+        },
         "consequence_profile": {
           "type": "object",
           "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
@@ -571,10 +578,21 @@
             },
             "observations": {
               "type": "array",
-              "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.",
+              "description": "Full response only: all distinct provider observations. Summary uses lossless observation_groups instead; empty/no-hit/failed rows are not negative votes.",
               "items": {
                 "type": "object"
               }
+            },
+            "observation_groups": {
+              "type": "array",
+              "description": "Summary only: merge observation_defaults, group.shared, then dict(zip(columns, row)). Explicit null overrides a default. All distinct transcripts are preserved.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "observation_defaults": {
+              "type": "object",
+              "description": "Repeated summary observation metadata; group and row fields take precedence."
             },
             "selected_provider": {
               "type": "string"
@@ -741,7 +759,7 @@
         },
         "runtime_manifest": {
           "type": "object",
-          "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
+          "description": "Runtime/schema/ruleset provenance, imported package_location, distribution_package_location, package_matches_distribution, VCS commit when available, and applicable CSpec identities."
         },
         "guard_context": {
           "type": "object",
@@ -755,7 +773,7 @@
         },
         "source_facts": {
           "type": "array",
-          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
+          "description": "Summary index of every SourceFact referenced by the returned clinical sections, once per fact_id; unreferenced full facts remain in full. Rows inherit source_fact_defaults; explicit null denotes unknown, not the default. Missing full sources are reported as source_reference_unresolved limitations.",
           "items": {
             "type": "object",
             "properties": {
@@ -774,6 +792,10 @@
               }
             }
           }
+        },
+        "source_fact_defaults": {
+          "type": "object",
+          "description": "Summary-only common source metadata; per-fact fields take precedence."
         },
         "source_assertions": {
           "type": "array",
@@ -865,6 +887,47 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "other_card_results": {
+                "type": "array",
+                "description": "Summary only: identical strength/status/reason results grouped within one representative card and scenario; card_ids retains every atomic card. Full keeps original aggregated_cards and atomic results. Display grouping never changes scoring.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "representative_card_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "scenario_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "strength": {
+                      "type": "string"
+                    },
+                    "evidence_status": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "card_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "representative_card_id",
+                    "scenario_id",
+                    "card_ids"
+                  ]
                 }
               }
             }
@@ -1007,6 +1070,7 @@
         "variant_identity",
         "variant_scope",
         "omim_context",
+        "population_observations",
         "consequence_profile",
         "rule_context",
         "runtime_manifest",
@@ -1588,6 +1652,13 @@
           "type": "object",
           "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
         },
+        "population_observations": {
+          "type": "array",
+          "description": "Independent allele/build/dataset/callset frequency, popmax subgroup, coverage and failure observations, including when no PM2/BA1/BS1 card exists. Never mix AF/AC/AN across datasets.",
+          "items": {
+            "type": "object"
+          }
+        },
         "consequence_profile": {
           "type": "object",
           "description": "Identity-bound, multi-provider selected-transcript consequence profile used for criterion applicability routing.",
@@ -1612,10 +1683,21 @@
             },
             "observations": {
               "type": "array",
-              "description": "All authoritative, aggregation, normalization-context, alternate-transcript, empty, and failed consequence observations. Empty/no-hit/failed rows are not negative votes.",
+              "description": "Full response only: all distinct provider observations. Summary uses lossless observation_groups instead; empty/no-hit/failed rows are not negative votes.",
               "items": {
                 "type": "object"
               }
+            },
+            "observation_groups": {
+              "type": "array",
+              "description": "Summary only: merge observation_defaults, group.shared, then dict(zip(columns, row)). Explicit null overrides a default. All distinct transcripts are preserved.",
+              "items": {
+                "type": "object"
+              }
+            },
+            "observation_defaults": {
+              "type": "object",
+              "description": "Repeated summary observation metadata; group and row fields take precedence."
             },
             "selected_provider": {
               "type": "string"
@@ -1782,7 +1864,7 @@
         },
         "runtime_manifest": {
           "type": "object",
-          "description": "Installed runtime, collector schema, deterministic ruleset hash, VCS provenance when available, and applicable dynamic CSpec identities."
+          "description": "Runtime/schema/ruleset provenance, imported package_location, distribution_package_location, package_matches_distribution, VCS commit when available, and applicable CSpec identities."
         },
         "guard_context": {
           "type": "object",
@@ -1796,7 +1878,7 @@
         },
         "source_facts": {
           "type": "array",
-          "description": "Normalized provider or document facts supporting reviewable EvidenceCards and automatic or verified calculation roles.",
+          "description": "Summary index of every SourceFact referenced by the returned clinical sections, once per fact_id; unreferenced full facts remain in full. Rows inherit source_fact_defaults; explicit null denotes unknown, not the default. Missing full sources are reported as source_reference_unresolved limitations.",
           "items": {
             "type": "object",
             "properties": {
@@ -1815,6 +1897,10 @@
               }
             }
           }
+        },
+        "source_fact_defaults": {
+          "type": "object",
+          "description": "Summary-only common source metadata; per-fact fields take precedence."
         },
         "source_assertions": {
           "type": "array",
@@ -1906,6 +1992,47 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "other_card_results": {
+                "type": "array",
+                "description": "Summary only: identical strength/status/reason results grouped within one representative card and scenario; card_ids retains every atomic card. Full keeps original aggregated_cards and atomic results. Display grouping never changes scoring.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "representative_card_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "scenario_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "strength": {
+                      "type": "string"
+                    },
+                    "evidence_status": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "card_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "representative_card_id",
+                    "scenario_id",
+                    "card_ids"
+                  ]
                 }
               }
             }
@@ -2048,6 +2175,7 @@
         "variant_identity",
         "variant_scope",
         "omim_context",
+        "population_observations",
         "consequence_profile",
         "rule_context",
         "runtime_manifest",

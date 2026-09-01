@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tooluniverse.acmg import (
     compatibility,
+    computational,
     consequence_sources,
     literature_extractor,
     models,
@@ -109,6 +110,15 @@ def test_ruleset_hash_tracks_spliceai_scope_policy(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_duox2_scope_and_protein_mapping(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(computational, "COMPUTATIONAL_SCOPE_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+    baseline = ruleset_hash()
+    monkeypatch.setattr(rule_catalog, "PROTEIN_MAPPING_POLICY_VERSION", "fixture")
+    assert ruleset_hash() != baseline
+
+
 def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     manifest = build_runtime_manifest(
         {
@@ -120,8 +130,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-automation-4.2"
-    assert manifest["collector_schema_version"] == "2026-08-25-v4.2"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-4.3"
+    assert manifest["collector_schema_version"] == "2026-08-31-v4.3"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {
@@ -130,3 +140,22 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
             "content_hash": "sha256:fixture",
         }
     ]
+
+
+def test_manifest_discloses_a_shadowed_distribution(monkeypatch):
+    from types import SimpleNamespace
+    from tooluniverse.acmg import runtime_manifest
+
+    monkeypatch.setattr(
+        runtime_manifest.metadata,
+        "distribution",
+        lambda _: SimpleNamespace(
+            version="1.4.1+acmg.9",
+            locate_file=lambda _: "/other/install/tooluniverse",
+            read_text=lambda _: '{"vcs_info":{"commit_id":"exact-commit"}}',
+        ),
+    )
+    manifest = runtime_manifest.build_runtime_manifest()
+    assert manifest["distribution_vcs_commit"] == "exact-commit"
+    assert manifest["package_matches_distribution"] is False
+    assert manifest["package_location"] != manifest["distribution_package_location"]

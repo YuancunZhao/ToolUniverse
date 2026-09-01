@@ -307,32 +307,28 @@ def _strip_attributed_external_assertions(answer_text: str) -> str:
 
 
 def _has_predictor_majority_claim(answer_text: str) -> bool:
-    normalized = _normalized_label_text(answer_text)
-    english = bool(
-        re.search(
-            r"(?:MAJORITY|CONSENSUS).{0,32}(?:PREDICTOR|IN SILICO|COMPUTATIONAL)"
-            r".{0,32}(?:BENIGN|PATHOGENIC)",
+    for sentence in re.split(r"[。;；\n!?！？]|\.(?=\s+[A-Za-z])", answer_text):
+        normalized = _normalized_label_text(sentence)
+        if re.search(
+            r"(?:不使用|不采用|不能根据|不根据|不代表).{0,12}(?:多数|共识|一致)"
+            r"|(?:DO NOT USE|CANNOT INFER|NOT BASED ON).{0,20}(?:MAJORITY|CONSENSUS)"
+            r"|(?:不作为|不用于).{0,8}(?:证据|判据|评级)"
+            r"|DESCRIPTIVE STATISTICS ONLY|NOT USED (?:AS|FOR) EVIDENCE",
             normalized,
+        ):
+            continue
+        prediction = r"(?:PREDICT(?:OR|ION|IONS|ORS)?|IN SILICO|COMPUTATIONAL|预测)"
+        aggregate = r"(?:MAJORITY|CONSENSUS|多数|共识|高度一致|一致性)"
+        conclusion = (
+            r"(?:BENIGN|PATHOGENIC|DAMAGING|TOLERATED|良性|致病|耐受|无害|有害)"
         )
-        or re.search(
-            r"(?:PREDICTOR|IN SILICO|COMPUTATIONAL).{0,32}(?:MAJORITY|CONSENSUS)"
-            r".{0,32}(?:BENIGN|PATHOGENIC)",
+        if re.search(
+            rf"(?:{aggregate}.{{0,32}}{prediction}|{prediction}.{{0,32}}{aggregate})"
+            rf".{{0,32}}{conclusion}",
             normalized,
-        )
-    )
-    chinese = unicodedata.normalize("NFKC", str(answer_text or ""))
-    return english or bool(
-        re.search(
-            r"(?:多数|大多数|共识).{0,16}(?:预测(?:软件|工具|器)|计算预测)"
-            r".{0,16}(?:支持|提示|倾向).{0,8}(?:良性|致病)",
-            chinese,
-        )
-        or re.search(
-            r"(?:预测(?:软件|工具|器)|计算预测).{0,16}(?:多数|大多数|共识)"
-            r".{0,16}(?:支持|提示|倾向).{0,8}(?:良性|致病)",
-            chinese,
-        )
-    )
+        ):
+            return True
+    return False
 
 
 def guard_acmg_answer(

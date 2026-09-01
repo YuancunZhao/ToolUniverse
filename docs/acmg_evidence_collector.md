@@ -322,14 +322,16 @@ Principal outputs include:
 Summary mode keeps every clinically relevant representative card, predictor,
 literature item, provider/failure index, and conflict while omitting full text,
 full CSpec documents, repeated atomic-card payloads, and raw provider payloads.
-When every literature row has the same provider, that provider appears once in
-`literature_candidate_defaults`; consumers merge the defaults into each compact
-`literature_candidates` row.
+Repeated literature metadata appears once in `literature_candidate_defaults`;
+per-record fields override those defaults, and explicit null remains unknown.
 Provider failures are indexed by tool and attempted representation, including
 the actual HTTP retry count; complete attempt records remain in full mode.
-Representative CFTR, GP1BA, MAT1A, and
-BRCA2 summaries stay below 40 KB without truncating cards, predictors, or
-literature candidates. Full mode retains
+40 KB is an optimization target for common cases, not a universal hard limit.
+CFTR, GP1BA, MAT1A, BRCA2 and DUOX2 tests report total and per-section compact
+UTF-8 bytes, preserve clinical indexes, and validate all source references.
+High-volume responses may exceed the target without truncation, size warnings
+in the runtime result, changed evidence status, or extra collection actions.
+Full mode retains
 normalized facts, excerpts, rule content, provenance, and raw-result hashes
 without a summary-size limit.
 
@@ -355,6 +357,70 @@ parsing, temporary files, source imports, and manual provider retries are not
 part of that path.
 
 ## v3 to v4 migration
+
+### v4.3 DUOX2 corrections
+
+Package `1.4.1+acmg.9`, runtime `evidence-automation-4.3`, schema
+`2026-08-31-v4.3` retain the existing Guard context shape. The runtime manifest
+also reports `package_location`, allowing installation checks through the actual
+configured MCP entry rather than a different local Python/CLI.
+
+- `population_observations` independently exposes every gnomAD frequency,
+  callability and constraint response, with allele/build, dataset/callset,
+  subgroup labels, AF/AC/AN, provenance and failures. No card is required for
+  display. Do not join frequency values across datasets or relabel `eas_XX` as
+  an unstratified population.
+- `criterion_reviews.rule_evaluations` retains the PM2 inputs, threshold,
+  comparison and primary reason without a card. Failure of the fork AF <=
+  0.0001 candidate filter is not a definitive disease-specific PM2 exclusion.
+  Generic BA1 remains 5%; no numeric thresholds changed.
+- Computational `rule_evaluation.prediction_mechanism` distinguishes
+  `protein_effect` and `splicing`. Low SpliceAI is not independent overall BP4
+  for a protein-altering variant; protein-only benign prediction does not
+  cancel a calibrated splice PP3. Same-criterion signals are still counted once.
+- Protein mapping uses actual UniProt RefSeq/MANE cross-references and residue
+  consistency. Reviewed status only breaks ties between identity-equivalent
+  candidates; accession spelling is not a selection rule. Unresolved candidate
+  contexts remain accession-scoped and visible.
+- Summary replaces `consequence_profile.observations` with
+  `observation_groups`: merge `observation_defaults`, each group's `shared`
+  fields, then its `columns`/`rows` values to recover every compact observation.
+  Explicit null overrides a default (unknown is not agreement). Full retains the original
+  complete observations. Four-channel SpliceAI values live only in
+  `predictor_scores.spliceai` in summary; raw exon arrays and selected-row copies
+  remain in full. No clinical list is truncated to meet the soft 40 KB target.
+  The high-density DUOX2 captured-response replay tests serialization and
+  provenance, not current scientific results or live provider availability.
+- SpliceAI's selected four-channel values are in `profile`; distinct remaining
+  rows are in `alternate_transcript_scores`. Raw REF/ALT probabilities and
+  verbose model-version justification remain in full alongside the original
+  rows; versions, run parameters, event directions and DS/DP values stay visible.
+- `source_fact_defaults` and `literature_candidate_defaults` similarly hold
+  repeated metadata once; per-record fields override those defaults. Duplicate
+  identifier-conflict notices are collapsed without dropping distinct conflicts.
+- Summary `source_facts` indexes every source referenced by its cards, reviews,
+  consequence groups, population, assertions, scenarios and failures, once per
+  fact ID. Unreferenced full facts remain in full. A reference missing from full
+  is listed in `limitations` as `source_reference_unresolved: <id>`; no source or
+  verification status is invented.
+- Summary `criterion_reviews.other_card_results` groups identical strength,
+  status and reason within one `representative_card_id` and `scenario_id`.
+  Each group has `card_ids` instead of a scalar `card_id`, retaining all atomic
+  IDs. Different scenarios, representatives, strengths, statuses and reasons
+  remain separate. Full `aggregated_cards` retains the original atomic results;
+  grouping never changes evidence selection or Bayesian calculation.
+- Within one call, structured full text is attempted first; failed, empty or
+  truncated documents alone use fallback. Extraction and optional proposals
+  reuse those same retrieved documents, with actual provenance and hashes.
+
+Return exactly the final text checked by Guard; do not append scientific
+interpretations after PASS. See SETUP for ZCode's supported 10-minute timeout
+and configured-MCP installation checks. No background jobs or persistent cache
+were added.
+The manifest reports both `package_location` (imported code) and
+`distribution_package_location` (installed metadata), with
+`package_matches_distribution`. A matching package version or metadata SHA
+does not validate a different checkout imported through `PYTHONPATH`.
 
 The v4 runtime does not dual-write old evidence-gate fields. Migrate broad
 preview consumers to `automatic_bayesian`, strict consumers to

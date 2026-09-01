@@ -4,7 +4,7 @@ Comparison baseline:
 `upstream/main@1aaaf00d1a9a91c21ae09d014fe19bf46fa82917` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.1+acmg.8`. Files unrelated to the ACMG runtime,
+The package version is `1.4.1+acmg.9`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
@@ -204,8 +204,14 @@ as `{card_id, criterion, reason}`, Bayesian included/excluded card IDs, and
 criterion-review decision fields without repeated observed facts). A common
 literature provider is factored into `literature_candidate_defaults` rather
 than repeated on every candidate row. The
-representative compact UTF-8 JSON regression ceiling is 40 KB;
-`response_detail="full"` restores complete payloads. A review-only
+compact UTF-8 JSON optimization target is 40 KB, not a universal ceiling;
+larger clinical indexes remain complete and do not change evidence status.
+Every SourceFact referenced by summary sections has one compact source-index
+entry; missing full sources are explicitly reported, never fabricated.
+Identical other-card explanations are grouped only within a representative
+card and scenario, retaining every atomic card ID without changing scoring.
+`response_detail="full"` restores complete audit payloads, but is not needed
+for normal collector-to-Guard reporting. A review-only
 `clinical_context` (zygosity,
 parental origin, phase, phenotype, second-allele status) is echoed for human
 review and never generates criteria. Multi-allele rsIDs on one transcript fail
@@ -231,7 +237,7 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-25-v4.2` adds automatic/verified candidate policies and retains
+Collector schema `2026-08-31-v4.3` adds population observations and grouped consequence indexes and retains
 the auditable 28-criterion routing contract.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
@@ -349,6 +355,14 @@ identity, locator, excerpts, and extracted fields. An optional internal
 be self-declared through public tool arguments.
 
 ## Installation and MCP Surface
+
+v4.3 fixes protein-effect versus splice prediction applicability, automatic
+UniProt cross-reference resolution, independent population observations, and
+lossless grouped consequence summary. Full-text fallback is request-local and
+shared by extraction/proposal validation. Numeric scientific thresholds and
+the two-call host workflow are unchanged. ZCode timeout and configured-MCP
+exact-SHA checks are documented in SETUP; validated pins are not advanced by
+uncommitted working-tree changes.
 
 The upstream installation surface remains the default for non-ACMG use:
 marketplace plugins for Codex and Claude Code, `npx skills add` for standalone

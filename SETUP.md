@@ -36,9 +36,20 @@ The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
-The branch documentation below describes the validated v4.2 interface. The
-dedicated pin-only commit that contains this text is not the runtime install
-target; installers must continue to use the exact validated runtime SHA above.
+The pinned runtime above remains validated v4.2. The working tree additionally
+implements v4.3 (`1.4.1+acmg.9`); its new population/grouped-consequence outputs
+and configured-MCP verification must not be claimed for the older pin.
+Documentation HEAD is not the runtime install target; installers must continue
+to use the exact validated runtime SHA above until a new candidate is verified.
+
+v4.3 is not release-accepted yet: actual configured-client/exact-SHA validation
+awaits an authorized commit, and full-repository strict documentation checks
+are reported separately. Summary size is an optimization target, not a release
+veto: 40 KB is desirable for common cases, but larger clinical indexes are
+returned intact without truncation, extra collection calls, or size-based
+degradation. The captured DUOX2 response is a historical serialization workload,
+not a new online result. Test reports record total and per-section UTF-8 bytes
+alongside source-reference and clinical-index completeness.
 
 ## One-line installation prompt
 
@@ -47,6 +58,38 @@ Copy this sentence into another AI agent:
 > Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `b303cf58a6507534c96e1ed43cae8952f695f25f` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
+
+### ZCode long-running collector calls
+
+ZCode supports `mcp.servers.tooluniverse.timeoutMs`. Set it to `600000`
+(10 minutes), preserving an existing larger value, in the existing ToolUniverse
+server entry. Retain its pinned command/args and unrelated client settings:
+
+```json
+{"mcp":{"servers":{"tooluniverse":{"timeoutMs":600000}}}}
+```
+
+This is a merge fragment, not a complete replacement configuration. Do not add
+`timeoutMs` to clients whose MCP configuration does not support it. A timeout
+does not prove provider absence, cache warming, or server cancellation.
+
+For a future v4.3 exact-SHA installation, verify the **configured MCP entry**
+with the matching checkout (not an unrelated `tu` command):
+
+```bash
+python scripts/verify_acmg_install_smoke.py --source mcp-config \
+  --mcp-config /absolute/path/to/.zcode/cli/config.json \
+  --git-ref <validated-40-character-runtime-SHA> --expected-version 1.4.1+acmg.9
+```
+
+This read-only check starts that configured stdio command, verifies eight tool
+schemas, the collector runtime manifest, imported package location, VCS commit,
+and Guard. Identical package versions do not establish identical SHA. A local
+`tu` wrapper pointing at a development checkout is a separate development entry;
+do not delete it or silently substitute it for MCP. Environment values are not
+printed in the verification report.
+
+### Standard MCP entry
 
 Install `uv` if necessary. Merge the following server entry into the current
 client's MCP configuration. Preserve unrelated servers and replace only an

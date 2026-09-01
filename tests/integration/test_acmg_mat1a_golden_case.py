@@ -208,7 +208,7 @@ PROPOSALS = [
 ]
 
 
-def test_mat1a_broad_and_validated_evidence_workflow():
+def test_mat1a_broad_and_validated_evidence_workflow(check_acmg_summary):
     """The MAT1A fixture emits traceable candidates without false paper inflation."""
     fixture = MAT1AProviderFixture()
     initial = ACMGEvidencePipeline(fixture).run(
@@ -314,14 +314,7 @@ def test_mat1a_broad_and_validated_evidence_workflow():
             "literature_proposals": PROPOSALS,
         }
     )
-    assert (
-        len(
-            json.dumps(summary, ensure_ascii=False, separators=(",", ":")).encode(
-                "utf-8"
-            )
-        )
-        < 40_000
-    )
+    check_acmg_summary(summary)
     assert (
         len(
             json.dumps(

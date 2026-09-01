@@ -2229,7 +2229,7 @@ def _uniprot_fields(payload: dict[str, Any]) -> dict[str, Any]:
     cross_reference_index = [
         {
             key: row.get(key)
-            for key in ("database", "id", "properties")
+            for key in ("database", "id", "properties", "isoformId")
             if row.get(key) not in (None, "", [], {})
         }
         for row in payload.get("uniProtKBCrossReferences") or []

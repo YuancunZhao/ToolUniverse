@@ -13,7 +13,7 @@ PM2_RARE_OBSERVED_CANDIDATE_POLICY_ID = "tooluniverse-pm2-rare-observed-candidat
 PM2_RARE_OBSERVED_CANDIDATE_POLICY_VERSION = "2026-08-08-v3"
 PM2_RARE_OBSERVED_GLOBAL_AF_MAX = 0.0001
 PM2_RARE_OBSERVED_POPMAX_AF_MAX = 0.001
-PM2_DECISION_POLICY_VERSION = "2026-08-13-v3"
+PM2_DECISION_POLICY_VERSION = "2026-08-31-v4.3"
 GNOMAD_NO_HIT_POLICY_VERSION = "2026-08-25-v2"
 GNOMAD_TRANSPORT_RETRY_POLICY_VERSION = "2026-08-25-v1"
 _FREQUENCY_OPERATORS = {
@@ -227,8 +227,9 @@ def population_evidence(
             pm2_strength = "indeterminate"
             pm2_status = "excluded"
             pm2_reason = (
-                "PM2: the variant is observed and no disease-specific maximum "
-                "credible allele frequency was available"
+                "PM2: observed frequency does not pass the fork rare-variant "
+                "candidate filter; disease-specific maximum credible allele "
+                "frequency is still unknown, not a definitive PM2 exclusion"
             )
     elif gnomad_ac == 0:
         condition = "condition_met" if coverage_confirmed_adequate else "unresolved"
@@ -335,8 +336,23 @@ def population_evidence(
                     "cspec_population_frequency"
                     if has_cspec_threshold and gnomad_ac > 0
                     else "fork_candidate_filter"
-                    if rare_observed_candidate
+                    if complete and gnomad_ac > 0 and maximum_credible_af is None
                     else ""
+                ),
+                "candidate_filter": (
+                    {
+                        "af_global_max": PM2_RARE_OBSERVED_GLOBAL_AF_MAX,
+                        "af_popmax_max_or_missing": PM2_RARE_OBSERVED_POPMAX_AF_MAX,
+                        "comparison": "<=",
+                        "status": "condition_met"
+                        if rare_observed_candidate
+                        else "condition_not_met",
+                    }
+                    if complete
+                    and gnomad_ac > 0
+                    and not has_cspec_threshold
+                    and maximum_credible_af is None
+                    else {}
                 ),
                 "status": condition,
                 "primary_reason": pm2_reason,

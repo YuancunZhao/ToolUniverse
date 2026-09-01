@@ -6,9 +6,11 @@ import hashlib
 from importlib import metadata
 import json
 from typing import Any
+from pathlib import Path
 
 from . import (
     compatibility,
+    computational,
     consequence_sources,
     cspec,
     literature_extractor,
@@ -21,33 +23,34 @@ from . import (
 )
 
 
-ACMG_RUNTIME_VERSION = "evidence-automation-4.2"
-COLLECTOR_SCHEMA_VERSION = "2026-08-25-v4.2"
+ACMG_RUNTIME_VERSION = "evidence-automation-4.3"
+COLLECTOR_SCHEMA_VERSION = "2026-08-31-v4.3"
 OMIM_CONTEXT_POLICY_VERSION = "2026-08-21-v1"
 UPSTREAM_BASE_COMMIT = "1aaaf00d1a9a91c21ae09d014fe19bf46fa82917"
 BAYESIAN_PRIOR = 0.1
 
 
-def _distribution_provenance() -> tuple[str, str]:
+def _distribution_provenance() -> tuple[str, str, str]:
     """Return the installed VCS revision when distribution metadata provides it."""
     try:
         distribution = metadata.distribution("tooluniverse")
     except metadata.PackageNotFoundError:
-        return "", "source_tree"
+        return "", "source_tree", ""
+    package_path = str(Path(distribution.locate_file("tooluniverse")).resolve())
     direct_url = distribution.read_text("direct_url.json")
     if not direct_url:
-        return "", "installed_distribution"
+        return "", "installed_distribution", package_path
     try:
         payload = json.loads(direct_url)
     except (TypeError, json.JSONDecodeError):
-        return "", "installed_distribution"
+        return "", "installed_distribution", package_path
     vcs_info = payload.get("vcs_info")
     if isinstance(vcs_info, dict):
-        return str(vcs_info.get("commit_id") or ""), "vcs"
+        return str(vcs_info.get("commit_id") or ""), "vcs", package_path
     directory_info = payload.get("dir_info")
     if isinstance(directory_info, dict) and directory_info.get("editable") is True:
-        return "", "editable"
-    return "", "installed_distribution"
+        return "", "editable", package_path
+    return "", "installed_distribution", package_path
 
 
 def _ruleset_payload() -> dict[str, Any]:
@@ -74,6 +77,8 @@ def _ruleset_payload() -> dict[str, Any]:
         "generic_tavtigian_odds": generic_odds,
         "bayesian_prior": BAYESIAN_PRIOR,
         "evidence_calculation_policy": {
+            "computational_scope": computational.COMPUTATIONAL_SCOPE_POLICY_VERSION,
+            "protein_mapping": rule_catalog.PROTEIN_MAPPING_POLICY_VERSION,
             "identity_verification": rule_catalog.IDENTITY_VERIFICATION_POLICY,
             "identity_provider_roles": rule_catalog.IDENTITY_PROVIDER_ROLES,
             "clinical_observation_case_identifier_priority": [
@@ -268,7 +273,8 @@ def build_runtime_manifest(
         package_version = metadata.version("tooluniverse")
     except metadata.PackageNotFoundError:
         package_version = "0.0.0+source"
-    revision, source_type = _distribution_provenance()
+    revision, source_type, distribution_package = _distribution_provenance()
+    package_location = str(Path(__file__).resolve().parents[1])
     return {
         "tooluniverse_version": package_version,
         "acmg_runtime_version": ACMG_RUNTIME_VERSION,
@@ -277,6 +283,9 @@ def build_runtime_manifest(
         "ruleset_hash": ruleset_hash(),
         "distribution_vcs_commit": revision,
         "distribution_source_type": source_type,
+        "package_location": package_location,
+        "distribution_package_location": distribution_package,
+        "package_matches_distribution": package_location == distribution_package,
         "applicable_cspec": _cspec_index(rule_context),
     }
 

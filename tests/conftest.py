@@ -1,10 +1,68 @@
 import os
 import sys
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
 import warnings
+
+
+@pytest.fixture
+def check_acmg_summary(record_property):
+    """Check clinical index integrity and report size without a byte-count veto."""
+
+    def check(summary):
+        refs = set()
+
+        def visit(value):
+            if isinstance(value, list):
+                for row in value:
+                    visit(row)
+            elif isinstance(value, dict):
+                for key, child in value.items():
+                    if key.endswith("source_fact_id") and child:
+                        refs.add(child)
+                    elif key.endswith("source_fact_ids"):
+                        refs.update(child or [])
+                    visit(child)
+                if isinstance(value.get("columns"), list) and isinstance(
+                    value.get("rows"), list
+                ):
+                    for row in value["rows"]:
+                        visit(dict(zip(value["columns"], row)))
+
+        visit(summary)
+        refs.update(
+            row["fact_id"] for row in summary.get("population_observations", [])
+        )
+        ids = [row["fact_id"] for row in summary.get("source_facts", [])]
+        assert len(ids) == len(set(ids))
+        assert refs <= set(ids), f"Missing summary sources: {refs - set(ids)}"
+        assert summary["final_classification_allowed"] is False
+        assert all(
+            "observed_facts" not in card for card in summary.get("evidence_cards", [])
+        )
+        assert "executable_contract" not in summary.get("rule_context", {})
+        assert "criterion_use_matrix" not in summary.get("rule_context", {})
+        assert "observations" not in summary.get("consequence_profile", {})
+        assert "EXON_STARTS" not in json.dumps(summary.get("predictor_scores", {}))
+
+        def size(value):
+            return len(
+                json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+                    "utf-8"
+                )
+            )
+
+        sections = {key: size(value) for key, value in summary.items()}
+        record_property("summary_bytes", size(summary))
+        record_property("summary_section_bytes", json.dumps(sections, sort_keys=True))
+        print(f"ACMG summary: {size(summary)} UTF-8 bytes; sections={sections}")
+        return size(summary)
+
+    return check
+
 
 # ---------------------------------------------------------------------------
 # Ensure the source tree is importable even when tests are invoked without

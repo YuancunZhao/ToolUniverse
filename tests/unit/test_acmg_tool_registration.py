@@ -112,6 +112,9 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "Preserve the original `gene;NM_:c.(p.)` string",
         "`clinical_context.zygosity`",
         "repeat the same two calls independently",
+        "40 KB is a summary optimization target, not a failure boundary",
+        "source_reference_unresolved",
+        "other_card_results",
     )
     forbidden_tokens = (
         "abstract-only or unavailable material remains a source lead",
@@ -119,6 +122,7 @@ def test_acmg_routing_contract_is_consolidated_into_one_visible_skill():
         "Run this state machine to completion",
         "Execute every pending `next_actions`",
         "End automated collection only when",
+        "regression ceiling is 40 KB",
     )
 
     for root in roots:

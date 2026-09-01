@@ -26,6 +26,7 @@ contracts rather than mutable scores or result counts.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import os
@@ -192,12 +193,17 @@ check(
 )
 
 from tooluniverse.acmg.guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_hash
-from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, ruleset_hash
+from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, build_runtime_manifest, ruleset_hash
 
 check(
     "v4_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-4.2",
+    ACMG_RUNTIME_VERSION == "evidence-automation-4.3",
     ACMG_RUNTIME_VERSION,
+)
+check(
+    "import_matches_distribution",
+    build_runtime_manifest()["package_matches_distribution"] is True,
+    str(build_runtime_manifest()),
 )
 
 guard_context = {
@@ -668,17 +674,128 @@ def _expected_schema_hash() -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _zcode_server(path: Path) -> dict:
+    """Read only the supported ZCode stdio shape; never rewrite client config."""
+    server = json.loads(path.read_text())["mcp"]["servers"]["tooluniverse"]
+    if not isinstance(server.get("command"), str) or not isinstance(
+        server.get("args", []), list
+    ):
+        raise ValueError("Expected ZCode ToolUniverse command and args")
+    if int(server.get("timeoutMs", 30000)) < 600000:
+        raise ValueError("ZCode tooluniverse.timeoutMs must be >= 600000")
+    return server
+
+
+def _mcp_payload(response) -> dict:
+    data = getattr(response, "data", None)
+    if isinstance(data, dict):
+        return data
+    for block in response.content:
+        if getattr(block, "text", None):
+            value = json.loads(block.text)
+            if isinstance(value, dict):
+                return value
+    raise ValueError("MCP response has no JSON object")
+
+
+async def _verify_configured_mcp(
+    server: dict, expected_version: str, expected_commit: str
+) -> dict:
+    from fastmcp import Client
+    from fastmcp.client.transports import StdioTransport
+
+    # This is the client's configured entry point, not an imported local `tu`.
+    transport = StdioTransport(
+        command=server["command"],
+        args=server.get("args", []),
+        env=dict(server.get("env", {})),
+        cwd=server.get("cwd") or tempfile.gettempdir(),
+    )
+    expected = json.loads(
+        (ROOT / "src/tooluniverse/data/acmg_overlay_gate_tools.json").read_text()
+    )
+    async with Client(transport, timeout=int(server["timeoutMs"]) / 1000) as client:
+        info = _mcp_payload(
+            await client.call_tool(
+                "get_tool_info",
+                {
+                    "tool_names": [row["name"] for row in expected],
+                    "detail_level": "full",
+                },
+            )
+        )
+        actual = {row["name"]: row for row in info.get("tools", [])}
+        for row in expected:
+            found = actual.get(row["name"], {})
+            for key in ("parameter", "return_schema"):
+                if found.get(key) != row.get(key):
+                    raise ValueError(f"MCP schema mismatch: {row['name']}.{key}")
+        # An unsupported SV exercises the real collector/manifest without network providers.
+        result = _mcp_payload(
+            await client.call_tool(
+                "execute_tool",
+                {
+                    "tool_name": "ACMG_evidence_collector",
+                    "arguments": {
+                        "variant": "NC_000023.10:g.32018026_32222964del",
+                        "genome_build": "GRCh37",
+                    },
+                },
+            )
+        )
+        manifest = result.get("runtime_manifest") or {}
+        if (
+            manifest.get("tooluniverse_version") != expected_version
+            or manifest.get("distribution_vcs_commit") != expected_commit
+            or not manifest.get("package_location")
+            or manifest.get("package_matches_distribution") is not True
+            or manifest.get("package_location")
+            != manifest.get("distribution_package_location")
+        ):
+            raise ValueError(f"MCP runtime installation mismatch: {manifest}")
+        if result.get("final_classification_allowed") is not False:
+            raise ValueError("MCP evidence-only boundary missing")
+        guard = _mcp_payload(
+            await client.call_tool(
+                "execute_tool",
+                {
+                    "tool_name": "ACMG_guard_final_answer",
+                    "arguments": {
+                        "final_answer_text": "This input is outside the small-variant workflow.",
+                        "guard_context": result["guard_context"],
+                    },
+                },
+            )
+        )
+        if guard.get("status") != "PASS":
+            raise ValueError(f"MCP Guard failed: {guard}")
+    return {
+        "command": server["command"],
+        "args": server.get("args", []),
+        "timeoutMs": server["timeoutMs"],
+        "runtime_manifest": manifest,
+        "schema_fingerprint": _expected_schema_hash(),
+        "acmg_tools": len(expected),
+        "cli_note": "Local tu is a separate entry point, not verified by this MCP check.",
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--source",
-        choices=("local", "git-ref"),
+        choices=("local", "git-ref", "mcp-config"),
         default="local",
-        help="Install the current checkout or an explicit Git revision.",
+        help="Install locally/from an exact SHA, or inspect the configured ZCode MCP entry.",
+    )
+    parser.add_argument(
+        "--mcp-config",
+        type=Path,
+        help="ZCode config file; used only with --source=mcp-config. Read-only.",
     )
     parser.add_argument(
         "--git-ref",
-        help="Exact commit SHA or other immutable Git ref (required for git-ref).",
+        help="Full 40-character commit SHA (required for git-ref and mcp-config).",
     )
     parser.add_argument(
         "--repo-url",
@@ -699,16 +816,30 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     args = parser.parse_args()
-    if args.source == "git-ref" and not args.git_ref:
-        parser.error("--git-ref is required when --source=git-ref")
-    if args.source == "git-ref" and not re.fullmatch(r"[0-9a-fA-F]{40}", args.git_ref):
+    if args.source in {"git-ref", "mcp-config"} and not args.git_ref:
+        parser.error("--git-ref is required for git-ref and mcp-config modes")
+    if args.source in {"git-ref", "mcp-config"} and not re.fullmatch(
+        r"[0-9a-fA-F]{40}", args.git_ref
+    ):
         parser.error("--git-ref must be a full 40-character commit SHA")
+    if args.source == "mcp-config" and (not args.mcp_config or args.online_providers):
+        parser.error(
+            "mcp-config requires --mcp-config; online providers use git-ref mode"
+        )
     return args
 
 
 def main() -> int:
     args = _parse_args()
     expected = args.expected_version or _expected_version()
+    if args.source == "mcp-config":
+        report = asyncio.run(
+            _verify_configured_mcp(
+                _zcode_server(args.mcp_config), expected, args.git_ref
+            )
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
     install_source = (
         str(ROOT) if args.source == "local" else f"git+{args.repo_url}@{args.git_ref}"
     )

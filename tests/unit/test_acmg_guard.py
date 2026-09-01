@@ -162,8 +162,11 @@ def test_guard_does_not_misread_protein_hgvs_p_value_or_group_b():
 def test_guard_blocks_predictor_majority_or_consensus_claims():
     for text in (
         "多数预测软件提示良性，PP3 仍列为候选。",
+        "多数预测耐受，因此没有蛋白影响。",
+        "这些预测软件高度一致有害，因此支持 PP3。",
         "Predictor consensus supports pathogenicity; PP3 is listed.",
         "The majority of computational predictors supports benign impact; PP3 is listed.",
+        "Do not use majority voting. Predictor consensus supports damaging impact.",
     ):
         result = guard_acmg_answer(
             text,
@@ -181,6 +184,14 @@ def test_guard_allows_individual_scores_and_versioned_thresholds():
     )
 
     assert result["status"] == "PASS"
+
+    for text in (
+        "不根据多数预测软件提示无害进行评级。",
+        "REVEL=0.967; SpliceAI=0.008. These scores are not a majority vote.",
+        "描述性统计：多数预测耐受，不作为证据使用。",
+        "The majority of predictors report tolerated: descriptive statistics only.",
+    ):
+        assert guard_acmg_answer(text, [])["status"] == "PASS"
 
 
 def test_guard_expands_combined_criterion_codes():

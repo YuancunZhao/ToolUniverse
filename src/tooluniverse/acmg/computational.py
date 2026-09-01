@@ -10,6 +10,8 @@ from .models import EvidenceCard
 from .rule_catalog import SPLICEAI_RULE, rule_for_criterion
 from .spliceai import normalize_spliceai_inputs, walker_run_metadata_ready
 
+COMPUTATIONAL_SCOPE_POLICY_VERSION = "2026-08-31-v1"
+
 
 def _finite_number(value: object) -> float | None:
     # Providers serialize scores as numeric strings (e.g. SpliceAI DS_*).
@@ -152,6 +154,23 @@ def computational_evidence(
     audit_scores["spliceai_profile"] = normalized_spliceai
     if spliceai_run_metadata:
         audit_scores["spliceai_run_metadata"] = dict(spliceai_run_metadata)
+    splice_cards = _splice_prediction_cards(
+        normalized_spliceai,
+        splice_prediction_applicable=splice_prediction_applicable,
+        splice_context=context,
+        audit_scores=audit_scores,
+        spliceai_run_metadata=spliceai_run_metadata,
+        rule_override=rule_override,
+    )
+    trailing_cards = [
+        *splice_cards,
+        *_pvs1_splice_route(is_canonical_splice, normalized_spliceai),
+    ]
+    audit_scores = {
+        **audit_scores,
+        "prediction_mechanism": "protein_effect",
+        "scope_policy_version": COMPUTATIONAL_SCOPE_POLICY_VERSION,
+    }
 
     missense_applicable = (
         profile.get("protein_effect") == "missense"
@@ -170,18 +189,7 @@ def computational_evidence(
                 ],
             ),
         ]
-        cards.extend(
-            _splice_prediction_cards(
-                normalized_spliceai,
-                splice_prediction_applicable=splice_prediction_applicable,
-                splice_context=context,
-                audit_scores=audit_scores,
-                spliceai_run_metadata=spliceai_run_metadata,
-                rule_override=rule_override,
-            )
-        )
-        cards.extend(_pvs1_splice_route(is_canonical_splice, normalized_spliceai))
-        return cards
+        return [*cards, *trailing_cards]
 
     if revel_score is None:
         card = EvidenceCard(
@@ -192,24 +200,14 @@ def computational_evidence(
             rule_basis="Pejaver 2022 (PMID:36413997)",
             provenance_chain=["PP3/BP4: no REVEL score was returned by the provider"],
         )
-        return [
-            card,
-            *_splice_prediction_cards(
-                normalized_spliceai,
-                splice_prediction_applicable=splice_prediction_applicable,
-                splice_context=context,
-                audit_scores=audit_scores,
-                spliceai_run_metadata=spliceai_run_metadata,
-                rule_override=rule_override,
-            ),
-            *_pvs1_splice_route(is_canonical_splice, normalized_spliceai),
-        ]
+        return [card, *trailing_cards]
 
     cspec_decision = _cspec_predictor_decision(
         revel_score,
         predictor="REVEL",
         variant_type=variant_type,
         rule_override=rule_override,
+        observations=audit_scores,
     )
     thresholds = rule["thresholds"]["REVEL"]
     if cspec_decision is not None:
@@ -241,19 +239,24 @@ def computational_evidence(
             f"PP3/BP4: fixed REVEL={revel_score:.3f} -> {strength}; other predictors are audit-only"
         ],
     )
+    if criterion == "BP4" and any(
+        row.criterion == "PP3" and row.strength.startswith("PP3")
+        for row in splice_cards
+    ):
+        card.strength = "not_applicable"
+        card.provenance_chain.append(
+            "Protein-only non-impact cannot establish overall BP4 when a "
+            "calibrated prediction supports a splicing effect."
+        )
+    card.rule_evaluation = {
+        "prediction_mechanism": "protein_effect",
+        "scope_policy_version": COMPUTATIONAL_SCOPE_POLICY_VERSION,
+        "score": revel_score,
+        "thresholds": dict(thresholds),
+        "primary_reason": card.provenance_chain[-1],
+    }
     _apply_cspec_provenance(card, rule_override, cspec_decision is not None)
-    return [
-        card,
-        *_splice_prediction_cards(
-            normalized_spliceai,
-            splice_prediction_applicable=splice_prediction_applicable,
-            splice_context=context,
-            audit_scores=audit_scores,
-            spliceai_run_metadata=spliceai_run_metadata,
-            rule_override=rule_override,
-        ),
-        *_pvs1_splice_route(is_canonical_splice, normalized_spliceai),
-    ]
+    return [card, *trailing_cards]
 
 
 def _splice_prediction_cards(
@@ -294,8 +297,9 @@ def _splice_prediction_cards(
         cspec_decision = _cspec_predictor_decision(
             score,
             predictor="SpliceAI",
-            variant_type="splicing",
+            variant_type=str(splice_context.get("protein_effect") or "splicing"),
             rule_override=rule_override,
+            observations={**audit_scores, "spliceai_max_delta_score": score},
         )
         if cspec_decision is not None:
             strength = cspec_decision[1]
@@ -327,11 +331,49 @@ def _splice_prediction_cards(
         if strength.startswith("BP4")
         else "PP3/BP4"
     )
+    cspec_bp4 = ((rule_override or {}).get("criteria") or {}).get("BP4") or {}
+    combined_cspec = bool(
+        cspec_decision
+        and cspec_bp4.get("condition_logic") == "all"
+        and any(
+            str(row.get("predictor") or "").casefold() not in {"", "spliceai"}
+            for row in cspec_bp4.get("predictor_rules") or []
+        )
+    )
+    if (
+        not combined_cspec
+        and criterion == "BP4"
+        and splice_context.get("protein_effect")
+        in {
+            "missense",
+            "inframe",
+            "lof",
+            "stop_lost",
+        }
+    ):
+        strength = "not_applicable"
+        reason = (
+            "BP4 splicing: no predicted splicing impact; this does not exclude "
+            "the encoded protein effect and cannot establish overall BP4."
+        )
     card = EvidenceCard(
         criterion=criterion,
         strength=strength,
         source_label="SpliceAI",
-        observed_facts={**audit_scores, "splice_context": dict(splice_context)},
+        observed_facts={
+            **audit_scores,
+            "prediction_mechanism": "splicing",
+            "scope_policy_version": COMPUTATIONAL_SCOPE_POLICY_VERSION,
+            "splice_context": dict(splice_context),
+        },
+        rule_evaluation={
+            "prediction_mechanism": "splicing",
+            "scope_policy_version": COMPUTATIONAL_SCOPE_POLICY_VERSION,
+            "score": score,
+            "thresholds": dict(SPLICEAI_RULE["thresholds"]),
+            "primary_reason": reason,
+            "protein_and_splicing_cspec_conditions_met": combined_cspec,
+        },
         rule_basis="ClinGen SVI splicing recommendations (Walker et al. 2023)",
         provenance_chain=[reason],
         rule_id=str(SPLICEAI_RULE["rule_id"]),
@@ -392,6 +434,7 @@ def _cspec_predictor_decision(
     predictor: str,
     variant_type: str,
     rule_override: dict[str, Any] | None,
+    observations: dict[str, Any] | None = None,
 ) -> tuple[str, str] | None:
     """Apply only an explicit, source-verified CSpec numeric predictor contract."""
     if score is None or not isinstance(rule_override, dict):
@@ -404,7 +447,14 @@ def _cspec_predictor_decision(
         contract = criteria.get(criterion)
         if not isinstance(contract, dict):
             continue
-        if str(contract.get("predictor") or "").casefold() != predictor.casefold():
+        predictors = {
+            str(contract.get("predictor") or "").casefold(),
+            *{
+                str(row.get("predictor") or "").casefold()
+                for row in contract.get("predictor_rules") or []
+            },
+        }
+        if predictor.casefold() not in predictors:
             continue
         allowed_types = {
             str(value).casefold() for value in contract.get("variant_types") or ()
@@ -419,17 +469,51 @@ def _cspec_predictor_decision(
                 "noncoding": "noncoding_variant",
             }.get(normalized_type, normalized_type),
         }
+        if predictor == "SpliceAI":
+            equivalent_types.add("splicing")
         if allowed_types and not (equivalent_types & allowed_types):
             continue
-        threshold = _finite_number(contract.get("threshold"))
-        operator = str(contract.get("operator") or "")
         strength = str(contract.get("strength") or "")
-        if threshold is None or not strength:
+        if not strength:
             continue
-        matched = (operator in {">=", "gte"} and score >= threshold) or (
-            operator in {"<=", "lte"} and score <= threshold
+        # Reuse the scenario evaluator; a threshold alone cannot satisfy a
+        # partial contract or an explicit multi-predictor/region condition.
+        from .scenario_engine import evaluate_cspec_criterion
+
+        scoped_contract = dict(contract)
+        if not any(
+            contract.get(key)
+            for key in (
+                "predictor_rules",
+                "regions",
+                "residues",
+                "point_table",
+                "case_count_threshold",
+            )
+        ):
+            scoped_contract.setdefault("condition_logic", "all")
+        evaluation = evaluate_cspec_criterion(
+            {
+                "criterion": criterion,
+                "observed_facts": {
+                    f"{predictor.lower()}_score": score,
+                    **{
+                        key: value
+                        for key, value in (observations or {}).items()
+                        if isinstance(value, (int, float))
+                        and not key.startswith("spliceai")
+                    },
+                    "spliceai_score": score
+                    if predictor == "SpliceAI"
+                    else ((observations or {}).get("spliceai_profile") or {}).get(
+                        "max_delta_score"
+                    ),
+                    "variant_type": "/".join(sorted(equivalent_types)),
+                },
+            },
+            scoped_contract,
         )
-        if matched:
+        if evaluation["status"] == "condition_met":
             decisions.append((criterion, strength))
     return decisions[0] if len(decisions) == 1 else None
 
@@ -444,7 +528,26 @@ def _apply_cspec_provenance(
     card.observed_facts["cspec_contract_applied"] = {
         "specification_id": rule_override.get("specification_id"),
         "version": rule_override.get("version"),
+        "content_hash": rule_override.get("content_hash"),
     }
+    contract = (rule_override.get("criteria") or {}).get(card.criterion) or {}
+    card.rule_evaluation["applied_cspec_condition"] = {
+        key: contract[key]
+        for key in (
+            "predictor",
+            "threshold",
+            "operator",
+            "strength",
+            "variant_types",
+            "predictor_rules",
+            "condition_logic",
+            "regions",
+            "residues",
+        )
+        if key in contract
+    }
+    if card.strength.startswith(("PP3_", "BP4_")):
+        card.rule_evaluation["primary_reason"] = "condition_met_using_exact_cspec"
     card.rule_id = str(rule_override.get("rule_id") or "")
     card.rule_version = str(rule_override.get("version") or "")
     card.rule_reference = str(rule_override.get("primary_reference") or "")

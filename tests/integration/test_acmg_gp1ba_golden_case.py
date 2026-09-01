@@ -34,7 +34,9 @@ class GP1BAProviderFixture:
         return [self.run_one_function(call, **kwargs) for call in calls]
 
 
-def test_gp1ba_name_resolves_gn079_and_alternate_transcript_does_not_block():
+def test_gp1ba_name_resolves_gn079_and_alternate_transcript_does_not_block(
+    check_acmg_summary,
+):
     fixture = GP1BAProviderFixture()
     result = ACMGEvidencePipeline(fixture).run(
         {
@@ -92,10 +94,7 @@ def test_gp1ba_name_resolves_gn079_and_alternate_transcript_does_not_block():
             "response_detail": "summary",
         }
     )
-    compact = json.dumps(summary, ensure_ascii=False, separators=(",", ":")).encode(
-        "utf-8"
-    )
-    assert len(compact) < 40_000
+    check_acmg_summary(summary)
     guard = json.dumps(
         summary["guard_context"], ensure_ascii=False, separators=(",", ":")
     ).encode("utf-8")
@@ -114,13 +113,13 @@ def test_gp1ba_direct_mondo_matches_disease_name_scenario():
     named = ACMGEvidencePipeline(fixture).run(
         {**common, "disease": "Bernard-Soulier syndrome"}
     )
-    direct = ACMGEvidencePipeline(fixture).run(
-        {**common, "disease": "MONDO:0009276"}
-    )
+    direct = ACMGEvidencePipeline(fixture).run({**common, "disease": "MONDO:0009276"})
 
-    assert named["rule_context"]["applicable_specification"]["specification_id"] == (
-        direct["rule_context"]["applicable_specification"]["specification_id"]
+    assert (
+        named["rule_context"]["applicable_specification"]["specification_id"]
+        == (direct["rule_context"]["applicable_specification"]["specification_id"])
     )
-    assert named["rule_context"]["executable_contract"]["content_hash"] == (
-        direct["rule_context"]["executable_contract"]["content_hash"]
+    assert (
+        named["rule_context"]["executable_contract"]["content_hash"]
+        == (direct["rule_context"]["executable_contract"]["content_hash"])
     )

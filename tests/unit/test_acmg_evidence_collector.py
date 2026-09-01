@@ -767,7 +767,9 @@ class _CFTRHighLiteratureToolUniverse(_FakeToolUniverse):
         return self._cftr_identity(super().run_one_function(call, **kwargs))
 
 
-def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
+def test_cftr_high_literature_summary_keeps_indexes_and_requires_atomic_facts(
+    check_acmg_summary,
+):
     runtime = _CFTRHighLiteratureToolUniverse()
     collector = _make_tool(runtime)
     calls = ["ACMG_evidence_collector"]
@@ -791,10 +793,7 @@ def test_cftr_high_literature_summary_stays_small_and_requires_atomic_facts():
     assert not {"PM3", "BP2", "PP1"}.intersection(
         card["criterion"] for card in result["evidence_cards"]
     )
-    assert (
-        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
-        < 40_000
-    )
+    check_acmg_summary(result)
     assert (
         len(
             json.dumps(
@@ -941,7 +940,9 @@ class _RTELToolUniverse:
         return {"status": "unavailable", "reason": "fixture has no result"}
 
 
-def test_rtel_alias_and_deep_intronic_input_remain_visible_without_overreach():
+def test_rtel_alias_and_deep_intronic_input_remain_visible_without_overreach(
+    check_acmg_summary,
+):
     runtime = _RTELToolUniverse("NM_001283009.2:c.2852-68G>A")
     result = _make_tool(runtime).run(
         {
@@ -963,13 +964,10 @@ def test_rtel_alias_and_deep_intronic_input_remain_visible_without_overreach():
     assert result["consequence_profile"]["verified_usable"] is False
     assert not {"PP3", "PVS1"}.intersection(_automatic_criteria(result))
     assert len(result["literature_candidates"]) == 205
-    assert (
-        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
-        < 40_000
-    )
+    check_acmg_summary(result)
 
 
-def test_rtel_protein_suffix_and_heterozygous_context_are_preserved():
+def test_rtel_protein_suffix_and_heterozygous_context_are_preserved(check_acmg_summary):
     runtime = _RTELToolUniverse(
         "NM_001283009.2:c.3718G>C", "NP_001269938.1:p.Ala1240Pro"
     )
@@ -995,10 +993,7 @@ def test_rtel_protein_suffix_and_heterozygous_context_are_preserved():
     ]
     assert queried == ["NM_001283009.2:c.3718G>C"]
     assert len(result["literature_candidates"]) == 205
-    assert (
-        len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode())
-        < 40_000
-    )
+    check_acmg_summary(result)
     assert (
         len(json.dumps(result["guard_context"], separators=(",", ":")).encode()) < 5_000
     )
@@ -1897,6 +1892,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "variant_scope",
         "clinical_context",
         "omim_context",
+        "population_observations",
         "response_detail",
         "consequence_profile",
         "rule_context",
@@ -2568,7 +2564,9 @@ def test_dnah1_vep_outage_recovers_consequence_without_inventing_nmd():
     assert "PTC in exon 73" not in serialized
 
 
-def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
+def test_summary_mode_returns_compact_indexes_without_bulky_payloads(
+    check_acmg_summary,
+):
     runtime = _FakeToolUniverse()
     result = _make_tool(runtime).run(
         {
@@ -2610,14 +2608,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads():
     )
     if revel_index is not None:
         assert revel_index["route"] == "missense_revel"
-    assert (
-        len(
-            json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode(
-                "utf-8"
-            )
-        )
-        <= 40_000
-    )
+    check_acmg_summary(result)
     assert set(result["compatibility_report"]) == {
         "compatible_card_ids",
         "excluded_evidence",
