@@ -21,10 +21,10 @@ Install the exact validated runtime commit instead of a floating branch:
 ```text
 Repository: https://github.com/YuancunZhao/ToolUniverse
 Branch:     codex/acmg-on-tooluniverse-1.4
-Commit:     b303cf58a6507534c96e1ed43cae8952f695f25f
+Commit:     8c218348c42afc383ab6bc53cf459b239d8b89fc
 ```
 
-This `1.4.1+acmg.8` commit passed 549 ACMG/SpliceAI/provider regression tests,
+This `1.4.1+acmg.9` commit passed 519 non-network ACMG regression tests,
 MCP registration checks, Skill installer/mirror checks, wrapper/schema checks,
 and local plus remote exact-Git-SHA isolated installation smoke tests. The
 installed package exposes 2699 tools, including all eight ACMG tools, and its
@@ -36,26 +36,21 @@ The Claude and Codex plugin MCP manifests must use this same validated SHA.
 Advance all three references only after a new runtime commit has passed the
 exact-Git-SHA installation smoke test.
 
-The pinned runtime above remains validated v4.2. The working tree additionally
-implements v4.3 (`1.4.1+acmg.9`); its new population/grouped-consequence outputs
-and configured-MCP verification must not be claimed for the older pin.
-Documentation HEAD is not the runtime install target; installers must continue
-to use the exact validated runtime SHA above until a new candidate is verified.
-
-v4.3 is not release-accepted yet: actual configured-client/exact-SHA validation
-awaits an authorized commit, and full-repository strict documentation checks
-are reported separately. Summary size is an optimization target, not a release
-veto: 40 KB is desirable for common cases, but larger clinical indexes are
-returned intact without truncation, extra collection calls, or size-based
-degradation. The captured DUOX2 response is a historical serialization workload,
-not a new online result. Test reports record total and per-section UTF-8 bytes
-alongside source-reference and clinical-index completeness.
+The pinned runtime above is validated v4.3. Documentation HEAD is not the
+runtime install target; installers must use the exact validated runtime SHA
+above until a newer candidate is verified. Summary size is an optimization
+target, not a release veto: 40 KB is desirable for common cases, but larger
+clinical indexes are returned intact without truncation, extra collection
+calls, or size-based degradation. The captured DUOX2 response is a historical
+serialization workload, not a new online result. Test reports record total and
+per-section UTF-8 bytes alongside source-reference and clinical-index
+completeness.
 
 ## One-line installation prompt
 
 Copy this sentence into another AI agent:
 
-> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `b303cf58a6507534c96e1ed43cae8952f695f25f` for my current AI client. Preserve unrelated MCP servers and skills.
+> Read https://raw.githubusercontent.com/YuancunZhao/ToolUniverse/codex/acmg-on-tooluniverse-1.4/SETUP.md, then install and verify the complete ToolUniverse scientific Skill bundle and ACMG evidence-only extension from exact commit `8c218348c42afc383ab6bc53cf459b239d8b89fc` for my current AI client. Preserve unrelated MCP servers and skills.
 
 ## MCP configuration
 
@@ -73,7 +68,7 @@ This is a merge fragment, not a complete replacement configuration. Do not add
 `timeoutMs` to clients whose MCP configuration does not support it. A timeout
 does not prove provider absence, cache warming, or server cancellation.
 
-For a future v4.3 exact-SHA installation, verify the **configured MCP entry**
+For this v4.3 exact-SHA installation, verify the **configured MCP entry**
 with the matching checkout (not an unrelated `tu` command):
 
 ```bash
@@ -101,7 +96,7 @@ existing `tooluniverse` entry:
   "args": [
     "--refresh",
     "--from",
-    "git+https://github.com/YuancunZhao/ToolUniverse.git@b303cf58a6507534c96e1ed43cae8952f695f25f",
+    "git+https://github.com/YuancunZhao/ToolUniverse.git@8c218348c42afc383ab6bc53cf459b239d8b89fc",
     "tooluniverse"
   ],
   "env": {
@@ -149,7 +144,7 @@ Set `SKILLS_DIR`, `SKILLS_PROFILE`, and the target `PROJECT_ROOT` first:
 Then run:
 
 ```bash
-TOOLUNIVERSE_COMMIT="b303cf58a6507534c96e1ed43cae8952f695f25f"
+TOOLUNIVERSE_COMMIT="8c218348c42afc383ab6bc53cf459b239d8b89fc"
 : "${SKILLS_DIR:?Set SKILLS_DIR before installing ToolUniverse skills}"
 : "${SKILLS_PROFILE:?Set SKILLS_PROFILE to codex, claude, or generic}"
 : "${PROJECT_ROOT:?Set PROJECT_ROOT to the project that will use ToolUniverse}"
@@ -423,7 +418,7 @@ First verify that the exact commit starts:
 
 ```bash
 uvx --refresh --from \
-  git+https://github.com/YuancunZhao/ToolUniverse.git@b303cf58a6507534c96e1ed43cae8952f695f25f \
+  git+https://github.com/YuancunZhao/ToolUniverse.git@8c218348c42afc383ab6bc53cf459b239d8b89fc \
   tooluniverse --help
 ```
 
@@ -452,7 +447,7 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.1+acmg.8 \
+  --expected-version 1.4.1+acmg.9 \
   --online-providers
 ```
 
