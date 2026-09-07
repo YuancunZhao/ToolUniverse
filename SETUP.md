@@ -46,6 +46,30 @@ serialization workload, not a new online result. Test reports record total and
 per-section UTF-8 bytes alongside source-reference and clinical-index
 completeness.
 
+The unvalidated working-tree candidate is `1.4.1+acmg.13` / runtime v4.7. It
+keeps the v4.4 multi-source full-text chain and adds one `proposal_report` row
+per submitted literature fact. Unreachable external documents can produce
+explicitly unverified, user-selectable review cards only when a document hash,
+literal excerpt, locator, publication identifier, and versioned extractor are
+present; those cards never enter automatic or verified estimates. Do not
+advance the exact-SHA commands below until this candidate passes the documented
+remote installation checks.
+
+The v4.7 candidate additionally exposes card-specific observed values, literature
+titles, incomplete/negative fact reviews, invalid-card diagnostics, and actual
+search counts/stopping reasons. Optional `literature_search_limits` accepts
+1–1000 raw records per normal source query; omitted values retain defaults.
+`fulltext_match_classes=[]` disables ordinary candidate fulltext acquisition,
+not explicit proposal re-anchoring. Do not use these parameters with the pinned
+v4.3 runtime. ACMG summaries bypass generic MCP truncation; no clinical list is
+cut or written to a temporary file just for exceeding the size target.
+
+The candidate also adds selected-NM-bound Tark/exon recovery, OMIM disease
+fallbacks, bounded provider retries and optional `caller_verified_context`
+enrichment. These inputs require the new runtime schema; do not send them to
+the pinned v4.3 installation. Update installed Skills/project instructions
+together with a validated runtime, not independently.
+
 ## One-line installation prompt
 
 Copy this sentence into another AI agent:
@@ -282,7 +306,8 @@ The collector performs conditional exhaustive collection:
 - verified gene identity enables ClinGen validity, dosage, adult and pediatric
   actionability, variant-classification leads, and gnomAD constraint;
 - variant identity enables ClinVar, gnomAD frequency/coverage, MyVariant,
-  SpliceAI, LitVar, PubMed, and Europe PMC as applicable;
+  SpliceAI, LitVar, PubMed, Europe PMC/PMC, PubTator, and conditional OA PDF
+  recovery as applicable;
 - resolved protein identity enables UniProt, EBI Proteins, and InterPro;
 - explicit HPO IDs enable term, gene-association, and disease-association
   queries; free text is searched but ambiguous candidates are not selected.
@@ -311,11 +336,13 @@ Provider contracts worth checking:
   HDIV, MetaRNN, GERP, phyloP, phastCons, VEST4, and MutationTaster values,
   predictions, rank scores, and versions. Predictor agreement/conflict is
   summarized without majority voting.
-- PubMed is queried with abstracts enabled for the candidate pool; Europe PMC
-  supplies full text when available; LitVar contributes variant-linked
-  publications. If full text is unavailable, the runtime must not claim it was
-  read. Source-located abstracts, snippets, and provider-linked facts may form
-  explicitly limited source-backed candidates, but never verified evidence.
+- PubMed is queried with abstracts enabled; LitVar contributes variant-linked
+  publications. Europe PMC/PMC JATS is the preferred body, PubTator BioC full
+  text is an independent fallback, and DOI-based open-access PDF snippets are
+  tried only when neither route returns a complete body. If full text is
+  unavailable, the runtime must not claim it was read. Source-located abstracts
+  and snippets may form explicitly limited candidates, but only complete,
+  untruncated bodies can support verified literature evidence.
 - UniProt preserves entry status, names, function, disease comments, catalytic
   activity, cofactors, PTMs, domains, sequence length, cross-references, and
   references. Inactive or deleted entries remain visible with their reason.
@@ -334,10 +361,12 @@ unique match. Structured rules can be used directly. Natural-language rule
 requirements are preserved with parser limitations. Deterministic parsing is
 attempted first; optional `cspec_proposals` may supplement unresolved prose.
 
-The collector merges LitVar, PubMed, and Europe PMC candidates by PMID, PMCID,
-DOI, or stable title while preserving all source hits. Full text is preferred;
-abstract-only records can support a labeled automatic candidate when their
-source and identity are traceable, but cannot enter the verified estimate.
+The collector merges LitVar, PubMed, Europe PMC, and PubTator candidates by
+PMID, PMCID, DOI, or stable title while preserving all source hits. It selects
+one canonical body per publication to prevent duplicate facts. PubTator search
+failure does not prevent PMID-based BioC export. Abstract-only and OA PDF
+snippet records can support a labeled automatic candidate when their source and
+identity are traceable, but cannot enter the verified estimate.
 
 The collector performs deterministic literature fact extraction and scoring
 without requiring a host LLM. Optional supplemental inputs are:
@@ -350,7 +379,10 @@ without requiring a host LLM. Optional supplemental inputs are:
 When supplied, ToolUniverse re-fetches the source and verifies document identity, variant and
 gene context, locator, excerpt, per-field excerpts, version/hash, schema, and
 deduplication identity. The LLM suggestion cannot map an unrelated fact type to
-an arbitrary criterion.
+an arbitrary criterion. `proposal_report` records every submitted item. If the
+document cannot be retrieved, a complete external anchor may remain as an
+unverified review card; selecting an unmapped-strength card requires
+`strength_override` plus `reason`, and affects only `user_selected_bayesian`.
 
 ### 3. Review automatic, verified, and scenario estimates
 
@@ -447,16 +479,19 @@ python scripts/verify_acmg_install_smoke.py \
   --source git-ref \
   --git-ref "<candidate-40-character-sha>" \
   --repo-url https://github.com/YuancunZhao/ToolUniverse.git \
-  --expected-version 1.4.1+acmg.9 \
+  --expected-version 1.4.1+acmg.13 \
   --online-providers
 ```
 
-This gate retries CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and the
-live BRCA2 collector once. It validates stable identity and response structure,
+This gate retries CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC,
+PubTator search, PubTator annotated full text, Unpaywall, and the live BRCA2
+and PKD1 collectors once. It validates stable identity and response structure,
 records URLs, elapsed time, and errors, and exits nonzero if any required
 source still fails. It deliberately does not pin mutable scores or record
-counts. It is an explicit maintainer/agent check; this repository does not
-automatically run a release workflow or create a GitHub release.
+counts. CORE PDF extraction is covered offline because availability depends on
+the PDF URL and installed extractor. This is an explicit maintainer/agent
+check; the repository does not automatically run a release workflow or create
+a GitHub release.
 
 If `execute_tool`, `get_tool_info`, or `list_tools` is unavailable, stop the
 ACMG assessment and report `ToolUniverse MCP execution unavailable`. Do not

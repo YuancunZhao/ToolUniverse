@@ -18,6 +18,28 @@ EXPECTED = {
 }
 
 
+def test_quarantine_preserves_control_counts_not_substring_assertions():
+    """Ordinary assay facts stay facts; only exact/suffixed conclusion keys isolate."""
+    raw = {
+        "pathogenic_control_count": 0,
+        "benign_controls_present": False,
+        "criterion_threshold": 4,
+        "clinical_significance": "Pathogenic",
+        "nested": {"assay_classification": "normal", "pathogenic_controls": 3},
+    }
+    result = adapt_source_output("fixture_assay", raw)
+    features = result["reviewable_features"]
+    assert features["pathogenic_control_count"] == 0
+    assert features["benign_controls_present"] is False
+    assert features["criterion_threshold"] == 4
+    assert "clinical_significance" not in features
+    assert features["nested"] == {"pathogenic_controls": 3}
+    assert all(
+        "control" not in key and "threshold" not in key
+        for key in result["quarantined_conclusions"]
+    )
+
+
 def test_gene_label_difference_does_not_override_exact_allele_identity():
     assert identity_matches(
         {**EXPECTED, "gene": "NEK8"},
@@ -1181,3 +1203,60 @@ def test_favor_composite_locus_label_does_not_impersonate_gene_symbol():
     assert observed["coordinates"]["pos"] == 28740462
     assert identity_verified is True
     assert ready is True
+
+
+def test_pubtator_fulltext_and_failure_diagnostics_are_preserved():
+    full = adapt_source_output(
+        "PubTator3_get_annotations",
+        {
+            "status": "success",
+            "full": True,
+            "url": "https://example.test/pubtator",
+            "status_code": 200,
+            "retry_attempts": 1,
+            "retry_trace": [{"attempt": 1, "status_code": 503}],
+            "data": [
+                {
+                    "id": "36755831",
+                    "passages": [
+                        {"infons": {"type": "results"}, "text": "Article body"}
+                    ],
+                }
+            ],
+        },
+    )["reviewable_features"]
+    assert full["requested_full"] is True
+    assert full["documents"][0]["document_status"] == "annotated_full_text"
+    assert full["retry_attempts"] == 1
+
+    abstract = adapt_source_output(
+        "PubTator3_get_annotations",
+        {
+            "status": "success",
+            "full": False,
+            "data": [
+                {
+                    "id": "36755831",
+                    "passages": [{"infons": {"type": "abstract"}, "text": "Abstract"}],
+                }
+            ],
+        },
+    )["reviewable_features"]
+    assert abstract["requested_full"] is False
+    assert abstract["documents"][0]["document_status"] == "abstract_only"
+
+    failed = adapt_source_output(
+        "PubTator3_LiteratureSearch",
+        {
+            "status": "error",
+            "status_code": 400,
+            "detail": "Database maintenance",
+            "url": "https://example.test/search",
+            "retryable": True,
+            "retry_attempts": 2,
+            "retry_trace": [{"attempt": 1, "status_code": 400}],
+        },
+    )["reviewable_features"]
+    assert failed["status_code"] == 400
+    assert failed["retryable"] is True
+    assert failed["detail"] == "Database maintenance"

@@ -20,6 +20,7 @@ from .rule_catalog import ACMG_CRITERIA, is_valid_strength_for_criterion
 _LABEL_SEPARATORS_RE = re.compile(r"[_\-\u2010-\u2015\u2212]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
 GUARD_CONTEXT_SCHEMA_VERSION = "2026-08-25-v4.2-light"
+GUARD_TEXT_POLICY_VERSION = "2026-09-04-v1"
 _GUARD_CONTEXT_HASH_FIELDS = (
     "schema_version",
     "variant_identity_hash",
@@ -282,28 +283,22 @@ def _has_final_classification_label(answer_text: str) -> bool:
 
 
 def _strip_attributed_external_assertions(answer_text: str) -> str:
-    """Remove sentences that clearly attribute a label to an external source."""
-    retained: list[str] = []
-    for sentence in re.split(r"(?<=[.!?。！？;；])\s*|\n+", str(answer_text or "")):
-        normalized = _normalized_label_text(sentence)
-        has_source = bool(
-            re.search(
-                r"\b(?:VCEP|CLINGEN|CLINVAR|EXPERT PANEL|EXTERNAL ASSERTION)\b",
-                normalized,
-            )
-            or re.search(
-                r"(?:外部|专家组|来源|数据库).{0,12}(?:判定|分类|结论)", sentence
-            )
-        )
-        has_attribution = bool(
-            re.search(
-                r"(?:CLASSIFIED|CLASSIFIES|ASSERTED|REPORTED|CONCLUDED|判定为|分类为|报告为|结论为)",
-                normalized,
-            )
-        )
-        if not (has_source and has_attribution):
-            retained.append(sentence)
-    return "\n".join(retained)
+    """Mask only the attributed label, never a whole mixed-ownership sentence."""
+    text = _normalized_label_text(answer_text)
+    source = (
+        r"\b(?:VCEP|CLINGEN|CLINVAR|EXPERT PANEL|EXTERNAL ASSERTION)\b"
+        r"|\b(?:LABORATORY|LAB)\s+[A-Z0-9][A-Z0-9 _'-]{0,40}"
+        r"|实验室\s*[^，。；：,;:\s]{1,30}|(?:外部专家组|专家组|数据库)"
+    )
+    verb = r"(?:CLASSIFIED|CLASSIFIES|ASSERTED|REPORTED|REPORTS|CONCLUDED|判定为|分类为|报告为|结论为)"
+    label = (
+        r"(?:LIKELY PATHOGENIC|PATHOGENIC|VARIANT OF UNCERTAIN SIGNIFICANCE|"
+        r"UNCERTAIN SIGNIFICANCE|VUS|LIKELY BENIGN|BENIGN|LP|LB)(?![A-Z])"
+        r"|可能致病|可能良性|临床意义不明|意义不明|致病|良性"
+    )
+    context = r"(?:(?!\b(?:WE|OUR|TOOLUNIVERSE)\b|本工具|我们|因此)[^.!?。！？;；\n])"
+    pattern = rf"((?:{source}){context}{{0,100}}?{verb}{context}{{0,100}}?)(?:{label})"
+    return re.sub(pattern, lambda match: match[1] + "[EXTERNAL LABEL]", text)
 
 
 def _has_predictor_majority_claim(answer_text: str) -> bool:

@@ -220,3 +220,27 @@ def test_structured_fulltext_reports_provenance_and_truncation(monkeypatch):
     assert result["truncated"] is True
     assert result["truncated_sections"] == ["results"]
     assert result["metadata"]["source"] == result["source"]
+
+
+def test_structured_fulltext_preserves_table_rows_with_stable_locators(monkeypatch):
+    xml_payload = """<article><front><article-meta><title-group>
+    <article-title>Fixture</article-title></title-group></article-meta></front>
+    <body><sec sec-type='results'><title>Results</title><table-wrap id='T1'>
+    <label>Table 1</label><caption><p>Cases</p></caption><table><tbody>
+    <tr><td>case-1</td><td>c.1A&gt;G</td></tr>
+    <tr><td>case-2</td><td>c.2C&gt;T</td></tr>
+    </tbody></table></table-wrap></sec></body></article>"""
+
+    def fake_request_with_retry(*args, **kwargs):
+        return _FakeResponse(status_code=200, text=xml_payload)
+
+    monkeypatch.setattr(
+        "tooluniverse.europe_pmc_tool.request_with_retry", fake_request_with_retry
+    )
+    tool = EuropePMCStructuredFullTextTool({"name": "EuropePMC_get_full_text"})
+    table = tool.run({"pmcid": "PMC111"})["data"]["tables"][0]
+
+    assert table["rows"] == [
+        {"locator": "T1:row:1", "text": "case-1 | c.1A>G"},
+        {"locator": "T1:row:2", "text": "case-2 | c.2C>T"},
+    ]

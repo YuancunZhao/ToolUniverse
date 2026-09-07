@@ -195,10 +195,14 @@ check(
 from tooluniverse.acmg.guard import GUARD_CONTEXT_SCHEMA_VERSION, guard_context_hash
 from tooluniverse.acmg.runtime_manifest import ACMG_RUNTIME_VERSION, build_runtime_manifest, ruleset_hash
 
+expected_runtime = {
+    "1.4.1+acmg.9": "evidence-automation-4.3",
+    "1.4.1+acmg.13": "evidence-automation-4.7",
+}.get(expected_version)
 check(
     "v4_runtime_version",
-    ACMG_RUNTIME_VERSION == "evidence-automation-4.3",
-    ACMG_RUNTIME_VERSION,
+    ACMG_RUNTIME_VERSION == expected_runtime,
+    f"installed={ACMG_RUNTIME_VERSION} expected={expected_runtime}",
 )
 check(
     "import_matches_distribution",
@@ -561,6 +565,60 @@ def _validate_full_text(result):
     )
 
 
+def _validate_pubtator_search(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    data = result.get("data") or result
+    rows = data.get("results") if isinstance(data, dict) else None
+    identified = [
+        row
+        for row in rows or []
+        if isinstance(row, dict) and _nonempty(row.get("pmid") or row.get("_id"))
+    ]
+    return bool(identified), f"identified_results={len(identified)}"
+
+
+def _validate_pubtator_full(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    data = result.get("data") or {}
+    documents = data.get("PubTator3") if isinstance(data, dict) else data
+    documents = documents if isinstance(documents, list) else []
+    matching = [
+        row
+        for row in documents
+        if isinstance(row, dict)
+        and str(row.get("pmid") or row.get("_id") or row.get("id") or "")
+        == "36755831"
+    ]
+    body_passages = [
+        passage
+        for row in matching
+        for passage in row.get("passages") or []
+        if isinstance(passage, dict)
+        and str((passage.get("infons") or {}).get("type") or "").casefold()
+        not in {"", "title", "abstract", "front"}
+        and str(passage.get("text") or "").strip()
+    ]
+    return bool(body_passages), (
+        f"matching_documents={len(matching)} body_passages={len(body_passages)}"
+    )
+
+
+def _validate_unpaywall(result):
+    if not isinstance(result, dict) or result.get("status") != "success":
+        return False, "provider did not return success"
+    data = result.get("data") or result
+    doi_ok = str(data.get("doi") or "").casefold() == "10.1093/ckj/sfac236"
+    location_ok = any(
+        str(data.get(key) or "").startswith("http")
+        for key in ("best_pdf_url", "best_landing_page_url", "best_oa_url")
+    )
+    return bool(data.get("is_oa") is True and doi_ok and location_ok), (
+        f"is_oa={data.get('is_oa')} doi={doi_ok} location={location_ok}"
+    )
+
+
 def _validate_collector(result):
     if not isinstance(result, dict):
         return False, "collector result is not an object"
@@ -592,6 +650,26 @@ def _validate_collector(result):
     return contract_ok and failures_visible, (
         f"status={result.get('status')} contract={contract_ok} "
         f"facts={len(facts)} failures_visible={failures_visible}"
+    )
+
+
+def _validate_pkd1_collector(result):
+    if not isinstance(result, dict):
+        return False, "collector result is not an object"
+    candidates = result.get("literature_candidates") or []
+    review = result.get("literature_review") or {}
+    identifiers = json.dumps(candidates, ensure_ascii=False)
+    contract_ok = (
+        result.get("status") in {"success", "degraded"}
+        and result.get("final_classification_allowed") is False
+        and "automatic_bayesian" in result
+        and "verified_bayesian" in result
+        and isinstance(review, dict)
+    )
+    target_visible = "36755831" in identifiers or "PMC9900584" in identifiers
+    return contract_ok and target_visible, (
+        f"status={result.get('status')} candidates={len(candidates)} "
+        f"target_visible={target_visible}"
     )
 
 
@@ -632,6 +710,24 @@ checks = [
         _validate_full_text,
     ),
     (
+        "pubtator_search",
+        "PubTator3_LiteratureSearch",
+        {"query": "PKD1 c.6832G>A", "page": 0, "limit": 10},
+        _validate_pubtator_search,
+    ),
+    (
+        "pubtator_full",
+        "PubTator3_get_annotations",
+        {"pmids": "36755831", "concepts": "gene,disease,mutation", "full": True},
+        _validate_pubtator_full,
+    ),
+    (
+        "unpaywall",
+        "Unpaywall_get_full_text_url",
+        {"doi": "10.1093/ckj/sfac236"},
+        _validate_unpaywall,
+    ),
+    (
         "collector",
         "ACMG_evidence_collector",
         {
@@ -642,6 +738,17 @@ checks = [
             "response_detail": "summary",
         },
         _validate_collector,
+    ),
+    (
+        "pkd1_collector",
+        "ACMG_evidence_collector",
+        {
+            "variant": "PKD1;NM_001009944.3:c.6832G>A(p.Gly2278Arg)",
+            "gene": "PKD1",
+            "clinical_context": {"zygosity": "heterozygous"},
+            "response_detail": "summary",
+        },
+        _validate_pkd1_collector,
     ),
 ]
 all_ok = True

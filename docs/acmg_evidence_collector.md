@@ -51,7 +51,55 @@ The collector accepts:
 - optional `source_outputs_or_leads` for reproducible provider inputs;
 - optional supplemental `literature_proposals` and `cspec_proposals`;
 - optional `evidence_decisions`;
+- optional `caller_verified_context` for attributed named-tool context after
+  degraded collection (not independently verified by the caller's declaration);
 - `response_detail=summary|full`.
+
+### Bounded recovery and attributed enrichment (v4.6)
+
+Within one run, a transient provider failure gets at most one collector retry,
+in addition to the provider's own bounded HTTP retry policy. Both collector
+attempts remain SourceFacts with retrieval timestamps; a successful retry does
+not erase the failed attempt. Empty results do not trigger transient retries.
+
+For PVS1-compatible consequences, an incomplete Ensembl lookup falls back to
+Tark MANE mapping, Tark transcript metadata, and Ensembl exon overlap. The
+submitted RefSeq version remains selected. The default Ensembl REST overlap
+route is GRCh38-only; it is never queried with GRCh37 coordinates. Exon ranks,
+chromosome, strand, assembly and ordering are checked before deriving structure.
+`consequence_profile.transcript_structure` exposes the selected NM/ENST pair,
+biotype, exon number/total, completeness, NMD assumptions and source IDs.
+
+The versioned positional calculation uses the general final-exon/50-nt NMD
+boundary from [Abou Tayoun et al. 2018](https://pmc.ncbi.nlm.nih.gov/articles/PMC6185798/).
+Only a confirmed stop-gained SNV permits using its altered codon position;
+two-base codon-position uncertainty is retained near the boundary. It does not
+infer a frameshift or splice variant's PTC from the variant's genomic coordinate.
+The existing PVS1 disease-specific LoF mechanism and downgrade checks remain
+independent. OMIM associations, ClinVar hit counts, pLI and LOEUF do not establish
+a LoF mechanism by themselves.
+
+MARRVEL OMIM's actual snake_case fields are normalized. If the response is empty
+or fails, the existing gene-disease aggregator supplies attributed background.
+`omim_context.association_status` distinguishes `resolved`, `provider_gap` and
+`confirmed_no_association`. The last means no association in the successfully
+queried sources only, not proof of biological absence. Missing-key/failed sources
+and ClinVar gene-level coverage signals cannot be counted as negative votes.
+
+Optional `caller_verified_context` entries require `context_id`, `context_type`,
+`tool_name`, original `query`, `values` (provider response or its data body),
+`provider_version` and timezone-qualified ISO-8601 `retrieved_at`. Allowed types
+are `transcript_mapping`, `transcript_record`, `exon_model` and
+`disease_associations`; each accepts only the corresponding named tools listed
+in the schema. Adapters and transcript/build binding still apply. These facts
+are explicitly `caller_attributed`, never directly strict/verified. Independent
+collector retrieval creates separate provider facts, not a silent promotion of
+the submitted fact. An enrichment run must use its own returned Guard context.
+
+`recoverable_gaps.repair_plan` lists tools, concrete arguments when known, and
+argument dependencies when a preceding mapping is required. Do not execute a
+step until its required arguments are resolved. Plans do not authorize changing
+the genome build or repeating identical failed requests indefinitely.
 
 `clinical_context` never becomes case evidence by itself. Each
 `clinical_observations` item requires:
@@ -235,9 +283,13 @@ The normal chain runs inside the collector:
 `search -> retrieve -> deterministic extract -> SourceFact -> EvidenceCard`
 
 Sources are checked in this order: VCEP/ERepo structured summaries, Europe PMC
-XML/HTML, PubTator entities and locations, available tables/captions/
-supplements, PubMed abstract, and provider-linked snippet. PMID, PMCID, and DOI
-are merged as an identifier graph while preserving source hits and conflicts.
+or PMC JATS/HTML, PubTator BioC annotated full text, available tables and figure
+captions, PubMed abstract, and open-access PDF snippets. PMID, PMCID, and DOI are
+merged as an identifier graph while preserving source hits and conflicts.
+PubTator search and PMID export are independent: a search outage does not
+prevent retrieval by a PMID found through LitVar, PubMed, or Europe PMC.
+DOI-based Unpaywall and CORE recovery runs only when the PMC and PubTator body
+routes do not yield a complete document.
 
 Search queries never prove exact variant matching. PMCID and `inEPMC` do not
 prove full-text retrieval. The runtime records actual source, format, URL,
@@ -247,7 +299,10 @@ to have read inaccessible full text.
 Clear facts in an abstract or snippet can create a source-backed candidate for
 the automatic estimate. Truncated or non-full-text facts cannot enter the
 verified estimate. A record with no evidence-bearing text remains only a
-literature lead.
+literature lead. One canonical body is selected per publication so JATS, HTML,
+and BioC do not duplicate facts; alternate bodies remain provenance. CORE
+snippets can support only the automatic estimate. Evidence reported only in an
+inaccessible supplement is disclosed as `supplement_not_reviewed`.
 
 Literature coverage uses explicit limitation codes:
 `search_leads_only`, `full_text_unavailable`, `target_fact_not_found`,
@@ -268,6 +323,17 @@ an earlier extraction. They are re-anchored to document identity, hash,
 locator, excerpt, variant/gene/disease, and per-field value excerpts. A general
 LLM is not a runtime dependency and absence of LLM output does not prevent
 candidate cards or automatic scoring.
+
+Every submitted proposal has exactly one `proposal_report` row. Retrieval,
+identity binding, and semantic validation are reported independently, so an
+unreachable document is not mislabeled as a variant mismatch. When retrieval
+is unavailable, a valid submitted SHA-256 plus a literal excerpt, locator,
+PMID/PMCID, and versioned extractor can create an `externally_anchored` review
+card. It is excluded from automatic and verified estimates. It can enter only
+`user_selected_bayesian`, through a legal mapped strength or a
+direction-consistent `strength_override` with a reason. A retrieved document
+whose content hash disagrees with the submitted hash is rejected rather than
+downgraded to external anchoring.
 
 ## Compatibility and Bayesian views
 
@@ -357,6 +423,67 @@ parsing, temporary files, source imports, and manual provider retries are not
 part of that path.
 
 ## v3 to v4 migration
+
+### v4.7 visibility, search controls, and audit boundaries
+
+Package `1.4.1+acmg.13`, runtime `evidence-automation-4.7`, schema
+`2026-09-04-v4.7`. Guard context schema and the eight tool names are unchanged.
+
+- Summary EvidenceCards retain `observed_facts`: frequencies/counts, OR/CI,
+  case points and experimental values with units and conditions. Zero, false,
+  null and absent values remain distinct. Shared profiles use resolvable
+  summary references instead of duplicating full consequence or exon arrays.
+- Every `criterion_reviews` row carries `route_status` and `evidence_status`;
+  `criterion_review_defaults` has been removed. Invalid card strengths/statuses
+  produce `serialization_diagnostics` without card IDs. The five public evidence
+  groups return these diagnostics as well. They cannot be accepted as evidence.
+- Literature candidates include the retrieved `title` and `abstract_available`.
+  `literature_review.fact_reviews` exposes incomplete or target-linked negative
+  atoms with source IDs, values, excerpts, locators and exclusion reasons.
+  These remain outside all calculators, including mechanism and scenario paths.
+  Valid normal-function/nonsegregation BS3/BS4 routes are unchanged.
+- `literature_review.search_summary` distinguishes raw page counts, retained
+  rows, score filtering, known provider totals, budgets and stop reasons.
+  Unknown totals are null, not page length. Cross-source deduplication is
+  reported separately. Actual OR queries and aliases remain visible.
+- `literature_search_limits` optionally overrides normal PubMed/Europe PMC/
+  LitVar publications/PubTator budgets (defaults 50/100/50/10). Each supplied
+  value must be an integer 1–1000; booleans, unknown keys and out-of-range values
+  are rejected before collection. PubTator uses fixed ten-record pages,
+  sequential bounded pagination, raw-record budgets and repeated-page stops.
+  Existing targeted prior-variant searches remain separately reported queries.
+- `fulltext_match_classes` uses the existing matching enum. Defaults are
+  exact/equivalent/provider-linked variant matches; an empty array disables
+  ordinary fulltext/annotation retrieval. Explicit proposals and targeted
+  requests still re-anchor. Broadening retrieval does not upgrade relevance.
+- gnomAD regional LoF processing still uses at most 50 retrieved records;
+  `exon_context` reports retrieved/used counts and the independently known total.
+- Quarantine uses exact conclusion keys/suffixes, not substring matches such
+  as pathogenic-control counts. Guard exempts only explicitly attributed
+  external label spans, including named labs, never a whole mixed sentence.
+
+The serializer does not mutate full results. Forty KB remains an optimization
+target; high-information summaries remain complete through compact MCP without
+temporary-file fallback. Scientific thresholds, odds, and fixed prior do not
+change. Extraction/quarantine/Guard policy versions are included in the audit
+hash; pure display layout is not a scientific rule.
+
+### v4.5/v4.6 proposal traceability and context recovery
+
+Package `1.4.1+acmg.13`, runtime `evidence-automation-4.7`, and schema
+`2026-09-04-v4.7` retain the existing Guard context and scientific thresholds,
+and add the bounded structure/disease recovery described above.
+PubTator annotations accept `full=true` in batches of at most 100 PMIDs and
+return structured HTTP/retry diagnostics. The collector treats Europe PMC/PMC
+JATS, PubTator BioC, and open-access PDF snippets as one fallback chain, selects
+one canonical document, preserves all retrieval provenance, and emits stable
+passage/table-row locators. A reviewed full text with no qualifying atomic fact
+is reported as `full_text_reviewed_no_eligible_fact`, not provider failure.
+Supplemental functional, phase, case, family, and phenotype proposals are no
+longer silently dropped: specialized calculators consume eligible facts first;
+the remaining proposal becomes an explicit review card or a reason-coded
+rejection. `proposal_report` preserves the submitted order and generated card
+IDs.
 
 ### v4.3 DUOX2 corrections
 

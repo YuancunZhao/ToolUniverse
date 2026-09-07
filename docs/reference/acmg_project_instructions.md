@@ -19,4 +19,13 @@ in `clinical_context.zygosity`.
 ToolUniverse does not issue its own five-tier classification.
 Timeouts are execution issues, not missing evidence. Do not rerun to warm a
 cache, switch to a local CLI, or add scientific interpretations after Guard.
+
+The collector itself performs bounded retries and named provider fallbacks.
+After unresolved degradation only, an optional targeted enrichment round may
+follow `recoverable_gaps.repair_plan`. Submit named tool results, original query,
+version and retrieval time through `caller_verified_context`; these are
+attributed, not independently verified. Recollect with the same original
+variant and use only the new result's Guard context. Never invent missing
+arguments, switch builds, promote background to evidence, or repeatedly execute
+the same failed step. This exception does not require shell or temporary files.
 <!-- TOOLUNIVERSE_ACMG_INSTRUCTIONS_END -->

@@ -7,7 +7,11 @@ import hashlib
 import json
 from typing import Any
 
-from .models import is_automatic_evidence, is_verified_evidence
+from .models import (
+    is_automatic_evidence,
+    is_user_selectable_evidence,
+    is_verified_evidence,
+)
 
 
 COMPATIBILITY_POLICY_VERSION = "2026-08-25-v4.2"
@@ -67,6 +71,14 @@ def aggregate_evidence_cards(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     passthrough: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
+            continue
+        if (
+            str(row.get("evidence_status") or "") == "excluded"
+            and (row.get("calculation_roles") or {}).get("user_selectable") is True
+        ):
+            # External document review cards need their own stable ID so a later
+            # evidence_decision can select the specific cited fact.
+            passthrough.append(copy.deepcopy(row))
             continue
         criterion = _criterion(row)
         scenario_id = str(row.get("scenario_id") or "generic-svi")
@@ -259,13 +271,18 @@ def resolve_evidence_compatibility(
         ):
             excluded.append({**row, "reason": "cross_scenario_rule_mix"})
             continue
-        eligible = (
-            is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids)
-            if eligibility == "automatic"
-            else is_verified_evidence(
+        if eligibility == "automatic":
+            eligible = is_automatic_evidence(
+                row, known_source_fact_ids=known_source_fact_ids
+            )
+        elif eligibility == "user_selected":
+            eligible = is_user_selectable_evidence(
+                row, known_source_fact_ids=known_source_fact_ids
+            )
+        else:
+            eligible = is_verified_evidence(
                 row, verified_source_fact_ids=verified_source_fact_ids
             )
-        )
         if not eligible:
             excluded.append({**row, "reason": "not_eligible_for_candidate_bayesian"})
             continue

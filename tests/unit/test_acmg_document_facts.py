@@ -75,7 +75,10 @@ def test_public_verification_claim_cannot_bypass_excerpt_validation():
 
     assert result["verified"] is False
     assert result["verification_level"] == "unverified"
-    assert "field_excerpt_not_found:odds_ratio" in result["validation_errors"]
+    assert (
+        "reanchor_failed_field_excerpt_not_found:odds_ratio"
+        in result["validation_errors"]
+    )
 
 
 def test_numeric_value_contradiction_is_separate_from_document_anchor():
@@ -125,4 +128,4 @@ def test_document_identity_and_locator_must_match():
 
     assert result["verified"] is False
     assert "document_identity_mismatch" in result["validation_errors"]
-    assert "locator_not_found" in result["validation_errors"]
+    assert "reanchor_failed_locator_not_found" in result["validation_errors"]

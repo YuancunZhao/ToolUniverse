@@ -98,7 +98,14 @@
   },
   {
     "name": "PubTator3_get_annotations",
-    "description": "Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Given one or more PubMed IDs (PMIDs), returns text-mined entities including genes, diseases, chemicals, species, mutations, and cell lines with their normalized identifiers (NCBI Gene ID, MeSH, NCBI Taxonomy, etc.) and text positions. Useful for extracting structured biomedical knowledge from literature. Provide PMIDs as a comma-separated string.",
+    "description": "Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Set full=true to request annotated full-text BioC passages when available; full=false returns the normal title/abstract annotation export. Provide at most 100 comma-separated PMIDs per request.",
+    "endpoint_path": "/publications/export/biocjson",
+    "method": "GET",
+    "param_map": {
+      "pmids": "pmids",
+      "concepts": "concepts",
+      "full": "full"
+    },
     "parameter": {
       "type": "object",
       "properties": {
@@ -110,6 +117,11 @@
           "type": "string",
           "default": "gene,disease,chemical,species,mutation,cellline",
           "description": "Comma-separated entity types to extract: gene, disease, chemical, species, mutation, cellline (default: all types)"
+        },
+        "full": {
+          "type": "boolean",
+          "default": false,
+          "description": "Request annotated full-text BioC passages when available. A successful response may still contain only title and abstract; consumers must inspect the returned passages."
         }
       },
       "required": [
@@ -117,9 +129,10 @@
       ]
     },
     "fields": {
-      "endpoint": "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/publications/export/biocjson"
+      "endpoint": "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/publications/export/biocjson",
+      "tool_subtype": "PubTatorAnnotations"
     },
-    "type": "BaseRESTTool",
+    "type": "PubTatorTool",
     "test_examples": [
       {
         "pmids": "33205991",
@@ -134,7 +147,7 @@
       }
     ],
     "return_schema": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
           "properties": {
@@ -316,9 +329,29 @@
         {
           "type": "object",
           "properties": {
+            "status": {"type": "string", "enum": ["success"]},
+            "data": {"type": ["array", "object"]},
+            "url": {"type": "string"},
+            "status_code": {"type": "integer"},
+            "full": {"type": "boolean"},
+            "retry_attempts": {"type": "integer"},
+            "retry_trace": {"type": "array", "items": {"type": "object"}}
+          },
+          "required": ["status", "data", "url", "status_code"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {"type": "string", "enum": ["error"]},
             "error": {
               "type": "string"
-            }
+            },
+            "status_code": {"type": ["integer", "null"]},
+            "detail": {"type": ["string", "null"]},
+            "url": {"type": "string"},
+            "retryable": {"type": "boolean"},
+            "retry_attempts": {"type": "integer"},
+            "retry_trace": {"type": "array", "items": {"type": "object"}}
           },
           "required": [
             "error"

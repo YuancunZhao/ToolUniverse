@@ -34,6 +34,21 @@ def test_ruleset_hash_tracks_candidate_preview_policy(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_visibility_boundaries(monkeypatch):
+    """Changed extraction, attribution, and quarantine policies are auditable."""
+    from tooluniverse.acmg import guard, source_adapters
+
+    for module, field in (
+        (guard, "GUARD_TEXT_POLICY_VERSION"),
+        (source_adapters, "QUARANTINE_POLICY_VERSION"),
+        (literature_extractor, "REVIEW_ONLY_POLICY_VERSION"),
+    ):
+        baseline = ruleset_hash()
+        with monkeypatch.context() as patch:
+            patch.setattr(module, field, "fixture-policy")
+            assert ruleset_hash() != baseline
+
+
 def test_ruleset_hash_tracks_pm2_candidate_threshold(monkeypatch):
     baseline = ruleset_hash()
     monkeypatch.setattr(population, "PM2_RARE_OBSERVED_GLOBAL_AF_MAX", 0.0002)
@@ -119,6 +134,19 @@ def test_ruleset_hash_tracks_duox2_scope_and_protein_mapping(monkeypatch):
     assert ruleset_hash() != baseline
 
 
+def test_ruleset_hash_tracks_literature_retrieval_and_canonical_body(monkeypatch):
+    baseline = ruleset_hash()
+    monkeypatch.setattr(
+        literature_extractor, "DOCUMENT_RETRIEVAL_POLICY_VERSION", "fixture"
+    )
+    assert ruleset_hash() != baseline
+    baseline = ruleset_hash()
+    monkeypatch.setattr(
+        literature_extractor, "CANONICAL_DOCUMENT_POLICY_VERSION", "fixture"
+    )
+    assert ruleset_hash() != baseline
+
+
 def test_runtime_manifest_indexes_applicable_dynamic_cspec():
     manifest = build_runtime_manifest(
         {
@@ -130,8 +158,8 @@ def test_runtime_manifest_indexes_applicable_dynamic_cspec():
         }
     )
 
-    assert manifest["acmg_runtime_version"] == "evidence-automation-4.3"
-    assert manifest["collector_schema_version"] == "2026-08-31-v4.3"
+    assert manifest["acmg_runtime_version"] == "evidence-automation-4.7"
+    assert manifest["collector_schema_version"] == "2026-09-04-v4.7"
     assert manifest["tooluniverse_version"]
     assert manifest["applicable_cspec"] == [
         {
@@ -150,7 +178,7 @@ def test_manifest_discloses_a_shadowed_distribution(monkeypatch):
         runtime_manifest.metadata,
         "distribution",
         lambda _: SimpleNamespace(
-            version="1.4.1+acmg.9",
+            version="1.4.1+acmg.13",
             locate_file=lambda _: "/other/install/tooluniverse",
             read_text=lambda _: '{"vcs_info":{"commit_id":"exact-commit"}}',
         ),

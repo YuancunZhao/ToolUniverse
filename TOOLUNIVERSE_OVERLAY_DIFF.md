@@ -4,12 +4,22 @@ Comparison baseline:
 `upstream/main@1aaaf00d1a9a91c21ae09d014fe19bf46fa82917` to
 `codex/acmg-on-tooluniverse-1.4`.
 
-The package version is `1.4.1+acmg.9`. Files unrelated to the ACMG runtime,
+The package version is `1.4.1+acmg.13`. Files unrelated to the ACMG runtime,
 its four missing provider operations, directly supporting Skills, generated
 registration surface, and fork installation metadata remain on the fixed
 upstream 1.4.0 base.
 
 ## Current Overlay Surface
+
+Unreleased v4.6 additionally reuses upstream Tark MANE/transcript, Ensembl exon
+overlap, MARRVEL OMIM and the gene-disease aggregator within the collector.
+One transient retry is allowed per collector call; both attempts remain
+SourceFacts. Selected-NM exon models supply auditable structure and a versioned
+50-nt NMD-position calculation for confirmed stop-gained SNVs. Other variant
+types do not substitute their genomic position for an unknown PTC. Disease
+background remains review-only. Optional caller-attributed tool results can
+fill unresolved context but cannot directly enter verified Bayesian scoring.
+Guard context and all eight ACMG tool names are unchanged.
 
 The fork adds an evidence-only ClinGen/SVI extension around upstream
 ToolUniverse variant providers. The public runtime is intentionally limited to:
@@ -224,8 +234,9 @@ Git-ref verification now requires a full 40-character commit SHA, disables pip
 cache reuse, isolates user site packages and the working directory, verifies
 the installed `direct_url.json` VCS revision, and reports the schema
 fingerprint and actual import path. `--online-providers` adds an opt-in,
-two-attempt gate for CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC, and a
-live BRCA2 collector while asserting only stable identity and response shape.
+two-attempt gate for CSpec, ERepo, ClinVar, gnomAD, MyVariant, Europe PMC,
+PubTator search and annotated full text, Unpaywall, and live BRCA2/PKD1
+collectors while asserting only stable identity and response shape.
 The Guard smoke uses a complete `collector_result`, covering serialized
 known-SourceFact binding. These checks are invoked explicitly; the retired
 candidate-release workflow is not restored, and ordinary commits do not
@@ -237,8 +248,16 @@ hash over the deterministic criterion/PVS1/SpliceAI/Bayesian ruleset, optional
 installed VCS revision, and applicable online CSpec identities. The Bayesian
 prior remains fixed at 0.1.
 
-Collector schema `2026-08-31-v4.3` adds population observations and grouped consequence indexes and retains
-the auditable 28-criterion routing contract.
+Collector schema `2026-09-04-v4.7` adds multi-source canonical full-text
+retrieval while retaining population observations, grouped consequence indexes,
+and the auditable 28-criterion routing contract.
+The v4.7 visibility layer adds compact card observed values, literature titles,
+review-only incomplete/negative atoms, invalid-card diagnostics and per-query
+search totals/budgets/stop reasons. Search limits and fulltext match classes are
+optional engineering controls, not evidence thresholds. Generic MCP truncation
+is bypassed only for ACMG's dedicated summary. No clinical lists are discarded.
+The model field reader and common result assembly are shared locally; numeric
+semantics, retries, public aliases, dispatch and trust-boundary validators stay.
 Each `criterion_reviews` row reports `route_status`, candidate SourceFact IDs,
 pending full-text request IDs, and missing requirements. Top-level
 `review_readiness` distinguishes automatic-workflow readiness from clinical
@@ -349,18 +368,29 @@ post-answer hooks; ToolUniverse enforcement begins inside its policy context.
 `examples/acmg_host_hooks.py` provides a framework-neutral reference for those
 two calls. Guard label matching normalizes Unicode width, underscores, hyphens,
 and repeated whitespace before checking five-tier terminology.
-Document-backed LLM facts require ToolUniverse full-text verification of their
-identity, locator, excerpts, and extracted fields. An optional internal
+Document-backed facts that enter automatic or verified estimates require
+ToolUniverse re-anchoring of identity, locator, excerpts, and extracted fields.
+When an external document is unreachable, a valid submitted document hash,
+literal excerpt, locator, publication identifier, and versioned extractor may
+produce an explicitly unverified user-selectable review card; it never enters
+automatic or verified estimates. Every submitted item is retained in
+`proposal_report`. An optional internal
 `acmg_review_assertion_verifier` callback can add curator provenance but cannot
 be self-declared through public tool arguments.
 
 ## Installation and MCP Surface
 
-v4.3 fixes protein-effect versus splice prediction applicability, automatic
-UniProt cross-reference resolution, independent population observations, and
-lossless grouped consequence summary. Full-text fallback is request-local and
-shared by extraction/proposal validation. Numeric scientific thresholds and
-the two-call host workflow are unchanged. ZCode timeout and configured-MCP
+v4.5 adds per-proposal dispositions, separates retrieval failure from identity
+mismatch, and preserves externally anchored functional/phase/case facts for
+explicit user review. v4.4 made PubTator BioC full-text export independent of PubTator search,
+selects one canonical Europe PMC/PMC or PubTator body, and uses Unpaywall plus
+CORE snippets only when complete bodies are unavailable. Retrieval attempts
+retain actual provenance and retry diagnostics; snippets are automatic-only,
+and a reviewed body with no qualifying fact is not mislabeled as provider
+failure. v4.3 fixed protein-effect versus splice prediction applicability,
+automatic UniProt cross-reference resolution, independent population
+observations, and lossless grouped consequence summary. Numeric scientific
+thresholds and the two-call host workflow are unchanged. ZCode timeout and configured-MCP
 exact-SHA checks are documented in SETUP; validated pins are not advanced by
 uncommitted working-tree changes.
 

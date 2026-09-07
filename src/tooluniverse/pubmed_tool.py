@@ -737,9 +737,9 @@ class PubMedRESTTool(BaseRESTTool):
                             "data": articles,
                             "metadata": {
                                 "count": len(articles),
-                                "total": int(
-                                    esearch_result.get("count", len(articles))
-                                ),
+                                "total": int(esearch_result["count"])
+                                if esearch_result.get("count") is not None
+                                else None,
                                 "query": arguments.get("query"),
                                 "source": "PubMed",
                                 **search_warnings,

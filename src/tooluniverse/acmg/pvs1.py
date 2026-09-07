@@ -4,7 +4,7 @@ Implements the Abou Tayoun et al. 2018 (PMID:30192042) PVS1 flowchart with
 selected-transcript SpliceAI Loss/Gain and delta-position interpretation for
 the canonical splice-site route. The tree is fail-closed: it only consumes structured,
 machine-verifiable facts and never caller booleans; facts that cannot be
-verified (last-50nt NMD boundary, exon-frame outcome, alternative start
+verified (uncertain PTC position, exon-frame outcome, alternative start
 codons) trigger conservative downgrades or ``not_assessed`` instead of
 assumed strength. Deletion and duplication branches remain review-only until
 curated exon-level fact contracts exist.
@@ -18,9 +18,11 @@ from .consequence import consequence_applicability
 from .models import EvidenceCard
 
 RULE_ID = "clingen-svi-pvs1"
-RULE_VERSION = "1.2"
+RULE_VERSION = "1.3"
 RULE_REFERENCE = "Abou Tayoun et al. 2018, PMID:30192042"
 RULE_BASIS = "ClinGen SVI PVS1 decision tree"
+NMD_POSITION_POLICY_VERSION = "2026-09-03-v1"
+NMD_FINAL_JUNCTION_DISTANCE_NT = 50
 
 _STRENGTH_LADDER = ("PVS1_Supporting", "PVS1_Moderate", "PVS1_Strong", "PVS1")
 
@@ -224,7 +226,7 @@ def _transcript_gate(
 def _nmd_region(
     transcript: dict[str, Any], steps: list[str]
 ) -> tuple[str | None, int | None]:
-    """Classify the PTC region; the 50nt boundary is not machine-verifiable."""
+    """Classify PTC position, preferring a versioned exon-model calculation."""
     exon_number, exon_total = _exon_pair(transcript.get("exon"))
     if transcript.get("exon_number") is not None:
         exon_number = _int(transcript.get("exon_number"))
@@ -235,6 +237,29 @@ def _nmd_region(
             "from the selected transcript"
         )
         return None, exon_number
+    calculated = str(transcript.get("nmd_region") or "")
+    policy_version = str(transcript.get("nmd_policy_version") or "")
+    distance = _int(transcript.get("distance_to_final_exon_junction_bp"))
+    if calculated in {"nmd_predicted", "nmd_escape", "nmd_uncertain"} and (
+        policy_version == NMD_POSITION_POLICY_VERSION
+    ):
+        expected = "nmd_uncertain"
+        if exon_number == exon_total:
+            expected = "nmd_escape"
+        elif distance is not None and distance >= 0:
+            if distance - 2 > NMD_FINAL_JUNCTION_DISTANCE_NT:
+                expected = "nmd_predicted"
+            elif distance + 2 <= NMD_FINAL_JUNCTION_DISTANCE_NT:
+                expected = "nmd_escape"
+        if calculated != expected:
+            steps.append("inconsistent versioned NMD calculation; position unresolved")
+            return None, exon_number
+        steps.append(
+            f"PTC in exon {exon_number}/{exon_total}: {calculated} by the "
+            f"versioned {NMD_FINAL_JUNCTION_DISTANCE_NT}-nt final-junction rule"
+            + (f" (distance={distance} nt)" if distance is not None else "")
+        )
+        return calculated, exon_number
     if exon_total >= 3 and exon_number <= exon_total - 2:
         steps.append(
             f"PTC in exon {exon_number}/{exon_total}: NMD predicted "

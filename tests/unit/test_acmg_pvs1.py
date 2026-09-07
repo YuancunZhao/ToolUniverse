@@ -163,7 +163,7 @@ def test_nmd_predicted_truncating_variant_yields_full_pvs1():
     card = assess_pvs1(consequence_profile=_profile(), pvs1_facts=_facts())
     assert card.strength == "PVS1"
     assert card.rule_id == "clingen-svi-pvs1"
-    assert card.rule_version == "1.2"
+    assert card.rule_version == "1.3"
     assert card.rule_reference == "Abou Tayoun et al. 2018, PMID:30192042"
     assert any("NMD predicted" in step for step in card.provenance_chain)
 
@@ -981,14 +981,14 @@ def test_pvs1_strengths_are_eligible_for_preview_with_tavtigian_odds():
         ("PVS1_Supporting", 2.08),
     ):
         assert rule_allows_verified_strength(
-            "PVS1", strength, rule_id="clingen-svi-pvs1", rule_version="1.2"
+            "PVS1", strength, rule_id="clingen-svi-pvs1", rule_version="1.3"
         )
         assert (
             bayesian_odds_for_output(
-                "PVS1", strength, rule_id="clingen-svi-pvs1", rule_version="1.2"
+                "PVS1", strength, rule_id="clingen-svi-pvs1", rule_version="1.3"
             )
             == odds
         )
     assert not rule_allows_verified_strength(
-        "PVS1", "not_assessed", rule_id="clingen-svi-pvs1", rule_version="1.2"
+        "PVS1", "not_assessed", rule_id="clingen-svi-pvs1", rule_version="1.3"
     )

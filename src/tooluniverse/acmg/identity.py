@@ -6,6 +6,64 @@ import re
 from typing import Any
 
 
+_PROTEIN_CHANGE_RE = re.compile(
+    r"(?:p\.)?\(?(?P<ref>[A-Za-z]{1,3})(?P<position>\d+)"
+    r"(?P<alt>[A-Za-z*]{1,3})"
+)
+_AA3_TO_1 = {
+    "ALA": "A",
+    "ARG": "R",
+    "ASN": "N",
+    "ASP": "D",
+    "CYS": "C",
+    "GLN": "Q",
+    "GLU": "E",
+    "GLY": "G",
+    "HIS": "H",
+    "ILE": "I",
+    "LEU": "L",
+    "LYS": "K",
+    "MET": "M",
+    "PHE": "F",
+    "PRO": "P",
+    "SER": "S",
+    "THR": "T",
+    "TRP": "W",
+    "TYR": "Y",
+    "VAL": "V",
+    "TER": "*",
+}
+
+
+def amino_acid_code(value: Any) -> str:
+    """Return one-letter amino-acid notation when the token is recognizable."""
+    normalized = str(value or "").strip().upper()
+    return _AA3_TO_1.get(normalized, normalized if len(normalized) == 1 else "")
+
+
+def protein_change(value: Any) -> tuple[str, int | None, str]:
+    """Return a representation-independent (ref, position, alt) protein change."""
+    match = _PROTEIN_CHANGE_RE.search(str(value or ""))
+    if not match:
+        return "", None, ""
+    return (
+        amino_acid_code(match.group("ref")),
+        int(match.group("position")),
+        amino_acid_code(match.group("alt")),
+    )
+
+
+def normalize_hgvs_token(value: Any) -> str:
+    """Normalize whitespace in one HGVS token without guessing equivalence."""
+    token = re.sub(r"\s+", "", str(value or "").strip())
+    match = re.search(
+        r"(?:(?:[A-Za-z][A-Za-z0-9_.-]*):)?[cgmp]\.[^();,\s]+",
+        token,
+        re.I,
+    )
+    return match.group(0).casefold() if match else ""
+
+
 CODING_HGVS_RE = re.compile(r"^c\.[^\s]+$", re.IGNORECASE)
 GENE_CODING_RE = re.compile(
     r"^(?P<gene>[A-Za-z][A-Za-z0-9-]*)\s*[: ]\s*(?P<hgvs>c\.[^\s]+)$",
@@ -419,8 +477,11 @@ __all__ = [
     "GENOMIC_HGVS_RE",
     "GENOMIC_VCF_RE",
     "RSID_RE",
+    "amino_acid_code",
     "formatted_transcript_candidates",
     "myvariant_id_from_hgvs_g",
+    "normalize_hgvs_token",
+    "protein_change",
     "select_formatted_transcript",
     "select_mane_transcript",
     "split_gene_coding_input",

@@ -111,7 +111,7 @@ def test_prior_variant_requires_independent_pathogenic_evidence():
         "functional",
     ],
 )
-def test_criterion_specific_literature_proposals_do_not_create_generic_duplicate_cards(
+def test_consumed_criterion_specific_proposals_do_not_create_duplicate_cards(
     fact_type,
 ):
     fact = SourceFact(
@@ -136,6 +136,7 @@ def test_criterion_specific_literature_proposals_do_not_create_generic_duplicate
     cards = ACMGEvidencePipeline._literature_proposal_cards(
         {fact.fact_id: fact},
         {"status": "resolved"},
+        consumed_source_fact_ids={fact.fact_id},
     )
 
     assert cards == []

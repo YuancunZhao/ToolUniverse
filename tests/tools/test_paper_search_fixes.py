@@ -499,6 +499,109 @@ class TestPubTator3ScoreThreshold(unittest.TestCase):
         self.assertEqual(len(filtered["results"]), 2)
 
 
+class TestPubTator3FullTextTransport(unittest.TestCase):
+    def _make_tool(self):
+        from tooluniverse.pubtator_tool import PubTatorTool
+
+        return PubTatorTool(
+            {
+                "name": "PubTator3_get_annotations",
+                "type": "PubTatorTool",
+                "endpoint_path": "/publications/export/biocjson",
+                "method": "GET",
+                "param_map": {"pmids": "pmids", "concepts": "concepts", "full": "full"},
+                "fields": {"tool_subtype": "PubTatorAnnotations"},
+            }
+        )
+
+    def test_full_true_is_forwarded_and_body_is_preserved(self):
+        tool = self._make_tool()
+        response = MagicMock()
+        response.ok = True
+        response.status_code = 200
+        response.url = "https://example.test/biocjson?full=true"
+        response.headers = {"Content-Type": "application/json"}
+        response.text = "[]"
+        response.json.return_value = [
+            {
+                "id": "36755831",
+                "passages": [
+                    {"offset": 0, "infons": {"type": "title"}, "text": "Title"},
+                    {"offset": 6, "infons": {"type": "results"}, "text": "Body"},
+                ],
+            }
+        ]
+        with patch("tooluniverse.pubtator_tool.time.sleep"):
+            with patch(
+                "tooluniverse.pubtator_tool.request_with_retry", return_value=response
+            ) as request:
+                result = tool.run({"pmids": "36755831", "full": True})
+
+        self.assertEqual(request.call_args.kwargs["params"]["full"], "true")
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(result["full"])
+        self.assertEqual(result["data"][0]["id"], "36755831")
+
+    def test_structured_retryable_http_error_is_preserved(self):
+        tool = self._make_tool()
+        response = MagicMock()
+        response.ok = False
+        response.status_code = 400
+        response.url = "https://example.test/biocjson"
+        response.headers = {"Content-Type": "application/json"}
+        response.text = "Database maintenance; try again later"
+        with patch("tooluniverse.pubtator_tool.time.sleep"):
+            with patch(
+                "tooluniverse.pubtator_tool.request_with_retry", return_value=response
+            ):
+                result = tool.run({"pmids": "36755831", "full": True})
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["status_code"], 400)
+        self.assertTrue(result["retryable"])
+        self.assertIn("maintenance", result["detail"].lower())
+
+    def test_transient_http_errors_remain_retryable(self):
+        tool = self._make_tool()
+        for status_code in (408, 429, 500, 502, 503, 504):
+            with self.subTest(status_code=status_code):
+                response = MagicMock()
+                response.ok = False
+                response.status_code = status_code
+                response.url = "https://example.test/biocjson"
+                response.headers = {}
+                response.text = "temporarily unavailable"
+                with patch("tooluniverse.pubtator_tool.time.sleep"):
+                    with patch(
+                        "tooluniverse.pubtator_tool.request_with_retry",
+                        return_value=response,
+                    ):
+                        result = tool.run({"pmids": "36755831", "full": True})
+                self.assertEqual(result["status_code"], status_code)
+                self.assertTrue(result["retryable"])
+
+    def test_transport_timeout_returns_structured_diagnostics(self):
+        import requests
+
+        tool = self._make_tool()
+        with patch("tooluniverse.pubtator_tool.time.sleep"):
+            with patch(
+                "tooluniverse.pubtator_tool.request_with_retry",
+                side_effect=requests.Timeout("timed out"),
+            ):
+                result = tool.run({"pmids": "36755831", "full": True})
+        self.assertEqual(result["status"], "error")
+        self.assertTrue(result["retryable"])
+        self.assertIn("timed out", result["detail"])
+
+    def test_more_than_one_hundred_pmids_is_rejected_locally(self):
+        result = self._make_tool().run(
+            {"pmids": ",".join(str(value) for value in range(1, 102))}
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertIn("at most 100", result["error"])
+
+
 # ---------------------------------------------------------------------------
 # Feature-82A-005: openalex_search_works empty query errors
 # ---------------------------------------------------------------------------
@@ -1468,7 +1571,7 @@ class TestGTExGeneSymbolResolution(unittest.TestCase):
             mock_get.return_value = {"data": [{"variantId": "chr17_1234_A_G", "pValue": 0.001}]}
             result = tool.run({"gene_symbol": "TP53"})
             mock_resolve.assert_called_once_with(
-                "TP53", "https://gtexportal.org/api/v2", 30
+                "TP53", "https://gtexportal.org/api/v2", 30, "gtex_v8"
             )
             self.assertEqual(result["status"], "success")
 

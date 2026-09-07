@@ -333,7 +333,99 @@ def source_fact_ready(
         return (
             {"gene": features.get("query_gene") or features.get("gene")},
             identity_verified,
-            identity_verified and isinstance(features.get("omim_associations"), list),
+            identity_verified
+            and isinstance(features.get("omim_associations"), list)
+            and features.get("provider_contract_valid") is not False,
+        )
+
+    if tool_name == "gather_gene_disease_associations":
+        expected_gene = _norm(expected_identity.get("gene"))
+        observed_gene = _norm(features.get("query_gene"))
+        identity_verified = bool(expected_gene and observed_gene == expected_gene)
+        return (
+            {"gene": features.get("query_gene")},
+            identity_verified,
+            identity_verified
+            and isinstance(features.get("associations"), list)
+            and features.get("provider_contract_valid") is not False,
+        )
+
+    if tool_name == "Tark_get_mane_transcripts":
+        expected = _norm(expected_identity.get("transcript"))
+        rows = [
+            row
+            for row in features.get("mane_transcripts") or []
+            if isinstance(row, dict)
+            and _norm(row.get("refseq_transcript")).split(".", 1)[0]
+            == expected.split(".", 1)[0]
+            and (
+                not row.get("gene")
+                or not expected_identity.get("gene")
+                or _norm(row.get("gene")) == _norm(expected_identity.get("gene"))
+            )
+        ]
+        return (
+            {
+                "transcript": expected_identity.get("transcript"),
+                "ensembl_transcripts": [row.get("ensembl_transcript") for row in rows],
+            },
+            bool(expected and rows),
+            bool(expected and rows and provider_version(features)),
+        )
+
+    if tool_name == "Tark_get_transcript":
+        expected = _norm(expected_identity.get("ensembl_transcript_id"))
+        rows = [
+            row
+            for row in features.get("transcript_records") or []
+            if isinstance(row, dict)
+            and _norm(row.get("stable_id")).split(".", 1)[0]
+            == expected.split(".", 1)[0]
+        ]
+        build = _norm(expected_identity.get("build"))
+        rows = [
+            row
+            for row in rows
+            if not build or _norm(row.get("assembly")).startswith(build)
+        ]
+        return (
+            {"transcript": expected_identity.get("ensembl_transcript_id")},
+            bool(expected and rows),
+            bool(expected and rows and provider_version(features)),
+        )
+
+    if tool_name == "ensembl_get_overlap_features":
+        expected = _norm(expected_identity.get("ensembl_transcript_id"))
+        exons = [
+            row
+            for row in features.get("exons") or []
+            if isinstance(row, dict)
+            and _norm(row.get("transcript")).split(".", 1)[0]
+            == expected.split(".", 1)[0]
+        ]
+        identity_verified = bool(
+            expected
+            and exons
+            and all(
+                not row.get("assembly")
+                or build_matches(expected_identity, {"assembly": row.get("assembly")})
+                for row in exons
+            )
+        )
+        ready = bool(
+            identity_verified
+            and all(
+                _number(row, "start") is not None
+                and _number(row, "end") is not None
+                and _number(row, "rank") is not None
+                for row in exons
+            )
+            and provider_version(features)
+        )
+        return (
+            {"transcript": expected_identity.get("ensembl_transcript_id")},
+            identity_verified,
+            ready,
         )
 
     if tool_name == "ClinGen_search_cspec":
@@ -695,6 +787,16 @@ _CONCLUSION_KEYS = {
     "pathogenic",
     "benign",
 }
+QUARANTINE_POLICY_VERSION = "2026-09-04-v2"
+
+
+def _is_conclusion_key(key: str) -> bool:
+    lowered = str(key).casefold()
+    return lowered in _CONCLUSION_KEYS or lowered.endswith(
+        ("_classification", "_significance")
+    )
+
+
 _IDENTITY_KEYS = {
     "variant_id",
     "_id",
@@ -748,7 +850,13 @@ def _source_category(tool_name: str) -> str:
         return "computational_prediction"
     if "gnomad" in name or "population" in name:
         return "population"
-    if any(token in name for token in ("literature", "pubmed", "pmc")):
+    if (
+        any(
+            token in name
+            for token in ("literature", "pubmed", "pmc", "pubtator", "unpaywall")
+        )
+        or tool_name == "CORE_get_fulltext_snippets"
+    ):
         return "literature"
     if "clingen" in name or "g2p" in name or "marrvel" in name:
         return "disease_context"
@@ -781,12 +889,7 @@ def _quarantine(value: Any, path: str, assertions: dict[str, Any]) -> Any:
         clean: dict[str, Any] = {}
         for key, child in value.items():
             child_path = f"{path}.{key}" if path else str(key)
-            lowered = str(key).casefold()
-            if (
-                lowered in _CONCLUSION_KEYS
-                or lowered.endswith("_classification")
-                or lowered.endswith("_significance")
-            ):
+            if _is_conclusion_key(key):
                 assertions[child_path] = child
             else:
                 clean[key] = _quarantine(child, child_path, assertions)
@@ -2055,7 +2158,7 @@ def _pubmed_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "articles": [dict(row) for row in articles if isinstance(row, dict)],
         "query": metadata.get("query"),
-        "total_available": metadata.get("total", len(articles)),
+        "total_available": metadata.get("total"),
         "provider_version": metadata.get("source") or "PubMed E-utilities",
         "request_url": "https://pubmed.ncbi.nlm.nih.gov/",
         "review_only": True,
@@ -2099,25 +2202,53 @@ def _literature_search_fields(
         if tool_name == "PubTator3_LiteratureSearch"
         else "Europe PMC"
     )
-    return {
-        "articles": [dict(row) for row in articles if isinstance(row, dict)],
-        "query": metadata.get("query") or raw.get("query"),
-        "total_available": (
-            metadata.get("total")
-            or raw.get("total")
-            or raw.get("hitCount")
-            or len(articles)
-        ),
-        "provider_version": source,
-        "request_url": (
-            "https://www.ncbi.nlm.nih.gov/research/litvar2/"
-            if source == "LitVar"
-            else "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
-            if source == "PubTator3"
-            else "https://www.ebi.ac.uk/europepmc/webservices/rest/"
-        ),
-        "review_only": True,
-    }
+    return _drop_empty(
+        {
+            "articles": [dict(row) for row in articles if isinstance(row, dict)],
+            "query": metadata.get("query") or raw.get("query"),
+            "total_available": next(
+                (
+                    value
+                    for value in (
+                        metadata.get("total"),
+                        metadata.get("total_results"),
+                        raw.get("total"),
+                        raw.get("hitCount"),
+                        (
+                            payload.get("count")
+                            if tool_name == "PubTator3_LiteratureSearch"
+                            and isinstance(payload, dict)
+                            else None
+                        ),
+                        (
+                            payload.get("hitCount")
+                            if isinstance(payload, dict)
+                            else None
+                        ),
+                    )
+                    if type(value) is int and value >= 0
+                ),
+                None,
+            ),
+            "search_counts": raw.get("search_counts")
+            or (payload.get("search_counts") if isinstance(payload, dict) else {})
+            or {},
+            "provider_version": source,
+            "request_url": (
+                "https://www.ncbi.nlm.nih.gov/research/litvar2/"
+                if source == "LitVar"
+                else "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"
+                if source == "PubTator3"
+                else "https://www.ebi.ac.uk/europepmc/webservices/rest/"
+            ),
+            "review_only": True,
+            "status_code": raw.get("status_code"),
+            "detail": raw.get("detail") or raw.get("error"),
+            "retryable": raw.get("retryable"),
+            "retry_attempts": raw.get("retry_attempts"),
+            "retry_trace": raw.get("retry_trace") or [],
+        }
+    )
 
 
 def _literature_annotation_fields(
@@ -2136,17 +2267,52 @@ def _literature_annotation_fields(
                 or []
             )
         documents = [dict(row) for row in documents if isinstance(row, dict)]
-        return {
-            "pmids": [
-                str(row.get("pmid") or row.get("_id") or row.get("id") or "")
-                for row in documents
-                if row.get("pmid") or row.get("_id") or row.get("id")
-            ],
-            "annotations": documents,
-            "provider_version": "PubTator3",
-            "request_url": ("https://www.ncbi.nlm.nih.gov/research/pubtator3-api/"),
-            "review_only": True,
-        }
+        for document in documents:
+            passages = [
+                row for row in document.get("passages") or [] if isinstance(row, dict)
+            ]
+            body_passages = [
+                row
+                for row in passages
+                if str((row.get("infons") or {}).get("type") or "").casefold()
+                not in {"title", "abstract", "front", ""}
+                and str(row.get("text") or "").strip()
+            ]
+            abstract_passages = [
+                row
+                for row in passages
+                if str((row.get("infons") or {}).get("type") or "").casefold()
+                == "abstract"
+                and str(row.get("text") or "").strip()
+            ]
+            document["document_status"] = (
+                "annotated_full_text"
+                if body_passages
+                else "abstract_only"
+                if abstract_passages
+                else "annotation_only"
+            )
+        return _drop_empty(
+            {
+                "pmids": [
+                    str(row.get("pmid") or row.get("_id") or row.get("id") or "")
+                    for row in documents
+                    if row.get("pmid") or row.get("_id") or row.get("id")
+                ],
+                "annotations": documents,
+                "documents": documents,
+                "requested_full": raw.get("full") is True,
+                "provider_version": "PubTator3",
+                "request_url": raw.get("url")
+                or "https://www.ncbi.nlm.nih.gov/research/pubtator3-api/",
+                "status_code": raw.get("status_code"),
+                "detail": raw.get("detail") or raw.get("error"),
+                "retryable": raw.get("retryable"),
+                "retry_attempts": raw.get("retry_attempts"),
+                "retry_trace": raw.get("retry_trace") or [],
+                "review_only": True,
+            }
+        )
     payload_map = payload if isinstance(payload, dict) else {}
     return {
         "pmid": raw.get("pmid") or payload_map.get("pmid"),
@@ -2158,6 +2324,45 @@ def _literature_annotation_fields(
         "request_url": "https://www.ebi.ac.uk/europepmc/annotations_api/",
         "review_only": True,
     }
+
+
+def _open_access_document_fields(
+    tool_name: str, payload: Any, raw: dict[str, Any]
+) -> dict[str, Any]:
+    values = payload if isinstance(payload, dict) else {}
+    if tool_name == "Unpaywall_get_full_text_url":
+        return _drop_empty(
+            {
+                "doi": values.get("doi") or raw.get("doi"),
+                "is_oa": values.get("is_oa"),
+                "oa_status": values.get("oa_status"),
+                "best_pdf_url": values.get("best_pdf_url"),
+                "best_landing_page_url": values.get("best_landing_page_url"),
+                "request_url": values.get("best_landing_page_url"),
+                "provider_version": "Unpaywall",
+                "review_only": True,
+            }
+        )
+    return _drop_empty(
+        {
+            "pdf_url": values.get("pdf_url"),
+            "snippets": values.get("snippets") or [],
+            "snippets_count": values.get("snippets_count"),
+            "retrieval_trace": values.get("retrieval_trace") or [],
+            "truncated": values.get("truncated") is True,
+            "extractor_used": values.get("extractor_used"),
+            "pages_scanned": values.get("pages_scanned"),
+            "text_chars_scanned": values.get("text_chars_scanned"),
+            "status_code": values.get("status_code"),
+            "detail": values.get("error"),
+            "retryable": values.get("retryable"),
+            "source": "CORE open-access PDF",
+            "format": "pdf_snippets",
+            "url": values.get("pdf_url"),
+            "provider_version": "CORE full-text snippets",
+            "review_only": True,
+        }
+    )
 
 
 def _uniprot_fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2372,7 +2577,15 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
             "provider_version": "gnomAD GraphQL variant search",
         }
     elif tool_name == "MARRVEL_get_omim_phenotypes":
-        features = _marrvel_omim_fields(payload)
+        features = _marrvel_omim_fields(payload, raw)
+    elif tool_name == "gather_gene_disease_associations":
+        features = _gene_disease_association_fields(payload_dict)
+    elif tool_name == "Tark_get_mane_transcripts":
+        features = _tark_mane_fields(payload, raw)
+    elif tool_name == "Tark_get_transcript":
+        features = _tark_transcript_fields(payload, raw)
+    elif tool_name == "ensembl_get_overlap_features":
+        features = _ensembl_overlap_exon_fields(payload, raw)
     elif tool_name == "ensembl_lookup_gene":
         features = _ensembl_lookup_fields(payload_dict)
     elif tool_name in {
@@ -2403,6 +2616,8 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
         "EPMC_get_text_mined_annotations",
     }:
         features = _literature_annotation_fields(tool_name, payload, raw)
+    elif tool_name in {"Unpaywall_get_full_text_url", "CORE_get_fulltext_snippets"}:
+        features = _open_access_document_fields(tool_name, payload, raw)
     elif category == "population":
         features = _population_fields(payload_dict)
     elif "clinvar" in name:
@@ -2458,22 +2673,23 @@ def adapt_source_output(tool_name: str, raw_output: Any) -> dict[str, Any]:
 
     if isinstance(payload_dict, dict):
         features.update(_identity_fields(raw, payload_dict))
-    if category == "population":
-        features.update(
-            _copy(raw, {"status_code", "retry_attempts", "retry_trace", "error"})
+    features.update(
+        _copy(
+            raw,
+            {
+                "status_code",
+                "retryable",
+                "retry_attempts",
+                "retry_trace",
+                "request_url",
+                "url",
+                "error",
+                "detail",
+            },
         )
+    )
     for key, value in raw.items():
-        lowered = key.casefold()
-        if lowered in _CONCLUSION_KEYS or any(
-            token in lowered
-            for token in (
-                "classification",
-                "interpretation",
-                "criterion",
-                "pathogenic",
-                "benign",
-            )
-        ):
+        if _is_conclusion_key(key):
             assertions[key] = value
     features = _quarantine(features, "reviewable_features", assertions)
     raw_json = json.dumps(raw, sort_keys=True, separators=(",", ":"), default=str)
@@ -2599,12 +2815,16 @@ def _ensembl_lookup_fields(payload: dict[str, Any]) -> dict[str, Any]:
                     "start": exon.get("start"),
                     "end": exon.get("end"),
                     "strand": exon.get("strand"),
+                    "assembly": exon.get("assembly_name")
+                    or row.get("assembly_name")
+                    or payload.get("assembly_name"),
                 }
             )
     return _drop_empty(
         {
             "transcript_id": payload.get("id"),
             "chrom": payload.get("seq_region_name"),
+            "biotype": payload.get("biotype"),
             "exons": exons,
             "provider_version": "Ensembl REST lookup",
         }
@@ -2638,11 +2858,12 @@ def _gnomad_region_variants_fields(payload: dict[str, Any]) -> dict[str, Any]:
             "stop": region.get("stop"),
             "variants": variants,
             "provider_version": "gnomAD GraphQL region variants",
+            "total_available": region.get("total_count"),
         }
     )
 
 
-def _marrvel_omim_fields(payload: Any) -> dict[str, Any]:
+def _marrvel_omim_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize MARRVEL OMIM rows without turning them into ACMG evidence."""
     rows = payload if isinstance(payload, list) else []
     if isinstance(payload, dict):
@@ -2671,8 +2892,11 @@ def _marrvel_omim_fields(payload: Any) -> dict[str, Any]:
                 {
                     "phenotype_name": row.get("phenotype") or row.get("phenotype_name"),
                     "phenotype_mim": row.get("phenotypeMimNumber")
+                    or row.get("phenotype_mim_number")
                     or row.get("phenotype_mim"),
-                    "gene_mim": row.get("mimNumber") or row.get("gene_mim"),
+                    "gene_mim": row.get("mimNumber")
+                    or row.get("gene_mim_number")
+                    or row.get("gene_mim"),
                     "inheritance": inheritance,
                     "inheritance_enum": inheritance_map.get(
                         inheritance.casefold(), "candidate"
@@ -2684,9 +2908,112 @@ def _marrvel_omim_fields(payload: Any) -> dict[str, Any]:
         )
     return {
         "omim_associations": associations,
-        "provider_version": "MARRVEL OMIM phenotype endpoint",
+        "provider_contract_valid": isinstance(payload, list)
+        or (
+            isinstance(payload, dict)
+            and any(
+                isinstance(payload.get(key), list) for key in ("phenotypes", "data")
+            )
+        ),
+        "provider_version": str(
+            (raw.get("metadata") or {}).get("source")
+            if isinstance(raw.get("metadata"), dict)
+            else ""
+        )
+        or "MARRVEL OMIM phenotype endpoint",
         "review_only": True,
     }
+
+
+def _tark_mane_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
+    rows = [dict(row) for row in payload or [] if isinstance(row, dict)]
+    metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+    return {
+        "mane_transcripts": rows,
+        "query": dict(metadata.get("query") or {}),
+        "provider_version": str(metadata.get("source") or "Ensembl Tark MANE list"),
+    }
+
+
+def _tark_transcript_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
+    rows = [dict(row) for row in payload or [] if isinstance(row, dict)]
+    metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+    return {
+        "transcript_records": rows,
+        "query_stable_id": metadata.get("query_stable_id"),
+        "provider_version": str(
+            metadata.get("source") or "Ensembl Tark transcript archive"
+        ),
+    }
+
+
+def _ensembl_overlap_exon_fields(payload: Any, raw: dict[str, Any]) -> dict[str, Any]:
+    exons = []
+    for row in payload or []:
+        if not isinstance(row, dict):
+            continue
+        exons.append(
+            _drop_empty(
+                {
+                    "exon_id": row.get("id"),
+                    "transcript": row.get("Parent") or row.get("parent"),
+                    "rank": row.get("rank"),
+                    "chrom": row.get("seq_region_name") or row.get("chromosome"),
+                    "start": row.get("start"),
+                    "end": row.get("end"),
+                    "strand": row.get("strand"),
+                    "assembly": row.get("assembly_name"),
+                }
+            )
+        )
+    return {
+        "exons": exons,
+        "provider_version": str(raw.get("release") or "Ensembl REST overlap exon"),
+    }
+
+
+def _gene_disease_association_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    query = payload.get("query") if isinstance(payload.get("query"), dict) else {}
+    counts = (
+        payload.get("per_source_result_counts")
+        if isinstance(payload.get("per_source_result_counts"), dict)
+        else {}
+    )
+    sources_with_data = [
+        str(source)
+        for source, count in counts.items()
+        if isinstance(count, int) and not isinstance(count, bool) and count > 0
+    ]
+    failures = list(payload.get("sources_failed") or [])
+    checked_empty = [
+        source
+        for source, count in counts.items()
+        if count == 0
+        and source in {"OMIM", "DisGeNET", "OpenTargets", "GenCC"}
+        and not any(str(error).startswith(source + ":") for error in failures)
+    ]
+    return _drop_empty(
+        {
+            "query_gene": query.get("gene"),
+            "provider_contract_valid": isinstance(payload.get("associations"), list)
+            and bool(query.get("gene")),
+            "associations": [
+                dict(row)
+                for row in payload.get("associations") or []
+                if isinstance(row, dict)
+            ],
+            "num_associations": payload.get("num_associations"),
+            "sources_queried": list(payload.get("sources_queried") or []),
+            "sources_failed": failures,
+            "sources_checked_empty": checked_empty,
+            "notes": list(payload.get("notes") or []),
+            "sources_with_data": sources_with_data,
+            "per_source_result_counts": counts,
+            "truncated": payload.get("truncated"),
+            "provider_version": "ToolUniverse gene-disease association aggregator",
+            "review_only": True,
+        }
+    )
 
 
 __all__ = [

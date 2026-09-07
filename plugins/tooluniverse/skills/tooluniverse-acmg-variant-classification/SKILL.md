@@ -14,6 +14,31 @@ genomic coordinate.
 
 ## Normal path: exactly two tool calls
 
+Use `evidence_cards.observed_facts` for card-specific numbers and the indicated
+summary references for shared consequence/predictor/population values. Do not
+drop zero or false values. Every criterion review now states its own status;
+there is no `criterion_review_defaults`. Literature titles and
+`abstract_available` describe what was actually retrieved.
+
+`literature_review.fact_reviews` preserves incomplete and target-linked negative
+observations; these are review-only, not extra cards or user-selectable evidence.
+`serialization_diagnostics` records invalid card outputs without claim IDs.
+Discuss these limits without promoting them to a criterion or score.
+
+For an explicitly requested wider search, pass `literature_search_limits`
+with any of `pubmed`, `europe_pmc`, `litvar`, `pubtator` (integers 1–1000).
+Defaults are 50/100/50/10. PubTator pages are sequential and counted before
+score filtering. `literature_review.search_summary` reports actual queries,
+returned/retained/filtered counts, unknown totals as null, and stop reasons.
+`fulltext_match_classes` can broaden retrieval to existing match classes;
+an empty list disables normal automatic fulltext and annotations, not explicit
+proposal re-anchoring. Retrieval scope never changes target-link or evidence
+eligibility. Use returned summaries intact, including results larger than 40 KB.
+
+External laboratory conclusions may be quoted with a named laboratory/report
+and explicit attribution. This is permission to cite, not a claim that Guard
+verified that laboratory conclusion. ToolUniverse must not add its own label.
+
 This Skill is already-loaded execution guidance, not a capability to invoke.
 Do not call `skill:...` or rediscover either ACMG tool.
 
@@ -40,6 +65,27 @@ not absence of evidence; do not rerun to "warm the cache" or switch to an
 unverified local `tu`/Python environment. Report an installation/timeout issue
 if the configured MCP call cannot finish.
 
+The two-call rule is the normal path, not a ban on collector self-recovery.
+Inside that call, transient failures receive one bounded collector retry;
+failed and successful attempts remain sourced. Selected-transcript structure
+can fall back to Tark MANE/transcript records and GRCh38 Ensembl exon overlap.
+OMIM gaps can fall back to the existing multi-source gene-disease tool. A
+ClinVar gene hit is a coverage signal, not proof of a particular OMIM disease
+or LoF mechanism. Zero returned associations with failed sources means a
+provider gap, not confirmed biological absence.
+
+Only after an unresolved degraded result, optional `recoverable_gaps.repair_plan`
+steps may be executed as a targeted enrichment round. Resolve the declared
+argument dependencies; never guess ENST, coordinates or build. Return the
+named tool's original result via `caller_verified_context` with `context_id`,
+`context_type`, `tool_name`, `query`, `values`, `provider_version` and timezone-
+qualified `retrieved_at`. Despite the legacy-looking input name, these are
+caller-attributed facts, not independently verified facts. They never directly
+enter the verified estimate. Do not turn a manual tool response into a card;
+run the collector with the original variant plus the enrichment, then use only
+that new run's unchanged Guard context. Do not repeat identical failed steps
+or rerun just to warm caches. No shell or files are needed for enrichment.
+
 Call the compact MCP surface with this exact shape:
 
 ```json
@@ -58,6 +104,14 @@ Optional `literature_proposals` and `cspec_proposals` are supplemental
 reproducibility inputs, not normal completion requirements. Optional
 `evidence_decisions` requests a user-selected recalculation. `reviewer` and
 `decided_at` are optional and never affect eligibility or scoring.
+Every submitted literature item appears once in `proposal_report`. If a cited
+document cannot be independently retrieved, a proposal with a valid document
+SHA-256, literal excerpt, locator, publication identifier, and versioned
+extractor may appear as an `externally_anchored` review card. Such a card is
+never automatic or verified; a user may select it only with a legal existing
+strength or a direction-consistent `strength_override` plus `reason`. Report
+that boundary explicitly and do not describe the document as independently
+verified.
 
 ## Read the result, do not reconstruct it
 
@@ -95,6 +149,12 @@ an EvidenceCard. A card is emitted only when a source-located atomic fact binds
 the target and satisfies that criterion's minimum fields. Abstract or snippet
 facts may support an automatic candidate when those fields are complete;
 ordinary keyword/provider-linked leads do not enter Bayesian calculation.
+The collector obtains one canonical body per publication: Europe PMC/PMC JATS
+first, PubTator BioC full text when the PMC body is incomplete or target binding
+needs annotation, then an open-access PDF snippet fallback. PubTator search
+failure does not disable PMID export or the other discovery sources. CORE
+snippets never enter the verified estimate, and inaccessible supplements remain
+an explicit limitation rather than guessed evidence.
 In summary mode, merge `literature_candidate_defaults` into each candidate row;
 per-record values override defaults, and explicit null stays unknown. This does
 not truncate leads.

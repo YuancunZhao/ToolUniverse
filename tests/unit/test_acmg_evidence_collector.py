@@ -22,6 +22,7 @@ from tooluniverse.acmg.collector import (
     _literature_review_state,
 )
 from tooluniverse.acmg.cspec import cspec_content_hash
+from tooluniverse.acmg.document_facts import verify_document_fact
 from tooluniverse.acmg.models import SourceFact
 from tooluniverse.acmg.rule_catalog import CSPEC_RULE_CATALOG
 
@@ -379,6 +380,15 @@ def test_literature_review_request_is_executable_and_idempotent():
             },
             "max_attempts": 1,
         },
+        {
+            "tool_name": "PubTator3_get_annotations",
+            "arguments": {
+                "pmids": "999",
+                "concepts": "gene,disease,mutation",
+                "full": True,
+            },
+            "max_attempts": 1,
+        },
     ]
     repeated = _literature_review_state(
         candidates,
@@ -390,6 +400,104 @@ def test_literature_review_request_is_executable_and_idempotent():
         arguments={"gene": "DNAH1"},
     )
     assert repeated["review_requests"][0]["request_id"] == request["request_id"]
+
+
+def test_pkd1_search_failure_does_not_mask_reviewed_fulltext_without_fact():
+    identity = {
+        "gene": "PKD1",
+        "validated_hgvs_c": "NM_001009944.3:c.6832G>A",
+    }
+    article = {
+        "pmid": "36755831",
+        "pmcid": "PMC9900584",
+        "doi": "10.1093/ckj/sfac236",
+        "title": "PKD1 cohort",
+        "abstract": "PKD1 NM_001009944.3:c.6832G>A was reported.",
+    }
+    epmc = _source_fact(
+        "EuropePMC_search_articles",
+        "epmc-search",
+        {"articles": [article]},
+    )
+    litvar = _source_fact(
+        "LitVar_get_variant_publications",
+        "litvar-search",
+        {"articles": [article]},
+    )
+    failed_search = SourceFact(
+        fact_id="pubtator-search-failed",
+        tool_name="PubTator3_LiteratureSearch",
+        status="failed",
+        query_identity=identity,
+        result_identity={},
+        features={},
+        raw_result_hash="hash-pubtator-failure",
+        provider_version="fixture-v1",
+        request_arguments={"query": "PKD1 c.6832G>A", "page": 0},
+        source_status="failed",
+        extraction_status="unresolved",
+        failure_details={
+            "failure_code": "provider_failed",
+            "message": "Database maintenance; try again later",
+            "retryable": True,
+        },
+    )
+    fulltext = SourceFact(
+        fact_id="pmc-fulltext",
+        tool_name="EuropePMC_get_full_text",
+        status="success",
+        query_identity=identity,
+        result_identity={"pmid": "36755831", "pmcid": "PMC9900584"},
+        features={
+            "data": {
+                "pmid": "36755831",
+                "pmcid": "PMC9900584",
+                "sections": {"results": ["This cohort described PKD1 disease."]},
+            },
+            "source": "Europe PMC fullTextXML",
+            "format": "xml",
+            "url": "https://example.test/PMC9900584/fullTextXML",
+            "retrieval_trace": [{"status_code": 200}],
+            "truncated": False,
+        },
+        raw_result_hash="hash-pmc-fulltext",
+        provider_version="fixture-v1",
+        request_arguments={"pmcid": "PMC9900584"},
+        identity_status="matched",
+        source_status="available",
+        extraction_status="structured",
+        version_status="versioned",
+    )
+    facts = {
+        fact.fact_id: fact
+        for fact in (epmc, litvar, failed_search, fulltext)
+    }
+
+    candidates = _literature_candidate_index(
+        facts,
+        identity=identity,
+        arguments={"gene": "PKD1", "variant": identity["validated_hgvs_c"]},
+    )
+    state = _literature_review_state(
+        candidates,
+        facts,
+        identity=identity,
+        arguments={"gene": "PKD1"},
+    )
+
+    assert len(candidates) == 1
+    assert {"epmc-search", "litvar-search"} <= set(
+        candidates[0]["source_fact_ids"]
+    )
+    reviewed = state["candidates"][0]
+    assert reviewed["canonical_document_source"] == "Europe PMC fullTextXML"
+    assert reviewed["document_status"] == "complete"
+    assert reviewed["fact_count"] == 0
+    assert reviewed["review_outcome"] == "full_text_reviewed_no_eligible_fact"
+    assert reviewed["retrieval_failure_code"] == ""
+    assert state["review_requests"][0]["state"] == (
+        "completed_no_rule_extractable_fact"
+    )
 
 
 def test_collector_accepts_minimal_input():
@@ -1912,6 +2020,7 @@ def test_collector_runtime_executes_sources_and_group_rules():
         "conflict_report",
         "literature_candidates",
         "literature_review",
+        "proposal_report",
         "recoverable_gaps",
         "workflow_status",
         "review_readiness",
@@ -2593,7 +2702,7 @@ def test_summary_mode_returns_compact_indexes_without_bulky_payloads(
         for fact in result["source_facts"]
     )
     for card in result["evidence_cards"]:
-        assert "observed_facts" not in card
+        assert isinstance(card["observed_facts"], dict)
         assert card["criterion"]
         assert card["route"]
         assert "calculation_roles" in card
@@ -3101,12 +3210,12 @@ def test_contradicted_llm_literature_proposal_remains_visible_but_excluded():
         }
     )
     assert selected["user_selected_bayesian"]["included_card_ids"] == []
-    assert selected["decision_report"]["decision_errors"] == [
-        {
-            "card_id": card["card_id"],
-            "reason": "proposal_not_eligible_for_source_backed_selection",
-        }
+    assert selected["decision_report"]["decision_errors"][0]["card_id"] == card[
+        "card_id"
     ]
+    assert selected["decision_report"]["decision_errors"][0]["reason"] == (
+        "proposal_not_eligible_for_source_backed_selection"
+    )
 
 
 def test_stale_document_hash_excludes_literature_proposal():
@@ -3140,9 +3249,11 @@ def test_stale_document_hash_excludes_literature_proposal():
     )
     assert card["calculation_roles"]["automatic"] is False
     assert card["calculation_roles"]["verified"] is False
-    assert card["verification_dimensions"]["identity_status"] == "conflict"
-    assert fact["identity_status"] == "conflict"
-    assert fact["features"]["anchor_status"] == "mismatch"
+    assert card["verification_dimensions"]["identity_status"] == "matched"
+    assert fact["identity_status"] == "matched"
+    assert fact["features"]["anchor_status"] == "reanchor_failed"
+    assert fact["features"]["reanchor_status"] == "reanchor_failed"
+    assert fact["features"]["identity_binding_status"] == "exact"
     assert any(
         "document_hash" in message for message in fact["features"]["validation_errors"]
     )
@@ -3195,6 +3306,319 @@ def test_abstract_only_literature_proposal_stays_source_lead():
     )
     assert selected["calculation_roles"]["user_selected"] is True
     assert reviewed["user_selected_bayesian"]["included_card_ids"] == [card["card_id"]]
+
+
+class _IDUAExternalAnchorToolUniverse(_FakeToolUniverse):
+    @classmethod
+    def _idua_identity(cls, value):
+        if isinstance(value, dict):
+            transformed = {key: cls._idua_identity(child) for key, child in value.items()}
+            for key in ("pos", "position"):
+                if transformed.get(key) == 1803931:
+                    transformed[key] = 987915
+            if transformed.get("alt") == "G":
+                transformed["alt"] = "T"
+            return transformed
+        if isinstance(value, list):
+            return [cls._idua_identity(child) for child in value]
+        if isinstance(value, int) and value == 1803931:
+            return 987915
+        if isinstance(value, str):
+            for old, new in (
+                ("NM_000142.5:c.1075+95C>G", "NM_000203.5:c.265C>T"),
+                ("NC_000004.12:g.1803931C>G", "NC_000004.12:g.987915C>T"),
+                ("chr4:g.1803931C>G", "chr4:g.987915C>T"),
+                ("4-1803931-C-G", "4-987915-C-T"),
+                ("NM_000142.5", "NM_000203.5"),
+                ("1803931", "987915"),
+                ("FGFR3", "IDUA"),
+            ):
+                value = value.replace(old, new)
+        return value
+
+    def run_one_function(self, call, **kwargs):
+        if call["name"] in {
+            "EuropePMC_get_full_text",
+            "EuropePMC_get_fulltext",
+            "PubTator3_get_annotations",
+            "Unpaywall_get_full_text_url",
+            "CORE_get_fulltext_snippets",
+        }:
+            self.calls.append((call, kwargs))
+            return {"status": "unavailable", "reason": "non-OA fixture"}
+        return self._idua_identity(super().run_one_function(call, **kwargs))
+
+
+def _idua_external_proposals():
+    common = {
+        "gene": "IDUA",
+        "extractor": {"name": "fixture-extractor", "version": "1"},
+        "reading_manifest": {"status": "unavailable"},
+    }
+    return [
+        {
+            **common,
+            "fact_id": "litprop-14559116-functional-cho-expression",
+            "fact_type": "functional",
+            "pmid": "14559116",
+            "document_hash": "99bb8cb2d9e124f8df6599381c4b77a60052167462cc5c52cf13f9ae33625b9c",
+            "locator": "Table 2, CHO-K1 expression",
+            "excerpt": "R89W protein was 28.3 versus 31.8 ug/mg and activity was 53.6 versus 361.9 nmol/min/mg.",
+            "variant_identity": "IDUA;p.R89W",
+            "criterion": "PS3",
+            "values": {
+                "assay_instance_id": "hein-2003-cho-expression",
+                "readout_name": "IDUA enzyme activity",
+                "variant_result": 53.6,
+                "direction": "damaging",
+            },
+            "field_excerpts": {
+                "assay_instance_id": "CHO-K1 expression",
+                "readout_name": "activity",
+                "variant_result": "53.6",
+                "direction": "activity was 53.6 versus 361.9",
+            },
+        },
+        {
+            **common,
+            "fact_id": "litprop-14559116-functional-patient-kinetics",
+            "fact_type": "functional",
+            "pmid": "14559116",
+            "document_hash": "99bb8cb2d9e124f8df6599381c4b77a60052167462cc5c52cf13f9ae33625b9c",
+            "locator": "Table 1, patient fibroblast kinetics",
+            "excerpt": "IDUA c.265C > T (p.R89W) fibroblasts had Km 114 and 216 and Vmax 4.6 and 3.4.",
+            "variant_identity": "NM_000203.5:c.265C > T",
+            "criterion": "PS3",
+            "values": {
+                "assay_instance_id": "hein-2003-patient-kinetics",
+                "readout_name": "Vmax",
+                "variant_result": 4.6,
+                "direction": "damaging",
+            },
+            "field_excerpts": {
+                "assay_instance_id": "patient fibroblast kinetics",
+                "readout_name": "Vmax",
+                "variant_result": "Vmax 4.6",
+                "direction": "Vmax 4.6 and 3.4",
+            },
+        },
+        {
+            **common,
+            "fact_id": "litprop-14559116-case-series-r89w",
+            "fact_type": "case_series",
+            "pmid": "14559116",
+            "document_hash": "99bb8cb2d9e124f8df6599381c4b77a60052167462cc5c52cf13f9ae33625b9c",
+            "locator": "Results, patients",
+            "excerpt": "Two attenuated MPS I patients carried R89W with Q70X or P533R.",
+            "variant_identity": "p.R89W",
+            "criterion": "PS4",
+            "values": {
+                "case_count": 2,
+                "cases_independent": True,
+                "phenotype_consistency": "attenuated MPS I",
+                "cohort_id": "hein-2003-r89w-series",
+            },
+            "field_excerpts": {
+                "case_count": "Two attenuated MPS I patients",
+                "cases_independent": "independent patients true",
+                "phenotype_consistency": "attenuated MPS I",
+                "cohort_id": "patients carried R89W",
+            },
+        },
+        {
+            **common,
+            "fact_id": "litprop-31544795-case-series-r89w-mps1hs",
+            "fact_type": "case_series",
+            "pmid": "31544795",
+            "document_hash": "109857a38765721c18f552d0917ab783e870c62dbbb4142cc96214924d888c0a",
+            "locator": "Results, affected siblings",
+            "excerpt": "Two siblings had c.265C > T (p.R89W) and c.1633G>T (p.E545*) with low IDUA activity.",
+            "variant_identity": "NM_000203.5:c.265C > T",
+            "criterion": "PS4",
+            "values": {
+                "case_count": 2,
+                "cases_independent": False,
+                "phenotype_consistency": "MPS I-H/S",
+                "cohort_id": "li-2019-siblings",
+            },
+            "field_excerpts": {
+                "case_count": "Two siblings",
+                "cases_independent": "siblings",
+                "phenotype_consistency": "MPS I-H/S",
+                "cohort_id": "siblings",
+            },
+        },
+        {
+            **common,
+            "fact_id": "litprop-31544795-allelic-phase-r89w",
+            "fact_type": "allelic_phase",
+            "pmid": "31544795",
+            "document_hash": "109857a38765721c18f552d0917ab783e870c62dbbb4142cc96214924d888c0a",
+            "locator": "Pedigree and Sanger validation",
+            "excerpt": "The mother carried c.265C > T and the father carried c.1633G>T, confirming the variants in trans in case sibling-1.",
+            "variant_identity": "NM_000203.5:c.265C > T",
+            "criterion": "PM3",
+            "values": {
+                "case_id": "li-2019-sibling-1",
+                "phase": "confirmed in trans",
+                "other_variant_classification": "pathogenic",
+                "other_variant_frequency_eligible": True,
+                "zygosity": "compound heterozygous",
+            },
+            "field_excerpts": {
+                "case_id": "case sibling-1",
+                "phase": "in trans",
+                "other_variant_classification": "c.1633G>T",
+                "other_variant_frequency_eligible": "father carried c.1633G>T",
+                "zygosity": "mother carried c.265C > T and the father carried c.1633G>T",
+            },
+        },
+        {
+            **common,
+            "fact_id": "litprop-28619065-phenotype-specificity-r89w",
+            "fact_type": "phenotype_specificity",
+            "pmid": "28619065",
+            "document_hash": "a" * 64,
+            "locator": "Review, variant spectrum",
+            "excerpt": "R89W was described as a known mild IDUA variant.",
+            "variant_identity": "R89W",
+            "criterion": "PP4",
+            "values": {
+                "disease": "MPS I",
+                "inheritance_mode": "AR",
+                "phenotype_specificity": "mild phenotype",
+            },
+            "field_excerpts": {
+                "disease": "IDUA variant",
+                "inheritance_mode": "AR",
+                "phenotype_specificity": "mild",
+            },
+        },
+    ]
+
+
+def test_external_anchor_requires_hash_and_rejects_a_different_allele():
+    proposal = _idua_external_proposals()[0]
+    anchored = verify_document_fact(
+        proposal,
+        None,
+        expected_variant="NM_000203.5:c.265C>T",
+        expected_protein="p.Arg89Trp",
+        expected_gene="IDUA",
+    )
+    assert anchored["reanchor_status"] == "externally_anchored"
+    assert anchored["reanchor_failure_code"] == "document_unreachable"
+    assert anchored["identity_binding_status"] == "equivocal"
+    assert anchored["target_link_status"] == "protein_alias"
+
+    without_hash = verify_document_fact(
+        {key: value for key, value in proposal.items() if key != "document_hash"},
+        None,
+        expected_variant="NM_000203.5:c.265C>T",
+        expected_protein="p.Arg89Trp",
+        expected_gene="IDUA",
+    )
+    assert without_hash["reanchor_status"] == "document_unreachable"
+
+    mismatch = verify_document_fact(
+        {**proposal, "variant_identity": "NM_000203.5:c.266C>T"},
+        None,
+        expected_variant="NM_000203.5:c.265C>T",
+        expected_protein="p.Arg89Trp",
+        expected_gene="IDUA",
+    )
+    assert mismatch["reanchor_status"] == "rejected"
+    assert mismatch["identity_binding_status"] == "mismatch"
+
+
+def test_idua_external_literature_proposals_are_reported_and_user_selectable():
+    arguments = {
+        "variant": "IDUA;NM_000203.5:c.265C>T(p.Arg89Trp)",
+        "gene": "IDUA",
+        "response_detail": "full",
+        "literature_proposals": _idua_external_proposals(),
+    }
+    initial = _make_tool(_IDUAExternalAnchorToolUniverse()).run(arguments)
+
+    assert [row["submitted_fact_id"] for row in initial["proposal_report"]] == [
+        proposal["fact_id"] for proposal in arguments["literature_proposals"]
+    ]
+    assert all(row["disposition"] == "card_generated" for row in initial["proposal_report"])
+    assert all(row["reanchor_status"] == "externally_anchored" for row in initial["proposal_report"])
+    assert [
+        row["identity_binding_status"] for row in initial["proposal_report"]
+    ] == ["equivocal", "exact", "equivocal", "exact", "exact", "equivocal"]
+    assert all(row["user_selectable"] is True for row in initial["proposal_report"])
+    assert all(
+        "document_unreachable" in row["reason_codes"]
+        for row in initial["proposal_report"]
+    )
+    proposal_cards = [
+        card
+        for card in initial["evidence_cards"]
+        if card.get("observed_facts", {}).get("reanchor_status")
+        == "externally_anchored"
+    ]
+    assert len(proposal_cards) == 6
+    assert {card["criterion"] for card in proposal_cards} == {"PS3", "PS4", "PM3", "PP4"}
+    assert all(card["evidence_status"] == "excluded" for card in proposal_cards)
+    assert {
+        card["exclusion_reason"]
+        for card in proposal_cards
+        if card["criterion"] != "PS3"
+    } == {"document_unreachable"}
+    assert all(card["calculation_roles"]["automatic"] is False for card in proposal_cards)
+    assert all(card["calculation_roles"]["verified"] is False for card in proposal_cards)
+    assert all(card["calculation_roles"]["user_selectable"] is True for card in proposal_cards)
+    assert {
+        claim["role"]
+        for claim in initial["guard_context"]["claims"]
+        if claim["card_id"] in {card["card_id"] for card in proposal_cards}
+    } == {"excluded"}
+    assert not set(card["card_id"] for card in proposal_cards) & set(
+        initial["automatic_bayesian"]["included_card_ids"]
+    )
+    assert not set(card["card_id"] for card in proposal_cards) & set(
+        initial["verified_bayesian"]["included_card_ids"]
+    )
+
+    functional = next(card for card in proposal_cards if card["criterion"] == "PS3")
+    no_override = _make_tool(_IDUAExternalAnchorToolUniverse()).run(
+        {
+            **arguments,
+            "evidence_decisions": [
+                {"card_id": functional["card_id"], "decision": "accept"}
+            ],
+        }
+    )
+    assert no_override["user_selected_bayesian"]["included_card_ids"] == []
+    assert no_override["decision_report"]["decision_errors"][0]["reason"] == (
+        "strength_override_required_for_user_selectable_review_card"
+    )
+
+    selected = _make_tool(_IDUAExternalAnchorToolUniverse()).run(
+        {
+            **arguments,
+            "evidence_decisions": [
+                {
+                    "card_id": functional["card_id"],
+                    "decision": "accept",
+                    "strength_override": "PS3_Supporting",
+                    "reason": "User reviewed the externally anchored assay excerpt.",
+                }
+            ],
+        }
+    )
+    assert selected["user_selected_bayesian"]["included_card_ids"] == [
+        functional["card_id"]
+    ]
+    assert functional["card_id"] not in selected["automatic_bayesian"]["included_card_ids"]
+    assert functional["card_id"] not in selected["verified_bayesian"]["included_card_ids"]
+    assert next(
+        claim
+        for claim in selected["guard_context"]["claims"]
+        if claim["card_id"] == functional["card_id"]
+    )["role"] == "user_selected"
 
 
 def test_user_decision_recalculates_only_accepted_stable_cards():
@@ -3985,7 +4409,7 @@ def test_pvs1_decision_tree_enters_system_preview_when_facts_verified():
     assert pvs1["strength"] == "PVS1"
     assert pvs1["evidence_status"] == "rule_mapped"
     assert pvs1["rule_id"] == "clingen-svi-pvs1"
-    assert pvs1["rule_version"] == "1.2"
+    assert pvs1["rule_version"] == "1.3"
     assert pvs1["calculation_roles"]["verified"] is True
     assert pvs1["calculation_roles"]["automatic"] is True
     assert "PVS1" in _automatic_criteria(result)

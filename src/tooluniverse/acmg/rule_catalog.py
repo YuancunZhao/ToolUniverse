@@ -248,7 +248,7 @@ RULE_CATALOG = {
     ),
     "PVS1": _rule(
         "clingen-svi-pvs1",
-        "1.2",
+        "1.3",
         "loss-of-function and splicing evidence",
         [
             "gene LoF disease mechanism",

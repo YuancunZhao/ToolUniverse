@@ -147,6 +147,25 @@ def test_guard_allows_attributed_external_vcep_assertion():
     assert result["status"] == "PASS"
 
 
+def test_lab_attribution_does_not_exempt_tool_owned_conclusion():
+    """Only the externally owned label span is exempt from the final-label guard."""
+    allowed = [
+        "实验室 X 在报告 Y 中将该变异报告为可能致病；PP3 为候选。",
+        "Laboratory X reported this variant as likely pathogenic; PP3 is a candidate.",
+    ]
+    blocked = [
+        "Previously reported: this variant is pathogenic.",
+        "ClinVar classified this variant as pathogenic, and we conclude this variant is pathogenic.",
+        "实验室 X 在报告 Y 中将该变异报告为可能致病，因此该变异为致病。",
+        "Laboratory X reported this variant as pathogenic, ToolUniverse classification: Pathogenic.",
+    ]
+    for text in allowed + blocked:
+        result = guard_acmg_answer(
+            text, [_candidate_pp3()], known_source_fact_ids={"fixture-source"}
+        )
+        assert result["status"] == ("PASS" if text in allowed else "BLOCK"), text
+
+
 def test_guard_does_not_misread_protein_hgvs_p_value_or_group_b():
     result = guard_acmg_answer(
         (

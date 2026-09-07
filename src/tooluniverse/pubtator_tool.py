@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
+import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import requests
 
 from .base_tool import BaseTool
+from .http_utils import request_with_retry
 from .tool_registry import register_tool
 
 # Official REST root  (cf. NIH “entity autocomplete” & “search” examples)
 BASE_URL = "https://www.ncbi.nlm.nih.gov/research/pubtator3-api"
 CONFIG_FILE = Path(__file__).with_name("pubtator_tool_config.json")
+_RATE_LOCK = threading.Lock()
+_LAST_REQUEST_AT = 0.0
+_MIN_REQUEST_INTERVAL = 1 / 3
 
 
 @register_tool("PubTatorTool")
@@ -35,6 +42,15 @@ class PubTatorTool(BaseTool):
     # ------------------------------------------------------------------ public API --------------
     def run(self, arguments: Dict[str, Any]):
         args = arguments.copy()
+        if self._tool_subtype == "PubTatorAnnotations":
+            pmids = [value.strip() for value in str(args.get("pmids") or "").split(",")]
+            if not pmids or not all(value.isdecimal() for value in pmids):
+                return {"status": "error", "error": "pmids must contain PubMed IDs"}
+            if len(pmids) > 100:
+                return {
+                    "status": "error",
+                    "error": "PubTator3 accepts at most 100 PMIDs per request",
+                }
         # Pop limit early so it doesn't leak to the API as a query param.
         # The PubTator3 search API ignores the page_size param and always
         # returns 10 results per page, so we apply client-side truncation.
@@ -62,21 +78,7 @@ class PubTatorTool(BaseTool):
             url = f"{BASE_URL.rstrip('/')}/search/"
             data = None
             headers: Dict[str, str] = {}
-            response = requests.request(
-                self._method,
-                url,
-                params=self._query_params(new_args),
-                data=data,
-                headers=headers,
-                timeout=30,
-            )
-            response.raise_for_status()
-            ctype = response.headers.get("Content-Type", "").lower()
-            if "json" in ctype:
-                return response.json()
-            if "text" in ctype or "xml" in ctype:
-                return response.text
-            return response.content
+            return self._perform_request(url, new_args, data, headers, _limit)
 
         # Special handling for PubTatorAnnotate: override endpoint paths
         if self._tool_subtype == "PubTatorAnnotate":
@@ -104,41 +106,7 @@ class PubTatorTool(BaseTool):
                 headers["Content-Type"] = "application/json"
 
         # ---------- perform request ----------
-        response = requests.request(
-            self._method,
-            url,
-            params=self._query_params(args) if self._method != "POST" else {},
-            data=data,
-            headers=headers,
-            timeout=30,
-        )
-        if not response.ok:
-            return {
-                "status": "error",
-                "error": f"Request failed with status code {response.status_code}: {response.text}",
-            }
-
-        # ---------- auto-detect & return ----------
-        ctype = response.headers.get("Content-Type", "").lower()
-        if "json" in ctype:
-            result = response.json()
-            # Extra filtering for PubTatorSearch: filter low-score items and facets.
-            if self._tool_subtype == "PubTatorSearch" and isinstance(result, dict):
-                result = self._filter_search_results(result)
-                # Apply client-side limit: PubTator3 API ignores page_size
-                # and always returns 10 results, so truncate here.
-                if (
-                    _limit is not None
-                    and "results" in result
-                    and isinstance(result["results"], list)
-                ):
-                    result["results"] = result["results"][:_limit]
-            if isinstance(result, dict) and "status" not in result:
-                return {"status": "success", **result, "data": result}
-            return result
-        if "text" in ctype or "xml" in ctype:
-            return response.text
-        return response.content
+        return self._perform_request(url, args, data, headers, _limit)
 
     # ------------------------------------------------------------------ helpers -----------------
     def _compose_url(self, args: Dict[str, Any]) -> str:
@@ -166,8 +134,132 @@ class PubTatorTool(BaseTool):
             api_key = self._param_map.get(user_key, user_key)
             if isinstance(val, (list, tuple)):
                 val = ",".join(map(str, val))
+            elif isinstance(val, bool):
+                val = str(val).lower()
             q[api_key] = str(val)
         return q
+
+    @staticmethod
+    def _maintenance_response(response: requests.Response) -> bool:
+        return bool(
+            response.status_code == 400
+            and re.search(
+                r"(?:updat(?:e|ing)|maintenance|try again later)",
+                response.text or "",
+                re.IGNORECASE,
+            )
+        )
+
+    def _perform_request(
+        self,
+        url: str,
+        args: Dict[str, Any],
+        data: Optional[bytes],
+        headers: Dict[str, str],
+        limit: Optional[int],
+    ) -> Dict[str, Any]:
+        global _LAST_REQUEST_AT
+
+        # ponytail: process-wide limiter is sufficient for this public API; use a
+        # cross-process limiter only if ToolUniverse starts multiple PubTator workers.
+        with _RATE_LOCK:
+            wait = _MIN_REQUEST_INTERVAL - (time.monotonic() - _LAST_REQUEST_AT)
+            if wait > 0:
+                time.sleep(wait)
+            _LAST_REQUEST_AT = time.monotonic()
+
+        trace: list[dict[str, Any]] = []
+        try:
+            response = request_with_retry(
+                requests,
+                self._method,
+                url,
+                params=self._query_params(args) if self._method != "POST" else {},
+                data=data,
+                headers=headers,
+                timeout=30,
+                max_attempts=3,
+                retry_response=self._maintenance_response,
+                attempt_trace=trace,
+            )
+        except requests.RequestException as exc:
+            return {
+                "status": "error",
+                "error": "PubTator3 request failed",
+                "detail": str(exc),
+                "url": url,
+                "retryable": True,
+                "retry_attempts": max(0, len(trace) - 1),
+                "retry_trace": trace,
+            }
+
+        request_url = getattr(response, "url", None) or url
+        retryable = response.status_code in {408, 429, 500, 502, 503, 504} or bool(
+            self._maintenance_response(response)
+        )
+        if not response.ok:
+            return {
+                "status": "error",
+                "error": f"PubTator3 API returned HTTP {response.status_code}",
+                "status_code": response.status_code,
+                "detail": (response.text or "")[:1000],
+                "url": request_url,
+                "retryable": retryable,
+                "retry_attempts": max(0, len(trace) - 1),
+                "retry_trace": trace,
+            }
+
+        ctype = response.headers.get("Content-Type", "").lower()
+        try:
+            result: Any = (
+                response.json()
+                if "json" in ctype
+                or (response.text or "").lstrip().startswith(("{", "["))
+                else response.text
+            )
+        except ValueError as exc:
+            return {
+                "status": "error",
+                "error": "PubTator3 returned malformed JSON",
+                "detail": str(exc),
+                "status_code": response.status_code,
+                "url": request_url,
+                "retryable": False,
+                "retry_attempts": max(0, len(trace) - 1),
+                "retry_trace": trace,
+            }
+        if self._tool_subtype == "PubTatorSearch" and isinstance(result, dict):
+            raw_rows = result.get("results") or []
+            returned = len(raw_rows)
+            page_hash = hashlib.sha256(
+                json.dumps(raw_rows, sort_keys=True).encode()
+            ).hexdigest()
+            result = self._filter_search_results(result)
+            filtered = returned - len(result.get("results") or [])
+            if limit is not None and isinstance(result.get("results"), list):
+                result["results"] = result["results"][:limit]
+            result["search_counts"] = {
+                "provider_returned_count": returned,
+                "filtered_count": filtered,
+                "retained_count": len(result.get("results") or []),
+                "page_hash": page_hash,
+            }
+        if self._tool_subtype not in {"PubTatorSearch", "PubTatorAnnotations"}:
+            return result
+        return {
+            **(result if isinstance(result, dict) else {}),
+            "status": "success",
+            "data": result,
+            "url": request_url,
+            "status_code": response.status_code,
+            "retry_attempts": max(0, len(trace) - 1),
+            "retry_trace": trace,
+            **(
+                {"full": bool(args.get("full"))}
+                if self._tool_subtype == "PubTatorAnnotations"
+                else {}
+            ),
+        }
 
     def _filter_search_results(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Filter PubTatorSearch results by score threshold and remove facet items that only have 'name', 'type', and 'value'."""

@@ -55,6 +55,7 @@ def test_source_backed_candidate_enters_automatic_not_verified_estimate():
         "automatic": True,
         "verified": False,
         "user_selected": False,
+        "user_selectable": True,
     }
 
 

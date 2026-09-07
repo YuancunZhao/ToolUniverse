@@ -9,6 +9,11 @@ from .source_adapters import adapt_source_output
 
 ACMG_POLICY_CONTEXT = {"acmg_evidence_collection": True}
 ACMG_FRONT_DOOR_TOOL_NAME = "ACMG_evidence_collector"
+COLLECTOR_RETRY_POLICY_VERSION = "2026-09-03-v1"
+COLLECTOR_MAX_RETRIES = 1
+TRANSCRIPT_STRUCTURE_FALLBACK_POLICY_VERSION = "2026-09-03-v1"
+DISEASE_CONTEXT_FALLBACK_POLICY_VERSION = "2026-09-03-v1"
+CALLER_CONTEXT_POLICY_VERSION = "2026-09-03-v1"
 ACMG_EVIDENCE_NOTICE = (
     "Within an explicit ACMG evidence-collection policy context, direct provider "
     "outputs are retained as review-only source leads. Use ACMG_evidence_collector "
@@ -62,6 +67,11 @@ HIGH_RISK_ACMG_TOOLS = {
     "gnomad_get_constraint",
     "gnomad_get_region_variants",
     "ensembl_lookup_gene",
+    "ensembl_get_overlap_features",
+    "Tark_get_mane_transcripts",
+    "Tark_get_transcript",
+    "MARRVEL_get_omim_phenotypes",
+    "gather_gene_disease_associations",
     "MaveDB_search_score_sets",
     "MaveDB_get_score_set",
     "MaveDB_get_variant_scores",
@@ -94,6 +104,8 @@ HIGH_RISK_ACMG_TOOLS = {
     "PubTator3_LiteratureSearch",
     "PubTator3_get_annotations",
     "EPMC_get_text_mined_annotations",
+    "Unpaywall_get_full_text_url",
+    "CORE_get_fulltext_snippets",
 }
 
 
@@ -201,6 +213,11 @@ __all__ = [
     "ACMG_FRONT_DOOR_TOOL_NAME",
     "ACMG_POLICY_CONTEXT",
     "ACMGScopedExecutor",
+    "CALLER_CONTEXT_POLICY_VERSION",
+    "COLLECTOR_MAX_RETRIES",
+    "COLLECTOR_RETRY_POLICY_VERSION",
+    "DISEASE_CONTEXT_FALLBACK_POLICY_VERSION",
     "HIGH_RISK_ACMG_TOOLS",
+    "TRANSCRIPT_STRUCTURE_FALLBACK_POLICY_VERSION",
     "sanitize_high_risk_acmg_result",
 ]

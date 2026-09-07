@@ -1306,6 +1306,23 @@ class EuropePMCStructuredFullTextTool(BaseTool):
         """Collapse all text under *el* into a single whitespace-normalised string."""
         return " ".join("".join(el.itertext()).split())
 
+    @classmethod
+    def _section_text(cls, el) -> str:
+        """Return prose without duplicating table rows or figure captions."""
+        parts: list[str] = []
+
+        def walk(node) -> None:
+            if node.text:
+                parts.append(node.text)
+            for child in node:
+                if cls._local(child.tag) not in {"table-wrap", "fig"}:
+                    walk(child)
+                if child.tail:
+                    parts.append(child.tail)
+
+        walk(el)
+        return " ".join("".join(parts).split())
+
     def _resolve_pmid_to_pmcid(self, pmid: str) -> str | None:
         """Use Europe PMC search to convert a PMID to a PMCID."""
         url = (
@@ -1369,7 +1386,7 @@ class EuropePMCStructuredFullTextTool(BaseTool):
                 if sec_type_attr in ("ref-list", "fn-group"):
                     continue
 
-                text = self._itertext(sec)
+                text = self._section_text(sec)
                 entry = {"title": sec_title, "text": text}
                 sections.setdefault(canonical, []).append(entry)
 
@@ -1408,14 +1425,37 @@ class EuropePMCStructuredFullTextTool(BaseTool):
 
         # --- tables ---
         tables = []
-        for tbl in root.iter("table-wrap"):
+        for table_index, tbl in enumerate(root.iter("table-wrap")):
             tbl_id = tbl.attrib.get("id", "")
             label_el = tbl.find("label")
             label = self._itertext(label_el) if label_el is not None else None
             cap_el = tbl.find(".//caption")
             caption = self._itertext(cap_el) if cap_el is not None else None
-            if label or caption:
-                tables.append({"id": tbl_id, "label": label, "caption": caption})
+            table_key = tbl_id or f"table-{table_index + 1}"
+            rows = []
+            for row_index, row in enumerate(tbl.findall(".//tr")):
+                cells = [
+                    self._itertext(cell)
+                    for cell in list(row)
+                    if cell.tag.rsplit("}", 1)[-1] in {"th", "td"}
+                ]
+                text = " | ".join(value for value in cells if value)
+                if text:
+                    rows.append(
+                        {
+                            "locator": f"{table_key}:row:{row_index + 1}",
+                            "text": text,
+                        }
+                    )
+            if label or caption or rows:
+                tables.append(
+                    {
+                        "id": table_key,
+                        "label": label,
+                        "caption": caption,
+                        "rows": rows,
+                    }
+                )
 
         # --- references ---
         references = []

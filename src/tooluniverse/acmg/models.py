@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 from .rule_catalog import (
+    ACMG_CRITERIA,
     generic_bayesian_odds_for,
     rule_allows_verified_strength,
     rule_for_criterion,
@@ -59,6 +60,7 @@ HARD_EXCLUSION_DIMENSIONS = {
 }
 AUTOMATIC_EVIDENCE_POLICY_VERSION = "2026-08-25-v4.2"
 VERIFIED_EVIDENCE_POLICY_VERSION = "2026-08-25-v4.2"
+USER_SELECTABLE_EVIDENCE_POLICY_VERSION = "2026-09-03-v1"
 NON_EVIDENCE_STRENGTHS = frozenset(
     {"", "not_assessed", "not_applicable", "indeterminate", "deprecated"}
 )
@@ -149,6 +151,7 @@ def fact_is_strictly_verified(fact: SourceFact) -> bool:
             and str(fact.features.get("target_link_status") or "direct_variant")
             in {
                 "direct_variant",
+                "equivalent_variant",
                 "adjacent_explicit_referent",
                 "direct_gene",
                 "same_residue",
@@ -165,17 +168,27 @@ def fact_is_strictly_verified(fact: SourceFact) -> bool:
             and str(fact.features.get("target_link_status") or "")
             in {
                 "direct_variant",
+                "equivalent_variant",
                 "adjacent_explicit_referent",
                 "direct_gene",
                 "same_residue",
             }
             and str(fact.features.get("negation_status") or "") == "not_negated"
         )
+    reading_manifest = fact.features.get("reading_manifest")
+    reading_status = (
+        str(reading_manifest.get("status") or "")
+        if isinstance(reading_manifest, dict)
+        else ""
+    )
     return bool(
         fact_is_available(fact)
+        and not fact.features.get("extraction_review_only")
+        and fact.verification_level != "caller_attributed"
         and fact.identity_status == "matched"
         and fact.source_status == "available"
         and fact.features.get("document_truncated") is not True
+        and reading_status in {"", "complete"}
         and extraction_verified
         and fact.version_status == "versioned"
         and fact.disease_match_status not in {"candidate", "mismatch"}
@@ -218,6 +231,20 @@ def _dimensions_have_hard_error(dimensions: dict[str, Any]) -> bool:
     )
 
 
+def _card_value(
+    row: EvidenceCard | dict[str, Any], name: str, default: Any = None
+) -> Any:
+    """Read normalized card fields without conflating eligibility policies."""
+    if isinstance(row, EvidenceCard):
+        return getattr(row, name)
+    value = row.get(name)
+    if isinstance(default, dict):
+        return value if isinstance(value, dict) else {}
+    if isinstance(default, str):
+        return str(value or "")
+    return value
+
+
 def is_automatic_evidence(
     row: EvidenceCard | dict[str, Any],
     *,
@@ -226,32 +253,81 @@ def is_automatic_evidence(
     """Whether a source-backed card may enter the default automatic estimate."""
     if known_source_fact_ids is None:
         return False
-    if isinstance(row, EvidenceCard):
-        source_ids = _source_fact_ids(row.source_fact_ids)
-        criterion = row.criterion
-        strength = row.strength
-        evidence_status = row.evidence_status
-        dimensions = row.verification_dimensions
-        rule_id = row.rule_id
-        rule_version = row.rule_version
-    elif isinstance(row, dict):
-        source_ids = _source_fact_ids(row.get("source_fact_ids"))
-        criterion = str(row.get("criterion") or "")
-        strength = str(row.get("strength") or "")
-        evidence_status = str(row.get("evidence_status") or "")
-        dimensions = (
-            row.get("verification_dimensions")
-            if isinstance(row.get("verification_dimensions"), dict)
-            else {}
-        )
-        rule_id = str(row.get("rule_id") or "")
-        rule_version = str(row.get("rule_version") or "")
-    else:
+    if not isinstance(row, (EvidenceCard, dict)):
         return False
+    source_ids = _source_fact_ids(_card_value(row, "source_fact_ids"))
+    criterion = _card_value(row, "criterion", "")
+    strength = _card_value(row, "strength", "")
+    evidence_status = _card_value(row, "evidence_status", "")
+    dimensions = _card_value(row, "verification_dimensions", {})
+    rule_id = _card_value(row, "rule_id", "")
+    rule_version = _card_value(row, "rule_version", "")
+    observed = _card_value(row, "observed_facts", {})
+    anchor_status = str(
+        dimensions.get("anchor_status") or observed.get("anchor_status") or ""
+    )
     return bool(
         source_ids
         and source_ids <= {value for value in known_source_fact_ids if value}
         and evidence_status in AUTOMATIC_EVIDENCE_STATUSES
+        and anchor_status != "externally_anchored"
+        and not _dimensions_have_hard_error(dimensions)
+        and _strength_supported(
+            criterion,
+            strength,
+            rule_id=rule_id,
+            rule_version=rule_version,
+        )
+    )
+
+
+def is_user_selectable_evidence(
+    row: EvidenceCard | dict[str, Any],
+    *,
+    known_source_fact_ids: set[str] | None,
+) -> bool:
+    """Whether a card may be selected for the user-only Bayesian estimate."""
+    if is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids):
+        return True
+    if known_source_fact_ids is None:
+        return False
+    if not isinstance(row, (EvidenceCard, dict)):
+        return False
+    source_ids = _source_fact_ids(_card_value(row, "source_fact_ids"))
+    criterion = _card_value(row, "criterion", "")
+    strength = _card_value(row, "strength", "")
+    dimensions = _card_value(row, "verification_dimensions", {})
+    observed = _card_value(row, "observed_facts", {})
+    roles = _card_value(row, "calculation_roles", {})
+    rule_id = _card_value(row, "rule_id", "")
+    rule_version = _card_value(row, "rule_version", "")
+    source_pmid = _card_value(row, "source_pmid", "") or next(
+        (str(value) for value in _card_value(row, "source_pmids") or [] if value), ""
+    )
+    anchor_status = str(
+        dimensions.get("anchor_status") or observed.get("anchor_status") or ""
+    )
+    identity_binding = str(
+        dimensions.get("identity_binding_status")
+        or observed.get("identity_binding_status")
+        or ""
+    )
+    semantic_status = str(
+        observed.get("semantic_status") or dimensions.get("semantic_status") or ""
+    )
+    document_hash = str(observed.get("submitted_document_hash") or "")
+    return bool(
+        roles.get("user_selectable") is True
+        and source_ids
+        and source_ids <= {value for value in known_source_fact_ids if value}
+        and anchor_status == "externally_anchored"
+        and identity_binding in {"exact", "equivalent", "equivocal"}
+        and semantic_status != "contradicted"
+        and len(document_hash) == 64
+        and all(character in "0123456789abcdefABCDEF" for character in document_hash)
+        and str(observed.get("excerpt") or "").strip()
+        and str(observed.get("locator") or "").strip()
+        and source_pmid
         and not _dimensions_have_hard_error(dimensions)
         and _strength_supported(
             criterion,
@@ -270,32 +346,16 @@ def is_verified_evidence(
     """Whether a card may enter the strict verified comparison estimate."""
     if verified_source_fact_ids is None:
         return False
-    if isinstance(row, EvidenceCard):
-        source_ids = _source_fact_ids(row.source_fact_ids)
-        evidence_status = row.evidence_status
-        dimensions = row.verification_dimensions
-        criterion = row.criterion
-        strength = row.strength
-        rule_id = row.rule_id
-        rule_version = row.rule_version
-        rule_source = row.rule_source
-    elif isinstance(row, dict):
-        source_ids = _source_fact_ids(row.get("source_fact_ids"))
-        evidence_status = str(row.get("evidence_status") or "")
-        dimensions = (
-            row.get("verification_dimensions")
-            if isinstance(row.get("verification_dimensions"), dict)
-            else {}
-        )
-        criterion = str(row.get("criterion") or "")
-        strength = str(row.get("strength") or "")
-        rule_id = str(row.get("rule_id") or "")
-        rule_version = str(row.get("rule_version") or "")
-        rule_source = (
-            row.get("rule_source") if isinstance(row.get("rule_source"), dict) else {}
-        )
-    else:
+    if not isinstance(row, (EvidenceCard, dict)):
         return False
+    source_ids = _source_fact_ids(_card_value(row, "source_fact_ids"))
+    criterion = _card_value(row, "criterion", "")
+    strength = _card_value(row, "strength", "")
+    evidence_status = _card_value(row, "evidence_status", "")
+    dimensions = _card_value(row, "verification_dimensions", {})
+    rule_id = _card_value(row, "rule_id", "")
+    rule_version = _card_value(row, "rule_version", "")
+    rule_source = _card_value(row, "rule_source", {})
     return bool(
         source_ids
         and source_ids <= {value for value in verified_source_fact_ids if value}
@@ -420,9 +480,31 @@ def evidence_cards_to_result(
 ) -> dict[str, Any]:
     """Serialize all substantive cards and derive independent calculation roles."""
     serialized: list[dict[str, Any]] = []
+    diagnostics: list[dict[str, Any]] = []
     known = known_source_fact_ids or set()
     verified = verified_source_fact_ids or set()
     for card in cards:
+        if card.evidence_status and card.evidence_status not in EVIDENCE_STATUSES:
+            diagnostics.append(
+                {
+                    "criterion": card.criterion,
+                    "strength": card.strength,
+                    "evidence_status": card.evidence_status,
+                    "source_fact_ids": list(card.source_fact_ids),
+                    "reason_code": "invalid_evidence_status",
+                }
+            )
+            continue
+        if any(code not in ACMG_CRITERIA for code in str(card.criterion).split("/")):
+            diagnostics.append(
+                {
+                    "criterion": card.criterion,
+                    "strength": card.strength,
+                    "source_fact_ids": list(card.source_fact_ids),
+                    "reason_code": "invalid_criterion",
+                }
+            )
+            continue
         if not is_substantive_evidence_card(card):
             continue
         if variant_identity and not card.variant_identity:
@@ -457,14 +539,6 @@ def evidence_cards_to_result(
             has_verified_sources=has_verified_sources,
         )
         evidence_status = card.evidence_status
-        if (
-            not evidence_status
-            and not strength_supported
-            and card.strength != "not_met"
-        ):
-            # Criteria without a substantive result are represented only in
-            # criterion_reviews; pure v3 does not serialize placeholder cards.
-            continue
         if not evidence_status:
             if card.strength == "deprecated":
                 evidence_status = "deprecated"
@@ -478,13 +552,19 @@ def evidence_cards_to_result(
                 evidence_status = "source_backed_candidate"
             else:
                 evidence_status = "excluded"
-        if evidence_status not in EVIDENCE_STATUSES:
-            evidence_status = "excluded"
-        if not strength_supported and evidence_status not in {
-            "not_met",
-            "excluded",
-            "deprecated",
-        }:
+        if not strength_supported and (
+            evidence_status not in {"not_met", "excluded", "deprecated"}
+            or card.strength
+            not in NON_EVIDENCE_STRENGTHS | {"not_met", "not_suggested"}
+        ):
+            diagnostics.append(
+                {
+                    "criterion": card.criterion,
+                    "strength": card.strength,
+                    "source_fact_ids": list(card.source_fact_ids),
+                    "reason_code": "unsupported_strength",
+                }
+            )
             continue
         rule_source = dict(card.rule_source)
         if not rule_source:
@@ -521,13 +601,17 @@ def evidence_cards_to_result(
         strict = is_verified_evidence(
             row, verified_source_fact_ids=verified_source_fact_ids
         )
+        user_selectable = bool(
+            automatic or card.calculation_roles.get("user_selectable") is True
+        )
         row["calculation_roles"] = {
             "automatic": automatic,
             "verified": strict,
             "user_selected": card.calculation_roles.get("user_selected") is True,
+            "user_selectable": user_selectable,
         }
         serialized.append(row)
-    return {"evidence_cards": serialized}
+    return {"evidence_cards": serialized, "serialization_diagnostics": diagnostics}
 
 
 __all__ = [
@@ -551,5 +635,7 @@ __all__ = [
     "fact_is_strictly_verified",
     "is_automatic_evidence",
     "is_substantive_evidence_card",
+    "is_user_selectable_evidence",
     "is_verified_evidence",
+    "USER_SELECTABLE_EVIDENCE_POLICY_VERSION",
 ]

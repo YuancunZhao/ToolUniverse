@@ -489,7 +489,10 @@ def test_literature_extractor_emits_each_located_atom_but_does_not_assume_indepe
         identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
     )
     de_novo = [
-        fact for fact in facts.values() if fact.features["fact_type"] == "de_novo"
+        fact
+        for fact in facts.values()
+        if fact.features["fact_type"] == "de_novo"
+        and not fact.features.get("extraction_review_only")
     ]
     assert len(de_novo) == 2
     assert {fact.independence_status for fact in de_novo} == {"unknown"}
@@ -533,12 +536,22 @@ def test_literature_de_novo_requires_target_and_case_in_same_sentence():
         identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
     )
     de_novo = [
-        fact for fact in facts.values() if fact.features["fact_type"] == "de_novo"
+        fact
+        for fact in facts.values()
+        if fact.features["fact_type"] == "de_novo"
+        and not fact.features.get("extraction_review_only")
     ]
     assert len(de_novo) == 1
     assert de_novo[0].features["target_link_status"] == "direct_variant"
     assert de_novo[0].features["requirements_status"] == "complete"
     assert de_novo[0].features["semantic_status"] == "verified"
+    negative = [
+        fact
+        for fact in facts.values()
+        if fact.features.get("negation_status") == "negated"
+    ]
+    assert len(negative) == 1
+    assert negative[0].features["extraction_review_only"] is True
 
 
 def test_provider_linked_sentence_is_visible_but_unresolved():
@@ -641,6 +654,140 @@ def test_complete_fulltext_atom_can_be_strict_but_truncated_text_cannot():
         identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
     )
     fact = next(iter(facts.values()))
+    assert fact.features["reading_manifest"]["status"] == "partial"
+    assert fact_is_strictly_verified(fact) is False
+
+
+def test_pubtator_full_text_is_strict_when_pmc_body_is_unavailable():
+    candidate = {
+        "publication_id": "pmid:full",
+        "pmid": "full",
+        "match_class": "exact_variant_match",
+        "source_fact_ids": [],
+    }
+    pubtator = _fact(
+        "pubtator-full",
+        tool_name="PubTator3_get_annotations",
+        features={
+            "documents": [
+                {
+                    "id": "full",
+                    "document_status": "annotated_full_text",
+                    "passages": [
+                        {
+                            "offset": 10,
+                            "infons": {"type": "results"},
+                            "text": "NM_000001.1:c.1A>G occurred de novo in one proband.",
+                        }
+                    ],
+                }
+            ],
+            "request_url": "https://example.test/pubtator",
+            "requested_full": True,
+        },
+        request_arguments={"pmids": "full", "full": True},
+    )
+
+    facts = extract_literature_facts(
+        [candidate],
+        {pubtator.fact_id: pubtator},
+        identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
+    )
+
+    fact = next(iter(facts.values()))
+    assert fact.tool_name == "PubTator3_get_annotations"
+    assert fact.features["document_source"] == "PubTator3"
+    assert fact.features["reading_manifest"]["status"] == "complete"
+    assert fact_is_strictly_verified(fact) is True
+
+
+def test_same_body_from_pmc_and_pubtator_is_extracted_once():
+    candidate = {
+        "publication_id": "pmid:duplicate",
+        "pmid": "duplicate",
+        "match_class": "exact_variant_match",
+        "source_fact_ids": [],
+    }
+    text = "NM_000001.1:c.1A>G occurred de novo in one proband."
+    pmc = _fact(
+        "pmc-full",
+        tool_name="EuropePMC_get_full_text",
+        features={
+            "data": {"sections": [text]},
+            "source": "Europe PMC fullTextXML",
+            "format": "xml",
+            "url": "https://example.test/pmc",
+            "truncated": False,
+        },
+        request_arguments={"pmid": "duplicate"},
+    )
+    pubtator = _fact(
+        "pubtator-duplicate",
+        tool_name="PubTator3_get_annotations",
+        features={
+            "documents": [
+                {
+                    "id": "duplicate",
+                    "document_status": "annotated_full_text",
+                    "passages": [
+                        {"offset": 0, "infons": {"type": "results"}, "text": text}
+                    ],
+                }
+            ],
+            "requested_full": True,
+        },
+        request_arguments={"pmids": "duplicate", "full": True},
+    )
+
+    facts = extract_literature_facts(
+        [candidate],
+        {pmc.fact_id: pmc, pubtator.fact_id: pubtator},
+        identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
+    )
+
+    assert len(facts) == 1
+    assert next(iter(facts.values())).features["document_source"] == (
+        "Europe PMC fullTextXML"
+    )
+
+
+def test_jats_table_fact_keeps_stable_row_locator():
+    candidate = {
+        "publication_id": "pmid:table",
+        "pmid": "table",
+        "match_class": "exact_variant_match",
+        "source_fact_ids": [],
+    }
+    row_text = "NM_000001.1:c.1A>G occurred de novo in proband case-1."
+    fulltext = _fact(
+        "table-fulltext",
+        tool_name="EuropePMC_get_full_text",
+        features={
+            "data": {
+                "tables": [
+                    {
+                        "id": "T1",
+                        "caption": "Cases",
+                        "rows": [{"locator": "T1:row:1", "text": row_text}],
+                    }
+                ]
+            },
+            "source": "Europe PMC fullTextXML",
+            "format": "xml",
+            "url": "https://example.test/table.xml",
+            "truncated": False,
+        },
+        request_arguments={"pmid": "table"},
+    )
+
+    facts = extract_literature_facts(
+        [candidate],
+        {fulltext.fact_id: fulltext},
+        identity={"gene": "TEST", "validated_hgvs_c": "NM_000001.1:c.1A>G"},
+    )
+
+    fact = next(iter(facts.values()))
+    assert fact.locator == "T1:row:1"
     assert fact.features["reading_manifest"]["status"] == "partial"
     assert fact_is_strictly_verified(fact) is False
 

@@ -22,7 +22,10 @@ def ACMG_evidence_collector(
     protein_accession: Optional[str] = None,
     clinical_context: Optional[dict[str, Any]] = None,
     clinical_observations: Optional[list[Any]] = None,
+    caller_verified_context: Optional[list[Any]] = None,
     response_detail: Optional[str] = "summary",
+    literature_search_limits: Optional[dict[str, Any]] = None,
+    fulltext_match_classes: Optional[list[str]] = None,
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
@@ -48,7 +51,7 @@ def ACMG_evidence_collector(
     source_outputs_or_leads : list[Any]
         Existing outputs from GeneBe, InterVar, ClinVar, ClinGen, SpliceAI, MyVariant...
     literature_proposals : list[Any]
-        Optional supplemental literature facts or reproducibility input. The collecto...
+        Optional supplemental literature facts or reproducibility input. Every item r...
     cspec_proposals : list[Any]
         Optional supplemental interpretations of unresolved natural-language rules fr...
     evidence_decisions : list[Any]
@@ -59,8 +62,14 @@ def ACMG_evidence_collector(
         Review-only clinical context, including caller-supplied zygosity. Explicit HP...
     clinical_observations : list[Any]
         Structured caller-supplied case, family, phase, phenotype, assay, case-contro...
+    caller_verified_context : list[Any]
+        Optional named ToolUniverse transcript/disease results for degraded-run enric...
     response_detail : str
         Output detail level. 'summary' (default) returns compact source-fact/evidence...
+    literature_search_limits : dict[str, Any]
+        Optional per-source raw-record engineering budgets (1-1000). Unspecified sour...
+    fulltext_match_classes : list[str]
+        Optional normal automatic fulltext/annotation scope. Defaults to exact/equiva...
     stream_callback : Callable, optional
         Callback for streaming output
     use_cache : bool, default False
@@ -91,7 +100,10 @@ def ACMG_evidence_collector(
             "protein_accession": protein_accession,
             "clinical_context": clinical_context,
             "clinical_observations": clinical_observations,
+            "caller_verified_context": caller_verified_context,
             "response_detail": response_detail,
+            "literature_search_limits": literature_search_limits,
+            "fulltext_match_classes": fulltext_match_classes,
         }.items()
         if v is not None
     }

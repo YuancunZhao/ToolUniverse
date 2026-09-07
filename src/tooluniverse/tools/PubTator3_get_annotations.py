@@ -1,7 +1,7 @@
 """
 PubTator3_get_annotations
 
-Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Given one or mor...
+Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Set full=true to...
 """
 
 from typing import Any, Optional, Callable
@@ -11,13 +11,14 @@ from ._shared_client import get_shared_client
 def PubTator3_get_annotations(
     pmids: str,
     concepts: Optional[str] = "gene,disease,chemical,species,mutation,cellline",
+    full: Optional[bool] = False,
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
     validate: bool = True,
 ) -> Any:
     """
-    Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Given one or mor...
+    Extract biomedical entity annotations from PubMed articles using NCBI PubTator3. Set full=true to...
 
     Parameters
     ----------
@@ -25,6 +26,8 @@ def PubTator3_get_annotations(
         Comma-separated PubMed IDs (e.g., '33205991', '33205991,34234088'). Maximum ~...
     concepts : str
         Comma-separated entity types to extract: gene, disease, chemical, species, mu...
+    full : bool
+        Request annotated full-text BioC passages when available. A successful respon...
     stream_callback : Callable, optional
         Callback for streaming output
     use_cache : bool, default False
@@ -40,7 +43,9 @@ def PubTator3_get_annotations(
 
     # Strip None values so optional parameters don't trigger schema validation errors
     _args = {
-        k: v for k, v in {"pmids": pmids, "concepts": concepts}.items() if v is not None
+        k: v
+        for k, v in {"pmids": pmids, "concepts": concepts, "full": full}.items()
+        if v is not None
     }
     return get_shared_client().run_one_function(
         {

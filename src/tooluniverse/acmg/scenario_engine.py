@@ -780,6 +780,19 @@ def build_scenario_results(
         for row in rows
         if str(row.get("scenario_id") or "generic-svi") == "generic-svi"
     ]
+    scenario_input_rows = [
+        row
+        for row in generic_rows
+        if not (
+            (row.get("calculation_roles") or {}).get("user_selectable") is True
+            and str(
+                (row.get("verification_dimensions") or {}).get("anchor_status")
+                or (row.get("observed_facts") or {}).get("anchor_status")
+                or ""
+            )
+            == "externally_anchored"
+        )
+    ]
     scenario_specs = list(rule_context.get("rule_scenarios") or [])
     known_scenarios = {str(row.get("scenario_id") or "") for row in scenario_specs}
     merged_assertion_scenarios: dict[str, str] = {}
@@ -850,14 +863,14 @@ def build_scenario_results(
             scenario_rows = copy.deepcopy(generic_rows)
         elif isinstance(contract, dict):
             scenario_rows = []
-            for row in generic_rows:
+            for row in scenario_input_rows:
                 cloned, trace = _clone_for_scenario(row, scenario, contract)
                 scenario_rows.append(cloned)
                 traces.append(trace)
         else:
             scenario_rows = []
             if scenario.get("scenario_type") == "vcep_assertion":
-                for row in generic_rows:
+                for row in scenario_input_rows:
                     cloned = copy.deepcopy(row)
                     cloned["scenario_id"] = scenario_id
                     cloned["card_id"] = _scenario_card_id(

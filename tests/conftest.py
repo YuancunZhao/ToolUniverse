@@ -40,9 +40,38 @@ def check_acmg_summary(record_property):
         assert len(ids) == len(set(ids))
         assert refs <= set(ids), f"Missing summary sources: {refs - set(ids)}"
         assert summary["final_classification_allowed"] is False
-        assert all(
-            "observed_facts" not in card for card in summary.get("evidence_cards", [])
-        )
+
+        def check_facts(value):
+            if isinstance(value, dict):
+                assert (
+                    not {
+                        "raw_payload",
+                        "full_text",
+                        "exons",
+                        "EXON_STARTS",
+                        "EXON_ENDS",
+                    }
+                    & value.keys()
+                )
+                for key in (
+                    "consequence_profile_in",
+                    "predictor_scores_in",
+                    "spliceai_profile_in",
+                ):
+                    if key in value:
+                        target = summary
+                        for part in value[key].split("."):
+                            target = target[part]
+                        assert target is not None
+                for child in value.values():
+                    check_facts(child)
+            elif isinstance(value, list):
+                for child in value:
+                    check_facts(child)
+
+        for card in summary.get("evidence_cards", []):
+            assert isinstance(card["observed_facts"], dict)
+            check_facts(card["observed_facts"])
         assert "executable_contract" not in summary.get("rule_context", {})
         assert "criterion_use_matrix" not in summary.get("rule_context", {})
         assert "observations" not in summary.get("consequence_profile", {})

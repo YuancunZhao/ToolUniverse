@@ -2,7 +2,7 @@
   {
     "type": "PubTatorTool",
     "name": "PubTator3_EntityAutocomplete",
-    "description": "Provides suggestions for the best\u2010matching standardized PubTator IDs for a partial biomedical term (gene, disease, chemical, or variant). Use this tool first to convert free\u2010text names into the stable @IDs required by the other PubTator APIs.",
+    "description": "Provides suggestions for the best‐matching standardized PubTator IDs for a partial biomedical term (gene, disease, chemical, or variant). Use this tool first to convert free‐text names into the stable @IDs required by the other PubTator APIs.",
     "endpoint_path": "/entity/autocomplete/",
     "method": "GET",
     "param_map": {
@@ -15,7 +15,7 @@
       "properties": {
         "text": {
           "type": "string",
-          "description": "A few characters or the full name of the biomedical concept you are trying to look up (e.g. \u201cBRAF V6\u201d)."
+          "description": "A few characters or the full name of the biomedical concept you are trying to look up (e.g. “BRAF V6”)."
         },
         "entity_type": {
           "type": "string",
@@ -47,7 +47,7 @@
   {
     "type": "PubTatorTool",
     "name": "PubTator3_LiteratureSearch",
-    "description": "Find PubMed articles that match a keyword, a PubTator entity ID (e.g. \u201c@GENE_BRAF\u201d), or an entity-to-entity relation expression (e.g. \u201crelations:treat|@CHEMICAL_Doxorubicin|@DISEASE_Neoplasms\u201d).",
+    "description": "Find PubMed articles that match a keyword, a PubTator entity ID (e.g. “@GENE_BRAF”), or an entity-to-entity relation expression (e.g. “relations:treat|@CHEMICAL_Doxorubicin|@DISEASE_Neoplasms”).",
     "endpoint_path": "/search/",
     "method": "GET",
     "param_map": {
@@ -234,6 +234,60 @@
             "null",
             "number"
           ]
+        },
+        "status_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retryable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "retry_attempts": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "retry_trace": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "search_counts": {
+          "type": "object",
+          "description": "Raw provider page count, retained count after existing score filtering/client limit, filtered count, and raw page hash. Counts do not imply the provider's total hit count.",
+          "properties": {
+            "provider_returned_count": {
+              "type": "integer"
+            },
+            "retained_count": {
+              "type": "integer"
+            },
+            "filtered_count": {
+              "type": "integer"
+            },
+            "page_hash": {
+              "type": "string"
+            }
+          }
         }
       }
     }

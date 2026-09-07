@@ -457,3 +457,194 @@ def test_document_fallback_only_when_needed_and_reused_for_proposals(
     _, extra = pipeline._fetch_literature_documents(candidates, calls)
     assert extra == []
     assert len(requested) == (1 if primary == "complete" else 2)
+
+
+def test_pubtator_full_text_recovers_failed_pmc_chain(monkeypatch):
+    pipeline = ACMGEvidencePipeline(None)
+    requested = []
+
+    def batch(specs):
+        calls = []
+        for name, arguments, category in specs:
+            requested.append(name)
+            calls.append(
+                SourceCall(
+                    name,
+                    category,
+                    "failed",
+                    {"status": "error", "error": "unavailable"},
+                    arguments=arguments,
+                )
+            )
+        return calls
+
+    def call(name, arguments, category):
+        requested.append(name)
+        assert name == "PubTator3_get_annotations"
+        return SourceCall(
+            name,
+            category,
+            "success",
+            {
+                "status": "success",
+                "data": [
+                    {
+                        "id": "36755831",
+                        "passages": [
+                            {
+                                "offset": 0,
+                                "infons": {"type": "results"},
+                                "text": "PKD1 c.6832G>A was observed in one case.",
+                            }
+                        ],
+                    }
+                ],
+                "url": "https://example.test/pubtator",
+                "full": True,
+            },
+            arguments=arguments,
+        )
+
+    monkeypatch.setattr(pipeline, "_call_batch", batch)
+    monkeypatch.setattr(pipeline, "_call", call)
+    documents, _calls = pipeline._fetch_literature_documents(
+        [{"pmid": "36755831", "pmcid": "PMC9900584"}]
+    )
+
+    assert documents["36755831"].tool_name == "PubTator3_get_annotations"
+    assert requested == [
+        "EuropePMC_get_full_text",
+        "EuropePMC_get_fulltext",
+        "PubTator3_get_annotations",
+    ]
+
+
+def test_open_pdf_snippets_are_last_resort(monkeypatch):
+    pipeline = ACMGEvidencePipeline(None)
+    requested = []
+
+    def batch(specs):
+        calls = []
+        for name, arguments, category in specs:
+            requested.append(name)
+            if name == "Unpaywall_get_full_text_url":
+                result = {
+                    "status": "success",
+                    "is_oa": True,
+                    "best_pdf_url": "https://example.test/article.pdf",
+                }
+                status = "success"
+            elif name == "CORE_get_fulltext_snippets":
+                result = {
+                    "status": "success",
+                    "pdf_url": arguments["pdf_url"],
+                    "snippets": [
+                        {"term": "c.6832G>A", "snippet": "PKD1 c.6832G>A case"}
+                    ],
+                }
+                status = "success"
+            else:
+                result = {"status": "error", "error": "unavailable"}
+                status = "failed"
+            calls.append(
+                SourceCall(name, category, status, result, arguments=arguments)
+            )
+        return calls
+
+    def call(name, arguments, category):
+        requested.append(name)
+        return SourceCall(
+            name,
+            category,
+            "failed",
+            {"status": "error", "error": "maintenance"},
+            arguments=arguments,
+        )
+
+    monkeypatch.setattr(pipeline, "_call_batch", batch)
+    monkeypatch.setattr(pipeline, "_call", call)
+    documents, _calls = pipeline._fetch_literature_documents(
+        [
+            {
+                "pmid": "36755831",
+                "pmcid": "PMC9900584",
+                "doi": "10.1093/ckj/sfac236",
+                "gene": "PKD1",
+                "variant_search_terms": ["c.6832G>A"],
+            }
+        ]
+    )
+
+    assert documents["PMC9900584"].tool_name == "CORE_get_fulltext_snippets"
+    assert requested == [
+        "EuropePMC_get_full_text",
+        "EuropePMC_get_fulltext",
+        "PubTator3_get_annotations",
+        "Unpaywall_get_full_text_url",
+        "CORE_get_fulltext_snippets",
+    ]
+
+
+def test_pubtator_search_stops_paging_after_first_failure(monkeypatch):
+    class Runtime:
+        def __init__(self):
+            self.pages = []
+
+        def run_many_functions(self, calls, **_kwargs):
+            return [self.run_one_function(call) for call in calls]
+
+        def run_one_function(self, call, **_kwargs):
+            if call["name"] == "ClinVar_get_clinical_significance":
+                return {"status": "success", "data": {}}
+            page = call["arguments"]["page"]
+            self.pages.append(page)
+            if page == 0:
+                return {
+                    "status": "success",
+                    "results": [{"pmid": "36755831", "title": "PKD1"}],
+                    "search_counts": {
+                        "provider_returned_count": 10,
+                        "filtered_count": 9,
+                    },
+                }
+            return {
+                "status": "error",
+                "status_code": 400,
+                "detail": "Database maintenance; try again later",
+                "retryable": True,
+            }
+
+    runtime = Runtime()
+    pipeline = ACMGEvidencePipeline(runtime)
+    monkeypatch.setattr(
+        pipeline,
+        "_source_specs",
+        lambda _arguments, _identity: [
+            (
+                "ClinVar_get_clinical_significance",
+                {"variation_id": "1"},
+                "source_assertion",
+            ),
+            (
+                "PubTator3_LiteratureSearch",
+                {"query": "PKD1 c.6832G>A", "page": 0},
+                "literature",
+            ),
+        ],
+    )
+
+    calls = pipeline._collect_sources(
+        {"literature_search_limits": {"pubtator": 50}}, {}
+    )
+
+    assert runtime.pages == [0, 1]
+    failed = calls[-1]
+    assert failed.tool_name == "PubTator3_LiteratureSearch"
+    assert failed.status == "failed"
+    from tooluniverse.acmg.collector import _literature_search_summary
+
+    facts = pipeline._source_facts(calls, {})
+    summary = _literature_search_summary(
+        facts, {"literature_search_limits": {"pubtator": 50}}
+    )
+    assert [row["stop_reason"] for row in summary] == ["next_page", "maintenance"]

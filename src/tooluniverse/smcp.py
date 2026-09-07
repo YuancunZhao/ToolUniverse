@@ -2128,7 +2128,22 @@ class SMCP(FastMCP):
 
                     # Guard against oversized responses that overflow LLM context
                     max_chars = 100_000
-                    if len(serialized) > max_chars:
+                    # ACMG has its own clinical summary: truncation would sever
+                    # source/claim references and force a file-based second workflow.
+                    clinical_summary = (
+                        (
+                            args_dict.get("tool_name")
+                            if tool_name == "execute_tool"
+                            else tool_name
+                        )
+                        in {
+                            "ACMG_evidence_collector",
+                            "ACMG_overlay_gate_assess_variant",
+                        }
+                        and isinstance(result, dict)
+                        and result.get("response_detail") == "summary"
+                    )
+                    if len(serialized) > max_chars and not clinical_summary:
                         serialized = _truncate_response(
                             result,
                             serialized,

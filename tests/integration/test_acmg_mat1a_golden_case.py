@@ -249,8 +249,10 @@ def test_mat1a_broad_and_validated_evidence_workflow(check_acmg_summary):
     # points, which maps to Moderate rather than preserving the LLM suggestion.
     assert pp1["strength"] == "PP1_Moderate"
     # The PM1 excerpt names a region but does not bind the target variant in
-    # the same sentence, so it remains a visible SourceFact rather than a card.
-    assert "PM1" not in by_criterion
+    # the same sentence, so v4.5 keeps an explicit excluded review card.
+    assert len(by_criterion["PM1"]) == 1
+    assert by_criterion["PM1"][0]["evidence_status"] == "excluded"
+    assert by_criterion["PM1"][0]["calculation_roles"]["automatic"] is False
     pm1_review = next(
         row for row in reviewed["criterion_reviews"] if row["criterion"] == "PM1"
     )

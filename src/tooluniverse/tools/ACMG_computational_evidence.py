@@ -24,16 +24,16 @@ def ACMG_computational_evidence(
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
     validate: bool = True,
-) -> Any:
+) -> dict[str, Any]:
     """
     Apply the pre-specified computational predictor policy and return EvidenceCards only.
 
     Parameters
     ----------
     revel_score : float
-        
+
     cadd_phred : float
-        
+
     spliceai_max_delta : float
         Explicit four-channel maximum delta score. Complete DS_*/DP_* values are stil...
     spliceai_profile : dict[str, Any]
@@ -41,17 +41,17 @@ def ACMG_computational_evidence(
     spliceai_scores : dict[str, Any]
         Selected-transcript SpliceAI score row. DS_AG/DS_AL/DS_DG/DS_DL are delta sco...
     spliceai_run_metadata : dict[str, Any]
-        Walker 2023 run provenance. Missing or incomplete metadata keeps SpliceAI PP3...
+        Walker 2023 run provenance. Missing or incomplete metadata prevents a positiv...
     predictor_scores : dict[str, Any]
-        
+
     variant_type : str
-        
+
     consequence_terms : list[str]
-        
+
     hgvs_c : str
-        
+
     hgvs_p : str
-        
+
     stream_callback : Callable, optional
         Callback for streaming output
     use_cache : bool, default False
@@ -61,24 +61,28 @@ def ACMG_computational_evidence(
 
     Returns
     -------
-    Any
+    dict[str, Any]
     """
     # Handle mutable defaults to avoid B006 linting error
 
     # Strip None values so optional parameters don't trigger schema validation errors
-    _args = {k: v for k, v in {
-        "revel_score": revel_score,
-                "cadd_phred": cadd_phred,
-                "spliceai_max_delta": spliceai_max_delta,
-                "spliceai_profile": spliceai_profile,
-                "spliceai_scores": spliceai_scores,
-                "spliceai_run_metadata": spliceai_run_metadata,
-                "predictor_scores": predictor_scores,
-                "variant_type": variant_type,
-                "consequence_terms": consequence_terms,
-                "hgvs_c": hgvs_c,
-                "hgvs_p": hgvs_p
-    }.items() if v is not None}
+    _args = {
+        k: v
+        for k, v in {
+            "revel_score": revel_score,
+            "cadd_phred": cadd_phred,
+            "spliceai_max_delta": spliceai_max_delta,
+            "spliceai_profile": spliceai_profile,
+            "spliceai_scores": spliceai_scores,
+            "spliceai_run_metadata": spliceai_run_metadata,
+            "predictor_scores": predictor_scores,
+            "variant_type": variant_type,
+            "consequence_terms": consequence_terms,
+            "hgvs_c": hgvs_c,
+            "hgvs_p": hgvs_p,
+        }.items()
+        if v is not None
+    }
     return get_shared_client().run_one_function(
         {
             "name": "ACMG_computational_evidence",
@@ -86,7 +90,7 @@ def ACMG_computational_evidence(
         },
         stream_callback=stream_callback,
         use_cache=use_cache,
-        validate=validate
+        validate=validate,
     )
 
 

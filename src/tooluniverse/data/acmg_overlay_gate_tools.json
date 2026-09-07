@@ -43,7 +43,7 @@
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Optional supplemental literature facts or reproducibility input. The collector normally retrieves and extracts source-backed candidates itself; submitted proposals are re-anchored to the cited document and cannot override fact-type or strength rules.",
+          "description": "Optional supplemental literature facts or reproducibility input. Every item receives a proposal_report disposition. When independent retrieval is unavailable, a proposal with a valid document SHA-256, literal excerpt, locator, publication identifier, and versioned extractor may become an externally anchored review card; it never enters automatic or verified Bayesian estimates and cannot override fact-type or strength rules.",
           "items": {
             "type": "object",
             "properties": {
@@ -451,6 +451,73 @@
             "additionalProperties": false
           }
         },
+        "caller_verified_context": {
+          "type": "array",
+          "description": "Optional named ToolUniverse transcript/disease results for degraded-run enrichment. Caller-attributed, NOT independently verified; never directly eligible for verified Bayesian. Normal collection still runs once with internal fallbacks.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "context_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "context_type": {
+                "type": "string",
+                "enum": [
+                  "transcript_mapping",
+                  "transcript_record",
+                  "exon_model",
+                  "disease_associations"
+                ]
+              },
+              "tool_name": {
+                "type": "string",
+                "enum": [
+                  "Tark_get_mane_transcripts",
+                  "Tark_get_transcript",
+                  "ensembl_get_overlap_features",
+                  "ensembl_lookup_gene",
+                  "MARRVEL_get_omim_phenotypes",
+                  "gather_gene_disease_associations"
+                ]
+              },
+              "query": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "Original tool arguments; not arbitrary URLs or executable code."
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "array"
+                  }
+                ],
+                "description": "Original provider response or data body; retained as attributed provenance."
+              },
+              "provider_version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "retrieved_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "context_id",
+              "context_type",
+              "tool_name",
+              "query",
+              "values",
+              "provider_version",
+              "retrieved_at"
+            ],
+            "additionalProperties": false
+          }
+        },
         "response_detail": {
           "type": "string",
           "enum": [
@@ -459,6 +526,49 @@
           ],
           "default": "summary",
           "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
+        },
+        "literature_search_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional per-source raw-record engineering budgets (1-1000). Unspecified sources retain defaults: PubMed 50, Europe PMC 100, LitVar publications 50, PubTator 10; not scientific thresholds.",
+          "properties": {
+            "pubmed": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "europe_pmc": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "litvar": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "pubtator": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        },
+        "fulltext_match_classes": {
+          "type": "array",
+          "description": "Optional normal automatic fulltext/annotation scope. Defaults to exact/equivalent/provider-linked variant matches. Empty disables normal fetching, not explicit proposal re-anchoring or targeted requests; does not change evidence eligibility.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "exact_variant_match",
+              "equivalent_variant_match",
+              "provider_linked_variant_match",
+              "same_residue_match",
+              "gene_disease_background",
+              "mechanism_background",
+              "unverified_candidate"
+            ]
+          }
         }
       },
       "required": [
@@ -545,7 +655,7 @@
         },
         "omim_context": {
           "type": "object",
-          "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
+          "description": "Attributed disease context from MARRVEL OMIM and bounded gene-disease fallback. association_status distinguishes resolved, provider_gap, and confirmed_no_association in queried sources only. Background never establishes LoF mechanism or ACMG evidence."
         },
         "population_observations": {
           "type": "array",
@@ -691,6 +801,10 @@
             "transcript_mapping": {
               "type": "object"
             },
+            "transcript_structure": {
+              "type": "object",
+              "description": "Selected-NM-bound MANE/ENST structure, biotype, exon number/total, model completeness, source IDs, and versioned NMD-position calculation with assumptions."
+            },
             "selected_observation": {
               "type": [
                 "object",
@@ -812,7 +926,7 @@
         },
         "literature_candidates": {
           "type": "array",
-          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
+          "description": "Cross-provider deduplicated literature index preserving LitVar, Europe PMC, PubMed, and PubTator source hits plus canonical-document status. Summary rows inherit any common fields from literature_candidate_defaults. Includes retrieved title and abstract_available; unavailable titles are never inferred.",
           "items": {
             "type": "object"
           }
@@ -823,10 +937,18 @@
         },
         "literature_review": {
           "type": "object",
-          "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
+          "description": "Deduplicated candidates, canonical Europe PMC/PMC or PubTator full-text state, open-access PDF snippet fallback provenance, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status. Also includes fact_reviews for incomplete/negative review-only atoms, extraction skip diagnostics, and per-tool/query search_summary with raw/retained/filtered counts, nullable provider totals, budgets and stopping reasons."
+        },
+        "proposal_report": {
+          "type": "array",
+          "description": "One auditable disposition per submitted literature proposal, including re-anchoring, identity binding, generated cards, user-selectability, reason codes, and missing requirements.",
+          "items": {
+            "type": "object"
+          }
         },
         "recoverable_gaps": {
           "type": "array",
+          "description": "Unresolved or recovered requirements, with bounded recovery status and optional repair_plan tool arguments/dependencies. Caller-attributed enrichment never implies independent verification.",
           "items": {
             "type": "object"
           }
@@ -931,7 +1053,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "All 28 criterion review rows explicitly report route_status, evidence_status and missing requirements. Invalid-card serialization_diagnostics have no card ID or calculation eligibility; no criterion_review_defaults is needed."
         },
         "evidence_cards": {
           "type": "array",
@@ -1007,7 +1130,8 @@
               "scenario_id",
               "source_fact_ids"
             ]
-          }
+          },
+          "description": "undefined Summary includes compact observed_facts with clinical numeric values and resolvable shared-profile references; invalid cards are reported as nonselectable diagnostics."
         },
         "conflict_report": {
           "type": "object"
@@ -1081,6 +1205,7 @@
         "prior_variant_candidates",
         "literature_candidates",
         "literature_review",
+        "proposal_report",
         "recoverable_gaps",
         "workflow_status",
         "review_readiness",
@@ -1148,7 +1273,7 @@
         },
         "literature_proposals": {
           "type": "array",
-          "description": "Optional supplemental literature facts or reproducibility input. The collector normally retrieves and extracts source-backed candidates itself; submitted proposals are re-anchored to the cited document and cannot override fact-type or strength rules.",
+          "description": "Optional supplemental literature facts or reproducibility input. Every item receives a proposal_report disposition. When independent retrieval is unavailable, a proposal with a valid document SHA-256, literal excerpt, locator, publication identifier, and versioned extractor may become an externally anchored review card; it never enters automatic or verified Bayesian estimates and cannot override fact-type or strength rules.",
           "items": {
             "type": "object",
             "properties": {
@@ -1556,6 +1681,73 @@
             "additionalProperties": false
           }
         },
+        "caller_verified_context": {
+          "type": "array",
+          "description": "Optional named ToolUniverse transcript/disease results for degraded-run enrichment. Caller-attributed, NOT independently verified; never directly eligible for verified Bayesian. Normal collection still runs once with internal fallbacks.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "context_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "context_type": {
+                "type": "string",
+                "enum": [
+                  "transcript_mapping",
+                  "transcript_record",
+                  "exon_model",
+                  "disease_associations"
+                ]
+              },
+              "tool_name": {
+                "type": "string",
+                "enum": [
+                  "Tark_get_mane_transcripts",
+                  "Tark_get_transcript",
+                  "ensembl_get_overlap_features",
+                  "ensembl_lookup_gene",
+                  "MARRVEL_get_omim_phenotypes",
+                  "gather_gene_disease_associations"
+                ]
+              },
+              "query": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "Original tool arguments; not arbitrary URLs or executable code."
+              },
+              "values": {
+                "oneOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "array"
+                  }
+                ],
+                "description": "Original provider response or data body; retained as attributed provenance."
+              },
+              "provider_version": {
+                "type": "string",
+                "minLength": 1
+              },
+              "retrieved_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "context_id",
+              "context_type",
+              "tool_name",
+              "query",
+              "values",
+              "provider_version",
+              "retrieved_at"
+            ],
+            "additionalProperties": false
+          }
+        },
         "response_detail": {
           "type": "string",
           "enum": [
@@ -1564,6 +1756,49 @@
           ],
           "default": "summary",
           "description": "Output detail level. 'summary' (default) returns compact source-fact/evidence-card indexes plus ID/decision-only compatibility, Bayesian, and criterion-review reports; 'full' returns complete audit payloads."
+        },
+        "literature_search_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional per-source raw-record engineering budgets (1-1000). Unspecified sources retain defaults: PubMed 50, Europe PMC 100, LitVar publications 50, PubTator 10; not scientific thresholds.",
+          "properties": {
+            "pubmed": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "europe_pmc": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "litvar": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "pubtator": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        },
+        "fulltext_match_classes": {
+          "type": "array",
+          "description": "Optional normal automatic fulltext/annotation scope. Defaults to exact/equivalent/provider-linked variant matches. Empty disables normal fetching, not explicit proposal re-anchoring or targeted requests; does not change evidence eligibility.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "exact_variant_match",
+              "equivalent_variant_match",
+              "provider_linked_variant_match",
+              "same_residue_match",
+              "gene_disease_background",
+              "mechanism_background",
+              "unverified_candidate"
+            ]
+          }
         }
       },
       "required": [
@@ -1650,7 +1885,7 @@
         },
         "omim_context": {
           "type": "object",
-          "description": "Auditable OMIM disease and inheritance context from MARRVEL. This context is review-only and does not select a CSpec or create ACMG evidence."
+          "description": "Attributed disease context from MARRVEL OMIM and bounded gene-disease fallback. association_status distinguishes resolved, provider_gap, and confirmed_no_association in queried sources only. Background never establishes LoF mechanism or ACMG evidence."
         },
         "population_observations": {
           "type": "array",
@@ -1796,6 +2031,10 @@
             "transcript_mapping": {
               "type": "object"
             },
+            "transcript_structure": {
+              "type": "object",
+              "description": "Selected-NM-bound MANE/ENST structure, biotype, exon number/total, model completeness, source IDs, and versioned NMD-position calculation with assumptions."
+            },
             "selected_observation": {
               "type": [
                 "object",
@@ -1917,7 +2156,7 @@
         },
         "literature_candidates": {
           "type": "array",
-          "description": "Cross-provider deduplicated literature index preserving all LitVar, Europe PMC, and PubMed source hits. Summary rows inherit any common fields from literature_candidate_defaults.",
+          "description": "Cross-provider deduplicated literature index preserving LitVar, Europe PMC, PubMed, and PubTator source hits plus canonical-document status. Summary rows inherit any common fields from literature_candidate_defaults. Includes retrieved title and abstract_available; unavailable titles are never inferred.",
           "items": {
             "type": "object"
           }
@@ -1928,10 +2167,18 @@
         },
         "literature_review": {
           "type": "object",
-          "description": "Deduplicated candidates, verified full-text state, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status."
+          "description": "Deduplicated candidates, canonical Europe PMC/PMC or PubTator full-text state, open-access PDF snippet fallback provenance, deterministic fact extraction, optional supplemental review requests, reading manifests, and proposal validation status. Also includes fact_reviews for incomplete/negative review-only atoms, extraction skip diagnostics, and per-tool/query search_summary with raw/retained/filtered counts, nullable provider totals, budgets and stopping reasons."
+        },
+        "proposal_report": {
+          "type": "array",
+          "description": "One auditable disposition per submitted literature proposal, including re-anchoring, identity binding, generated cards, user-selectability, reason codes, and missing requirements.",
+          "items": {
+            "type": "object"
+          }
         },
         "recoverable_gaps": {
           "type": "array",
+          "description": "Unresolved or recovered requirements, with bounded recovery status and optional repair_plan tool arguments/dependencies. Caller-attributed enrichment never implies independent verification.",
           "items": {
             "type": "object"
           }
@@ -2036,7 +2283,8 @@
                 }
               }
             }
-          }
+          },
+          "description": "All 28 criterion review rows explicitly report route_status, evidence_status and missing requirements. Invalid-card serialization_diagnostics have no card ID or calculation eligibility; no criterion_review_defaults is needed."
         },
         "evidence_cards": {
           "type": "array",
@@ -2112,7 +2360,8 @@
               "scenario_id",
               "source_fact_ids"
             ]
-          }
+          },
+          "description": "undefined Summary includes compact observed_facts with clinical numeric values and resolvable shared-profile references; invalid cards are reported as nonselectable diagnostics."
         },
         "conflict_report": {
           "type": "object"
@@ -2186,6 +2435,7 @@
         "prior_variant_candidates",
         "literature_candidates",
         "literature_review",
+        "proposal_report",
         "recoverable_gaps",
         "workflow_status",
         "review_readiness",
@@ -2263,6 +2513,29 @@
     },
     "fields": {
       "operation": "population"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Substantive legal evidence cards only."
+        },
+        "serialization_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Invalid criterion/strength/state diagnostics with source references, without card IDs or user-selection eligibility."
+        }
+      },
+      "required": [
+        "evidence_cards",
+        "serialization_diagnostics"
+      ]
     }
   },
   {
@@ -2317,6 +2590,29 @@
     },
     "fields": {
       "operation": "computational"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Substantive legal evidence cards only."
+        },
+        "serialization_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Invalid criterion/strength/state diagnostics with source references, without card IDs or user-selection eligibility."
+        }
+      },
+      "required": [
+        "evidence_cards",
+        "serialization_diagnostics"
+      ]
     }
   },
   {
@@ -2420,6 +2716,29 @@
     },
     "fields": {
       "operation": "clinical"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Substantive legal evidence cards only."
+        },
+        "serialization_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Invalid criterion/strength/state diagnostics with source references, without card IDs or user-selection eligibility."
+        }
+      },
+      "required": [
+        "evidence_cards",
+        "serialization_diagnostics"
+      ]
     }
   },
   {
@@ -2579,6 +2898,29 @@
     },
     "fields": {
       "operation": "functional"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Substantive legal evidence cards only."
+        },
+        "serialization_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Invalid criterion/strength/state diagnostics with source references, without card IDs or user-selection eligibility."
+        }
+      },
+      "required": [
+        "evidence_cards",
+        "serialization_diagnostics"
+      ]
     }
   },
   {
@@ -2678,6 +3020,29 @@
     },
     "fields": {
       "operation": "literature"
+    },
+    "return_schema": {
+      "type": "object",
+      "properties": {
+        "evidence_cards": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Substantive legal evidence cards only."
+        },
+        "serialization_diagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Invalid criterion/strength/state diagnostics with source references, without card IDs or user-selection eligibility."
+        }
+      },
+      "required": [
+        "evidence_cards",
+        "serialization_diagnostics"
+      ]
     }
   },
   {

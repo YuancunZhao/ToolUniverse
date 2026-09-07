@@ -18,20 +18,20 @@ def ACMG_functional_evidence(
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
     validate: bool = True,
-) -> Any:
+) -> dict[str, Any]:
     """
     Review structured functional assays under Brnich OddsPath; only the collector can validate and co...
 
     Parameters
     ----------
     variant_type : str
-        
+
     functional_assays : list[Any]
-        
+
     consequence_profile : dict[str, Any]
         Review-only normalized consequence context. Caller-provided values cannot mak...
     protein_context : dict[str, Any]
-        Review-only protein mapping and domain/site facts. Collector-verified SourceF...
+        Review-only protein mapping and domain/site facts. Collector-normalized Sourc...
     pvs1_facts : dict[str, Any]
         Review-only structured facts for the deterministic ClinGen SVI PVS1 decision ...
     stream_callback : Callable, optional
@@ -43,18 +43,22 @@ def ACMG_functional_evidence(
 
     Returns
     -------
-    Any
+    dict[str, Any]
     """
     # Handle mutable defaults to avoid B006 linting error
 
     # Strip None values so optional parameters don't trigger schema validation errors
-    _args = {k: v for k, v in {
-        "variant_type": variant_type,
-                "functional_assays": functional_assays,
-                "consequence_profile": consequence_profile,
-                "protein_context": protein_context,
-                "pvs1_facts": pvs1_facts
-    }.items() if v is not None}
+    _args = {
+        k: v
+        for k, v in {
+            "variant_type": variant_type,
+            "functional_assays": functional_assays,
+            "consequence_profile": consequence_profile,
+            "protein_context": protein_context,
+            "pvs1_facts": pvs1_facts,
+        }.items()
+        if v is not None
+    }
     return get_shared_client().run_one_function(
         {
             "name": "ACMG_functional_evidence",
@@ -62,7 +66,7 @@ def ACMG_functional_evidence(
         },
         stream_callback=stream_callback,
         use_cache=use_cache,
-        validate=validate
+        validate=validate,
     )
 
 

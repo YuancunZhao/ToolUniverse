@@ -13,19 +13,23 @@ from . import (
     computational,
     consequence_sources,
     cspec,
+    document_facts,
+    guard,
     literature_extractor,
     models,
+    policy,
     population,
     pvs1,
     rule_catalog,
     spliceai,
+    source_adapters,
     vcep,
 )
 
 
-ACMG_RUNTIME_VERSION = "evidence-automation-4.3"
-COLLECTOR_SCHEMA_VERSION = "2026-08-31-v4.3"
-OMIM_CONTEXT_POLICY_VERSION = "2026-08-21-v1"
+ACMG_RUNTIME_VERSION = "evidence-automation-4.7"
+COLLECTOR_SCHEMA_VERSION = "2026-09-04-v4.7"
+OMIM_CONTEXT_POLICY_VERSION = "2026-09-04-v1"
 UPSTREAM_BASE_COMMIT = "1aaaf00d1a9a91c21ae09d014fe19bf46fa82917"
 BAYESIAN_PRIOR = 0.1
 
@@ -73,10 +77,24 @@ def _ruleset_payload() -> dict[str, Any]:
             "rule_id": pvs1.RULE_ID,
             "version": pvs1.RULE_VERSION,
             "reference": pvs1.RULE_REFERENCE,
+            "nmd_position_policy": pvs1.NMD_POSITION_POLICY_VERSION,
+            "final_junction_distance_nt": pvs1.NMD_FINAL_JUNCTION_DISTANCE_NT,
+        },
+        "context_recovery_policy": {
+            "retry": policy.COLLECTOR_RETRY_POLICY_VERSION,
+            "max_collector_retries": policy.COLLECTOR_MAX_RETRIES,
+            "transcript_structure": policy.TRANSCRIPT_STRUCTURE_FALLBACK_POLICY_VERSION,
+            "disease_context": policy.DISEASE_CONTEXT_FALLBACK_POLICY_VERSION,
+            "caller_attribution": policy.CALLER_CONTEXT_POLICY_VERSION,
+            "caller_context_is_strictly_verified": False,
         },
         "generic_tavtigian_odds": generic_odds,
         "bayesian_prior": BAYESIAN_PRIOR,
         "evidence_calculation_policy": {
+            "guard_text_policy": guard.GUARD_TEXT_POLICY_VERSION,
+            "quarantine_policy": source_adapters.QUARANTINE_POLICY_VERSION,
+            "quarantined_conclusion_keys": sorted(source_adapters._CONCLUSION_KEYS),
+            "review_only_extraction": literature_extractor.REVIEW_ONLY_POLICY_VERSION,
             "computational_scope": computational.COMPUTATIONAL_SCOPE_POLICY_VERSION,
             "protein_mapping": rule_catalog.PROTEIN_MAPPING_POLICY_VERSION,
             "identity_verification": rule_catalog.IDENTITY_VERIFICATION_POLICY,
@@ -88,6 +106,9 @@ def _ruleset_payload() -> dict[str, Any]:
             ],
             "automatic_policy_version": models.AUTOMATIC_EVIDENCE_POLICY_VERSION,
             "verified_policy_version": models.VERIFIED_EVIDENCE_POLICY_VERSION,
+            "user_selectable_policy_version": (
+                models.USER_SELECTABLE_EVIDENCE_POLICY_VERSION
+            ),
             "automatic_evidence_statuses": sorted(models.AUTOMATIC_EVIDENCE_STATUSES),
             "verified_evidence_statuses": sorted(models.VERIFIED_EVIDENCE_STATUSES),
             "non_evidence_strengths": sorted(models.NON_EVIDENCE_STRENGTHS),
@@ -187,12 +208,30 @@ def _ruleset_payload() -> dict[str, Any]:
             "literature_extractor": {
                 "id": literature_extractor.EXTRACTOR_ID,
                 "version": literature_extractor.EXTRACTOR_VERSION,
+                "document_retrieval_policy_version": (
+                    literature_extractor.DOCUMENT_RETRIEVAL_POLICY_VERSION
+                ),
+                "canonical_document_policy_version": (
+                    literature_extractor.CANONICAL_DOCUMENT_POLICY_VERSION
+                ),
                 "target_link_policy_version": (
                     literature_extractor.TARGET_LINK_POLICY_VERSION
                 ),
                 "minimum_fact_requirements": (
                     literature_extractor.MINIMUM_FACT_REQUIREMENTS
                 ),
+                "proposal_reanchor_policy_version": (
+                    document_facts.PROPOSAL_REANCHOR_POLICY_VERSION
+                ),
+                "external_anchor": {
+                    "requires_document_hash": True,
+                    "requires_excerpt_and_locator": True,
+                    "requires_publication_identifier": True,
+                    "requires_versioned_extractor": True,
+                    "automatic": False,
+                    "verified": False,
+                    "user_selection_requires_valid_strength_or_override": True,
+                },
             },
             "cspec_rule_parser_version": cspec.CSPEC_RULE_PARSER_VERSION,
             "cspec_scenario_policy_version": (

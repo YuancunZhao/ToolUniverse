@@ -12,12 +12,16 @@ import json
 import re
 from typing import Any
 
+from .document_facts import retrieved_document_status
 from .models import SourceFact
 
 
 EXTRACTOR_ID = "tooluniverse-acmg-literature-rules"
-EXTRACTOR_VERSION = "2026-08-09-v3"
+EXTRACTOR_VERSION = "2026-09-04-v4.7"
+REVIEW_ONLY_POLICY_VERSION = "2026-09-04-v1"
 TARGET_LINK_POLICY_VERSION = "2026-08-09-v3"
+DOCUMENT_RETRIEVAL_POLICY_VERSION = "2026-09-02-v1"
+CANONICAL_DOCUMENT_POLICY_VERSION = "2026-09-02-v1"
 MINIMUM_FACT_REQUIREMENTS = {
     "de_novo": ("target_variant", "proband_or_family"),
     "case_control": ("target_variant", "odds_ratio", "confidence_interval"),
@@ -70,17 +74,96 @@ def _document_strings(features: dict[str, Any]) -> list[str]:
         "table_captions",
         "supplements",
         "snippet",
+        "snippets",
+        "passages",
     ):
         texts.extend(_strings(payload.get(key), key=key))
     return texts
 
 
+def _document_units(features: dict[str, Any]) -> list[tuple[str, str]]:
+    """Expose stable source locators for structured bodies and snippets."""
+    payload = features.get("data")
+    payload = payload if isinstance(payload, dict) else features
+    units: list[tuple[str, str]] = []
+
+    def add(locator: str, value: Any) -> None:
+        if isinstance(value, str) and value.strip():
+            units.append((locator, value))
+
+    add("title", payload.get("title"))
+    add("abstract", payload.get("abstract"))
+    sections = payload.get("sections")
+    if isinstance(sections, dict):
+        for section, values in sections.items():
+            if isinstance(values, list):
+                for index, value in enumerate(values, 1):
+                    if isinstance(value, dict):
+                        add(f"section:{section}:{index}", value.get("text"))
+                    else:
+                        add(f"section:{section}:{index}", value)
+            else:
+                add(f"section:{section}", values)
+    elif isinstance(sections, list):
+        for index, value in enumerate(sections, 1):
+            if isinstance(value, dict):
+                add(
+                    str(value.get("locator") or f"section:{index}"),
+                    value.get("text"),
+                )
+            else:
+                add(f"section:{index}", value)
+    for index, table in enumerate(payload.get("tables") or [], 1):
+        if not isinstance(table, dict):
+            continue
+        table_id = str(table.get("id") or f"table-{index}")
+        add(f"{table_id}:caption", table.get("caption"))
+        for row_index, row in enumerate(table.get("rows") or [], 1):
+            if isinstance(row, dict):
+                add(
+                    str(row.get("locator") or f"{table_id}:row:{row_index}"),
+                    row.get("text"),
+                )
+    for index, figure in enumerate(payload.get("figures") or [], 1):
+        if isinstance(figure, dict):
+            figure_id = str(figure.get("id") or f"figure-{index}")
+            add(f"{figure_id}:caption", figure.get("caption"))
+    for passage in payload.get("passages") or []:
+        if not isinstance(passage, dict):
+            continue
+        add(f"passage:{passage.get('offset', '')}", passage.get("text"))
+    for index, snippet in enumerate(payload.get("snippets") or [], 1):
+        if isinstance(snippet, dict):
+            add(f"snippet:{index}", snippet.get("snippet"))
+        else:
+            add(f"snippet:{index}", snippet)
+    add("text", payload.get("text"))
+    add("content", payload.get("content"))
+    if units:
+        return units
+    return [
+        (f"document:{index}", text)
+        for index, text in enumerate(_document_strings(features), 1)
+    ]
+
+
 def _publication_matches(fact: SourceFact, candidate: dict[str, Any]) -> bool:
     arguments = fact.request_arguments
-    for key in ("pmid", "pmcid"):
+    for key in ("pmid", "pmcid", "doi"):
         expected = str(candidate.get(key) or "").casefold()
-        observed = str(arguments.get(key) or "").casefold()
+        observed = str(
+            arguments.get(key) or arguments.get("_acmg_document_key") or ""
+        ).casefold()
         if expected and observed and expected == observed:
+            return True
+    expected_pmid = str(candidate.get("pmid") or "").casefold()
+    for document in fact.features.get("documents") or []:
+        if not isinstance(document, dict):
+            continue
+        document_id = str(
+            document.get("pmid") or document.get("_id") or document.get("id") or ""
+        ).casefold()
+        if expected_pmid and document_id == expected_pmid:
             return True
     article_id = str(arguments.get("article_id") or "").casefold()
     return bool(
@@ -88,22 +171,77 @@ def _publication_matches(fact: SourceFact, candidate: dict[str, Any]) -> bool:
     )
 
 
+def _document_for_candidate(
+    fact: SourceFact, candidate: dict[str, Any]
+) -> dict[str, Any]:
+    if fact.tool_name != "PubTator3_get_annotations":
+        return fact.features
+    expected = str(candidate.get("pmid") or "").casefold()
+    document = next(
+        (
+            row
+            for row in fact.features.get("documents") or []
+            if isinstance(row, dict)
+            and str(row.get("pmid") or row.get("_id") or row.get("id") or "").casefold()
+            == expected
+        ),
+        {},
+    )
+    return {
+        "data": document,
+        "source": "PubTator3",
+        "format": "biocjson",
+        "url": fact.features.get("request_url"),
+        "retrieval_trace": fact.features.get("retry_trace") or [],
+        "truncated": False,
+    }
+
+
+def _document_rank(tool_name: str, status: str) -> tuple[int, int]:
+    return (
+        {"complete": 4, "partial": 3, "abstract_only": 2, "snippet_only": 1}.get(
+            status, 0
+        ),
+        {
+            "EuropePMC_get_full_text": 3,
+            "PubTator3_get_annotations": 2,
+            "EuropePMC_get_fulltext": 1,
+            "CORE_get_fulltext_snippets": 0,
+        }.get(tool_name, 0),
+    )
+
+
 def _candidate_corpus(
     candidate: dict[str, Any], source_facts: dict[str, SourceFact]
 ) -> tuple[str, str, list[str], str, dict[str, Any]]:
-    texts = [
-        str(candidate.get("abstract") or ""),
-        *_strings(candidate.get("snippets"), key="snippets"),
-        *_strings(candidate.get("fulltext_snippets"), key="fulltext_snippets"),
+    candidate_units = [
+        ("abstract", str(candidate.get("abstract") or "")),
+        *[
+            (f"snippet:{index}", text)
+            for index, text in enumerate(
+                _strings(candidate.get("snippets"), key="snippets"), 1
+            )
+        ],
+        *[
+            (f"fulltext-snippet:{index}", text)
+            for index, text in enumerate(
+                _strings(candidate.get("fulltext_snippets"), key="fulltext_snippets"),
+                1,
+            )
+        ],
     ]
-    source_status = (
+    candidate_texts = [text for _locator, text in candidate_units]
+    candidate_status = (
         "abstract_only"
         if candidate.get("abstract")
         else "snippet_only"
-        if any(text.strip() for text in texts)
+        if any(text.strip() for text in candidate_texts)
         else "unavailable"
     )
     provenance = list(candidate.get("source_fact_ids") or [])
+    canonical: tuple[tuple[int, int], SourceFact, dict[str, Any], str] | None = None
+    retrieval_sources: list[dict[str, Any]] = []
+    annotation_sources: list[str] = []
     document_audit: dict[str, Any] = {
         "truncated": False,
         "truncated_sections": [],
@@ -111,40 +249,119 @@ def _candidate_corpus(
         "format": "",
         "url": "",
         "retrieval_trace": [],
+        "tool_name": "",
     }
     for fact in source_facts.values():
-        if fact.tool_name not in {"EuropePMC_get_full_text", "EuropePMC_get_fulltext"}:
+        if fact.tool_name not in {
+            "EuropePMC_get_full_text",
+            "EuropePMC_get_fulltext",
+            "PubTator3_get_annotations",
+            "Unpaywall_get_full_text_url",
+            "CORE_get_fulltext_snippets",
+        }:
             continue
         if not _publication_matches(fact, candidate):
             continue
-        fact_texts = _document_strings(fact.features)
-        if fact_texts:
-            texts.extend(fact_texts)
-            source_status = "available"
-            metadata = fact.features.get("metadata")
-            metadata = metadata if isinstance(metadata, dict) else {}
-            document_audit = {
-                "truncated": fact.features.get("truncated") is True,
-                "truncated_sections": list(
-                    fact.features.get("truncated_sections") or []
-                ),
-                "source": str(
-                    fact.features.get("source") or metadata.get("source") or ""
-                ),
-                "format": str(
-                    fact.features.get("format") or metadata.get("format") or ""
-                ),
-                "url": str(fact.features.get("url") or metadata.get("url") or ""),
-                "retrieval_trace": list(
-                    fact.features.get("retrieval_trace")
-                    or metadata.get("retrieval_trace")
-                    or []
-                ),
-            }
         provenance.append(fact.fact_id)
-    corpus = "\n".join(text for text in texts if text.strip())
+        features = _document_for_candidate(fact, candidate)
+        provenance_fields = features.get("metadata")
+        provenance_fields = (
+            provenance_fields if isinstance(provenance_fields, dict) else {}
+        )
+        audit = {
+            "truncated": features.get("truncated") is True,
+            "truncated_sections": list(features.get("truncated_sections") or []),
+            "source": str(
+                features.get("source") or provenance_fields.get("source") or ""
+            ),
+            "format": str(
+                features.get("format") or provenance_fields.get("format") or ""
+            ),
+            "url": str(features.get("url") or provenance_fields.get("url") or ""),
+            "retrieval_trace": list(
+                features.get("retrieval_trace")
+                or provenance_fields.get("retrieval_trace")
+                or []
+            ),
+            "tool_name": fact.tool_name,
+        }
+        units = _document_units(features)
+        if not units:
+            if fact.tool_name == "Unpaywall_get_full_text_url":
+                retrieval_sources.append(
+                    {
+                        "tool_name": fact.tool_name,
+                        "status": (
+                            "oa_location"
+                            if features.get("is_oa") is True
+                            else "unavailable"
+                        ),
+                        "url": features.get("best_pdf_url")
+                        or features.get("request_url"),
+                    }
+                )
+            else:
+                annotation_sources.append(fact.tool_name)
+            continue
+        status = retrieved_document_status(features, audit)
+        retrieval_sources.append(
+            {"tool_name": fact.tool_name, "status": status, "url": audit["url"]}
+        )
+        ranked = (_document_rank(fact.tool_name, status), fact, features, status)
+        if canonical is None or ranked[0] > canonical[0]:
+            canonical = ranked
+            document_audit = audit
+    if canonical:
+        _rank, _fact, canonical_features, selected_status = canonical
+        units = _document_units(canonical_features)
+        document_audit["document_status"] = selected_status
+        source_status = (
+            "available"
+            if selected_status in {"complete", "partial"}
+            else selected_status
+        )
+    else:
+        units = candidate_units
+        document_audit["document_status"] = candidate_status
+        source_status = candidate_status
+    document_audit["retrieval_sources"] = retrieval_sources
+    document_audit["annotation_sources"] = sorted(set(annotation_sources))
+    parts: list[str] = []
+    locator_spans: list[dict[str, Any]] = []
+    cursor = 0
+    for locator, value in units:
+        text = value.strip()
+        if not text:
+            continue
+        if parts:
+            cursor += 1
+        start = cursor
+        parts.append(text)
+        cursor += len(text)
+        locator_spans.append({"start": start, "end": cursor, "locator": locator})
+    corpus = "\n".join(parts)
+    document_audit["locator_spans"] = locator_spans
     digest = hashlib.sha256(corpus.encode()).hexdigest() if corpus else ""
     return corpus, source_status, sorted(set(provenance)), digest, document_audit
+
+
+def literature_document_summary(
+    candidate: dict[str, Any], source_facts: dict[str, SourceFact]
+) -> dict[str, Any]:
+    """Return the canonical document choice without exposing its body."""
+    _corpus, source_status, _provenance, document_hash, audit = _candidate_corpus(
+        candidate, source_facts
+    )
+    document_status = str(audit.get("document_status") or source_status)
+    return {
+        "canonical_document_source": audit.get("source")
+        or audit.get("tool_name")
+        or "",
+        "document_status": document_status,
+        "document_hash": document_hash,
+        "retrieval_sources": list(audit.get("retrieval_sources") or []),
+        "annotation_sources": list(audit.get("annotation_sources") or []),
+    }
 
 
 def _sentence_units(text: str) -> list[tuple[int, str]]:
@@ -583,6 +800,7 @@ def extract_literature_facts(
     identity: dict[str, Any],
     disease: str = "",
     inheritance: str = "",
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[str, SourceFact]:
     """Return one SourceFact per deterministic, source-located evidence atom."""
     extracted: dict[str, SourceFact] = {}
@@ -634,15 +852,39 @@ def extract_literature_facts(
                         match_class=match_class,
                         fact_type=fact_type,
                     )
-                    if target_link_status == "unlinked":
-                        continue
-                    if _methodological_false_positive(fact_type, sentence):
+                    skip_reason = (
+                        "target_unlinked"
+                        if target_link_status == "unlinked"
+                        else "methodological_false_positive"
+                        if _methodological_false_positive(fact_type, sentence)
+                        else ""
+                    )
+                    if skip_reason:
+                        if diagnostics is not None:
+                            diagnostic = {
+                                "publication_id": publication_id,
+                                "fact_type": fact_type,
+                                "locator": f"{source_status}:char:{unit_offset + match.start()}",
+                                "reason_code": skip_reason,
+                                "source_fact_ids": list(provenance_ids),
+                            }
+                            if diagnostic not in diagnostics:
+                                diagnostics.append(diagnostic)
                         continue
                     negated = _negated(fact_type, sentence, match)
-                    if negated:
-                        continue
                     excerpt = " ".join(sentence.split())
                     absolute_start = unit_offset + match.start()
+                    source_locator = next(
+                        (
+                            str(span["locator"])
+                            for span in document_audit.get("locator_spans") or []
+                            if span["start"] <= absolute_start < span["end"]
+                        ),
+                        (
+                            f"{source_status}:char:{absolute_start}-"
+                            f"{absolute_start + len(match.group(0))}"
+                        ),
+                    )
                     values = _values(
                         fact_type,
                         match,
@@ -661,6 +903,7 @@ def extract_literature_facts(
                     semantic_status = (
                         "verified"
                         if requirements_status == "complete"
+                        and not negated
                         and target_link_status
                         in {
                             "direct_variant",
@@ -679,6 +922,8 @@ def extract_literature_facts(
                         "target_link_status": target_link_status,
                         "requirements_status": requirements_status,
                     }
+                    if negated:
+                        payload["negation_status"] = "negated"
                     fact_hash = hashlib.sha256(
                         json.dumps(
                             payload,
@@ -703,16 +948,22 @@ def extract_literature_facts(
                             re.IGNORECASE,
                         )
                     )
-                    reading_status = (
-                        "partial"
-                        if source_status == "available" and document_audit["truncated"]
-                        else "complete"
-                        if source_status == "available"
-                        else source_status
+                    reading_status = str(
+                        document_audit.get("document_status") or source_status
                     )
+                    manifest_limitations = (
+                        ["provider response was truncated"]
+                        if document_audit["truncated"]
+                        else []
+                    )
+                    if re.search(
+                        r"\b(?:supplement|supplementary)\b", excerpt, re.IGNORECASE
+                    ):
+                        manifest_limitations.append("supplement_not_reviewed")
                     extracted[fact_id] = SourceFact(
                         fact_id=fact_id,
-                        tool_name="EuropePMC_get_full_text",
+                        tool_name=document_audit["tool_name"]
+                        or "tooluniverse_literature_extractor",
                         status="success",
                         query_identity={
                             "gene": expected_gene,
@@ -743,7 +994,22 @@ def extract_literature_facts(
                             "semantic_status": semantic_status,
                             "requirements_status": requirements_status,
                             "missing_requirements": missing_requirements,
-                            "negation_status": "not_negated",
+                            "negation_status": "negated" if negated else "not_negated",
+                            **(
+                                {
+                                    "extraction_review_only": True,
+                                    "review_reason_codes": [
+                                        *(["negated_observation"] if negated else []),
+                                        *(
+                                            ["minimum_facts_incomplete"]
+                                            if requirements_status != "complete"
+                                            else []
+                                        ),
+                                    ],
+                                }
+                                if negated or requirements_status != "complete"
+                                else {}
+                            ),
                             "extraction_method": "rule_extracted",
                             "extractor": {
                                 "name": EXTRACTOR_ID,
@@ -755,16 +1021,14 @@ def extract_literature_facts(
                             "document_format": document_audit["format"],
                             "document_url": document_audit["url"],
                             "retrieval_trace": document_audit["retrieval_trace"],
+                            "retrieval_sources": document_audit["retrieval_sources"],
+                            "annotation_sources": document_audit["annotation_sources"],
                             "document_truncated": document_audit["truncated"],
                             "truncated_sections": document_audit["truncated_sections"],
                             "reading_manifest": {
                                 "status": reading_status,
                                 "document_hash": document_hash,
-                                "limitations": (
-                                    ["provider response was truncated"]
-                                    if document_audit["truncated"]
-                                    else []
-                                ),
+                                "limitations": manifest_limitations,
                             },
                         },
                         raw_result_hash=document_hash or fact_hash,
@@ -772,10 +1036,7 @@ def extract_literature_facts(
                         request_arguments={"publication_id": publication_id},
                         provenance=tuple([publication_id, *provenance_ids]),
                         excerpt=excerpt,
-                        locator=(
-                            f"{source_status}:char:{absolute_start}-"
-                            f"{absolute_start + len(match.group(0))}"
-                        ),
+                        locator=source_locator,
                         verification_level="deterministic_rule_extraction",
                         identity_status=identity_status,
                         source_status=source_status,
@@ -789,9 +1050,12 @@ def extract_literature_facts(
 
 
 __all__ = [
+    "CANONICAL_DOCUMENT_POLICY_VERSION",
+    "DOCUMENT_RETRIEVAL_POLICY_VERSION",
     "EXTRACTOR_ID",
     "EXTRACTOR_VERSION",
     "MINIMUM_FACT_REQUIREMENTS",
     "TARGET_LINK_POLICY_VERSION",
     "extract_literature_facts",
+    "literature_document_summary",
 ]

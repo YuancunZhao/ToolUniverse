@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .models import is_automatic_evidence, is_verified_evidence
+from .models import (
+    is_automatic_evidence,
+    is_user_selectable_evidence,
+    is_verified_evidence,
+)
 from .rule_catalog import bayesian_odds_for_output, generic_bayesian_odds_for
 from .runtime_manifest import BAYESIAN_PRIOR
 
@@ -33,13 +37,18 @@ def compute_bayesian_score(
     for row in rows:
         if not isinstance(row, dict) or not _selected(row, calculation_role):
             continue
-        eligible = (
-            is_automatic_evidence(row, known_source_fact_ids=known_source_fact_ids)
-            if eligibility == "automatic"
-            else is_verified_evidence(
+        if eligibility == "automatic":
+            eligible = is_automatic_evidence(
+                row, known_source_fact_ids=known_source_fact_ids
+            )
+        elif eligibility == "user_selected":
+            eligible = is_user_selectable_evidence(
+                row, known_source_fact_ids=known_source_fact_ids
+            )
+        else:
+            eligible = is_verified_evidence(
                 row, verified_source_fact_ids=verified_source_fact_ids
             )
-        )
         if not eligible:
             continue
         strength = str(row.get("strength") or "")
@@ -108,6 +117,8 @@ def compute_bayesian_score(
         "estimate_policy": (
             "source_backed_candidates"
             if eligibility == "automatic"
+            else "user_selected_evidence"
+            if eligibility == "user_selected"
             else "verified_rules"
         ),
         "prior_probability": prior,
