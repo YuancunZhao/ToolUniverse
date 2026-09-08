@@ -186,6 +186,37 @@ uv run pytest tests/unit/test_clingen_cspec_tool.py \
   未 stash/reset/clean、未提交；仅按计划第 1 节执行了 `git fetch upstream`
   （远程跟踪引用更新，不影响工作树）。
 
+## 交付后修正（2026-09-09，用户质询触发）
+
+用户问及 PS2/PM6 计数表的来源后，对 SVI_REFERENCE.md 中凭记忆撰写的数值表
+逐张回核原始文件，发现三张与原文不符（方向一致：整体低估一档或沿用旧约定），
+已按原文修正并同步两份发布副本：
+
+| 条目 | 原文实际规则（已核） | 修正前错误 |
+|---|---|---|
+| PS2/PM6 de novo | SVI v1.1（2018-03-18 批准，2021-05-05 修订）：每先证者按"表型特异性 × 亲缘确认"计 2/1/0.5/0.25 点（表型不一致=0，父母未检测=0）；合计 0.5/1/2/4 → Supporting/Moderate/Strong/VeryStrong；AR 无第二击降一级、种系嵌合需确认亲缘、X 连锁携带母亲特例 | 写成"1 个确认→Moderate、2 个→Strong、≥3→VeryStrong、未确认最多 Supporting" |
+| PM3 in trans | SVI PM3 v1.0（Oza et al. 2018 Table 6a）：每先证者按"相位 × 另一变异分级"计 1.0/0.5/0.25/0；合计 0.5/1/2/4 → 同上阶梯；单个完全确认先证者= Moderate | 写成"1 个确认→Supporting、2→Moderate、3–4→Strong、≥5→VeryStrong" |
+| PP1/BS4/PP4 | Biesecker et al. AJHG 2023（PMC10806742）：共分离按个体计点（AD 1.0、AR 患者 2.0/非患者 0.4、XLR 男 1.0），1/2/4/8 → S/M/S/VS；PP4 按诊断产出计点（≥20% 起步 +1.0）；PP1+PP4 合计上限 +5.0；BS4 不分离= −4.0（AD/AR 纯合/X 连锁；AR 复合杂合几乎不计） | PP1 写成旧的"meioses 阶梯"（≥2→Supporting…≥7→VS）；PP4 未接产出点表；BS4 未接 −4.0 规则 |
+
+核验来源（均为原文，非二手摘要）：
+
+- PS2/PM6：官方 PDF 全文提取（clinicalgenome.org docs 页，Version 1.1，含
+  Table 1/Table 2 与全部附加规则）；并用 MYOC GN019 的疾病特化表反验（
+  "1 confirmed JOAG→Moderate"等条目与 SVI 通用表逐条吻合）。
+- PM3：Genome Medicine 2020 SVI 综述（PMC6885382）Table 4A/4C + ClinGen
+  curation SOP 的 0.5/1/2/4 阶梯 + ATM Clin Chem 2021 用例（score 2.0–3.75
+  → Strong）三方一致。
+- PP1/BS4/PP4：AJHG 全文（PMC10806742）Table 2/3/4 原文数值。
+
+同时核实为正确的条目（未改）：PM2_Supporting（SVI PM2 v1.0）、PS3/BS3
+（Brnich et al.，MYOC 规范同引）、PP3/BP4（Pejaver et al. 2022 校准）、
+PVS1 决策树结构、PP5/BP6 停用；并确认 **PS4/PM1/BP5 无 SVI 专项建议**
+（guidance 索引核对），文档中"规范依赖、不造阈值"的写法正确。
+
+教训已吸收：SVI_REFERENCE.md 头部现列出各计数表的原始文件与版本；
+后续任何数值表修改都应先取原文，不以记忆或搜索摘要为准（本次搜索摘要
+曾给出 PM3 2/4/6/8 的错误阶梯，被原文否决）。
+
 ## 提交
 
 实现以 git 提交固化在本分支（见 `git log codex/acmg-svi-cspec-lightweight`）。

@@ -17,6 +17,27 @@ Strong ±4, VeryStrong ±8; thresholds ≥10 P / 6–9 LP / 0–5 VUS / −6..�
 Per-gene specifications carry their own version — record the CSpec id and
 version in `rule_context` and in each `rule_refs` entry.
 
+Primary SVI documents behind the counting tables (all verified against source
+text on 2026-09-09, not from memory):
+
+- PS2/PM6 — SVI "Recommendation for de novo Criteria (PS2 & PM6)" **v1.1**
+  (approved 2018-03-18, updated 2021-05-05): per-proband points 2/1/0.5/0.25
+  by phenotype class × parentage; combined 0.5/1/2/4 → Supporting/Moderate/
+  Strong/VeryStrong.
+- PM3 — SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a): per-proband
+  1.0/0.5/0.25/0 by phase × other-variant class; combined 0.5/1/2/4 →
+  Supporting/Moderate/Strong/VeryStrong.
+- PP1/BS4/PP4 — Biesecker et al., AJHG 2023 (ClinGen PP1/BS4/PP4 guidance,
+  PMC10806742): co-segregation points per individual by inheritance model;
+  PP4 diagnostic-yield points; locus evidence (PP1+PP4) capped at +5.0;
+  BS4 non-segregation = −4.0 (AD / AR-homozygous / X-linked).
+- PVS1 — SVI PVS1 decision tree v1.1; PS3/BS3 — SVI functional specifications
+  (Brnich et al.); PM2 — SVI PM2 v1.0 (Supporting by default); PP3/BP4 —
+  SVI in-silico calibration (Pejaver et al. 2022); PP5/BP6 — retired.
+- **No SVI criteria-specific recommendation exists for PS4, PM1, or BP5**
+  (checked against the guidance index): for those, gene/disease
+  specifications are the only source of thresholds — do not invent them.
+
 ## Status semantics (record precisely)
 
 | Status | Meaning |
@@ -88,19 +109,35 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   reference variant twice within one code.
 - **Source:** ClinGen SVI PS1/PM5 comparison requirements (2020).
 
-### PS2 / PM6 — de novo (Strong by SVI counting)
-- **Facts:** confirmed de novo observation(s) in a proband with a consistent,
-  highly specific phenotype; parentage confirmed by testing (PS2) vs
-  documented-but-unconfirmed (PM6).
-- **SVI counting (de novo specifications, 2020)** — replaces fixed strengths:
-  1 de novo (parentage confirmed, phenotype consistent & specific) →
-  **Moderate**; 2 de novos (≥1 confirmed) → **Strong**; ≥3 → **VeryStrong**.
-  Without confirmed parentage the observation supports at most **Supporting**;
-  inconsistent or non-specific phenotype → do not apply.
-- **Record:** count, confirmation status, phenotype specificity in
-  `evidence_ids`/`rationale`; insufficient family information → `needs_review`
-  with the gap stated (never assume de novo from a single affected child).
-- **Source:** ClinGen SVI PS2/PM6 de novo specifications (2020).
+### PS2 / PM6 — de novo (SVI point system, replaces fixed strengths)
+- **Facts:** every proband with a de novo observation, each with (1) parental
+  relationships confirmed by testing vs assumed, (2) phenotype consistency
+  class, (3) parents tested for the variant — untested parents score 0 points.
+- **SVI v1.1 points per proband (approved 2018-03-18, updated 2021-05-05):**
+
+| Phenotype | Confirmed parentage | Assumed parentage |
+|---|---|---|
+| Highly specific for the gene | 2 | 1 |
+| Consistent, not highly specific | 1 | 0.5 |
+| Consistent, not highly specific + high genetic heterogeneity | 0.5 | 0.25 |
+| Not consistent with the gene | 0 | 0 |
+
+- **Combined points → strength:** 0.5 **Supporting**; 1 **Moderate**; 2
+  **Strong**; 4 **VeryStrong**. These internal de novo points are NOT the
+  Tavtigian 2020 classification points (the source states this explicitly).
+  Example from the recommendation: one confirmed de novo with a highly
+  specific phenotype = 2 points → Strong.
+- **Additional rules:** X-linked — a variant de novo in an unaffected carrier
+  mother with consistent family history still counts; autosomal recessive
+  without a second P/LP variant identified → decrease one level; apparent
+  germline mosaicism requires confirmed parentage; PS2 and PM6 may be
+  recorded under either code (many VCEPs combine them under PS2).
+- **Record:** per-proband count, confirmation status, phenotype class in
+  `rationale`/`evidence_ids`; insufficient family information →
+  `needs_review` with the gap stated (never assume de novo from one affected
+  child).
+- **Source:** ClinGen SVI, "Recommendation for de novo Criteria (PS2 & PM6)"
+  v1.1.
 
 ### PS3 — functional evidence for pathogenicity (Strong default)
 - **Facts:** a functional assay result showing damaging effect; assay
@@ -157,17 +194,24 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   original caveat.
 - **Source:** ClinGen SVI PM2_Supporting recommendation (2020).
 
-### PM3 — in trans with a pathogenic variant, recessive (Moderate default)
-- **Facts:** proband observations with the variant in trans with an
-  established pathogenic allele; phase evidence per observation (confirmed by
-  family/typing vs inferred).
-- **SVI counting (PM3 specifications, 2021):** 1 phase-confirmed observation
-  → **Supporting**; 2 → **Moderate**; 3–4 → **Strong**; ≥5 → **VeryStrong**.
-  Phase-unconfirmed observations carry reduced weight (fractional counting
-  per the specification); consult it rather than guessing.
-- **Insufficient phase evidence** → `needs_review` with the gap; never count
-  an unphased homozygous-compound assumption as confirmed.
-- **Source:** ClinGen SVI PM3 specifications (2021).
+### PM3 — in trans with a pathogenic variant, recessive (SVI point system)
+- **Facts:** proband observations with the variant paired on the other allele;
+  phase evidence per observation (confirmed by family/molecular typing vs
+  inferred vs unknown); classification of the other variant (P vs LP vs VUS).
+- **SVI points per proband (Oza et al. 2018 / SVI PM3 v1.0):**
+  - confirmed in trans with a Pathogenic or Likely pathogenic variant → 1.0
+  - phase unknown: 0.5 if the other variant is Pathogenic, 0.25 if Likely
+    pathogenic
+  - homozygous occurrence → 0.5 (cap 1.0 across homozygous observations)
+  - in trans with a VUS → 0.25 confirmed / 0 unphased (cap 0.5)
+- **Combined points → strength:** 0.5 **Supporting**; 1 **Moderate**; 2
+  **Strong**; 4 **VeryStrong**. One fully confirmed proband is PM3_Moderate
+  (1.0), not Supporting; phase-unconfirmed observations score at their
+  reduced value, and an unphased VUS co-occurrence scores nothing.
+- **Insufficient phase evidence** → `needs_review` with the gap recorded;
+  never assume phase from co-occurrence.
+- **Source:** ClinGen SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a;
+  thresholds 0.5/1/2/4).
 
 ### PM4 — protein-length change in a non-repeat region (Moderate default)
 - **Facts:** variant changes protein length (frameshift in non-repeat,
@@ -187,16 +231,28 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   predicted (not established) pathogenicity never counts.
 - **Source:** ClinGen SVI PS1/PM5 comparison requirements (2020).
 
-### PP1 — co-segregation (Supporting default)
-- **Facts:** informative meioses count (phase + affection status known),
-  phenocopy handling, family structure.
-- **SVI segregation counting (2022):** ≥2 informative meioses →
-  **Supporting**; 3–4 → **Moderate**; 5–6 → **Strong**; ≥7 →
-  **VeryStrong**; LOD-score alternatives per the specification. Phenocopies
-  and reduced penetrance reduce the count.
-- **Insufficient segregation data** → `not_assessed`/`needs_review`, never a
+### PP1 — co-segregation (SVI 2023 point system)
+- **Facts:** inheritance model; each genotyped co-segregating relative with
+  affection status; penetrance assumption; phase (established by the first
+  meiosis — two for autosomal recessive; unaffected parents establish phase
+  and are not themselves counted).
+- **SVI points per co-segregating individual (Biesecker et al. 2023, Table 3):**
+  - autosomal dominant (affected or unaffected): **1.0** each
+  - autosomal recessive, affected: **2.0** each; unaffected: **0.4** each
+    (+0.4 per additional beyond five)
+  - X-linked recessive male (affected or unaffected): **1.0** each; obligate
+    heterozygous females may add
+  - unaffected relatives count only under a full-penetrance assumption
+- **Points → strength:** 1 **Supporting**; 2 **Moderate**; 4 **Strong**; 8
+  **VeryStrong** (the standard Bayesian point ladder; the paper's Table 4
+  gives classical-label equivalents, e.g., ≥5 = Strong + Supporting).
+- **PP1 and PP4 are coupled locus evidence:** their points sum and are capped
+  at **+5.0** per variant; a proband counts for PP4 or PS4, never both; with a
+  single-potent-locus phenotype (diagnostic yield >90%) PP4 applies at the
+  cap and co-segregation adds nothing.
+- Insufficient segregation data → `not_assessed`/`needs_review`, never a
   hand-waved PP1.
-- **Source:** ClinGen SVI segregation analysis recommendations (2022).
+- **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP2 — missense-enrichment gene (Supporting default)
 - **Facts:** missense is the established disease mechanism AND the gene has
@@ -217,13 +273,18 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Exclusions:** synonymous (see BP7), canonical splice (PVS1 path).
 - **Source:** ClinGen SVI in-silico predictor calibration (2022).
 
-### PP4 — phenotype specificity (Supporting default)
-- **Facts:** the proband's phenotype is highly specific for the gene's
-  disease (and inheritance consistent), gene-disease validity established.
-- **Adjustments:** specifications may upgrade with additional family
-  history/segregation; without specificity evidence PP4 is `not_met`.
-- **Exclusions:** non-specific phenotype, phenocopies, competing diagnoses.
-- **Source:** ClinGen SVI PP4 guidance (2021); specifications override.
+### PP4 — phenotype specificity (SVI 2023 point system)
+- **Facts:** the gene's diagnostic yield for the proband's specific phenotype
+  (and exclusion of other candidate loci, which raises the effective yield).
+- **Points follow the diagnostic-yield table (Biesecker et al. 2023, Table 2):**
+  floor **+1.0 at ~20% yield**, rising with yield (≈+6.0 at 90%); round down
+  between rows; yield <20% → PP4 does not apply.
+- **Coupling:** PP4 points sum with PP1 co-segregation points as locus
+  evidence, capped at +5.0 per variant; a proband counts for PP4 or PS4,
+  never both. With yield >90%, PP4 applies at the cap and PP1 adds nothing.
+- **Do not apply** for nonspecific phenotypes (isolated seizures, intellectual
+  disability, arrhythmia and similar).
+- **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP5 — RETIRED, do not apply
 - ClinGen SVI recommended discontinuing PP5/BP6 (2020). Status must be
@@ -273,12 +334,15 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   requires benign AND pathogenic controls; downgrades by validation
   category. One assay produces either PS3 or BS3, never both.
 
-### BS4 — lack of segregation (Strong)
-- **Facts:** affected non-carriers in a family where the disease segregates
-  (informative meioses documented), phenocopy/penetrance assessed.
-- **Caveats:** requires genuinely informative families; misspecified
-  affection status voids it. Insufficient pedigree → `not_assessed`.
-- **Source:** ACMG/AMP 2015; SVI segregation counting applies (2022).
+### BS4 — lack of segregation
+- **Facts:** affected relatives who do NOT carry the variant (genotyped,
+  informative, full-penetrance reasoning); misspecified affection status
+  voids the criterion.
+- **SVI 2023 rule:** non-segregation = **−4.0 points** (Strong benign) for
+  autosomal dominant, autosomal-recessive homozygous, and X-linked contexts;
+  for autosomal-recessive compound heterozygotes non-segregation provides
+  little to no benign evidence.
+- **Source:** Biesecker et al., AJHG 2023 (same point system as PP1/PP4).
 
 ### BP1 — missense in a LoF-only gene (Supporting)
 - Mirror of PP2; mutually exclusive with it. Facts: gene where only
