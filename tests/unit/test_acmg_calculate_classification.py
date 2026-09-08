@@ -559,6 +559,62 @@ def test_released_spec_with_complete_materials_classifies():
 
 
 # --------------------------------------------------------------------------- #
+# SVI combination caps (enforced by the calculator)
+# --------------------------------------------------------------------------- #
+def test_pp1_pp4_locus_cap_pauses_above_five():
+    # Biesecker 2023: PP1 + PP4 locus evidence capped at +5 points.
+    result = run(
+        args(build_evidence(met("PP1", "Strong"), met("PP4", "Moderate")))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    assert "locus_evidence_cap_exceeded" in [
+        r["reason"] for r in data["review_reasons"]
+    ]
+
+
+def test_pp1_pp4_locus_cap_allows_five():
+    result = run(
+        args(build_evidence(met("PP1", "Strong"), met("PP4", "Supporting")))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["total_score"] == 5
+
+
+def test_pp4_alone_above_locus_cap_pauses():
+    # A single locus-evidence code above +5 also breaches the cap.
+    result = run(args(build_evidence(met("PP4", "VeryStrong"))))
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert "locus_evidence_cap_exceeded" in [
+        r["reason"] for r in data["review_reasons"]
+    ]
+
+
+def test_pp3_pm1_combined_cap_pauses_above_strong():
+    # Pejaver 2022: PP3 + PM1 summed strength must not exceed Strong (= 4).
+    result = run(
+        args(build_evidence(met("PP3", "Strong"), met("PM1", "Moderate")))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert "pp3_pm1_strength_cap_exceeded" in [
+        r["reason"] for r in data["review_reasons"]
+    ]
+
+
+def test_pp3_pm1_combined_cap_allows_strong_sum():
+    result = run(
+        args(build_evidence(met("PP3", "Moderate"), met("PM1", "Moderate")))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["total_score"] == 4
+
+
+# --------------------------------------------------------------------------- #
 # Envelope and registration
 # --------------------------------------------------------------------------- #
 def test_envelope_marks_variant_classification_metadata():

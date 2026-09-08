@@ -217,6 +217,37 @@ PVS1 决策树结构、PP5/BP6 停用；并确认 **PS4/PM1/BP5 无 SVI 专项�
 后续任何数值表修改都应先取原文，不以记忆或搜索摘要为准（本次搜索摘要
 曾给出 PM3 2/4/6/8 的错误阶梯，被原文否决）。
 
+## 交付后修正二（2026-09-09，用户指令：所有 SVI 规则对齐 recommendation 原文）
+
+应用户要求，对**全部**有 SVI recommendation 的规则逐一取原文核验并重写
+SVI_REFERENCE.md；同时查出并删除了四个**不存在的"SVI 建议"引用**：
+
+| 条目 | 核验结果与修正 |
+|---|---|
+| PVS1 | 按 Abou Tayoun et al. 2018（PMC6185798）决策树原文重写强度档：VeryStrong（NMD 预测/全基因缺失）；Strong（NMD 逃逸+C 端关键证据 或 去除>10% 蛋白；插入位点未知的重复）；Moderate（NMD 逃逸<10% 蛋白；起始密码子丢失+下游框内起始上游有致病变异）；Supporting（起始密码子丢失+无上游致病变异）；任意强度均不适用（LoF 非机制、外显子在相关可变转录本缺失、外显子富集高频 LoF、±20nt 内有可重建框内剪接的强共有序列）。补 Walker 2023 RNA 规则：RNA 证实剪接异常 → PVS1_Strength(RNA)，**不是 PS3**，并替代预测性 PP3/BP4 |
+| PS3/BS3 | 按 Brnich et al. 2020（PMC6938631）重写：强度**从零起**、按验证升级（≤10 个验证对照 → 最多 Supporting；≥11 个（≤1 个不确定读出）→ Moderate；OddsPath 阶梯 >2.1/>4.3/>18.7/>350；良性 <0.48/<0.23/<0.053 且**封顶 Strong**）；多实验一致取最验证者、冲突时更验证/更贴机制者优先、同级冲突不用；跨实验类别合并无共识。原"默认 Strong"写法有误 |
+| PP3/BP4 | 按 Pejaver et al. 2022（PMC9748256）替换为精确校准区间表（REVEL 0.644–0.773/0.773–0.932/≥0.932；BP4 0.183–0.290/0.016–0.183/0.003–0.016；CADD 25.3–28.1/≥28.1 与 17.3–22.7/0.15–17.3/≤0.15 等）；"单一工具、全基因组、见结果前预指定"；**PP3+PM1 合计强度 ≤ Strong**；REVEL/BayesDel 可与 PM2/BS1 无限组合；SpliceAI 剪接阈值 ≥0.2→PP3 / ≤0.1→BP4 / 0.1–0.2 无证据（Walker 2023）。原"REVEL≥0.7"近似值删除 |
+| BA1 | 按 Ghosh et al. 2018（PMC6188666）+ SVI 例外清单（2018-07，PDF 原文核对）：初始九个豁免变体（HFE C282Y/H63D、GJB2 V37I、MEFV P369S/R408Q、BTD D444H、ACAD9、ACADS、PIBF1）逐名列出；确认存在按既定标准设置**更低**基因阈值与修订申请机制 |
+| PP5/BP6 | 核实原始建议（Biesecker & Harrison, Genet Med 2018, PMC6709533）：**完全停用**（"discontinue the use of criteria PP5 and BP6"），已录入原文引文 |
+| PM2 | 核实 v1.0（2020-09-04 批准，PDF 原文）：降为 Supporting；其配套新组合规则（VeryStrong+Supporting→LP）与 Tavtigian 点制（8+1=9→LP）算术一致，已注明 |
+| PS4/PM1/BP5/PS1/PM5 | **原引用的"SVI 建议"不存在**（guidance 索引核对），全部改为诚实标注"无 SVI 专项建议"：PS4 给出 ClinGen SOP 默认（OR>5.0 且 CI 不含 1）与 PS4-LRCalc（Rowlands 2024, PMC11503184）定量路线；PM1 仅规范定义区域 + Pejaver 组合上限；BP5 回归 2015 原文+规范条件；PS1/PM5 回归 2015 原文+Walker 剪接比较+规范（MYOC 的 PM5_Strong 路径为规范层） |
+
+**计算器硬化**（SVI 组合上限，代码可按代码标识强制）：
+
+- `locus_evidence_cap_exceeded`：PP1+PP4 合计 > +5 分 → needs_review
+  （Biesecker 2023 位点证据上限）
+- `pp3_pm1_strength_cap_exceeded`：PP3+PM1 合计 > 4 分（Strong）→
+  needs_review（Pejaver 2022）
+
+新增 5 项测试（含边界允许值：PP1+PP4=5 可计、PP3+PM1=4 可计），
+`tests/unit/test_acmg_calculate_classification.py` + MCP 集成共 58 项全部
+通过；SKILL.md 常设规则与工具描述同步更新；三处副本已同步。
+
+核验中同时确认（未改动）：PP1/BS4/PP4 与 PS2/PM6、PM3 三张表已在修正一中
+对齐原文；PS4/PM1/BP5/PS1/PM5 索引上确无专项建议。
+
+
+
 ## 提交
 
 实现以 git 提交固化在本分支（见 `git log codex/acmg-svi-cspec-lightweight`）。

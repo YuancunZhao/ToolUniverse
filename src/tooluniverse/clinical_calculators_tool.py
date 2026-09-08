@@ -1182,6 +1182,38 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 },
             }
         )
+    # SVI combination caps the fixed integrator can enforce by code identity.
+    # Biesecker et al. 2023: locus evidence (PP1 + PP4) is capped at +5.0.
+    locus_points = sum(
+        c["points"] for c in contributions if c["criterion"] in ("PP1", "PP4")
+    )
+    if locus_points > 5:
+        review_reasons.append(
+            {
+                "reason": "locus_evidence_cap_exceeded",
+                "detail": (
+                    f"PP1 + PP4 contribute {locus_points} points, but ClinGen "
+                    "SVI caps combined locus evidence at +5 (Biesecker et al. "
+                    "2023); reduce the applied strengths accordingly"
+                ),
+            }
+        )
+    # Pejaver et al. 2022: the summed strength of PP3 and PM1 must not
+    # exceed Strong (= 4 points in the Tavtigian 2020 system).
+    pp3_pm1_points = sum(
+        c["points"] for c in contributions if c["criterion"] in ("PP3", "PM1")
+    )
+    if pp3_pm1_points > 4:
+        review_reasons.append(
+            {
+                "reason": "pp3_pm1_strength_cap_exceeded",
+                "detail": (
+                    f"PP3 + PM1 contribute {pp3_pm1_points} points, but "
+                    "ClinGen SVI caps their summed strength at Strong = 4 "
+                    "points (Pejaver et al. 2022)"
+                ),
+            }
+        )
     if not met_records:
         review_reasons.append(
             {

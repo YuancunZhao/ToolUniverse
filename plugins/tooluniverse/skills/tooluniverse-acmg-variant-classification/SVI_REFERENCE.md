@@ -17,26 +17,42 @@ Strong ±4, VeryStrong ±8; thresholds ≥10 P / 6–9 LP / 0–5 VUS / −6..�
 Per-gene specifications carry their own version — record the CSpec id and
 version in `rule_context` and in each `rule_refs` entry.
 
-Primary SVI documents behind the counting tables (all verified against source
-text on 2026-09-09, not from memory):
+Primary SVI documents behind these rules (every numeric table verified
+against source text on 2026-09-09 — none from memory):
 
-- PS2/PM6 — SVI "Recommendation for de novo Criteria (PS2 & PM6)" **v1.1**
-  (approved 2018-03-18, updated 2021-05-05): per-proband points 2/1/0.5/0.25
-  by phenotype class × parentage; combined 0.5/1/2/4 → Supporting/Moderate/
-  Strong/VeryStrong.
-- PM3 — SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a): per-proband
-  1.0/0.5/0.25/0 by phase × other-variant class; combined 0.5/1/2/4 →
+- **PVS1** — SVI decision tree: Abou Tayoun et al. 2018 (PMC6185798);
+  splicing/RNA extensions Walker et al. 2023 (PMC10357475).
+- **PS2/PM6** — SVI "Recommendation for de novo Criteria (PS2 & PM6)"
+  **v1.1** (approved 2018-03-18, updated 2021-05-05): per-proband points
+  2/1/0.5/0.25 by phenotype class × parentage; combined 0.5/1/2/4 →
   Supporting/Moderate/Strong/VeryStrong.
-- PP1/BS4/PP4 — Biesecker et al., AJHG 2023 (ClinGen PP1/BS4/PP4 guidance,
-  PMC10806742): co-segregation points per individual by inheritance model;
-  PP4 diagnostic-yield points; locus evidence (PP1+PP4) capped at +5.0;
+- **PS3/BS3** — Brnich et al., Genome Medicine 2020 (PMC6938631): strength
+  from zero by validation (≤10 controls → Supporting; ≥11 → Moderate;
+  OddsPath >2.1/>4.3/>18.7/>350 pathogenic ladder; benign capped at
+  Strong).
+- **PM2** — SVI PM2 recommendation **v1.0** (approved 2020-09-04): apply at
+  Supporting (PM2_Supporting).
+- **PM3** — SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a):
+  per-proband 1.0/0.5/0.25/0 by phase × other-variant class; combined
+  0.5/1/2/4 → Supporting/Moderate/Strong/VeryStrong.
+- **PP1/BS4/PP4** — Biesecker et al., AJHG 2023 (PMC10806742): co-segregation
+  points per individual by inheritance model; PP4 diagnostic-yield points;
+  locus evidence (PP1+PP4) capped at +5.0 (enforced by the calculator);
   BS4 non-segregation = −4.0 (AD / AR-homozygous / X-linked).
-- PVS1 — SVI PVS1 decision tree v1.1; PS3/BS3 — SVI functional specifications
-  (Brnich et al.); PM2 — SVI PM2 v1.0 (Supporting by default); PP3/BP4 —
-  SVI in-silico calibration (Pejaver et al. 2022); PP5/BP6 — retired.
-- **No SVI criteria-specific recommendation exists for PS4, PM1, or BP5**
-  (checked against the guidance index): for those, gene/disease
-  specifications are the only source of thresholds — do not invent them.
+- **PP3/BP4** — Pejaver et al., AJHG 2022 (PMC9748256): one pre-specified
+  calibrated tool; exact intervals in the PP3 entry; PP3+PM1 summed
+  strength ≤ Strong (enforced by the calculator); splicing thresholds from
+  Walker et al. 2023 (SpliceAI ≥0.2 / ≤0.1).
+- **PP5/BP6** — Biesecker & Harrison, Genet Med 2018 (PMC6709533):
+  discontinue use entirely.
+- **BA1** — Ghosh et al., Hum Mutat 2018 (PMC6188666) + the SVI BA1
+  exception list (July 2018): >5% stand-alone benign; enumerated exceptions;
+  lower gene-specific thresholds via defined criteria.
+- **No SVI criteria-specific recommendation exists for PS4, PM1, BP5,
+  PS1, or PM5** (checked against the guidance index): for those, use the
+  cited generic routes (PS4: curation SOP OR>5 CI excluding 1 / PS4-LRCalc;
+  PM1: specification-defined regions only) and gene/disease specifications
+  as the only source of thresholds — do not invent them.
 
 ## Status semantics (record precisely)
 
@@ -75,39 +91,56 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   sensitivity / validity curations, gnomAD LOEUF/pLI, literature); (3) the
   clinically relevant transcript(s) (MANE Select/Plus Clinical; VCEP-defined
   isoform) — consequence must be established on the transcript used;
-  (4) NMD expectation (last exon or last ~50 bp of penultimate exon → NMD
-  escape); (5) known rescue/alternative transcripts or exon-skipping that
-  preserves the reading frame.
-- **Apply when** all of: LoF established, variant LoF on the clinical
-  transcript, NMD expected → **PVS1 (VeryStrong)**.
-- **Strength adjustments** (SVI PVS1 decision tree, v1.1 2019/2020 update):
-  NMD escape → **Strong**; exon skipping/in-frame rescue transcript possible
-  or role in minor transcript → **Moderate/Supporting** per the tree;
-  start-loss and splice-region variants follow the tree's dedicated branches.
-- **Exclusions:** LoF not a disease mechanism (dominant-negative genes,
-  haploinsufficiency not established) → `not_applicable` (e.g., MYOC CSpec
-  marks PVS1 not applicable at all strengths); variant in a transcript
-  without clinical relevance → do not apply. **Never assign PVS1 before the
-  LoF mechanism itself is established** — without mechanism evidence the
-  criterion is `not_met`/`needs_review`, not PVS1 at reduced strength.
-- **Double counting:** a frameshift also changing protein length is covered
-  by PVS1 when LoF holds — do not also take PM4 for the same fact.
-- **Source:** ClinGen SVI PVS1 decision tree (2019; 2020 update); gene
-  specifications override.
+  (4) NMD expectation (premature termination codon NOT in the 3'-most exon
+  or the 3'-most 50 bp of the penultimate exon → NMD expected); (5) known
+  rescue/alternative transcripts or exon skipping preserving the reading
+  frame; (6) for NMD-escaping variants: whether the removed C-terminal
+  region is critical (experimental/clinical evidence, pathogenic variants
+  downstream).
+- **Strength assignments (SVI decision tree, Abou Tayoun et al. 2018):**
+  - **VeryStrong** — nonsense/frameshift/canonical-splice frameshift with NMD
+    predicted; whole-gene deletions (given LoF mechanism).
+  - **Strong** — NMD escape WITH evidence the C-terminal region is critical;
+    or NMD escape removing >10% of the protein; duplications with unknown
+    insertion site predicted to cause frameshift/NMD (one step down).
+  - **Moderate** — NMD escape, no domain criticality evidence, <10% of the
+    protein removed; start-codon loss with no alternative transcripts AND
+    pathogenic variant(s) reported 5' of the next downstream in-frame start.
+  - **Supporting** — start-codon loss with no alternative start codons AND
+    no pathogenic variants upstream of the new methionine.
+  - **Not applicable at any strength** — LoF not an established disease
+    mechanism; the exon is missing from an alternate biologically relevant
+    transcript; the exon is enriched for high-frequency LoF variants in the
+    general population; a nearby (±20 nt) strong consensus splice sequence
+    may reconstitute in-frame splicing; whole-gene tandem insertion.
+- **Splicing overlay (Walker et al. 2023):** canonical ±1/2 variants follow
+  the gene-specific tree (some do not alter splicing → PVS1_N/A); RNA assays
+  confirming aberrant splicing give **PVS1 at the strength the tree assigns
+  for the confirmed transcript outcome — not PS3**; RNA-confirmed aberrant
+  splicing replaces predictive PP3/BP4 for that variant.
+- **Exclusions/double counting:** a frameshift also changing protein length
+  is covered by PVS1 when LoF holds — do not also take PM4 for the same
+  fact. **Never assign PVS1 at any strength before the LoF mechanism itself
+  is established.**
+- **Source:** ClinGen SVI PVS1 decision tree (Abou Tayoun et al. 2018,
+  PMC6185798); splicing extensions Walker et al. 2023 (PMC10357475); gene
+  specifications override (e.g., MYOC CSpec marks PVS1 not applicable).
 
 ### PS1 — same amino-acid change as an established pathogenic variant (Strong)
 - **Facts:** reference variant with the same protein change (different
   nucleotide), its pathogenicity established (expert panel / equivalent), same
   transcript and residue, protein-level (not merely predicted) identity.
-- **Adjustments:** downgrades per specification; methionine-residue and
-  start-codon situations follow the SVI PS1/PM5 comparison rules.
-- **Exclusions:** reference variant VUS/LB/B → PS1 does not apply (consider
-  nothing — do not score it); nucleotide-level identity is not required, but
-  protein-level identity is.
+- **Exclusions:** reference variant VUS/LB/B → PS1 does not apply (do not
+  score it); nucleotide-level identity is not required, but protein-level
+  identity is.
 - **Double counting:** PS1 (same AA change) and PM5 (different AA, same
   residue) are different facts and may coexist; do not count the same
   reference variant twice within one code.
-- **Source:** ClinGen SVI PS1/PM5 comparison requirements (2020).
+- **Source:** ACMG/AMP 2015 original wording (no SVI criteria-specific
+  recommendation exists for PS1/PM5 — checked against the guidance index);
+  splicing-related same-change comparisons follow Walker et al. 2023;
+  specifications may define additional combinations (e.g., MYOC defines
+  PM5_Strong paths and PP3 caps).
 
 ### PS2 / PM6 — de novo (SVI point system, replaces fixed strengths)
 - **Facts:** every proband with a de novo observation, each with (1) parental
@@ -139,60 +172,93 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Source:** ClinGen SVI, "Recommendation for de novo Criteria (PS2 & PM6)"
   v1.1.
 
-### PS3 — functional evidence for pathogenicity (Strong default)
-- **Facts:** a functional assay result showing damaging effect; assay
-  validation status against known pathogenic AND benign controls.
-- **Apply when** the assay is validated per the SVI functional framework for
-  this gene (both control classes, adequate replication) → **Strong**.
-  Partially validated (limited controls) → **Moderate/Supporting** by
-  validation category. A single unvalidated biochemical study → at most
-  **Supporting**. No generic upgrade to VeryStrong without a specification.
-- **Exclusions:** assays without benign controls cannot separate
-  hypomorphs from pathogenic effects; epidemiological contradictions take
-  precedence and must be documented, not averaged away.
-- **Double counting:** one assay → one code (PS3 or its contribution to a
-  domain/hotspot claim), never both PS3 and PM1 from the same assay fact.
-- **Source:** ClinGen SVI functional evidence specifications for PS3/BS3
-  (2023); gene specifications list validated assays.
+### PS3 — functional evidence for pathogenicity (validation-driven strength)
+- **Facts:** the assay result; the assay's validation record — positive and
+  negative internal controls, technical/biological replicates, and known
+  pathogenic AND known benign variant controls whose clinical classification
+  was established **independently of functional data** (controls may be
+  assembled across instances of the same assay class; gnomAD variants above
+  BA1/BS1 frequencies can serve as benign controls).
+- **Strength starts at ZERO and escalates only with validation** (SVI
+  functional framework, Brnich et al. 2020):
+  - without both control types and replicates → no evidence (unless
+    thresholds are extremely well understood)
+  - **≤10 total validation controls → at most Supporting**
+  - **≥11 total validation controls (≤1 indeterminate readout) → Moderate**
+  - with formal statistical validation, the **OddsPath** ladder applies:
+    >2.1 Supporting; >4.3 Moderate; >18.7 Strong; **>350 VeryStrong**
+- **BS3 mirror:** OddsPath <0.48 Supporting; <0.23 Moderate; <0.053 Strong;
+  **benign evidence is capped at Strong** (no benign VeryStrong tier).
+- **Multiple/conflicting assays:** consistent results → apply the strength
+  of the most well-validated assay; conflicting → the assay that better
+  matches the disease mechanism and is better validated overrides; at equal
+  validation with conflicting results, use NO functional evidence. Combining
+  evidence across different assay classes has no SVI consensus — the concern
+  is double-counting the same functional fact.
+- **RNA-splicing assays are NOT PS3/BS3** — they feed PVS1/BP7 per the
+  splicing framework (Walker et al. 2023).
+- **Double counting:** one assay → one code, never PS3 and PM1 from the
+  same assay fact; epidemiological contradictions take precedence and must
+  be documented, not averaged away.
+- **Source:** Brnich et al., Genome Medicine 2020 (PMC6938631); gene
+  specifications list pre-validated assays.
 
-### PS4 — case–control enrichment (Strong default)
-- **Facts:** allele frequency in cases vs matched controls with statistical
-  significance and adequate power/effect size; study quality.
-- **Adjustments:** per SVI PS4 (2018) the strength follows the evidence
-  strength of association; very large effect sizes in well-powered studies
-  may support **VeryStrong**, weak/small studies are downgraded — do not fix
-  a threshold without the specification.
+### PS4 — case–control enrichment (no SVI criteria-specific recommendation)
+- **No SVI criteria-specific recommendation exists for PS4** (checked
+  against the ClinGen guidance index). Generic quantitative routes:
+  - ClinGen curation SOP default: prevalence in affected vs controls
+    significantly increased with **odds ratio > 5.0 and a confidence
+    interval excluding 1.0** (adequate power and matching).
+  - **PS4-LRCalc** (Rowlands et al. 2024, JMG, PMC11503184): converts
+    case/control counts into a likelihood ratio → log-LR points mapped onto
+    the standard point ladder (Supporting/Moderate/Strong); supports
+    continuous evidence allocation.
+  - VCEP specifications frequently define proband-count tables (e.g., ≥N
+    probands → Strong) — the specification's numbers replace any default.
+- **Not to be double counted with PP4:** the same proband counts for PP4 or
+  PS4, never both (Biesecker et al. 2023) — reuse the same `evidence_ids`
+  fact so the calculator's duplicate-fact check enforces this.
 - **Exclusions:** population stratification, ascertainment bias; conflicting
-  case-control studies → `needs_review`.
-- **Source:** ClinGen SVI PS4 recommendations (2018).
+  studies → `needs_review`.
+- **Source:** ClinGen variant curation SOP; Rowlands et al. 2024
+  (PMC11503184); specifications override.
 
-### PM1 — hotspot / critical functional domain (Moderate default)
-- **Facts:** variant lies in a VCEP-specified critical region or a
-  well-defined functional domain with significant depletion of benign
+### PM1 — hotspot / critical functional domain (no SVI criteria-specific recommendation)
+- **No SVI criteria-specific recommendation exists for PM1** (checked
+  against the ClinGen guidance index): there is no generic numeric
+  definition of a hotspot or critical region.
+- **Facts:** variant lies in a VCEP-specified critical region, or a
+  well-defined functional domain with quantified depletion of benign
   missense variation (domain architecture from UniProt/InterPro; gnomAD
-  regional constraint).
-- **Apply when** the region is defined by specification or by domain-level
-  benign depletion; somatic hotspot data may support PM1 in cancer-gene
+  regional constraint); somatic hotspot data may support PM1 in cancer-gene
   contexts per the specification.
-- **No generic threshold exists.** Without a specification-defined region or
-  quantified depletion, PM1 is `not_met`, not a weaker PM1.
+- **Apply** only from a specification-defined region or quantified domain
+  depletion. Without either, PM1 is `not_met` — never a hand-scaled PM1.
+- **Combination limit:** PP3 + PM1 summed strength must not exceed Strong
+  (Pejaver et al. 2022); the calculator enforces this.
 - **Double counting:** the same domain fact used with PM1 must not also
-  carry PP2 (missense enrichment) — one fact, one code.
-- **Source:** ClinGen SVI PM1 specifications (2021).
+  carry PP2 — one fact, one code.
+- **Source:** specifications are the threshold source; combination limit
+  from Pejaver et al. 2022 (PMC9748256).
 
-### PM2 — absent / extremely rare (Supporting by SVI default)
+### PM2 — absent / extremely rare (Supporting by SVI decision)
 - **Facts:** gnomAD (and matching ancestry) frequency with callability —
-  coverage at the locus, quality; homozygote/hi-quality counts.
-- **Apply at Supporting by default** (ClinGen SVI 2020): PM2_Supporting.
-  Higher strengths only if a specification states them. Absence must be
-  supported by adequate coverage — absent call ≠ absent allele.
+  coverage at the locus, quality; homozygote counts.
+- **Apply at Supporting (PM2_Supporting) by SVI decision** (v1.0, approved
+  2020-09-04): rarity alone does not meet the Moderate odds of
+  pathogenicity (≈4.3:1) — 54% of high-quality ExAC variants are singletons.
+  Higher strengths only if a specification explicitly states them. Absence
+  must be supported by adequate coverage — absent call ≠ absent allele.
+  The SVI pairs this downgrade with a new combination rule (VeryStrong +
+  Supporting → Likely pathogenic), which the Tavtigian 2020 point system
+  reproduces arithmetically (8 + 1 = 9 → LP).
 - **Disease-aware frequency:** the disease's maximum credible frequency
   (see BS1) governs BA1/BS1/BS2 decisions, not a flat 0.0001; PM2 is about
   absence/rarity, BA1/BS1 about excess.
 - **Exclusions:** BA1 or BS1 met → do not also record PM2 as met (conflict;
-  resolve first). Recessive genes: ultra-low frequency still applies per
+  resolve first). Recessive genes: ultra-low frequency still applies per the
   original caveat.
-- **Source:** ClinGen SVI PM2_Supporting recommendation (2020).
+- **Source:** ClinGen SVI PM2 recommendation v1.0 (2020-09-04).
 
 ### PM3 — in trans with a pathogenic variant, recessive (SVI point system)
 - **Facts:** proband observations with the variant paired on the other allele;
@@ -229,7 +295,9 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   reference variant's classification verified current.
 - **Exclusions:** reference variant VUS or conflicting → do not apply;
   predicted (not established) pathogenicity never counts.
-- **Source:** ClinGen SVI PS1/PM5 comparison requirements (2020).
+- **Source:** ACMG/AMP 2015 (no SVI criteria-specific recommendation exists
+  for PM5 — checked against the guidance index); specifications may define
+  upgraded paths (e.g., MYOC's PM5_Strong combinations with caps).
 
 ### PP1 — co-segregation (SVI 2023 point system)
 - **Facts:** inheritance model; each genotyped co-segregating relative with
@@ -263,15 +331,37 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Source:** ACMG/AMP 2015; gnomAD constraint (Karczewski et al.);
   specification override.
 
-### PP3 — computational evidence for pathogenicity (Supporting)
-- **Apply from a single calibrated predictor meeting its pre-set threshold**
-  (ClinGen SVI in-silico calibration, Pejaver et al. 2022): e.g., REVEL
-  ≥ 0.7 for missense; the calibration table gives predictor-specific cutoffs
-  per variant class.
-- **No majority voting.** Concordance across uncalibrated predictors is not
-  PP3; discordant calibrated predictors → neither PP3 nor BP4.
-- **Exclusions:** synonymous (see BP7), canonical splice (PVS1 path).
-- **Source:** ClinGen SVI in-silico predictor calibration (2022).
+### PP3 — computational evidence for pathogenicity (calibrated thresholds)
+- **Use ONE pre-specified calibrated tool, chosen genome-wide BEFORE seeing
+  the variant's results** (Pejaver et al. 2022; scanning multiple tools for
+  the strongest evidence is explicitly warned against). No majority voting
+  across uncalibrated predictors; discordant calibrated predictors → neither
+  PP3 nor BP4.
+- **Preferred tools (PP3 to Strong / BP4 to Moderate)** — exact calibrated
+  intervals:
+
+| Tool | PP3 Supporting | PP3 Moderate | PP3 Strong | BP4 Supporting | BP4 Moderate |
+|---|---|---|---|---|---|
+| REVEL | 0.644–0.773 | 0.773–0.932 | ≥0.932 | 0.183–0.290 | 0.016–0.183 |
+| BayesDel | 0.13–0.27 | 0.27–0.50 | ≥0.50 | −0.36 to −0.18 | ≤−0.36 |
+| MutPred2 | 0.737–0.829 | 0.829–0.932 | ≥0.932 | 0.197–0.391 | 0.010–0.197 |
+| VEST4 | 0.764–0.861 | 0.861–0.965 | ≥0.965 | 0.302–0.449 | ≤0.302 |
+| CADD | 25.3–28.1 | ≥28.1 | — | 17.3–22.7 | 0.15–17.3 |
+
+  (REVEL and CADD also support stronger benign tiers: REVEL 0.003–0.016 and
+  CADD ≤0.15 = BP4 Strong.)
+- **Combination limits:** the summed strength of **PP3 + PM1 must not
+  exceed Strong**; tools without an allele-frequency component (REVEL,
+  BayesDel) may combine with PM2/BS1 without limits. A tool whose maximum
+  calibrated tier is Moderate can never contribute above Moderate.
+- **Splice prediction (non-canonical variants, Walker et al. 2023):**
+  SpliceAI Δ ≥0.2 → PP3 (calibrated Moderate, conservatively applied at
+  Supporting); Δ ≤0.1 → BP4 (same conservative Supporting); 0.1–0.2 →
+  uninformative, no code.
+- **Exclusions:** synonymous variants (BP7 path), canonical splice (PVS1
+  path); RNA-confirmed splice outcomes replace predictive PP3/BP4.
+- **Source:** Pejaver et al., AJHG 2022 (PMC9748256); Walker et al. 2023
+  (PMC10357475).
 
 ### PP4 — phenotype specificity (SVI 2023 point system)
 - **Facts:** the gene's diagnostic yield for the proband's specific phenotype
@@ -287,10 +377,14 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP5 — RETIRED, do not apply
-- ClinGen SVI recommended discontinuing PP5/BP6 (2020). Status must be
-  `deprecated` in the 28-record review; a ClinVar/lab "Pathogenic" label is
-  an external conclusion — attribute it separately in the report, it never
-  scores. **A ClinVar label alone must not produce PP5/BP6.**
+- The SVI recommendation is unambiguous: "laboratories [should] discontinue
+  the use of criteria PP5 and BP6 as soon as that is practically
+  achievable" (Biesecker & Harrison, Genet Med 2018 — rationale: assertions
+  without primary evidence, ClinVar now exposes the underlying data, and
+  reuse of the same data double-counts with codes like PS3/BS3). Status must
+  be `deprecated` in the 28-record review; a ClinVar/lab "Pathogenic" label
+  is an external conclusion — attribute it separately, it never scores.
+  **A ClinVar label alone must not produce PP5/BP6.**
 
 ---
 
@@ -298,15 +392,19 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 
 ### BA1 — allele frequency > 5% (StandAlone)
 - **Facts:** allele frequency above 5% in a large general-population dataset
-  (gnomAD, ancestry-specific maximum), data quality at the locus.
+  (ExAC/gnomAD recommended by SVI; check the ancestry-specific maximum),
+  data quality at the locus.
 - **Apply:** stand-alone **Benign** — the calculator runs BA1 on its own path
   (total score null); BA1 met together with any pathogenic `met` pauses
   classification for conflict resolution.
-- **Exceptions:** the ClinGen SVI curates a BA1 exception list (disease/
-  variant contexts where >5% does not stand alone) and specifications may
-  define their own — consult the current list before applying; exceptions
-  are enumerated there, not invented here.
-- **Source:** ACMG/AMP 2015; ClinGen SVI BA1 exceptions list (2023 revision).
+- **Exceptions (Ghosh et al. 2018 + the SVI exception list, July 2018):** an
+  enumerated, SVI-curated list of specific high-frequency variants that are
+  exempt from BA1 (initial list: nine variants, e.g., HFE C282Y/H63D, GJB2
+  V37I, MEFV P369S/R408Q, BTD D444H) — consult the current list; petitions
+  can amend it; and SVI defines criteria for setting a numerically LOWER
+  gene-specific BA1 threshold. Exceptions are enumerated, not invented.
+- **Source:** Ghosh et al., Hum Mutat 2018 (PMC6188666); SVI BA1 exception
+  list (July 2018).
 
 ### BS1 — frequency above the disease's maximum credible frequency (Strong)
 - **Facts:** disease prevalence, inheritance model, penetrance, allelic/
@@ -329,10 +427,14 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   otherwise record `needs_review`.
 - **Source:** ACMG/AMP 2015; specification-defined criteria where present.
 
-### BS3 — functional evidence against pathogenicity (Strong default)
-- Same validation framework as PS3 (SVI functional specifications, 2023):
-  requires benign AND pathogenic controls; downgrades by validation
-  category. One assay produces either PS3 or BS3, never both.
+### BS3 — functional evidence against pathogenicity
+Same SVI validation framework as PS3 (Brnich et al. 2020): strength starts
+at zero and escalates with validation (≤10 controls → Supporting max;
+≥11 → Moderate; formal OddsPath analysis gives the full ladder). The benign
+OddsPath ladder: <0.48 Supporting; <0.23 Moderate; <0.053 Strong —
+**benign functional evidence is capped at Strong** (no VeryStrong tier).
+One assay produces either PS3 or BS3, never both; RNA-splicing assays feed
+BP7/PVS1 instead.
 
 ### BS4 — lack of segregation
 - **Facts:** affected relatives who do NOT carry the variant (genotyped,
@@ -357,23 +459,34 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - Mirror of PM4; repeat region per UniProt/InterPro. If the gene mechanism
   makes indels pathogenic (specification), BP3 may be `not_applicable`.
 
-### BP5 — alternate molecular diagnosis in the proband (Supporting)
-- Apply only when the alternative diagnosis is molecularly confirmed;
-  an unconfirmed alternative diagnosis does not support BP5. Use with
-  caution in genes with variable expressivity.
-- **Source:** ClinGen SVI BP5 caution (2018 statement).
+### BP5 — alternate molecular diagnosis in the proband
+- **No SVI criteria-specific recommendation exists for BP5** (checked
+  against the guidance index). Apply only when the alternative diagnosis is
+  molecularly confirmed; an unconfirmed alternative diagnosis does not
+  support BP5. Use with caution in genes with variable expressivity —
+  specifications define their own conditions where present.
+- **Source:** ACMG/AMP 2015 original; specifications override.
 
 ### BP6 — RETIRED, do not apply
 - See PP5. ClinVar "Benign" consensus labels are attributed externally,
   never scored.
 
-### BP7 — synonymous with no splice impact (Supporting)
-- **Facts:** synonymous variant AND no predicted splice effect from a
-  calibrated predictor (SpliceAI < 0.1 is the common default;
-  specifications may set their own).
+### BP7 — synonymous/intronic with no splice impact
+- **Predictive route (Walker et al. 2023):** BP7 applies when SpliceAI Δ
+  **≤ 0.1** (BP4 conditions met) AND:
+  - synonymous variants: NOT at the first base or the last 3 bases of the
+    exon;
+  - intronic variants: at or beyond positions **+7/−21** of the donor/
+    acceptor regions.
+  Conservation filters are discouraged without empirical justification.
+  SpliceAI 0.1–0.2 is uninformative — no code either way.
+- **RNA route:** RNA assays from non-tumor patient tissue confirming no
+  splicing impact → **BP7_Strong (RNA)**, applicable irrespective of
+  position for intronic variants.
 - **Exclusions:** borderline predictor output → `needs_review`; variants
-  near exon boundaries or in genes with known cryptic-splice mechanism
+  near exon boundaries or in genes with known cryptic-splice mechanisms
   follow the specification.
+- **Source:** Walker et al. 2023 (PMC10357475).
 
 ---
 
