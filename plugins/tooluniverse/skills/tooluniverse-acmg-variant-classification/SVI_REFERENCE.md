@@ -205,16 +205,23 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 
 ### PS4 — case–control enrichment (no SVI criteria-specific recommendation)
 - **No SVI criteria-specific recommendation exists for PS4** (checked
-  against the ClinGen guidance index). Generic quantitative routes:
-  - ClinGen curation SOP default: prevalence in affected vs controls
+  against the ClinGen guidance index). Two quantitative routes:
+  - **ClinGen curation SOP default:** prevalence in affected vs controls
     significantly increased with **odds ratio > 5.0 and a confidence
     interval excluding 1.0** (adequate power and matching).
-  - **PS4-LRCalc** (Rowlands et al. 2024, JMG, PMC11503184): converts
-    case/control counts into a likelihood ratio → log-LR points mapped onto
-    the standard point ladder (Supporting/Moderate/Strong); supports
-    continuous evidence allocation.
-  - VCEP specifications frequently define proband-count tables (e.g., ≥N
-    probands → Strong) — the specification's numbers replace any default.
+  - **PS4-LRCalc** (Rowlands et al. 2024, JMG, PMC11503184): case/control
+    counts → likelihood ratio (association hypothesis, e.g. OR ≥ target,
+    vs non-association, OR ≤ 1) → **exponent points on the base-2.08 log
+    ladder — identical to the Tavtigian 2020 point values** (LR ≥2.08 → 1;
+    ≥4.33 → 2; ≥18.72 → 4; ≥350.4 → 8; benign mirrors ≤0.48/0.23/0.053/
+    0.00285 → −1/−2/−4/−8). Configured for **autosomal dominant
+    heterozygous** variants; **a single case observation (n=1) may not
+    drive PS4**; use the CI-conservative options (lower 70–95% CI for the
+    association target, upper CI for the null) when data are thin; EPs from
+    independently ascertained series sum. The 2015 framework capped PS4 at
+    Strong; LRCalc permits stronger allocation where the data support it.
+  - VCEP specifications frequently define proband-count tables — the
+    specification's numbers replace any default.
 - **Not to be double counted with PP4:** the same proband counts for PP4 or
   PS4, never both (Biesecker et al. 2023) — reuse the same `evidence_ids`
   fact so the calculator's duplicate-fact check enforces this.
@@ -263,21 +270,28 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 ### PM3 — in trans with a pathogenic variant, recessive (SVI point system)
 - **Facts:** proband observations with the variant paired on the other allele;
   phase evidence per observation (confirmed by family/molecular typing vs
-  inferred vs unknown); classification of the other variant (P vs LP vs VUS).
-- **SVI points per proband (Oza et al. 2018 / SVI PM3 v1.0):**
-  - confirmed in trans with a Pathogenic or Likely pathogenic variant → 1.0
-  - phase unknown: 0.5 if the other variant is Pathogenic, 0.25 if Likely
-    pathogenic
+  unknown); classification of the other variant (P/LP vs VUS); homozygous
+  occurrences and consanguinity.
+- **Points per proband (Oza et al. 2018, Table 6a — the table the SVI
+  recommendation formalized):**
+  - in trans with a Pathogenic/Likely pathogenic variant → 1.0 confirmed;
+    0.5 phase unknown
   - homozygous occurrence → 0.5 (cap 1.0 across homozygous observations)
-  - in trans with a VUS → 0.25 confirmed / 0 unphased (cap 0.5)
-- **Combined points → strength:** 0.5 **Supporting**; 1 **Moderate**; 2
-  **Strong**; 4 **VeryStrong**. One fully confirmed proband is PM3_Moderate
-  (1.0), not Supporting; phase-unconfirmed observations score at their
-  reduced value, and an unphased VUS co-occurrence scores nothing.
+  - VUS on the other allele, or homozygous occurrence due to consanguinity
+    → 0.25 (cap 0.5)
+- **Combined points → strength (Table 6b):** 0.5 **Supporting**; 1
+  **Moderate**; 2 **Strong**; 4 **VeryStrong**. One fully confirmed proband
+  with a P/LP partner is PM3_Moderate (1.0), not Supporting; an unphased
+  VUS co-occurrence scores nothing.
+- **Open question (source discrepancy):** one secondary summary (Genome
+  Medicine 2020, Table 4C) reports phase-unknown split as 0.5 (Pathogenic)
+  vs 0.25 (Likely pathogenic); the primary Table 6a gives 0.5 for P/LP
+  jointly. Pending verification against the SVI PM3 v1.0 document, apply
+  Table 6a (0.5 for P/LP phase unknown) and cite the table used.
 - **Insufficient phase evidence** → `needs_review` with the gap recorded;
   never assume phase from co-occurrence.
-- **Source:** ClinGen SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a;
-  thresholds 0.5/1/2/4).
+- **Source:** Oza et al., Hum Mutat 2018, Table 6a/6b (PMC6188673); SVI PM3
+  recommendation v1.0; Genome Medicine 2020 overview (PMC6885382).
 
 ### PM4 — protein-length change in a non-repeat region (Moderate default)
 - **Facts:** variant changes protein length (frameshift in non-repeat,
@@ -391,18 +405,27 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 ## Benign criteria
 
 ### BA1 — allele frequency > 5% (StandAlone)
-- **Facts:** allele frequency above 5% in a large general-population dataset
-  (ExAC/gnomAD recommended by SVI; check the ancestry-specific maximum),
-  data quality at the locus.
-- **Apply:** stand-alone **Benign** — the calculator runs BA1 on its own path
-  (total score null); BA1 met together with any pathogenic `met` pauses
-  classification for conflict resolution.
-- **Exceptions (Ghosh et al. 2018 + the SVI exception list, July 2018):** an
-  enumerated, SVI-curated list of specific high-frequency variants that are
-  exempt from BA1 (initial list: nine variants, e.g., HFE C282Y/H63D, GJB2
-  V37I, MEFV P369S/R408Q, BTD D444H) — consult the current list; petitions
-  can amend it; and SVI defines criteria for setting a numerically LOWER
-  gene-specific BA1 threshold. Exceptions are enumerated, not invented.
+- **Refined SVI wording (Ghosh et al. 2018):** "Allele frequency is >0.05 in
+  any general continental population dataset of at least 2,000 observed
+  alleles and found in a gene without a gene- or variant-specific BA1
+  modification." Recommended ExAC/gnomAD continental subsets exclude
+  Finnish European (founder population); no need to match the case's
+  geographic origin to the dataset; datasets must be primarily unrelated
+  individuals; caution for bottlenecked populations.
+- **Apply:** stand-alone **Benign** — the calculator runs BA1 on its own
+  path (total score null); BA1 met together with any pathogenic `met`
+  pauses classification for conflict resolution.
+- **Exception list (SVI-curated, interim):** nine initial exempted variants
+  (Ghosh 2018 + July 2018 list): HFE C282Y / H63D (common low-penetrance —
+  ACMG criteria not designed for this class), GJB2 V37I, MEFV P369S /
+  R408Q, BTD D444H and ACADS R171W (Finnish-only >5%), ACAD9 c.-44_-41dup,
+  PIBF1 R405G. Petition form on the ClinGen SVI site amends the list; labs
+  may keep in-house lists — consult the current version.
+- **Lower gene-specific thresholds:** expert groups may set a numerically
+  lower BA1 threshold based on known prevalence, penetrance, and genetic
+  heterogeneity — validated against known pathogenic variation,
+  conservative, a valid exclusion for the most common associated disorder,
+  and not below where BS1 would apply.
 - **Source:** Ghosh et al., Hum Mutat 2018 (PMC6188666); SVI BA1 exception
   list (July 2018).
 

@@ -252,3 +252,27 @@ SVI_REFERENCE.md；同时查出并删除了四个**不存在的"SVI 建议"引�
 
 实现以 git 提交固化在本分支（见 `git log codex/acmg-svi-cspec-lightweight`）。
 未推送远端；未改任何发布版本或远程 pin。
+
+## 交付后修正三（2026-09-09，补齐一手来源）
+
+在用户提供 PDF 前的自查补漏，新核验/充实：
+
+- **BA1**：补 Ghosh 2018 全文操作细节（精确定义 "any general continental
+  population dataset of at least 2,000 observed alleles…"；ExAC 大陆亚群
+  不含芬兰；无需地理匹配；更低基因阈值的四条既定标准；修订申请机制；
+  九个豁免变体全表含 MAF）。
+- **PS4**：补 PS4-LRCalc 全文（Rowlands 2024, PMC11503184）：LR→以 2.08 为
+  底的对数点（与 Tavtigian 点值恒等：2.08/4.33/18.72/350.4 ↔ 1/2/4/8）；
+  仅配置 AD 杂合；n=1 病例禁用；CI 保守选项；独立系列点数可加。SOP 的
+  OR>5.0/CI 不含 1 规则由 49 页 curation SOP PDF 原文核验。
+- **PM3**：Table 6a/6b 由 Oza et al. 2018（PMC6188673）原文核验（P/LP
+  确认 1.0 / 相位未知 0.5；纯合 0.5 上限 1.0；VUS/近亲纯合 0.25 上限 0.5；
+  阈值 0.5/1/2/4）。**发现一处来源分歧**：Genome Medicine 2020 Table 4C
+  称相位未知区分 P(0.5)/LP(0.25)，Table 6a 为 P/LP 统一 0.5——暂按
+  Table 6a 执行并在条目中标注，待 SVI PM3 v1.0 原始 PDF 裁决。
+- **PVS1**：决策树 PPTX（clinicalgenome 可编辑版）下载解析，树结构与重写
+  条目逐档吻合（NMD→PVS1；逃逸+关键区/>10%→Strong；<10%+功能未知→
+  Moderate；外显子缺失于相关转录本/人群高频 LoF→N/A）。
+
+仍缺的一手文档（已请用户提供）：SVI PM3 v1.0 原始 PDF（裁决上述分歧）、
+BA1 例外清单 2018-07 之后的最新版、（次要）Pejaver 2022 补充阈值表边界值。
