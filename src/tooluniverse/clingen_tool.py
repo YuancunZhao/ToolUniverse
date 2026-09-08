@@ -27,6 +27,8 @@ ACTIONABILITY_PEDIATRIC_URL = (
     "https://actionability.clinicalgenome.org/ac/Pediatric/api"
 )
 EREPO_BASE_URL = "https://erepo.clinicalgenome.org/evrepo/api"
+CSPEC_API_BASE_URL = "https://cspec.genome.network/cspec/api"
+CSPEC_UI_DOC_URL = "https://cspec.genome.network/cspec/ui/svi/doc"
 
 # Confirmed live against the Evidence Repository's `classifications` endpoint:
 #   * `gene`, `caid`, `hgvs` and `variationId` are real server-side filters
@@ -151,6 +153,7 @@ class ClinGenTool(BaseTool):
             "get_actionability_pediatric": self._get_actionability_pediatric,
             "search_actionability": self._search_actionability,
             "get_variant_classifications": self._get_variant_classifications,
+            "search_cspec": self._search_cspec,
         }
 
         handler = operation_map.get(operation)
@@ -660,6 +663,320 @@ class ClinGenTool(BaseTool):
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    # ------------------------------------------------------------------ #
+    # CSpec (Sequence Variant Interpretation) specifications
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _released_cspec(record: Dict[str, Any]) -> bool:
+        return str(record.get("status") or "").strip().casefold() == "released"
+
+    @staticmethod
+    def _cspec_id(iri: Any) -> str:
+        """Last path segment of a CSpec @id IRI, e.g. '.../id/GN019' -> 'GN019'."""
+        return str(iri or "").rstrip("/").rsplit("/", 1)[-1]
+
+    @staticmethod
+    def _cspec_organization(record: Dict[str, Any]) -> str:
+        affiliation = record.get("affiliation")
+        if isinstance(affiliation, dict) and affiliation.get("label"):
+            return str(affiliation["label"])
+        return ""
+
+    @staticmethod
+    def _cspec_diseases(gene_entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Normalize one gene entry's diseases to name / MONDO id / inheritance."""
+        diseases: List[Dict[str, Any]] = []
+        for disease in gene_entry.get("diseases") or []:
+            if not isinstance(disease, dict):
+                continue
+            inheritance = [
+                str(item.get("@label") or "")
+                for item in disease.get("modeOfInheritance") or []
+                if isinstance(item, dict)
+            ]
+            label = str(disease.get("label") or "")
+            diseases.append(
+                {
+                    "name": label,
+                    "mondo_id": label,
+                    "inheritance": inheritance,
+                }
+            )
+        return diseases
+
+    def _cspec_matching_rule_sets(
+        self, record: Dict[str, Any], gene: str
+    ) -> List[Dict[str, Any]]:
+        """Rule sets of `record` that cover `gene`, keeping gene-disease binding.
+
+        A specification's rule sets bind genes to diseases and (in the detail
+        document) to their own criterion specifications. Returning one item
+        per matching rule set -- rather than one flat gene list -- keeps that
+        binding explicit so downstream consumers cannot mix rules across
+        rule sets.
+        """
+        matches: List[Dict[str, Any]] = []
+        for rule_set in record.get("ruleSets") or []:
+            if not isinstance(rule_set, dict):
+                continue
+            genes = []
+            for gene_entry in rule_set.get("genes") or []:
+                if not isinstance(gene_entry, dict):
+                    continue
+                if str(gene_entry.get("label") or "").strip().upper() != gene:
+                    continue
+                genes.append(
+                    {
+                        "symbol": str(gene_entry.get("label") or ""),
+                        "diseases": self._cspec_diseases(gene_entry),
+                    }
+                )
+            if genes:
+                matches.append(
+                    {
+                        "rule_set_id": self._cspec_id(rule_set.get("@id")),
+                        "genes": genes,
+                    }
+                )
+        return matches
+
+    @staticmethod
+    def _cspec_version(content: Dict[str, Any]) -> str:
+        version = str(content.get("version") or "").strip()
+        if version:
+            return version
+        match = re.search(
+            r"\bversion\s+([0-9]+(?:\.[0-9]+){1,2})\b",
+            str(content.get("label") or content.get("title") or ""),
+            re.IGNORECASE,
+        )
+        return match.group(1) if match else ""
+
+    def _cspec_criteria_for_rule_sets(
+        self, detail: Dict[str, Any], rule_set_ids: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Criterion specifications from `detail`, bound to their rule set id.
+
+        Mirrors the API shape confirmed live: each rule set carries its own
+        `criteriaCodes`, and each code lists per-strength `applicability`
+        plus a VCEP-specific `description` when the strength is specified.
+        """
+        normalized: List[Dict[str, Any]] = []
+        for rule_set in detail.get("ruleSets") or []:
+            if not isinstance(rule_set, dict):
+                continue
+            rule_set_id = self._cspec_id(rule_set.get("@id"))
+            if rule_set_ids and rule_set_id not in rule_set_ids:
+                continue
+            for item in rule_set.get("criteriaCodes") or []:
+                if not isinstance(item, dict):
+                    continue
+                strengths = []
+                for descriptor in item.get("evidenceStrengths") or []:
+                    if not isinstance(descriptor, dict):
+                        continue
+                    strengths.append(
+                        {
+                            "strength": descriptor.get("label"),
+                            "applicability": descriptor.get("applicability"),
+                            "specification_type": descriptor.get(
+                                "specificationType"
+                            ),
+                            "instructions": descriptor.get("instructionsToUse"),
+                            "text": descriptor.get("description"),
+                        }
+                    )
+                normalized.append(
+                    {
+                        "rule_set_id": rule_set_id,
+                        "criterion": item.get("label"),
+                        "applicability": item.get("applicability"),
+                        "instructions": item.get("description"),
+                        "strengths": strengths,
+                        "criterion_id": item.get("@id"),
+                    }
+                )
+        return normalized
+
+    def _search_cspec(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Find current Released ClinGen CSpec specifications for a gene.
+
+        Two-step lookup against the CSpec registry (shapes confirmed live
+        2026-09-09): the ``svis`` index lists every SequenceVariantInterpretation
+        document with status/affiliation/rule sets/version, and each document's
+        detail endpoint adds the per-criterion strength specifications and the
+        assertion method reference.
+
+        Outcome discipline:
+          * index lookup fails -> ``status: error``; an error is never a
+            statement that the gene has no specification;
+          * no Released specification covers the gene -> ``status: success``
+            with empty ``data`` and a note directing generic ACMG/SVI rules;
+          * a detail fetch fails for one specification -> the entry is kept,
+            marked ``detail_fetch_failed`` with the failure repeated in
+            ``partial_failures``, and its ``missing_materials`` names what
+            could not be retrieved.
+
+        The API JSON is a structured summary, not the full specification
+        prose: every success carries a note directing the caller to read the
+        official page (``url``, via ``get_webpage_text_from_url``) before
+        using a specification for classification.
+        """
+        gene = str(arguments.get("gene") or "").strip().upper()
+        if not gene:
+            return {
+                "status": "error",
+                "error": "Missing required parameter: gene",
+            }
+        index_url = f"{CSPEC_API_BASE_URL}/svis"
+        try:
+            response = requests.get(index_url, timeout=self.timeout)
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or not isinstance(
+                payload.get("data"), list
+            ):
+                return {
+                    "status": "error",
+                    "error": (
+                        "Unexpected CSpec index response shape (expected an "
+                        "object with a 'data' list); this is a lookup "
+                        "failure, not a statement that no specification "
+                        f"exists for {gene}."
+                    ),
+                }
+
+            matches: List[Dict[str, Any]] = []
+            partial_failures: Dict[str, str] = {}
+            for record in payload["data"]:
+                if not isinstance(record, dict) or not self._released_cspec(record):
+                    continue
+                rule_sets = self._cspec_matching_rule_sets(record, gene)
+                if not rule_sets:
+                    continue
+                specification_id = self._cspec_id(record.get("@id"))
+                if not specification_id:
+                    continue
+                detail_url = (
+                    f"{CSPEC_API_BASE_URL}/SequenceVariantInterpretation/id/"
+                    f"{specification_id}"
+                )
+                entry: Dict[str, Any] = {
+                    "specification_id": specification_id,
+                    "gene": gene,
+                    "vcep": self._cspec_organization(record),
+                    "version": self._cspec_version(record),
+                    "status": "Released",
+                    "url": str(
+                        record.get("url")
+                        or f"{CSPEC_UI_DOC_URL}/{specification_id}"
+                    ),
+                    "api_url": detail_url,
+                    "rule_sets": rule_sets,
+                    "diseases": [
+                        disease
+                        for rule_set in rule_sets
+                        for gene_entry in rule_set["genes"]
+                        for disease in gene_entry["diseases"]
+                    ],
+                    "missing_materials": [],
+                }
+                try:
+                    detail_response = requests.get(
+                        detail_url, timeout=self.timeout
+                    )
+                    detail_response.raise_for_status()
+                    detail = detail_response.json()
+                    detail = detail if isinstance(detail, dict) else {}
+                    entry["version"] = (
+                        entry["version"] or self._cspec_version(detail)
+                    )
+                    entry["last_updated"] = detail.get("lastUpdated")
+                    assertion_method = detail.get("assertionMethod")
+                    entry["assertion_method_url"] = (
+                        str(assertion_method.get("url") or "")
+                        if isinstance(assertion_method, dict)
+                        else None
+                    )
+                    rule_set_ids = [rs["rule_set_id"] for rs in rule_sets]
+                    entry["criterion_modifications"] = (
+                        self._cspec_criteria_for_rule_sets(detail, rule_set_ids)
+                    )
+                    entry["specification"] = detail
+                    if not entry["assertion_method_url"]:
+                        entry["missing_materials"].append("assertion_method")
+                    if not entry["criterion_modifications"]:
+                        entry["missing_materials"].append(
+                            "criterion_specifications"
+                        )
+                except Exception as exc:  # noqa: BLE001 - one bad detail must not sink the search
+                    partial_failures[specification_id] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    entry["detail_fetch_failed"] = True
+                    entry["missing_materials"].append(
+                        "full_specification (detail fetch failed; retry or "
+                        "read the official page directly)"
+                    )
+                matches.append(entry)
+
+            result: Dict[str, Any] = {
+                "status": "success",
+                "gene": gene,
+                "data": matches,
+                "total": len(matches),
+                "provider": "ClinGen CSpec Registry",
+                "request_url": response.url,
+                "note": (
+                    "The API JSON is a structured summary, not the full "
+                    "specification prose. Before classifying under a "
+                    "returned specification, read its official page (the "
+                    "`url` field) with get_webpage_text_from_url, including "
+                    "any attachments and the assertion method it references."
+                ),
+            }
+            if not matches:
+                result["note"] = (
+                    f"No Released ClinGen CSpec specification covers gene "
+                    f"{gene} in the CSpec registry. That is a valid empty "
+                    "result, not a lookup failure: classify under the "
+                    "generic ACMG/AMP 2015 + ClinGen SVI rules. Do not infer "
+                    "from this that VCEP guidance cannot exist elsewhere."
+                )
+            if partial_failures:
+                result["partial_failures"] = partial_failures
+            return result
+        except requests.exceptions.Timeout:
+            return {"status": "error", "error": f"Timeout after {self.timeout}s"}
+        except requests.exceptions.HTTPError as e:
+            return {
+                "status": "error",
+                "error": (
+                    f"CSpec index request failed (HTTP "
+                    f"{e.response.status_code if e.response is not None else '?'}): "
+                    "this is a lookup failure, not a statement that no "
+                    f"specification exists for {gene}."
+                ),
+            }
+        except requests.RequestException as exc:
+            return {
+                "status": "error",
+                "error": (
+                    f"ClinGen CSpec request failed: {exc}. This is a lookup "
+                    f"failure, not a statement that no specification exists "
+                    f"for {gene}."
+                ),
+            }
+        except ValueError as exc:
+            return {
+                "status": "error",
+                "error": (
+                    f"CSpec index response was not valid JSON: {exc}. This "
+                    "is a lookup failure, not a statement that no "
+                    f"specification exists for {gene}."
+                ),
+            }
 
     def _parse_csv(self, csv_text: str) -> List[Dict[str, Any]]:
         """Parse CSV text into list of dictionaries.

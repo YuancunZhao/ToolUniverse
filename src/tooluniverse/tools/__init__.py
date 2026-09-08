@@ -1,7 +1,7 @@
 """
 ToolUniverse Tools
 
-Type-safe Python interface to 2736 scientific tools.
+Type-safe Python interface to 2738 scientific tools.
 Each tool is in its own module for minimal import overhead.
 
 Usage:
@@ -26,6 +26,7 @@ from ._shared_client import get_shared_client, reset_shared_client
 
 # Import all tools
 from .ACC_list_guidelines import ACC_list_guidelines
+from .ACMG_calculate_classification import ACMG_calculate_classification
 from .ADA_get_standards_section import ADA_get_standards_section
 from .ADA_list_standards_sections import ADA_list_standards_sections
 from .ADA_search_standards import ADA_search_standards
@@ -310,6 +311,7 @@ from .ClinGen_get_dosage_sensitivity import ClinGen_get_dosage_sensitivity
 from .ClinGen_get_gene_validity import ClinGen_get_gene_validity
 from .ClinGen_get_variant_classifications import ClinGen_get_variant_classifications
 from .ClinGen_search_actionability import ClinGen_search_actionability
+from .ClinGen_search_cspec import ClinGen_search_cspec
 from .ClinGen_search_dosage_sensitivity import ClinGen_search_dosage_sensitivity
 from .ClinGen_search_gene_validity import ClinGen_search_gene_validity
 from .ClinVar_get_clinical_significance import ClinVar_get_clinical_significance
@@ -3299,6 +3301,7 @@ __all__ = [
     "get_shared_client",
     "reset_shared_client",
     "ACC_list_guidelines",
+    "ACMG_calculate_classification",
     "ADA_get_standards_section",
     "ADA_list_standards_sections",
     "ADA_search_standards",
@@ -3567,6 +3570,7 @@ __all__ = [
     "ClinGen_get_gene_validity",
     "ClinGen_get_variant_classifications",
     "ClinGen_search_actionability",
+    "ClinGen_search_cspec",
     "ClinGen_search_dosage_sensitivity",
     "ClinGen_search_gene_validity",
     "ClinVar_get_clinical_significance",

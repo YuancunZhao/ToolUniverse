@@ -12,7 +12,7 @@ clinical judgement.
 """
 
 import math
-from typing import Dict, Any, Callable, Optional
+from typing import Dict, Any, Callable, List, Optional
 
 from .base_tool import BaseTool
 from .tool_registry import register_tool
@@ -780,6 +780,451 @@ def _ascvd(a: Dict[str, Any]) -> Dict[str, Any]:
     return _ok(risk, f"10-year ASCVD risk {risk}% — {band} risk", comp, **extra)
 
 
+# --------------------------------------------------------------------------- #
+# ACMG/AMP germline variant classification (Tavtigian 2020 point system)
+# --------------------------------------------------------------------------- #
+# The classification workflow splits responsibilities: an outer LLM evaluates
+# each of the 28 ACMG/AMP criteria against collected facts and the applicable
+# ClinGen specification; this handler only checks that input contract and
+# computes the deterministic result. It accepts no caller-supplied score,
+# classification, point override, or threshold -- the four input keys below
+# are the whole surface.
+_ACMG_PATHOGENIC = frozenset(
+    {
+        "PVS1", "PS1", "PS2", "PS3", "PS4",
+        "PM1", "PM2", "PM3", "PM4", "PM5", "PM6",
+        "PP1", "PP2", "PP3", "PP4", "PP5",
+    }
+)
+_ACMG_BENIGN = frozenset(
+    {
+        "BA1", "BS1", "BS2", "BS3", "BS4",
+        "BP1", "BP2", "BP3", "BP4", "BP5", "BP6", "BP7",
+    }
+)
+_ACMG_CRITERIA = _ACMG_PATHOGENIC | _ACMG_BENIGN  # exactly 28 codes
+
+# PP5/BP6 are retired per ClinGen SVI guidance; they may be recorded, never
+# scored.
+_ACMG_RETIRED = frozenset({"PP5", "BP6"})
+
+_ACMG_STATUSES = frozenset(
+    {
+        "met",
+        "not_met",
+        "not_assessed",
+        "not_applicable",
+        "needs_review",
+        "deprecated",
+    }
+)
+
+# Tavtigian 2020 points by applied strength. BA1 is deliberately absent: it
+# runs the stand-alone path and never converts to points.
+_ACMG_STRENGTH_POINTS = {
+    "Supporting": 1,
+    "Moderate": 2,
+    "Strong": 4,
+    "VeryStrong": 8,
+}
+
+_ACMG_TOP_KEYS = ("variant_context", "rule_context", "evidence", "blocking_issues")
+_ACMG_EVIDENCE_KEYS = (
+    "criterion",
+    "status",
+    "strength",
+    "rationale",
+    "source_refs",
+    "rule_refs",
+    "evidence_ids",
+)
+_ACMG_CSPEC_STATUSES = frozenset(
+    {"released_spec_found", "no_released_spec", "unresolved", "failed"}
+)
+_ACMG_METHOD = "tavtigian2020"
+
+
+def _acmg_error(message: str) -> ValueError:
+    return ValueError(f"ACMG_calculate_classification: {message}")
+
+
+def _acmg_classify(total: int) -> str:
+    """Map a Tavtigian 2020 point total to its five-tier classification."""
+    if total >= 10:
+        return "Pathogenic"
+    if total >= 6:
+        return "Likely Pathogenic"
+    if total >= 0:
+        return "VUS"
+    if total >= -6:
+        return "Likely Benign"
+    return "Benign"
+
+
+def _acmg_envelope(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "status": "success",
+        "data": data,
+        "metadata": {"calculator_type": "variant_classification"},
+    }
+
+
+def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
+    """Deterministic Tavtigian 2020 classification from a full 28-code review.
+
+    Input contract (exact keys, nothing else is accepted):
+      * ``variant_context`` -- one normalized variant, gene, disease,
+        inheritance mode. Identity/scenario ambiguity belongs in
+        ``blocking_issues``, not in extra keys.
+      * ``rule_context`` -- CSpec lookup status, specification id/version/
+        source, whether the applicable rules were read completely, and the
+        combination method (only ``tavtigian2020`` is supported here).
+      * ``evidence`` -- exactly 28 records, one per ACMG/AMP code.
+      * ``blocking_issues`` -- explicit list; empty when nothing blocks.
+
+    Outcomes: ``computed`` (classification + points + contributions),
+    ``needs_review`` (classification null, reasons listed, records kept), or
+    ``status: error`` for structurally illegal input.
+    """
+    unexpected = set(a) - set(_ACMG_TOP_KEYS)
+    missing = [k for k in _ACMG_TOP_KEYS if k not in a]
+    if missing:
+        raise _acmg_error(f"missing required field(s): {', '.join(missing)}")
+    if unexpected:
+        # Also the guard for callers trying to pre-supply a score or
+        # classification: the calculator derives those itself.
+        raise _acmg_error(
+            f"unexpected field(s): {', '.join(sorted(unexpected))}. Only "
+            f"{', '.join(_ACMG_TOP_KEYS)} are accepted; scores, expected "
+            "classifications, point overrides, and thresholds are derived "
+            "here, not supplied."
+        )
+
+    variant_context = a["variant_context"]
+    if not isinstance(variant_context, dict):
+        raise _acmg_error("variant_context must be an object")
+    for key in ("variant", "gene"):
+        if not str(variant_context.get(key) or "").strip():
+            raise _acmg_error(
+                f"variant_context.{key} is required (a single normalized "
+                "variant and its gene); resolve ambiguity before classifying"
+            )
+    extra_vc = set(variant_context) - {
+        "variant",
+        "gene",
+        "disease",
+        "inheritance_mode",
+    }
+    if extra_vc:
+        raise _acmg_error(
+            f"unexpected variant_context field(s): {', '.join(sorted(extra_vc))}"
+        )
+
+    rule_context = a["rule_context"]
+    if not isinstance(rule_context, dict):
+        raise _acmg_error("rule_context must be an object")
+    extra_rc = set(rule_context) - {
+        "cspec_lookup_status",
+        "specification",
+        "applicable_rules_complete",
+        "combination_method",
+    }
+    if extra_rc:
+        raise _acmg_error(
+            f"unexpected rule_context field(s): {', '.join(sorted(extra_rc))}"
+        )
+    cspec_status = rule_context.get("cspec_lookup_status")
+    if cspec_status not in _ACMG_CSPEC_STATUSES:
+        raise _acmg_error(
+            "rule_context.cspec_lookup_status must be one of "
+            f"{sorted(_ACMG_CSPEC_STATUSES)}, got {cspec_status!r}"
+        )
+    combination_method = rule_context.get("combination_method")
+    if not isinstance(combination_method, str) or not combination_method.strip():
+        raise _acmg_error("rule_context.combination_method is required")
+    rules_complete = rule_context.get("applicable_rules_complete")
+
+    blocking_issues = a["blocking_issues"]
+    if not isinstance(blocking_issues, list) or any(
+        not isinstance(i, str) for i in blocking_issues
+    ):
+        raise _acmg_error("blocking_issues must be a list of strings")
+
+    evidence = a["evidence"]
+    if not isinstance(evidence, list):
+        raise _acmg_error(
+            f"evidence must be a list of {len(_ACMG_CRITERIA)} records "
+            f"(one per ACMG/AMP code), got {type(evidence).__name__}"
+        )
+
+    seen: Dict[str, Dict[str, Any]] = {}
+    for item in evidence:
+        if not isinstance(item, dict):
+            raise _acmg_error("each evidence record must be an object")
+        extra_keys = set(item) - set(_ACMG_EVIDENCE_KEYS)
+        absent = [k for k in _ACMG_EVIDENCE_KEYS if k not in item]
+        if absent:
+            raise _acmg_error(
+                f"evidence record missing key(s): {', '.join(absent)}"
+            )
+        if extra_keys:
+            # Includes point overrides smuggled into a record.
+            raise _acmg_error(
+                f"evidence record for {item.get('criterion')!r} has "
+                f"unexpected key(s): {', '.join(sorted(extra_keys))}"
+            )
+        criterion = item["criterion"]
+        if criterion not in _ACMG_CRITERIA:
+            raise _acmg_error(f"unknown criterion code: {criterion!r}")
+        if criterion in seen:
+            raise _acmg_error(f"criterion {criterion} appears more than once")
+        status = item["status"]
+        if status not in _ACMG_STATUSES:
+            raise _acmg_error(
+                f"{criterion}: status must be one of "
+                f"{sorted(_ACMG_STATUSES)}, got {status!r}"
+            )
+        for ref_key in ("source_refs", "rule_refs", "evidence_ids"):
+            if not isinstance(item[ref_key], list):
+                raise _acmg_error(
+                    f"{criterion}: {ref_key} must be a list of identifier strings"
+                )
+        if status != "met":
+            if item["strength"] is not None:
+                raise _acmg_error(
+                    f"{criterion}: strength must be null unless status is 'met'"
+                )
+        else:
+            if criterion in _ACMG_RETIRED:
+                raise _acmg_error(
+                    f"{criterion} is retired (ClinGen SVI PP5/BP6 retirement) "
+                    "and cannot be met or scored; record it as 'deprecated' "
+                    "or 'not_applicable'"
+                )
+            strength = item["strength"]
+            if criterion == "BA1":
+                if strength not in (None, "StandAlone"):
+                    raise _acmg_error(
+                        "BA1 applies only at stand-alone strength; it does "
+                        "not convert to points"
+                    )
+            elif strength not in _ACMG_STRENGTH_POINTS:
+                raise _acmg_error(
+                    f"{criterion}: 'met' requires one of "
+                    f"{sorted(_ACMG_STRENGTH_POINTS)} (or 'StandAlone' for "
+                    f"BA1 only), got {strength!r}"
+                )
+            if not str(item["rationale"] or "").strip():
+                raise _acmg_error(
+                    f"{criterion}: 'met' requires a non-empty rationale"
+                )
+            for ref_key in ("source_refs", "rule_refs", "evidence_ids"):
+                if not [r for r in item[ref_key] if str(r).strip()]:
+                    raise _acmg_error(
+                        f"{criterion}: 'met' requires non-empty {ref_key}"
+                    )
+        seen[criterion] = item
+    absent_codes = sorted(_ACMG_CRITERIA - set(seen))
+    if absent_codes:
+        raise _acmg_error(f"missing evidence record(s): {', '.join(absent_codes)}")
+
+    # ---- Everything below sees structurally valid input ------------------ #
+    met_records = [seen[c] for c in _ACMG_CRITERIA if seen[c]["status"] == "met"]
+    ba1 = next((m for m in met_records if m["criterion"] == "BA1"), None)
+    scored = [
+        m for m in met_records if m["criterion"] != "BA1"
+    ]  # BA1 never converts to points
+
+    contributions = []
+    for record in scored:
+        direction = (
+            "pathogenic" if record["criterion"] in _ACMG_PATHOGENIC else "benign"
+        )
+        points = _ACMG_STRENGTH_POINTS[record["strength"]]
+        contributions.append(
+            {
+                "criterion": record["criterion"],
+                "strength": record["strength"],
+                "points": points if direction == "pathogenic" else -points,
+                "direction": direction,
+            }
+        )
+    pathogenic_points = sum(
+        c["points"] for c in contributions if c["direction"] == "pathogenic"
+    )
+    benign_points = sum(
+        c["points"] for c in contributions if c["direction"] == "benign"
+    )
+    total = pathogenic_points + benign_points
+
+    uncounted = [
+        {
+            "criterion": code,
+            "status": seen[code]["status"],
+            "reason": (
+                "retired criterion, never scored"
+                if code in _ACMG_RETIRED
+                else f"status '{seen[code]['status']}' does not score"
+            ),
+        }
+        for code in _ACMG_CRITERIA
+        if seen[code]["status"] != "met"
+    ]
+    if ba1 is not None:
+        uncounted.append(
+            {
+                "criterion": "BA1",
+                "status": "met",
+                "reason": "stand-alone benign path; not converted to points",
+            }
+        )
+
+    base: Dict[str, Any] = {
+        "variant_context": variant_context,
+        "rule_context": rule_context,
+        "evidence": evidence,
+        "method": {
+            "name": _ACMG_METHOD,
+            "strength_points": dict(_ACMG_STRENGTH_POINTS),
+            "thresholds": {
+                "pathogenic": ">= 10",
+                "likely_pathogenic": "6 to 9",
+                "vus": "0 to 5",
+                "likely_benign": "-6 to -1",
+                "benign": "<= -7",
+            },
+        },
+        "point_contributions": contributions,
+        "pathogenic_points": pathogenic_points,
+        "benign_points": benign_points,
+        "uncounted_records": uncounted,
+    }
+
+    review_reasons: List[Dict[str, Any]] = []
+    if blocking_issues:
+        review_reasons.append(
+            {
+                "reason": "blocking_issues_present",
+                "detail": list(blocking_issues),
+            }
+        )
+    if cspec_status in ("unresolved", "failed"):
+        review_reasons.append(
+            {
+                "reason": "cspec_applicability_unresolved",
+                "detail": (
+                    f"cspec_lookup_status is '{cspec_status}'; whether a "
+                    "Released specification applies must be settled before "
+                    "classification"
+                ),
+            }
+        )
+    if cspec_status == "released_spec_found" and rules_complete is not True:
+        review_reasons.append(
+            {
+                "reason": "incomplete_specification_material",
+                "detail": (
+                    "a Released specification applies but "
+                    "applicable_rules_complete is not true; read the full "
+                    "specification (official page, attachments, assertion "
+                    "method) or classify under generic rules explicitly"
+                ),
+            }
+        )
+    if combination_method != _ACMG_METHOD:
+        review_reasons.append(
+            {
+                "reason": "unsupported_combination_method",
+                "detail": (
+                    f"combination_method '{combination_method}' is not "
+                    f"supported by this fixed {_ACMG_METHOD} point "
+                    "integrator (e.g. specification-specific combination "
+                    "caps or alternative thresholds); the evidence is kept "
+                    "for expert review"
+                ),
+            }
+        )
+    if ba1 is not None and any(
+        c["direction"] == "pathogenic" and c["points"] > 0 for c in contributions
+    ):
+        conflicting = [
+            c["criterion"] for c in contributions if c["direction"] == "pathogenic"
+        ]
+        review_reasons.append(
+            {
+                "reason": "ba1_pathogenic_conflict",
+                "detail": (
+                    "BA1 (stand-alone benign) conflicts with pathogenic "
+                    f"evidence: {', '.join(conflicting)}; resolve the "
+                    "conflict before classifying"
+                ),
+            }
+        )
+    fact_owners: Dict[str, List[str]] = {}
+    for record in scored:
+        for fact in record["evidence_ids"]:
+            fact_owners.setdefault(str(fact), []).append(record["criterion"])
+    duplicates = {
+        fact: codes for fact, codes in fact_owners.items() if len(codes) > 1
+    }
+    if duplicates:
+        review_reasons.append(
+            {
+                "reason": "duplicate_scoring_facts",
+                "detail": {
+                    "shared_evidence_ids": duplicates,
+                    "note": (
+                        "the same scoring fact underlies multiple codes; "
+                        "same-paper distinct facts are not automatically "
+                        "duplicates -- review whether each code is "
+                        "independently supported"
+                    ),
+                },
+            }
+        )
+    if not met_records:
+        review_reasons.append(
+            {
+                "reason": "no_scoring_evidence",
+                "detail": (
+                    "no criterion is met, so there is nothing to score; a "
+                    "classification of VUS requires at least one scored "
+                    "criterion (or a positive/negative balance), not the "
+                    "absence of evidence"
+                ),
+            }
+        )
+
+    if review_reasons:
+        base.update(
+            classification_status="needs_review",
+            classification=None,
+            review_reasons=review_reasons,
+        )
+        base["note"] = (
+            "Provisional point breakdown is retained for the reviewer but "
+            "is not a classification."
+        )
+        return _acmg_envelope(base)
+
+    if ba1 is not None:
+        base.update(
+            classification_status="computed",
+            classification="Benign",
+            total_score=None,
+            ba1_standalone=True,
+        )
+        return _acmg_envelope(base)
+
+    base.update(
+        classification_status="computed",
+        classification=_acmg_classify(total),
+        total_score=total,
+        ba1_standalone=False,
+    )
+    return _acmg_envelope(base)
+
+
 _DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "cha2ds2_vasc": _cha2ds2_vasc,
     "has_bled": _has_bled,
@@ -791,6 +1236,7 @@ _DISPATCH: Dict[str, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     "meld_na": _meld_na,
     "ckd_epi": _ckd_epi,
     "ascvd": _ascvd,
+    "acmg_classification": _acmg_classification,
 }
 
 

@@ -169,9 +169,20 @@ Tools: `PubMed_search_articles`, `EuropePMC_search_articles`, `BioRxiv_list_rece
 
 Always flag preprints as NOT peer-reviewed.
 
-## Phase 6: ACMG Classification
+## Phase 6: ACMG Classification (germline small variants -> single unified flow)
 
-Apply all relevant evidence codes (PVS1, PS1, PS3, PM1, PM2, PM5, PP3, PP5 for pathogenic; BA1, BS1, BS3, BP4, BP7 for benign). See `ACMG_CLASSIFICATION.md` for the complete algorithm.
+For any germline small variant, classification runs in the
+`tooluniverse-acmg-variant-classification` skill -- one flow shared by every
+entry point: confirm variant and scope -> query and confirm the applicable
+ClinGen CSpec (`ClinGen_search_cspec`, then read the specification's official
+page with `get_webpage_text_from_url`) -> collect facts -> evaluate all 28
+criteria (per that skill's `SVI_REFERENCE.md`) -> check dependencies and
+double counting -> call `ACMG_calculate_classification` -> present its output
+verbatim. Do not compute classifications, point totals, or thresholds inline
+here. PP5/BP6 are retired; ClinVar/VCEP conclusions are attributed separately
+and never scored. When a specification pauses the calculator
+(`needs_review`), report the reasons -- never silently fall back to generic
+classification.
 
 ### Gene-Specific Population Frequency Thresholds
 
@@ -182,6 +193,7 @@ BS1 (allele frequency too high for disorder) requires gene-specific calibration,
 - **Formula**: BS1 threshold = (disease prevalence × max allelic contribution × max genetic contribution) / penetrance
 - When in doubt, compare the variant's AF to the highest AF of any known pathogenic variant in the same gene — if it exceeds that, BS1 is likely applicable.
 
+
 ### Handling Conflicting Evidence: Functional vs Epidemiological
 
 This is one of the most challenging scenarios in variant interpretation. When a biochemical assay shows damage but population/epidemiological data shows no disease association:
@@ -191,103 +203,18 @@ This is one of the most challenging scenarios in variant interpretation. When a 
 3. **Hypomorphic variants**: Some variants genuinely reduce protein function (detectable in sensitive assays) but not enough to cause disease. This is biologically real and does not make them pathogenic.
 4. **Document the conflict explicitly** in the report. State: "Biochemical assay X shows [result], but case-control study Y with N cases found no significant disease association. Per ACMG guidelines, the epidemiological evidence is weighted more heavily for clinical classification."
 
-### Bayesian ACMG Point System (Tavtigian et al. 2018)
+### CSpec and VCEP Specifications Take Precedence
 
-Modern clinical labs use a point-based system instead of the original rule-counting approach:
-
-| Evidence Level | Pathogenic Points | Benign Points |
-|---|---|---|
-| Very Strong (PVS1) | +8 | -- |
-| Strong (PS1-PS4) | +4 each | -4 each (BS1-BS4) |
-| Moderate (PM1-PM6) | +2 each | -- |
-| Supporting (PP1-PP5) | +1 each | -1 each (BP1-BP7) |
-| Stand-alone (BA1) | -- | -8 |
-
-**Classification by total points**:
-- Pathogenic: >= 10 points
-- Likely Pathogenic: 6-9 points
-- VUS: -5 to 5 points
-- Likely Benign: -6 to -9 points
-- Benign: <= -10 points
-
-This system handles conflicting evidence naturally — a variant with PS3 (+4) and BS1 (-4) and BP4 (-1) nets -1, which is VUS. The original rule-based approach struggles with this scenario.
-
-**Computational procedure: ACMG Bayesian classification**
-
-```python
-# Automated ACMG point calculation
-# Input: dict of evidence codes with their applied strength
-
-def classify_acmg(evidence: dict) -> dict:
-    """
-    Classify a variant using the Bayesian ACMG point system.
-
-    Args:
-        evidence: dict mapping ACMG codes to strength levels.
-            Pathogenic codes: 'very_strong', 'strong', 'moderate', 'supporting'
-            Benign codes: 'stand_alone', 'strong', 'supporting'
-
-    Example:
-        evidence = {
-            'BS1': 'strong',       # AF too high
-            'BS3': 'supporting',   # Epidemiological evidence against pathogenicity
-            'BP6': 'supporting',   # ClinVar benign consensus
-            'PP3': 'supporting',   # Computational predictors say damaging
-        }
-    """
-    pathogenic_points = {
-        'very_strong': 8, 'strong': 4, 'moderate': 2, 'supporting': 1
-    }
-    benign_points = {
-        'stand_alone': -8, 'strong': -4, 'supporting': -1
-    }
-
-    total = 0
-    details = []
-    for code, strength in evidence.items():
-        if code.startswith(('PVS', 'PS', 'PM', 'PP')):
-            pts = pathogenic_points.get(strength, 0)
-        elif code.startswith(('BA', 'BS', 'BP')):
-            pts = benign_points.get(strength, 0)
-        else:
-            pts = 0
-        total += pts
-        details.append(f"{code} ({strength}): {pts:+d}")
-
-    if total >= 10:
-        classification = "Pathogenic"
-    elif 6 <= total <= 9:
-        classification = "Likely Pathogenic"
-    elif -5 <= total <= 5:
-        classification = "VUS"
-    elif -9 <= total <= -6:
-        classification = "Likely Benign"
-    else:
-        classification = "Benign"
-
-    return {
-        'classification': classification,
-        'total_points': total,
-        'evidence_breakdown': details
-    }
-
-# Example: PALB2 c.2816T>G (from test case)
-result = classify_acmg({
-    'BS1': 'strong',       # gnomAD AF 0.00105 exceeds threshold
-    'BS3': 'supporting',   # Case-control study shows no association
-    'BP6': 'supporting',   # ClinVar 13 submitters say benign/likely benign
-})
-# Output: Likely Benign, total_points=-6, evidence: BS1(strong):-4, BS3(supporting):-1, BP6(supporting):-1
-```
-
-Use this procedure after collecting all evidence from Phases 1-5 to compute the final classification.
-
-### Gene-Specific VCEP Criteria
-
-ClinGen Variant Curation Expert Panels (VCEPs) publish gene-specific ACMG modifications. Before classifying, check if a VCEP exists:
-- `ClinGen_search_gene_validity(gene="<gene_symbol>")` — if validity is "Definitive" or "Strong", a VCEP likely exists
-- Common VCEPs: BRCA1/2 (Enigma), TP53, PTEN, CDH1, PALB2, RASopathies, Lynch syndrome genes
-- VCEP criteria override generic ACMG criteria (e.g., PALB2 VCEP has specific PM1 hotspot regions)
+A Released ClinGen CSpec (VCEP specification) overrides generic rules for its
+genes (PM1 hotspot regions, PM2 at Supporting, BA1 exceptions, combination
+caps, ...). Before classifying:
+- `ClinGen_search_cspec(gene="<symbol>")` -- Released specifications with
+  criterion applicability, versions, and official page URLs
+- Read the specification's official page -- the API JSON alone is not the
+  full specification
+- Combinations or thresholds the Tavtigian 2020 calculator cannot express
+  pause the classification for expert review
+- No Released specification -> generic ACMG/AMP 2015 + ClinGen SVI rules
 
 ### Predictor Weighting
 
@@ -297,7 +224,7 @@ Not all computational predictors are equal. For missense variants:
 - **CADD** (AUC ~0.85) — good for all variant types, but less specific for missense
 - **SIFT/PolyPhen** (AUC ~0.80) — legacy tools; useful for consensus but not individually decisive
 
-When predictors disagree: if REVEL says tolerated but SIFT/PolyPhen say damaging, lean toward REVEL. If REVEL is unavailable, require 3+ concordant predictions for PP3/BP4.
+When predictors disagree: if REVEL says tolerated but SIFT/PolyPhen say damaging, lean toward REVEL. PP3/BP4 are applied from a single calibrated predictor meeting its pre-set threshold (see the ACMG skill's SVI_REFERENCE.md); when calibrated predictors disagree, neither code applies.
 
 ### Tool Failure Fallbacks
 

@@ -1,39 +1,22 @@
 # ACMG Classification Reference
 
-## Evidence Codes
+## Where the algorithm lives
 
-### Pathogenic Evidence
+Germline small-variant classification follows the unified flow in the
+`tooluniverse-acmg-variant-classification` skill: evaluate all 28 criteria
+(see its `SVI_REFERENCE.md` for per-code facts, strengths, exclusions, and
+double-counting rules), then call `ACMG_calculate_classification` — the
+deterministic Tavtigian 2020 point system (Supporting/Moderate/Strong/
+VeryStrong = +/-1/2/4/8; >=10 Pathogenic, 6-9 Likely Pathogenic, 0-5 VUS,
+-6 to -1 Likely Benign, <=-7 Benign; BA1 is a stand-alone benign path).
+Do not combine criteria with the 2015 rule-counting table here — the
+calculator is the single source of the final classification.
 
-| Code | Strength | Description |
-|------|----------|-------------|
-| PVS1 | Very Strong | Null variant in gene where LOF is mechanism |
-| PS1 | Strong | Same amino acid change as known pathogenic |
-| PS3 | Strong | Well-established functional studies |
-| PM1 | Moderate | Mutational hot spot / functional domain |
-| PM2 | Moderate | Absent from controls |
-| PM5 | Moderate | Different missense at same residue as pathogenic |
-| PP3 | Supporting | Multiple computational predictions |
-| PP5 | Supporting | Reputable source reports pathogenic |
+PP5 and BP6 are retired (ClinGen SVI) and are never scored; ClinVar/VCEP
+conclusions are attributed separately in reports.
 
-### Benign Evidence
-
-| Code | Strength | Description |
-|------|----------|-------------|
-| BA1 | Stand-alone | MAF >5% |
-| BS1 | Strong | MAF greater than expected |
-| BS3 | Strong | Functional studies show no effect |
-| BP4 | Supporting | Multiple computational predictions benign |
-| BP7 | Supporting | Synonymous with no splice impact |
-
-## Classification Algorithm
-
-| Classification | Evidence Required |
-|----------------|-------------------|
-| Pathogenic | 1 Very Strong + 1 Strong; OR 2 Strong; OR 1 Strong + 3 Moderate |
-| Likely Pathogenic | 1 Very Strong + 1 Moderate; OR 1 Strong + 2 Moderate; OR 1 Strong + 2 Supporting |
-| Likely Benign | 1 Strong + 1 Supporting; OR 2 Supporting |
-| Benign | 1 Stand-alone; OR 2 Strong |
-| VUS | Criteria not met |
+The tables below remain useful for evidence-gathering context (labels,
+databases, thresholds used during assessment).
 
 ## Classification Confidence
 
@@ -130,9 +113,11 @@
 
 ## PP3/BP4 Application Notes
 
-- **PP3**: Multiple concordant damaging predictions (AlphaMissense + CADD + EVE agreement = strong PP3)
-- **BP4**: Multiple concordant benign predictions
-- **Note**: AlphaMissense alone achieves ~90% accuracy on ClinVar pathogenic variants
+- PP3/BP4 come from a single calibrated predictor meeting its pre-set
+  threshold (per the ClinGen SVI in-silico calibration; see the ACMG skill's
+  SVI_REFERENCE.md), not from counting votes across predictors
+- Concordance of uncalibrated predictors is not PP3; discordant calibrated
+  predictors -> neither code applies
 
 ## SpliceAI Thresholds
 
@@ -165,5 +150,9 @@
 | Scenario | PVS1 Strength |
 |----------|---------------|
 | Canonical LOF gene, NMD predicted | Very Strong |
-| LOF gene, last exon | Moderate |
-| Non-LOF gene | Not applicable |
+| NMD escape (last exon, last ~50 bp of penultimate exon) | Strong |
+| In-frame exon skipping / rescue transcript possible | Moderate/Supporting |
+| LoF not an established disease mechanism | Not applicable |
+
+Full decision tree, transcript and splice caveats: the ACMG skill's
+`SVI_REFERENCE.md`.
