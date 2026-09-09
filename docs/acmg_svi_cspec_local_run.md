@@ -72,9 +72,10 @@ specs = ClinGen_search_cspec(gene="MYOC")
 #         get_webpage_text_from_url before classifying under it.
 #   unresolved_scope_specs: Released specifications whose gene scope the
 #         index does not resolve (e.g. GN015, whose mitochondrial gene
-#         rules appear only on its official page). Resolve each candidate
-#         against its url before concluding no specification applies; a
-#         nuclear-gene query can exclude GN015 on that documented basis.
+#         rules appear only on its official page). Resolve EVERY candidate
+#         even though GN019 already matches -- an explicit match does not
+#         resolve other candidates; a nuclear-gene query can exclude GN015
+#         on that documented basis, never on the missing `genes` alone.
 #   partial_failures / missing_materials / detail_structure_failed on an
 #         entry mean the specification was NOT fully read -- resolve via
 #         the official page or keep cspec_lookup_status="unresolved".

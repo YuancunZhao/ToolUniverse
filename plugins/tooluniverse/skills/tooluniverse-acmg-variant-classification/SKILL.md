@@ -1,7 +1,7 @@
 ---
+
 name: tooluniverse-acmg-variant-classification
-description: Systematic ACMG/AMP germline small-variant classification with all 28 criteria (PVS1, PS1-4, PM1-6, PP1-5, BA1, BS1-4, BP1-7) under the applicable ClinGen CSpec/VCEP specification where one exists. Evaluates every criterion against raw facts, then calls the deterministic ACMG_calculate_classification calculator (Tavtigian 2020 point system) for the five-tier verdict (Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign) with cited evidence per criterion. Use for variant interpretation, VUS resolution, and pathogenicity assessment. Combines CSpec lookups, ClinVar, gnomAD, computational predictors, and gene-mechanism context.
-disable-model-invocation: true
+description: "Systematic ACMG/AMP germline small-variant classification with all 28 criteria (PVS1, PS1-4, PM1-6, PP1-5, BA1, BS1-4, BP1-7) under the applicable ClinGen CSpec/VCEP specification where one exists. Evaluates every criterion against raw facts, then calls the deterministic ACMG_calculate_classification calculator (Tavtigian 2020 point system) for the five-tier verdict (Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign) with cited evidence per criterion. Use for variant interpretation, VUS resolution, and pathogenicity assessment. Combines CSpec lookups, ClinVar, gnomAD, computational predictors, and gene-mechanism context."
 ---
 
 # ACMG/AMP Germline Small-Variant Classification
@@ -27,20 +27,51 @@ protein change, variant type, genomic coordinates. If identity is ambiguous
 representation), stop formal classification and carry it as a blocking issue.
 
 **2. Query and confirm the CSpec.**
-Call `ClinGen_search_cspec(gene="<HGNC symbol>")`. Then decide:
+Call `ClinGen_search_cspec(gene="<HGNC symbol>")`.
+
+On every successful lookup, inspect both `data` and `unresolved_scope_specs`.
+Resolve every unresolved-scope candidate even when `data` already contains
+an explicit match. An explicit match does not resolve other candidates.
+For each candidate, read its `url` with `get_webpage_text_from_url` and
+decide from the official material whether it applies to this gene, disease,
+and inheritance mode: confirmed NOT applicable → exclude it and record the
+source (no need to read its unrelated evidence details); confirmed
+applicable → bring it into the normal CSpec reading and assessment flow;
+cannot decide → `cspec_lookup_status="unresolved"` and withhold the final
+classification. When the same specification appears in BOTH `data` and the
+candidates, verify its remaining scope via the candidate's `rule_set_ids` —
+never drop the candidate as a duplicate of the match.
+
+Then record:
 
 | Lookup result | Rule context to record |
 |---|---|
-| `success` with data (Released spec) | Read the specification's official page (`url` field) with `get_webpage_text_from_url`, including attachments and the assertion method it references. The API JSON alone is NOT the full specification. If any rule you need is incomplete after that, set `applicable_rules_complete=false`. |
-| `success`, empty `data` AND empty `unresolved_scope_specs` | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. BOTH lists must be empty; either alone is never sufficient. |
-| `success`, empty `data` but non-empty `unresolved_scope_specs` | Do NOT record `no_released_spec`. For each candidate, read its `url` with `get_webpage_text_from_url` and decide, from the official material, whether it applies to this gene, disease, and inheritance mode: confirmed NOT applicable → exclude it and record the source; confirmed applicable → proceed with the normal CSpec flow for it; cannot decide → `cspec_lookup_status="unresolved"`. Only when every candidate is excluded and no other specification applies may you fall back to generic rules. (The API not listing genes says nothing about applicability — e.g., a mitochondrial-panel specification lists its genes on the official page only; a nuclear-gene query can exclude it on that basis, never on the missing `genes` alone. Mitochondrial variants themselves belong to the dedicated mitochondrial workflow.) |
+| `success` with data (Released spec) | Read the specification's official page (`url` field) with `get_webpage_text_from_url`, including attachments and the assertion method it references. The API JSON alone is NOT the full specification. If any rule you need is incomplete after that, set `applicable_rules_complete=false`. Candidate adjudication (above) is still required. |
+| `success`, every candidate adjudicated and excluded, no applicable specification, `data` empty | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. Reachable ONLY after all `unresolved_scope_specs` candidates were resolved. |
+| `success` with any candidate not confirmed applicable or excluded | `cspec_lookup_status="unresolved"` — do NOT record `no_released_spec`; withhold the final classification. (The API not listing genes says nothing about applicability — e.g., a mitochondrial-panel specification lists its genes on the official page only; a nuclear-gene query can exclude it on that basis, never on the missing `genes` alone. Mitochondrial variants themselves belong to the dedicated mitochondrial workflow.) |
 | `error` (including damaged-index errors), timeout | `cspec_lookup_status="failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
 | The specification you need has `partial_failures`, `detail_fetch_failed`, `detail_structure_failed`, or `missing_materials` you could not fill by reading the official page | `cspec_lookup_status="unresolved"` — the spec exists but was not fully read; do NOT classify under it yet. Structural damage inside a detail (`detail_structure_failed`, with element paths in `missing_materials`) keeps the valid parts visible but never counts as fully read until the official materials resolve the gap. |
 
 Tool-version note: if a `ClinGen_search_cspec` response lacks the
-`unresolved_scope_specs` field entirely, do not treat it as an empty list —
-the tool predates the field; update the tool or verify gene scope manually
-before concluding `no_released_spec`.
+`unresolved_scope_specs` field entirely — whatever `data` contains — you
+cannot assume the candidates were checked; update the tool or verify gene
+scope manually before concluding anything about applicability.
+
+**Rule precedence** (same wording in `SVI_REFERENCE.md`):
+
+| Situation | Strategy |
+|---|---|
+| An applicable Released CSpec has its own provision | Use the CSpec's conditions, thresholds, strengths, and disqualifications |
+| The CSpec explicitly allows the generic provision, or complete materials confirm that part follows the base rules | Use generic ACMG/AMP + ClinGen SVI |
+| No applicable CSpec, confirmed | Use generic ACMG/AMP + ClinGen SVI |
+| API gaps, incomplete material, or unresolved applicability | Read the official materials further; never interpret absence as permission to use generic rules |
+| The CSpec marks a criterion not applicable | Record `not_applicable`; never re-enable it via generic rules |
+
+Evidence assessment and final combination stay separate: this skill
+interprets a CSpec's special evidence rules, but the calculator currently
+supports only the fixed `tavtigian2020` method. Special combination
+methods, joint caps, or classification thresholds continue to return
+`needs_review` — never substitute a generic method to bypass the pause.
 
 If the specification defines special combinations, joint point caps, or
 thresholds different from Tavtigian 2020, set

@@ -9,6 +9,14 @@ file for that gene. Where no generic rule exists, this file says so — never
 invent a threshold to fill the gap; leave the criterion at `not_assessed` /
 `needs_review` or carry a blocking issue.
 
+| Situation | Strategy |
+|---|---|
+| An applicable Released CSpec has its own provision | Use the CSpec's conditions, thresholds, strengths, and disqualifications |
+| The CSpec explicitly allows the generic provision, or complete materials confirm that part follows the base rules | Use generic ACMG/AMP + ClinGen SVI |
+| No applicable CSpec, confirmed | Use generic ACMG/AMP + ClinGen SVI |
+| API gaps, incomplete material, or unresolved applicability | Read the official materials further; never interpret absence as permission to use generic rules |
+| The CSpec marks a criterion not applicable | Record `not_applicable`; never re-enable it via generic rules |
+
 **Sources & versions** (as indexed by the ClinGen variant-classification
 guidance page, checked 2026-09): Richards et al. 2015 (ACMG/AMP original);
 Tavtigian et al. 2020 (point system; points: Supporting ±1, Moderate ±2,
