@@ -503,20 +503,144 @@ def test_released_record_with_non_list_genes_is_error(monkeypatch):
     assert "genes is not a list" in result["error"]
 
 
-def test_released_record_with_empty_gene_scope_is_skipped(monkeypatch):
-    # Real-world shape (live GN015): a Released rule set that binds no genes
-    # at all -- index AND detail omit the key. An empty gene scope is
-    # determinate (covers nothing), so it must be skipped without erroring
-    # and without ever fabricating a "no specification" answer.
-    empty_scope = _index_record(spec_id="GN015", gene="MYOC")
-    del empty_scope["ruleSets"][0]["genes"]
-    _patch(monkeypatch, _index(empty_scope))
+def test_unlisted_gene_scope_returns_unresolved_candidate(monkeypatch):
+    # Real-world shape (live GN015): a Released rule set whose index entry
+    # carries no `genes`. The API not listing genes says NOTHING about
+    # applicability (GN015's official page provides mitochondrial gene
+    # rules) -- the spec must be kept as an unresolved-scope candidate,
+    # never reported as determinately inapplicable and never silently
+    # dropped.
+    unlisted = _index_record(spec_id="GN015", gene="MYOC")
+    del unlisted["ruleSets"][0]["genes"]
+    _patch(monkeypatch, _index(unlisted))
 
     result = _tool().run({"gene": "MYOC"})
 
     assert result["status"] == "success"
     assert result["data"] == []
     assert result["total"] == 0
+    assert len(result["unresolved_scope_specs"]) == 1
+    candidate = result["unresolved_scope_specs"][0]
+    assert candidate["specification_id"] == "GN015"
+    assert candidate["scope_reason"] == "gene_binding_unavailable"
+    assert candidate["rule_set_ids"] == ["635003681"]
+    assert candidate["api_url"].endswith("/SequenceVariantInterpretation/id/GN015")
+    # The response must not claim a completed "no specification" judgment,
+    # and must not direct the caller to generic classification.
+    assert "unresolved" in result["note"]
+    assert "classify under" not in result["note"]
+    assert "do not default to generic rules" in result["note"]
+
+
+@pytest.mark.parametrize("genes_value", [None, []])
+def test_null_or_empty_genes_returns_candidate(monkeypatch, genes_value):
+    record = _index_record()
+    record["ruleSets"][0]["genes"] = genes_value
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN019"
+    ]
+
+
+def test_match_and_unresolved_candidate_coexist(monkeypatch):
+    unlisted = _index_record(spec_id="GN015", gene="MYOC", rule_set_id="999")
+    del unlisted["ruleSets"][0]["genes"]
+    _patch(monkeypatch, _index(_index_record(), unlisted))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [e["specification_id"] for e in result["data"]] == ["GN019"]
+    assert result["total"] == 1  # candidates are not counted
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+
+
+def test_one_spec_with_matching_and_unresolved_rule_sets(monkeypatch):
+    record = _index_record()
+    record["ruleSets"].append(
+        {"@id": "https://cspec.genome.network/cspec/api/RuleSet/id/888"}
+    )  # second rule set without genes: unresolved, kept separate
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    assert [rs["rule_set_id"] for rs in entry["rule_sets"]] == ["635003681"]
+    candidates = result["unresolved_scope_specs"]
+    assert len(candidates) == 1
+    assert candidates[0]["specification_id"] == "GN019"
+    assert candidates[0]["rule_set_ids"] == ["888"]
+
+
+def test_released_empty_rulesets_returns_candidate(monkeypatch):
+    record = _index_record()
+    record["ruleSets"] = []
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    candidate = result["unresolved_scope_specs"][0]
+    assert candidate["specification_id"] == "GN019"
+    assert candidate["rule_set_ids"] == []
+
+
+def test_candidate_missing_version_and_vcep_stay_missing(monkeypatch):
+    record = _index_record()
+    record.pop("version", None)
+    record["affiliation"] = {}
+    del record["ruleSets"][0]["genes"]
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    candidate = result["unresolved_scope_specs"][0]
+    assert candidate["version"] is None
+    assert candidate["vcep"] is None
+
+
+def test_unresolved_rule_set_with_bad_id_is_error(monkeypatch):
+    record = _index_record()
+    del record["ruleSets"][0]["genes"]
+    del record["ruleSets"][0]["@id"]
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "no usable" in result["error"]
+
+
+def test_valid_empty_result_has_empty_candidates(monkeypatch):
+    _patch(monkeypatch, _index(_index_record(spec_id="GNBRCA", gene="BRCA1")))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    assert result["unresolved_scope_specs"] == []
+    # Full "no specification" judgment is allowed only in this state.
+    assert "No Released" in result["note"]
+    assert "generic" in result["note"]
+
+
+def test_match_response_carries_empty_candidates_field(monkeypatch):
+    _patch(monkeypatch, _index(_index_record()))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["total"] == 1
+    assert result["unresolved_scope_specs"] == []
 
 
 def test_released_record_with_non_string_gene_label_is_error(monkeypatch):
@@ -586,3 +710,175 @@ def test_detail_non_object_is_partial_structure_failure(monkeypatch):
         "detail structure damaged" in m for m in entry["missing_materials"]
     )
     assert entry["criterion_modifications"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Detail-internal damage: valid parts kept, damage disclosed with paths
+# --------------------------------------------------------------------------- #
+def _detail_with_criteria(criteria):
+    return _detail_payload(criteria=criteria)
+
+
+def test_detail_criteria_with_null_element_keeps_valid_and_flags(monkeypatch):
+    valid_pm2 = _detail_payload()["ruleSets"][0]["criteriaCodes"][0]
+    damaged = _detail_with_criteria([valid_pm2, None])
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": damaged},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    # The valid criterion survives alongside the damage marker.
+    assert [c["criterion"] for c in entry["criterion_modifications"]] == ["PM2"]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "criteriaCodes[1]" in m for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "GN019" in result["partial_failures"]
+    assert "criteriaCodes[1]" in result["partial_failures"]["GN019"]
+
+
+def test_detail_strength_with_illegal_element_flags_path(monkeypatch):
+    criteria = _detail_payload()["ruleSets"][0]["criteriaCodes"]
+    criteria[0]["evidenceStrengths"] = [
+        criteria[0]["evidenceStrengths"][0],
+        42,
+    ]
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": _detail_with_criteria(criteria)},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    strengths = entry["criterion_modifications"][0]["strengths"]
+    assert [s["strength"] for s in strengths] == ["Supporting"]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "evidenceStrengths[1]" in m for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+
+
+def test_detail_criterion_with_unusable_label_flagged(monkeypatch):
+    criteria = _detail_payload()["ruleSets"][0]["criteriaCodes"]
+    criteria[0]["label"] = 7
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": _detail_with_criteria(criteria)},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "label is not a usable string" in m for m in entry["missing_materials"]
+    )
+
+
+def test_detail_missing_optional_text_is_not_damage(monkeypatch):
+    criteria = _detail_payload()["ruleSets"][0]["criteriaCodes"]
+    for strength in criteria[0]["evidenceStrengths"]:
+        strength.pop("description", None)  # optional prose absent: legal
+    criteria[0].pop("description", None)
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": _detail_with_criteria(criteria)},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry.get("detail_structure_failed") is not True
+    assert "GN019" not in result.get("partial_failures", {})
+    assert entry["criterion_modifications"][0]["criterion"] == "PM2"
+
+
+def test_detail_criteria_absent_is_material_gap_not_structure(monkeypatch):
+    detail = _detail_payload()
+    del detail["ruleSets"][0]["criteriaCodes"]
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry.get("detail_structure_failed") is not True
+    assert "criterion_specifications" in entry["missing_materials"]
+
+
+def test_detail_unattributable_rule_set_element_flagged(monkeypatch):
+    detail = _detail_payload()
+    detail["ruleSets"].append(42)  # cannot be attributed to any rule set
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "ruleSets[1] is not an object" in m for m in entry["missing_materials"]
+    )
+
+
+def test_detail_unrelated_damaged_rule_set_not_mixed(monkeypatch):
+    detail = _detail_payload()
+    detail["ruleSets"].append(
+        {
+            "@id": "https://cspec.genome.network/cspec/api/RuleSet/id/777",
+            "criteriaCodes": [None],  # damaged, but clearly not selected
+        }
+    )
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    # Selected criteria unaffected; the unrelated damage is not smuggled in.
+    assert [c["criterion"] for c in entry["criterion_modifications"]] == ["PM2"]
+    assert all(
+        c["rule_set_id"] == "635003681" for c in entry["criterion_modifications"]
+    )
+
+
+def test_one_damaged_detail_does_not_sink_other_spec(monkeypatch):
+    criteria = _detail_payload()["ruleSets"][0]["criteriaCodes"]
+    damaged_detail = _detail_with_criteria([valid for valid in [None]])
+    _patch(
+        monkeypatch,
+        _index(
+            _index_record(),
+            _index_record(spec_id="GN020", version="3.0", rule_set_id="777"),
+        ),
+        detail_payloads={
+            "GN019": damaged_detail,
+            "GN020": _detail_payload(rule_set_id="777"),
+        },
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    by_id = {e["specification_id"]: e for e in result["data"]}
+    assert by_id["GN020"]["criterion_modifications"][0]["criterion"] == "PM2"
+    assert by_id["GN019"]["detail_structure_failed"] is True
+    assert set(result["partial_failures"]) == {"GN019"}

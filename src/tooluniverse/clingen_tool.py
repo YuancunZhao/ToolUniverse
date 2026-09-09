@@ -740,11 +740,12 @@ class ClinGenTool(BaseTool):
                     return f"{rs_where} is not an object"
                 genes = rule_set.get("genes")
                 if genes is None or genes == []:
-                    # An absent or empty genes list is a determinate EMPTY
-                    # gene scope (JSON-LD omits unbound properties; verified
-                    # live: GN015's rule set binds no genes in index OR
-                    # detail). It cannot cover any queried gene, so skipping
-                    # it cannot fabricate a "no specification" answer.
+                    # No explicit gene binding in the index. That says
+                    # nothing about applicability (GN015's official page
+                    # provides mitochondrial gene rules while the API lists
+                    # none), so the caller keeps such rule sets as
+                    # unresolved-scope candidates -- never as "covers
+                    # nothing" and never as damage.
                     continue
                 if not isinstance(genes, list):
                     return f"{rs_where}.genes is not a list"
@@ -764,23 +765,33 @@ class ClinGenTool(BaseTool):
     def _cspec_matching_rule_sets(
         self, record: Dict[str, Any], gene: str
     ) -> tuple:
-        """Rule sets of `record` that cover `gene`, keeping gene-disease binding.
+        """Rule sets of `record` split into explicit matches and unresolved.
 
-        Returns (matches, error_message). A matched rule set without a usable
-        @id cannot be bound back to its criteria, so it is an error rather
-        than a match with a blank identifier (a blank id would silently mix
-        rule sets in the detail phase).
-
-        A specification's rule sets bind genes to diseases and (in the detail
-        document) to their own criterion specifications. Returning one item
-        per matching rule set -- rather than one flat gene list -- keeps that
-        binding explicit so downstream consumers cannot mix rules across
-        rule sets.
+        Returns (matches, unresolved_rule_set_ids, error_message). Explicit
+        matches keep the gene-disease binding of their rule set. Rule sets
+        without an index-level gene list (`genes` missing, null, or empty)
+        cannot be judged from the index alone -- they are returned as
+        unresolved-scope identifiers for the caller to expose as candidates,
+        never silently dropped and never treated as determinately
+        inapplicable. A rule set that matches (or is unresolved) without a
+        usable @id is an error: a blank identifier would silently mix rule
+        sets in the detail phase.
         """
         matches: List[Dict[str, Any]] = []
+        unresolved: List[str] = []
         for rs_position, rule_set in enumerate(record.get("ruleSets") or []):
+            genes_list = rule_set.get("genes")
+            if genes_list is None or genes_list == []:
+                rule_set_id = self._cspec_id(rule_set.get("@id"))
+                if not rule_set_id:
+                    return [], [], (
+                        f"ruleSets[{rs_position}] has unresolved gene scope "
+                        "but no usable @id"
+                    )
+                unresolved.append(rule_set_id)
+                continue
             genes = []
-            for gene_entry in rule_set.get("genes") or []:
+            for gene_entry in genes_list:
                 if str(gene_entry.get("label") or "").strip().upper() != gene:
                     continue
                 genes.append(
@@ -793,7 +804,7 @@ class ClinGenTool(BaseTool):
                 continue
             rule_set_id = self._cspec_id(rule_set.get("@id"))
             if not rule_set_id:
-                return [], (
+                return [], [], (
                     f"ruleSets[{rs_position}] covers {gene} but has no usable "
                     "@id"
                 )
@@ -803,7 +814,7 @@ class ClinGenTool(BaseTool):
                     "genes": genes,
                 }
             )
-        return matches, None
+        return matches, unresolved, None
 
     @staticmethod
     def _cspec_version(content: Dict[str, Any]) -> str:
@@ -819,49 +830,102 @@ class ClinGenTool(BaseTool):
 
     def _cspec_criteria_for_rule_sets(
         self, detail: Dict[str, Any], rule_set_ids: List[str]
-    ) -> List[Dict[str, Any]]:
+    ) -> tuple:
         """Criterion specifications from `detail`, bound to their rule set id.
 
-        Mirrors the API shape confirmed live: each rule set carries its own
-        `criteriaCodes`, and each code lists per-strength `applicability`
-        plus a VCEP-specific `description` when the strength is specified.
+        Returns ``(criteria, structure_errors)``. Mirrors the API shape
+        confirmed live: each rule set carries its own ``criteriaCodes``, and
+        each code lists per-strength ``applicability`` plus a VCEP-specific
+        ``description`` when the strength is specified. Valid entries are
+        parsed and returned even when sibling elements are damaged; the
+        damage is reported with an element-level path in
+        ``structure_errors`` (e.g.
+        ``detail.ruleSets[0].criteriaCodes[2].evidenceStrengths[1]``)
+        instead of being silently dropped. Missing optional prose and
+        absent or empty collections are legitimate shapes, not damage, and
+        the document is NOT required to carry exactly 28 criteria. A rule
+        set element whose @id cannot be read cannot be attributed, so its
+        damage is always reported; damage inside a rule set that is clearly
+        NOT one of ``rule_set_ids`` is skipped so it cannot contaminate the
+        selected rule sets' criteria.
         """
-        normalized: List[Dict[str, Any]] = []
-        for rule_set in detail.get("ruleSets") or []:
+        criteria: List[Dict[str, Any]] = []
+        errors: List[str] = []
+        rule_sets = detail.get("ruleSets")
+        if rule_sets is None:
+            return criteria, errors
+        if not isinstance(rule_sets, list):
+            return criteria, ["detail.ruleSets is not a list"]
+        for rs_index, rule_set in enumerate(rule_sets):
+            rs_path = f"detail.ruleSets[{rs_index}]"
             if not isinstance(rule_set, dict):
+                errors.append(f"{rs_path} is not an object")
                 continue
             rule_set_id = self._cspec_id(rule_set.get("@id"))
+            if not rule_set_id:
+                errors.append(f"{rs_path}.@id is missing or not usable")
+                continue
             if rule_set_ids and rule_set_id not in rule_set_ids:
                 continue
-            for item in rule_set.get("criteriaCodes") or []:
+            codes = rule_set.get("criteriaCodes")
+            if codes is None:
+                continue
+            if not isinstance(codes, list):
+                errors.append(f"{rs_path}.criteriaCodes is not a list")
+                continue
+            for code_index, item in enumerate(codes):
+                code_path = f"{rs_path}.criteriaCodes[{code_index}]"
                 if not isinstance(item, dict):
+                    errors.append(f"{code_path} is not an object")
+                    continue
+                label = item.get("label")
+                if not isinstance(label, str) or not label.strip():
+                    errors.append(f"{code_path}.label is not a usable string")
                     continue
                 strengths = []
-                for descriptor in item.get("evidenceStrengths") or []:
-                    if not isinstance(descriptor, dict):
-                        continue
-                    strengths.append(
-                        {
-                            "strength": descriptor.get("label"),
-                            "applicability": descriptor.get("applicability"),
-                            "specification_type": descriptor.get(
-                                "specificationType"
-                            ),
-                            "instructions": descriptor.get("instructionsToUse"),
-                            "text": descriptor.get("description"),
-                        }
-                    )
-                normalized.append(
+                descriptors = item.get("evidenceStrengths")
+                if descriptors is not None:
+                    strengths_path = f"{code_path}.evidenceStrengths"
+                    if not isinstance(descriptors, list):
+                        errors.append(f"{strengths_path} is not a list")
+                        descriptors = []
+                    for st_index, descriptor in enumerate(descriptors):
+                        st_path = f"{strengths_path}[{st_index}]"
+                        if not isinstance(descriptor, dict):
+                            errors.append(f"{st_path} is not an object")
+                            continue
+                        st_label = descriptor.get("label")
+                        if not isinstance(st_label, str) or not st_label.strip():
+                            errors.append(
+                                f"{st_path}.label is not a usable string"
+                            )
+                            continue
+                        strengths.append(
+                            {
+                                "strength": st_label,
+                                "applicability": descriptor.get(
+                                    "applicability"
+                                ),
+                                "specification_type": descriptor.get(
+                                    "specificationType"
+                                ),
+                                "instructions": descriptor.get(
+                                    "instructionsToUse"
+                                ),
+                                "text": descriptor.get("description"),
+                            }
+                        )
+                criteria.append(
                     {
                         "rule_set_id": rule_set_id,
-                        "criterion": item.get("label"),
+                        "criterion": label,
                         "applicability": item.get("applicability"),
                         "instructions": item.get("description"),
                         "strengths": strengths,
                         "criterion_id": item.get("@id"),
                     }
                 )
-        return normalized
+        return criteria, errors
 
     def _search_cspec(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Find current Released ClinGen CSpec specifications for a gene.
@@ -930,12 +994,13 @@ class ClinGenTool(BaseTool):
                 }
 
             matches: List[Dict[str, Any]] = []
+            unresolved_candidates: List[Dict[str, Any]] = []
             partial_failures: Dict[str, str] = {}
             for record in records:
                 if not self._released_cspec(record):
                     continue
-                rule_sets, match_error = self._cspec_matching_rule_sets(
-                    record, gene
+                rule_sets, unresolved_ids, match_error = (
+                    self._cspec_matching_rule_sets(record, gene)
                 )
                 if match_error is not None:
                     return {
@@ -947,10 +1012,31 @@ class ClinGenTool(BaseTool):
                             f"specification exists for {gene}."
                         ),
                     }
-                if not rule_sets:
-                    continue
                 specification_id = self._cspec_id(record.get("@id"))
-                if not specification_id:
+                # A Released record whose gene scope cannot be decided from
+                # the index (rule sets without gene lists, or no rule sets
+                # at all) is preserved as a candidate -- the index not
+                # listing genes says nothing about applicability.
+                if unresolved_ids or record.get("ruleSets") == []:
+                    unresolved_candidates.append(
+                        {
+                            "specification_id": specification_id,
+                            "version": self._cspec_version(record) or None,
+                            "vcep": self._cspec_organization(record) or None,
+                            "url": str(
+                                record.get("url")
+                                or f"{CSPEC_UI_DOC_URL}/{specification_id}"
+                            ),
+                            "api_url": (
+                                f"{CSPEC_API_BASE_URL}/"
+                                f"SequenceVariantInterpretation/id/"
+                                f"{specification_id}"
+                            ),
+                            "rule_set_ids": unresolved_ids,
+                            "scope_reason": "gene_binding_unavailable",
+                        }
+                    )
+                if not rule_sets:
                     continue
                 detail_url = (
                     f"{CSPEC_API_BASE_URL}/SequenceVariantInterpretation/id/"
@@ -992,12 +1078,14 @@ class ClinGenTool(BaseTool):
                             "detail response is not an object"
                         )
                         detail = {}
-                    elif "ruleSets" in detail and not isinstance(
-                        detail.get("ruleSets"), list
-                    ):
-                        detail_structures.append(
-                            "detail ruleSets is not a list"
+                    rule_set_ids = [rs["rule_set_id"] for rs in rule_sets]
+                    criteria, criteria_errors = (
+                        self._cspec_criteria_for_rule_sets(
+                            detail, rule_set_ids
                         )
+                    )
+                    entry["criterion_modifications"] = criteria
+                    detail_structures.extend(criteria_errors)
                     entry["version"] = (
                         entry["version"] or self._cspec_version(detail)
                     )
@@ -1008,12 +1096,6 @@ class ClinGenTool(BaseTool):
                         if isinstance(assertion_method, dict)
                         else None
                     )
-                    rule_set_ids = [rs["rule_set_id"] for rs in rule_sets]
-                    entry["criterion_modifications"] = (
-                        self._cspec_criteria_for_rule_sets(
-                            detail, rule_set_ids
-                        )
-                    )
                     entry["specification"] = detail
                     if detail_structures:
                         entry["detail_structure_failed"] = True
@@ -1022,13 +1104,19 @@ class ClinGenTool(BaseTool):
                             + "; ".join(detail_structures)
                             + ")"
                         )
+                        for structure_error in criteria_errors:
+                            entry["missing_materials"].append(
+                                "criterion_specifications (structure error: "
+                                + structure_error
+                                + ")"
+                            )
                         partial_failures[specification_id] = (
                             "detail structure damaged: "
                             + "; ".join(detail_structures)
                         )
                     if not entry["assertion_method_url"]:
                         entry["missing_materials"].append("assertion_method")
-                    if not entry["criterion_modifications"]:
+                    if not criteria and not criteria_errors:
                         entry["missing_materials"].append(
                             "criterion_specifications"
                         )
@@ -1048,6 +1136,7 @@ class ClinGenTool(BaseTool):
                 "gene": gene,
                 "data": matches,
                 "total": len(matches),
+                "unresolved_scope_specs": unresolved_candidates,
                 "provider": "ClinGen CSpec Registry",
                 "request_url": response.url,
                 "note": (
@@ -1058,13 +1147,31 @@ class ClinGenTool(BaseTool):
                     "any attachments and the assertion method it references."
                 ),
             }
-            if not matches:
+            if not matches and unresolved_candidates:
+                result["note"] = (
+                    f"No explicit gene match for {gene} in the CSpec index, "
+                    f"but {len(unresolved_candidates)} Released "
+                    "specification(s) whose gene scope the index does not "
+                    "resolve remain listed in `unresolved_scope_specs`. "
+                    "Resolve their scope against the official materials "
+                    "before concluding whether a specification applies; do "
+                    "not default to generic rules while candidates are "
+                    "unresolved."
+                )
+            elif not matches:
                 result["note"] = (
                     f"No Released ClinGen CSpec specification covers gene "
                     f"{gene} in the CSpec registry. That is a valid empty "
                     "result, not a lookup failure: classify under the "
                     "generic ACMG/AMP 2015 + ClinGen SVI rules. Do not infer "
                     "from this that VCEP guidance cannot exist elsewhere."
+                )
+            elif unresolved_candidates:
+                result["note"] += (
+                    f" Additionally, {len(unresolved_candidates)} Released "
+                    "specification(s) with unresolved gene scope are listed "
+                    "in `unresolved_scope_specs` and may also apply to "
+                    f"{gene}."
                 )
             if partial_failures:
                 result["partial_failures"] = partial_failures
