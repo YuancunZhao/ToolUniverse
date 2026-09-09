@@ -21,6 +21,34 @@ uv sync            # creates .venv with the project installed editable
 Do not use `uv sync --all-extras`: the `graph` extra needs pygraphviz, which
 requires system graphviz headers.
 
+## Environment note: hidden `.pth` files under iCloud-synced ~/Documents
+
+This workspace lives under `~/Documents`, which macOS syncs through iCloud's
+file provider. On this machine the daemon marks every `*.pth` in
+`.venv/lib/python3.12/site-packages/` with the macOS `UF_HIDDEN` flag within
+seconds, and CPython's `site` module **skips hidden `.pth` files** — which
+silently drops the editable-install path and makes both `import tooluniverse`
+and `tooluniverse-smcp-stdio` fail with `ModuleNotFoundError` in fresh
+processes. Regular module imports are NOT affected by the flag; only `.pth`
+processing is.
+
+Diagnosis and repair (environment state, not a code issue):
+
+```bash
+ls -lO .venv/lib/python3.12/site-packages/*.pth   # "hidden" in flags column
+chflags nohidden .venv/lib/python3.12/site-packages/__editable__.tooluniverse-1.4.1.pth
+env -u PYTHONPATH .venv/bin/python -c 'import tooluniverse; print(tooluniverse.__file__)'
+```
+
+If the flag returns within seconds (it does here — the daemon re-applies it),
+the durable fix already installed in this venv is
+`.venv/lib/python3.12/site-packages/sitecustomize.py`, which appends this
+workspace's `src` directory to `sys.path` at interpreter startup — exactly
+what the hidden `.pth` would have done. It works even though the daemon
+hides it too, because hidden `.py` files import normally. If you rebuild the
+venv somewhere `.pth` files keep their visibility, delete that
+`sitecustomize.py`.
+
 Note: `uv run` may try to append extra resolution entries to `uv.lock`
 (cuda-bindings etc.) unless frozen; if you want to keep `uv.lock` pristine,
 export `UV_FROZEN=1` or pass `--frozen`.

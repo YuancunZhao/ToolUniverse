@@ -32,9 +32,11 @@ against source text on 2026-09-09 — none from memory):
   Strong).
 - **PM2** — SVI PM2 recommendation **v1.0** (approved 2020-09-04): apply at
   Supporting (PM2_Supporting).
-- **PM3** — SVI PM3 recommendation v1.0 (Oza et al. 2018, Table 6a):
-  per-proband 1.0/0.5/0.25/0 by phase × other-variant class; combined
-  0.5/1/2/4 → Supporting/Moderate/Strong/VeryStrong.
+- **PM3** — SVI PM3 recommendation **v1.0** (approved 2019-05-02, official
+  PDF): per-proband 1.0/0.5/0.25/0 by phase × other-variant class
+  (phase-unknown splits P 0.5 / LP 0.25); combined 0.5/1/2/4 →
+  Supporting/Moderate/Strong/VeryStrong; affected proband, PM2 rarity of
+  both variants, and anti-circular classification required.
 - **PP1/BS4/PP4** — Biesecker et al., AJHG 2023 (PMC10806742): co-segregation
   points per individual by inheritance model; PP4 diagnostic-yield points;
   locus evidence (PP1+PP4) capped at +5.0 (enforced by the calculator);
@@ -268,40 +270,61 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Source:** ClinGen SVI PM2 recommendation v1.0 (2020-09-04).
 
 ### PM3 — in trans with a pathogenic variant, recessive (SVI point system)
-- **Facts:** proband observations with the variant paired on the other allele;
-  phase evidence per observation (confirmed by family/molecular typing vs
-  unknown); classification of the other variant (P/LP vs VUS); homozygous
-  occurrences and consanguinity.
-- **Points per proband (Oza et al. 2018, Table 6a — the table the SVI
-  recommendation formalized):**
-  - in trans with a Pathogenic/Likely pathogenic variant → 1.0 confirmed;
-    0.5 phase unknown
-  - homozygous occurrence → 0.5 (cap 1.0 across homozygous observations)
-  - VUS on the other allele, or homozygous occurrence due to consanguinity
-    → 0.25 (cap 0.5)
-- **Combined points → strength (Table 6b):** 0.5 **Supporting**; 1
-  **Moderate**; 2 **Strong**; 4 **VeryStrong**. One fully confirmed proband
-  with a P/LP partner is PM3_Moderate (1.0), not Supporting; an unphased
-  VUS co-occurrence scores nothing.
-- **Open question (source discrepancy):** one secondary summary (Genome
-  Medicine 2020, Table 4C) reports phase-unknown split as 0.5 (Pathogenic)
-  vs 0.25 (Likely pathogenic); the primary Table 6a gives 0.5 for P/LP
-  jointly. Pending verification against the SVI PM3 v1.0 document, apply
-  Table 6a (0.5 for P/LP phase unknown) and cite the table used.
-- **Insufficient phase evidence** → `needs_review` with the gap recorded;
-  never assume phase from co-occurrence.
-- **Source:** Oza et al., Hum Mutat 2018, Table 6a/6b (PMC6188673); SVI PM3
-  recommendation v1.0; Genome Medicine 2020 overview (PMC6885382).
+- **Revised SVI definition:** "For recessive disorders, detected in trans
+  with a pathogenic or likely pathogenic variant **in an affected
+  patient**" — the proband must be affected.
+- **Facts:** each proband observation with (1) phase status (confirmed in
+  trans vs unknown — one tested parent carrying only the other allele is
+  sufficient confirmation), (2) the other variant's classification, (3)
+  rarity of both variants (both must meet PM2 rarity, or PM3 does not
+  apply), (4) anti-circularity: the other variant's classification must NOT
+  use any evidence from the variant being interrogated.
+- **Points per proband (SVI PM3 v1.0, approved 2019-05-02, Table 1):**
+
+| Other variant / observation | Confirmed in trans | Phase unknown |
+|---|---:|---:|
+| Pathogenic | 1.0 | 0.5 |
+| Likely pathogenic | 1.0 | **0.25** |
+| VUS (cap 0.5 across such observations) | 0.25 | 0 |
+| Homozygous occurrence (cap 1.0 across such observations) | 0.5 per proband | N/A |
+
+- **Combined points → strength (Table 2):** 0.5 **PM3_Supporting**; 1
+  **PM3 (Moderate)**; 2 **PM3_Strong**; 4 **PM3_VeryStrong**. A total below
+  0.5 does not meet PM3. These are PM3-internal observation points, NOT the
+  final Tavtigian 2020 classification points.
+- **Phase unknown is not a gap by itself:** when the co-occurrence is
+  qualified (affected proband, other variant independently classified
+  P/LP, both rare), apply the downweighted phase-unknown values above —
+  roughly two phase-unknown P (or LP) co-occurrences equal one confirmed.
+  Keep the criterion at `needs_review` only when the facts themselves are
+  missing (no qualified co-occurrence, other variant unclassified, rarity
+  unestablished). BP2's phase requirements are separate and unchanged.
+- **Source:** ClinGen SVI PM3 recommendation v1.0, approved 2019-05-02
+  (official PDF; supersedes the Oza et al. 2018 Table 6a variant, whose
+  phase-unknown column did not split P vs LP).
 
 ### PM4 — protein-length change in a non-repeat region (Moderate default)
-- **Facts:** variant changes protein length (frameshift in non-repeat,
-  in-frame indel, exon-level deletion) outside a recognized repeat/low-
-  complexity region, and LoF is NOT the gene's mechanism (else PVS1 governs).
-- **Adjustments/downgrades** per specification; repeats defined by
-  UniProt/InterPro annotations.
-- **Double counting:** with PVS1 met, PM4 is redundant for the same fact.
-- **Source:** ACMG/AMP 2015 with SVI澄清; specification-defined region lists
-  where present.
+- **Generic definition:** an in-frame deletion/insertion in a non-repeat
+  region, or a stop-loss variant — i.e., a predicted protein-length change
+  outside recognized repeat/low-complexity regions (repeats per
+  UniProt/InterPro). Frameshift and nonsense variants are LoF types assessed
+  under PVS1, **not automatically PM4**; a specification may explicitly
+  extend PM4 to truncating variants for its gene (MYOC's does) — such an
+  extension applies only under that specification, never generically.
+- **Mechanism is not a precondition:** PM4 can apply whether or not LoF is
+  the gene's established mechanism; uncertain mechanism may justify a
+  strength reduction, not exclusion (SVI Q&A 2021-09-23). Judge from the
+  specific variant, the mechanism evidence, and the applicable
+  specification — never exclude PM4 solely because the gene has a LoF
+  mechanism.
+- **Double counting with PVS1 (SVI Q&A 2021-09-23):** do NOT apply both
+  PVS1 (at any strength) and PM4 to the same variant — pick one. "PVS1 not
+  applicable" never converts into "PM4 met" by itself (start-loss with a
+  downstream start is a PVS1_Supporting-vs-PM4 choice; evidence that the
+  re-initiation product is non-functional raises PVS1 strength instead).
+  Stop-loss with nonstop-mediated decay → PM4 is the better fit.
+- **Source:** ACMG/AMP 2015; ClinGen SVI Questions & Updates (2021-09-23),
+  PVS1/PM4 section; specifications may add region lists or extensions.
 
 ### PM5 — different pathogenic missense at the same residue (Moderate default)
 - **Facts:** a different amino-acid change at the same residue is
@@ -479,8 +502,25 @@ BP7/PVS1 instead.
   phase from co-occurrence alone.
 
 ### BP3 — in-frame indel in a repeat region (Supporting)
-- Mirror of PM4; repeat region per UniProt/InterPro. If the gene mechanism
-  makes indels pathogenic (specification), BP3 may be `not_applicable`.
+- Mirror of PM4's region logic: the in-frame indel falls INSIDE a
+  recognized repeat/low-complexity region (UniProt/InterPro). If the gene
+  mechanism or a specification makes such indels pathogenic, BP3 may be
+  `not_applicable` under that specification.
+
+### BP4 — computational evidence for benignity (calibrated thresholds)
+- Shares PP3's calibrated single-tool framework (one pre-specified tool,
+  chosen before seeing results; exact intervals in the PP3 entry above) —
+  apply the benign side of the same table: REVEL 0.183–0.290 Supporting,
+  0.016–0.183 Moderate, 0.003–0.016 Strong, ≤0.003 VeryStrong; CADD
+  17.3–22.7 Supporting, 0.15–17.3 Moderate, ≤0.15 Strong (other tools in
+  the PP3 table).
+- Discordant calibrated predictors → neither PP3 nor BP4; concordance of
+  uncalibrated tools proves nothing either way.
+- Splicing (Walker et al. 2023): SpliceAI Δ ≤0.1 → BP4 (calibrated
+  Moderate, conservatively applied at Supporting); 0.1–0.2 uninformative —
+  no code.
+- **Source:** Pejaver et al. 2022 (PMC9748256); Walker et al. 2023
+  (PMC10357475).
 
 ### BP5 — alternate molecular diagnosis in the proband
 - **No SVI criteria-specific recommendation exists for BP5** (checked
@@ -540,4 +580,4 @@ Strength modifiers shift a code along ±1/±2/±4/±8; BA1 never converts.
 | One AF dataset | BA1 / BS1 / PM2 pick the code the fact supports; conflicting codes → resolve before scoring |
 | One segregation dataset | PP1 xor BS4 |
 | One reference pathogenic variant | PS1 (same AA) and PM5 (same residue, different AA) are distinct facts and may both stand |
-| LoF frameshift in non-repeat region | PVS1 (LoF mechanism) xor PM4 (LoF not mechanism) |
+| Protein-length-affecting variant | PVS1 xor PM4 — never both, at any PVS1 strength; LoF types go to PVS1, in-frame/stop-loss to PM4, and "PVS1 not applicable" alone never makes PM4 met |

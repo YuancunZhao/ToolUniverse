@@ -65,9 +65,14 @@ what each code requires. Statuses mean different things — do not merge them:
 Each scoring fact gets a stable `evidence_ids` entry. The same fact under two
 codes (e.g., one functional assay driving both PS3 and PM1) must be sent to
 review — the calculator enforces this. Different facts from the same paper are
-NOT duplicates. Unresolved phase (BP2/PM3), unconfirmed de novo (PS2/PM6), or
-under-validated assays leave the criterion at `needs_review` with the gap
-recorded — do not paper over them.
+NOT duplicates. Unresolved phase does not automatically pause everything:
+PM3 has an official phase-unknown branch (downweighted per-proband points —
+see `SVI_REFERENCE.md`) that you should use whenever the co-occurrence facts
+are complete; keep the gap only when the facts themselves are missing (no
+qualified co-occurrence, other variant unclassified, rarity unestablished).
+BP2 still requires phase evidence. Unconfirmed de novo (PS2/PM6 follows the
+SVI assumed-parentage tiers) and under-validated assays leave the criterion
+at `needs_review` with the gap recorded — do not paper over them.
 
 **6. Call the calculator.**
 `ACMG_calculate_classification` with exactly four fields:
