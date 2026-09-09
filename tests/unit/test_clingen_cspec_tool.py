@@ -442,3 +442,120 @@ def test_cspec_index_unexpected_shape_is_error(monkeypatch):
     result = _tool().run({"gene": "MYOC"})
 
     assert result["status"] == "error"
+
+
+# --------------------------------------------------------------------------- #
+# Index structural damage must stay an error, never a valid empty result
+# --------------------------------------------------------------------------- #
+def test_malformed_index_is_not_a_valid_empty_result(monkeypatch):
+    _patch(monkeypatch, {"data": [None]})
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "data[0]" in result["error"]
+    # Never readable as "no specification exists"; not a JSON-decode claim.
+    assert "no specification exists" in result["error"]
+    assert "not valid JSON" not in result["error"]
+
+
+def test_missing_or_non_string_status_is_error(monkeypatch):
+    record = _index_record()
+    del record["status"]
+    _patch(monkeypatch, _index(record))
+
+    assert _tool().run({"gene": "MYOC"})["status"] == "error"
+
+    _patch(monkeypatch, _index(_index_record(status=123)))
+    assert _tool().run({"gene": "MYOC"})["status"] == "error"
+
+
+def test_released_record_without_usable_id_is_error(monkeypatch):
+    record = _index_record()
+    del record["@id"]
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "no specification exists" in result["error"]
+
+
+def test_released_record_with_broken_rulesets_is_error(monkeypatch):
+    record = _index_record()
+    record["ruleSets"] = "broken"
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "ruleSets" in result["error"]
+
+
+def test_released_record_with_non_string_gene_label_is_error(monkeypatch):
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["label"] = 42
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "label" in result["error"]
+
+
+def test_mixed_normal_and_corrupt_records_is_error(monkeypatch):
+    # One broken record poisons the applicability decision even when a
+    # perfectly valid Released record for the gene is also present.
+    _patch(monkeypatch, _index(_index_record(), None))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+
+
+def test_matched_rule_set_without_usable_id_is_error(monkeypatch):
+    record = _index_record()
+    del record["ruleSets"][0]["@id"]
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "no usable" in result["error"]
+
+
+def test_non_released_records_do_not_require_released_detail(monkeypatch):
+    # Draft/retired records are filtered by status alone; their structure
+    # must not be held to Released standards, or every draft would error.
+    draft = _index_record(spec_id="GNDRAFT", gene="MYOC", status="Draft")
+    del draft["ruleSets"]
+    del draft["@id"]
+    _patch(monkeypatch, _index(_index_record(), draft))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["total"] == 1
+    assert result["data"][0]["specification_id"] == "GN019"
+
+
+def test_detail_non_object_is_partial_structure_failure(monkeypatch):
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": ["not", "an", "object"]},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    # The candidate specification is kept; the structural damage is
+    # disclosed as a partial failure, distinct from missing optional
+    # material, and never reported as a fully-read specification.
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert "GN019" in result["partial_failures"]
+    assert any(
+        "detail structure damaged" in m for m in entry["missing_materials"]
+    )
+    assert entry["criterion_modifications"] == []

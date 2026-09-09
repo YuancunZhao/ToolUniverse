@@ -705,10 +705,64 @@ class ClinGenTool(BaseTool):
             )
         return diseases
 
+    @staticmethod
+    def _cspec_index_structure_error(
+        records: List[Any], gene: str
+    ) -> Optional[str]:
+        """Validate the index structure the applicability decision depends on.
+
+        Returns an error message describing the first structural defect, or
+        None when the index is sufficient to decide applicability. A broken
+        record that is silently skipped would read downstream as "no
+        specification exists for this gene" -- the exact misreading this
+        check exists to prevent. Non-Released records (draft, retired) are
+        filtered by status as before and are NOT required to carry full
+        Released detail structure.
+        """
+        for position, record in enumerate(records):
+            where = f"index data[{position}]"
+            if not isinstance(record, dict):
+                return f"{where} is not an object"
+            status = record.get("status")
+            if not isinstance(status, str) or not status.strip():
+                return f"{where}.status is missing or not a string"
+            if status.strip().casefold() != "released":
+                continue
+            spec_ref = record.get("@id")
+            if not isinstance(spec_ref, str) or not spec_ref.strip():
+                return f"{where} is Released but has no usable @id"
+            rule_sets = record.get("ruleSets")
+            if not isinstance(rule_sets, list):
+                return f"{where} ({spec_ref.rsplit('/', 1)[-1]}) is Released but ruleSets is not a list"
+            for rs_position, rule_set in enumerate(rule_sets):
+                rs_where = f"{where}.ruleSets[{rs_position}]"
+                if not isinstance(rule_set, dict):
+                    return f"{rs_where} is not an object"
+                genes = rule_set.get("genes")
+                if not isinstance(genes, list):
+                    return f"{rs_where}.genes is not a list"
+                for g_position, gene_entry in enumerate(genes):
+                    if not isinstance(gene_entry, dict):
+                        return (
+                            f"{rs_where}.genes[{g_position}] is not an object"
+                        )
+                    label = gene_entry.get("label")
+                    if not isinstance(label, str) or not label.strip():
+                        return (
+                            f"{rs_where}.genes[{g_position}].label is missing "
+                            "or not a string"
+                        )
+        return None
+
     def _cspec_matching_rule_sets(
         self, record: Dict[str, Any], gene: str
-    ) -> List[Dict[str, Any]]:
+    ) -> tuple:
         """Rule sets of `record` that cover `gene`, keeping gene-disease binding.
+
+        Returns (matches, error_message). A matched rule set without a usable
+        @id cannot be bound back to its criteria, so it is an error rather
+        than a match with a blank identifier (a blank id would silently mix
+        rule sets in the detail phase).
 
         A specification's rule sets bind genes to diseases and (in the detail
         document) to their own criterion specifications. Returning one item
@@ -717,13 +771,9 @@ class ClinGenTool(BaseTool):
         rule sets.
         """
         matches: List[Dict[str, Any]] = []
-        for rule_set in record.get("ruleSets") or []:
-            if not isinstance(rule_set, dict):
-                continue
+        for rs_position, rule_set in enumerate(record.get("ruleSets") or []):
             genes = []
             for gene_entry in rule_set.get("genes") or []:
-                if not isinstance(gene_entry, dict):
-                    continue
                 if str(gene_entry.get("label") or "").strip().upper() != gene:
                     continue
                 genes.append(
@@ -732,14 +782,21 @@ class ClinGenTool(BaseTool):
                         "diseases": self._cspec_diseases(gene_entry),
                     }
                 )
-            if genes:
-                matches.append(
-                    {
-                        "rule_set_id": self._cspec_id(rule_set.get("@id")),
-                        "genes": genes,
-                    }
+            if not genes:
+                continue
+            rule_set_id = self._cspec_id(rule_set.get("@id"))
+            if not rule_set_id:
+                return [], (
+                    f"ruleSets[{rs_position}] covers {gene} but has no usable "
+                    "@id"
                 )
-        return matches
+            matches.append(
+                {
+                    "rule_set_id": rule_set_id,
+                    "genes": genes,
+                }
+            )
+        return matches, None
 
     @staticmethod
     def _cspec_version(content: Dict[str, Any]) -> str:
@@ -846,13 +903,43 @@ class ClinGenTool(BaseTool):
                         f"exists for {gene}."
                     ),
                 }
+            records = payload["data"]
+
+            # Applicability is decided FROM this index, so a record the
+            # decision depends on must be structurally sound: a silently
+            # skipped broken record would read as "no specification exists".
+            structure_error = self._cspec_index_structure_error(records, gene)
+            if structure_error is not None:
+                return {
+                    "status": "error",
+                    "error": (
+                        f"CSpec index contains a damaged record: "
+                        f"{structure_error}. The applicability of "
+                        f"specifications to {gene} cannot be decided from "
+                        "this response; this is a data-structure failure, "
+                        "not a statement that no specification exists for "
+                        f"{gene}."
+                    ),
+                }
 
             matches: List[Dict[str, Any]] = []
             partial_failures: Dict[str, str] = {}
-            for record in payload["data"]:
-                if not isinstance(record, dict) or not self._released_cspec(record):
+            for record in records:
+                if not self._released_cspec(record):
                     continue
-                rule_sets = self._cspec_matching_rule_sets(record, gene)
+                rule_sets, match_error = self._cspec_matching_rule_sets(
+                    record, gene
+                )
+                if match_error is not None:
+                    return {
+                        "status": "error",
+                        "error": (
+                            f"CSpec index record matched {gene} but is "
+                            f"damaged: {match_error}. This is a "
+                            "data-structure failure, not a statement that no "
+                            f"specification exists for {gene}."
+                        ),
+                    }
                 if not rule_sets:
                     continue
                 specification_id = self._cspec_id(record.get("@id"))
@@ -888,7 +975,22 @@ class ClinGenTool(BaseTool):
                     )
                     detail_response.raise_for_status()
                     detail = detail_response.json()
-                    detail = detail if isinstance(detail, dict) else {}
+                    # A structurally damaged detail keeps the candidate
+                    # specification but is distinguished from a legitimate
+                    # response that merely lacks optional material: neither
+                    # state may be read as "specification fully read".
+                    detail_structures: List[str] = []
+                    if not isinstance(detail, dict):
+                        detail_structures.append(
+                            "detail response is not an object"
+                        )
+                        detail = {}
+                    elif "ruleSets" in detail and not isinstance(
+                        detail.get("ruleSets"), list
+                    ):
+                        detail_structures.append(
+                            "detail ruleSets is not a list"
+                        )
                     entry["version"] = (
                         entry["version"] or self._cspec_version(detail)
                     )
@@ -901,9 +1003,22 @@ class ClinGenTool(BaseTool):
                     )
                     rule_set_ids = [rs["rule_set_id"] for rs in rule_sets]
                     entry["criterion_modifications"] = (
-                        self._cspec_criteria_for_rule_sets(detail, rule_set_ids)
+                        self._cspec_criteria_for_rule_sets(
+                            detail, rule_set_ids
+                        )
                     )
                     entry["specification"] = detail
+                    if detail_structures:
+                        entry["detail_structure_failed"] = True
+                        entry["missing_materials"].append(
+                            "full_specification (detail structure damaged: "
+                            + "; ".join(detail_structures)
+                            + ")"
+                        )
+                        partial_failures[specification_id] = (
+                            "detail structure damaged: "
+                            + "; ".join(detail_structures)
+                        )
                     if not entry["assertion_method_url"]:
                         entry["missing_materials"].append("assertion_method")
                     if not entry["criterion_modifications"]:

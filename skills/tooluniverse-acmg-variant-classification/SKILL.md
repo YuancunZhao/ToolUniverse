@@ -32,8 +32,9 @@ Call `ClinGen_search_cspec(gene="<HGNC symbol>")`. Then decide:
 | Lookup result | Rule context to record |
 |---|---|
 | `success` with data (Released spec) | Read the specification's official page (`url` field) with `get_webpage_text_from_url`, including attachments and the assertion method it references. The API JSON alone is NOT the full specification. If any rule you need is incomplete after that, set `applicable_rules_complete=false`. |
-| `success`, empty data | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. |
-| `error`, timeout, or `partial_failures` for the spec you need | `cspec_lookup_status="unresolved"` or `"failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
+| `success`, empty data | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. ONLY a genuine empty `data` list means this; never an error. |
+| `error` (including damaged-index errors), timeout | `cspec_lookup_status="failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
+| The specification you need has `partial_failures`, `detail_fetch_failed`, `detail_structure_failed`, or `missing_materials` you could not fill by reading the official page | `cspec_lookup_status="unresolved"` — the spec exists but was not fully read; do NOT classify under it yet. |
 
 If the specification defines special combinations, joint point caps, or
 thresholds different from Tavtigian 2020, set
