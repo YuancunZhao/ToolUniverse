@@ -276,3 +276,90 @@ SVI_REFERENCE.md；同时查出并删除了四个**不存在的"SVI 建议"引�
 
 仍缺的一手文档（已请用户提供）：SVI PM3 v1.0 原始 PDF（裁决上述分歧）、
 BA1 例外清单 2018-07 之后的最新版、（次要）Pejaver 2022 补充阈值表边界值。
+
+## 验收修复轮（2026-09-09，计划：2026-09-09-acmg-svi-cspec-repair.md）
+
+起点 `a397a0c2`；四个提交：`6480b8db`（PM3/PM4 指导）、`2680cdce`（CSpec 异常）、
+`6bc71457`（计算器契约/Schema/SDK 测试）、第四个（CSpec 空范围修正 + MCP 三场景
++ 文档 + 副本 + 本记录）。
+
+### 原报告中的错误（本轮修复）
+
+1. **PM3 用错表**：轻量改造轮按 Oza 2018 Table 6a 把"相位未知 P/LP 统一 0.5"
+   当作裁决。官方 SVI PM3 v1.0 PDF（2019-05-02 批准，计划提供链接，已全文核验）
+   实际区分 P(0.5)/LP(0.25)；且补齐受累患者、双变异 PM2 罕见性、反循环分类、
+   单亲验证相位等前提。已按官方表重写并移除"待提供 PDF"占位。
+2. **PM4 定义错误**：原文把 frameshift 自动纳入 PM4 并加"LoF 必须不是机制"前提。
+   按 SVI Q&A（2021-09-23，第 35 页区段原文核验）恢复通用定义（非重复区
+   in-frame del/ins 或 stop-loss；机制不确定降强度不排除；PVS1 任意强度不与
+   PM4 并用；PVS1 不适用不自动转 PM4 满足）。补 BP4 独立条目（共用 PP3 校准表）。
+3. **"MYOC 无 CSpec、PVS1 满足"的错误示例**：测试与本地运行文档中 MYOC+
+   no_released_spec+PVS1 的组合与事实矛盾（MYOC 有 GN019 且其 PVS1 不适用）。
+   已全部改为明确标注的 synthetic fixture（TESTGENE/NM_999999.1），文档示例改用
+   真实 GN019 查询结果。
+4. **CSpec 索引损坏被静默过滤**：损坏记录原先被跳过，可能被读成"没有规范"。
+   现非对象记录、缺/非法 status、Released 缺 @id、ruleSets/genes/label 损坏、
+   命中规则集缺 @id → `status:error`（指明字段位置与"不能据此认定没有规范"）。
+   详情非对象/规则集损坏 → 保留候选规范 + `detail_structure_failed` +
+   partial_failures。在线实测中发现 GN015（Released，索引与详情都不含 genes）
+   属"确定空基因范围"（JSON-LD 缺省=未绑定，覆盖任何基因都不可能），按空集
+   跳过而非报错——修复后在线 MYOC 查询恢复 GN019 v2.1，未知基因仍为有效空结果。
+5. **计算器输入校验缺口**：`str()` 强转使对象/数值冒充字符串通过；specification
+   结构不校验；no_released_spec 与 specification 矛盾不查；疾病/遗传模式 null
+   可拿到正式分类。已全部收紧（见 6bc71457）：严格类型、四键齐全、布尔真伪、
+   http(s) source_url、矛盾=输入错误、`incomplete_variant_context`/
+   `missing_specification_identity` 两个新暂停原因；公开 JSON Schema 补全
+   （additionalProperties:false、枚举、28 定长、引用元素 minLength 1），由
+   upstream jsonschema 在 SDK/MCP 层强制。
+6. **MCP 测试的服务器选择与覆盖**：原先 `shutil.which` 优先全局 PATH 且可 skip。
+   现仅取 `sys.prefix/bin` 入口，缺失即失败（不 skip）；覆盖两工具发现 + 计算、
+   非法输入拒绝、needs_review 暂停三场景。
+7. **过时的"全部通过"结论**：本记录原实施记录宣称全绿时，环境实际已因隐藏
+   .pth 损坏（历史上出现 73 过/1 MCP 启动失败）。已如实重录。
+
+### 环境修复（非 Git 提交）
+
+iCloud fileprovider 守护进程持续把 `.venv`/.../site-packages 下**所有** `.pth`
+（及 410+ 文件）标记 `UF_HIDDEN`，chflags 后 3 秒内被回写，`brctl download` 无效；
+CPython site 跳过 hidden `.pth`，而普通模块导入不受影响（hidden 目录下 PIL 正常
+导入）。修复：`chflags nohidden`（计划要求步骤，已执行但非持久）+
+`.venv/.../sitecustomize.py`（把本工作区 `src` 加回 sys.path，等价于被隐藏的
+.pth；对 python/pytest/入口脚本统一生效）。验证：`env -u PYTHONPATH
+.venv/bin/python -c 'import tooluniverse'` 与 `.venv/bin/tooluniverse-smcp-stdio
+--help` 均指向本工作区。已写入本地运行文档的诊断节。
+
+### 实际测试命令与结果（本轮验收，2026-09-09）
+
+```
+env -u PYTHONPATH .venv/bin/python -m pytest \
+  tests/unit/test_acmg_calculate_classification.py \
+  tests/unit/test_clingen_*.py \
+  tests/unit/test_clinical_calc*.py \
+  tests/integration/test_acmg_mcp_stdio.py \
+  tests/unit/test_lazy_load_cache_consistency.py \
+  tests/unit/test_backward_compatibility.py \
+  tests/unit/test_tool_name_shortening.py \
+  tests/unit/test_run_parameters.py \
+  --no-cov
+→ 全部通过（含新增：计算器契约 30+、CSpec 结构 11、SDK 入口 3、MCP 2；
+  既有 7 项环境性 skip 不变）
+ruff check（改动文件）→ 通过；git diff --check → 干净
+tests/test_claude_code_plugin.py → 与修复前基线逐项一致
+  （5 项上游既有失败，无新增）
+在线 smoke（另行记录）：ClinGen_search_cspec MYOC→GN019 v2.1 成功；
+  未知基因→有效空结果；MCP tools/list 含两工具。
+```
+
+### 科学规则场景验收状态
+
+- PM3 四个固定场景（2×LP 相位未知=0.5→Supporting；1×P 相位未知=0.5→Supporting；
+  1×LP 确认=1→Moderate；相位未知 VUS=0）：**文档层已按官方表覆盖**（SVI_REFERENCE
+  PM3 表格与前提）；计算器不实现 PM3 内部计点（计划禁止硬编码评估器），场景由
+  外层 LLM 按文档执行——**LLM 实际执行未验收**（见下）。
+- PM4/PVS1 场景（LoF 机制不排除 PM4、frameshift 不自动 PM4、PVS1/PM4 不并用）：
+  文档层已修正并同步 quick table。
+- MYOC/GN019：PVS1 不适用（在线核实）；其 PP3+PM5≤5、PP3+PS1≤6 联合上限仍走
+  `unsupported_combination_method` 暂停路径（单测覆盖模拟场景）。
+- **未验收（如实标注）**：真实宿主 LLM 工作流验收——"跳过计算器"请求与来源
+  嵌入指令的实际调用轨迹记录，本轮环境无外层模型可用，未执行。静态文档检查
+  与算术单测不能替代该项。

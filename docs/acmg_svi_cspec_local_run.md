@@ -56,21 +56,44 @@ export `UV_FROZEN=1` or pass `--frozen`.
 ## SDK (Python)
 
 ```python
-# run inside the worktree: uv run python my_script.py
+# run inside the worktree: env -u PYTHONPATH .venv/bin/python my_script.py
 from tooluniverse.tools import ClinGen_search_cspec, ACMG_calculate_classification
 
+# 1) Real CSpec lookup for MYOC (online) -- carry the real result into
+#    rule_context; do NOT hand-write no_released_spec for a gene that HAS
+#    a Released specification.
 specs = ClinGen_search_cspec(gene="MYOC")
-# → status success; data[0].specification_id "GN019", version "2.1",
+# → status success; data[0]: specification_id "GN019", version "2.1",
+#   vcep "Glaucoma Variant Curation Expert Panel",
+#   url https://cspec.genome.network/cspec/ui/svi/doc/GN019,
 #   PVS1 not applicable at any strength, PM2 applicable at Supporting
 #   (AF ≤ 0.0001). Read data[0].url with get_webpage_text_from_url before
 #   classifying under it.
+spec = specs["data"][0]
 
+# 2) Deterministic computation. The example variant below is SYNTHETIC
+#    (TESTGENE does not exist) -- it demonstrates the interface only, with
+#    the generic-rules rule_context; a real MYOC classification would pass
+#    the specification block above (and MYOC's combination caps may pause
+#    classification for expert review).
 result = ACMG_calculate_classification(
-    variant_context={"variant": "NM_000715.3:c.1000C>T", "gene": "MYOC",
-                     "disease": None, "inheritance_mode": None},
-    rule_context={"cspec_lookup_status": "no_released_spec",
-                  "combination_method": "tavtigian2020",
-                  "specification": None, "applicable_rules_complete": True},
+    variant_context={"variant": "NM_999999.1:c.1000C>T", "gene": "TESTGENE",
+                     "disease": "Synthetic fixture disease",
+                     "inheritance_mode": "Autosomal dominant inheritance"},
+    rule_context={  # generic rules example; for MYOC use the block below
+        "cspec_lookup_status": "no_released_spec",
+        "combination_method": "tavtigian2020",
+        "specification": None, "applicable_rules_complete": True,
+    },
+    # "rule_context": {
+    #     "cspec_lookup_status": "released_spec_found",
+    #     "specification": {"id": spec["specification_id"],
+    #                       "version": spec["version"],
+    #                       "source_url": spec["url"],
+    #                       "vcep": spec["vcep"]},
+    #     "applicable_rules_complete": True,  # only after reading the full spec
+    #     "combination_method": "tavtigian2020",  # or the spec's own method
+    # },
     evidence=evidence_28_records,   # exactly 28, one per ACMG/AMP code
     blocking_issues=[],
 )
@@ -110,16 +133,19 @@ For a minimal session exposing only the two new tools (fast startup):
   --include-tools ClinGen_search_cspec ACMG_calculate_classification
 ```
 
-Verified over MCP on 2026-09-09: `tools/list` exposes both;
-`ClinGen_search_cspec(gene="MYOC")` returns GN019 v2.1 with the Glaucoma VCEP;
-`ACMG_calculate_classification` returns the Tavtigian 2020 result
-(PVS1 + PM2_Supporting → Likely Pathogenic, 9 points).
+Verified over MCP on 2026-09-09: `tools/list` exposes both tools;
+`ClinGen_search_cspec(gene="MYOC")` returns GN019 v2.1 with the Glaucoma VCEP
+(online smoke, recorded separately); `ACMG_calculate_classification` handles
+all three outcome classes on synthetic fixtures (computed: PVS1 +
+PM2_Supporting → Likely Pathogenic, 9 points; illegal input rejected;
+incomplete context → needs_review).
 
 ## Tests
 
 ```bash
 cd /Users/zhaoyuancun/Documents/ToolUniverse-acmg-svi-cspec-lightweight
-uv run pytest tests/unit/test_clingen_cspec_tool.py \
+env -u PYTHONPATH .venv/bin/python -m pytest \
+  tests/unit/test_clingen_cspec_tool.py \
               tests/unit/test_acmg_calculate_classification.py \
               tests/integration/test_acmg_mcp_stdio.py -q --no-cov
 ```

@@ -492,6 +492,33 @@ def test_released_record_with_broken_rulesets_is_error(monkeypatch):
     assert "ruleSets" in result["error"]
 
 
+def test_released_record_with_non_list_genes_is_error(monkeypatch):
+    record = _index_record()
+    record["ruleSets"][0]["genes"] = "MYOC"
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "genes is not a list" in result["error"]
+
+
+def test_released_record_with_empty_gene_scope_is_skipped(monkeypatch):
+    # Real-world shape (live GN015): a Released rule set that binds no genes
+    # at all -- index AND detail omit the key. An empty gene scope is
+    # determinate (covers nothing), so it must be skipped without erroring
+    # and without ever fabricating a "no specification" answer.
+    empty_scope = _index_record(spec_id="GN015", gene="MYOC")
+    del empty_scope["ruleSets"][0]["genes"]
+    _patch(monkeypatch, _index(empty_scope))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    assert result["total"] == 0
+
+
 def test_released_record_with_non_string_gene_label_is_error(monkeypatch):
     record = _index_record()
     record["ruleSets"][0]["genes"][0]["label"] = 42

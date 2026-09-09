@@ -739,6 +739,13 @@ class ClinGenTool(BaseTool):
                 if not isinstance(rule_set, dict):
                     return f"{rs_where} is not an object"
                 genes = rule_set.get("genes")
+                if genes is None or genes == []:
+                    # An absent or empty genes list is a determinate EMPTY
+                    # gene scope (JSON-LD omits unbound properties; verified
+                    # live: GN015's rule set binds no genes in index OR
+                    # detail). It cannot cover any queried gene, so skipping
+                    # it cannot fabricate a "no specification" answer.
+                    continue
                 if not isinstance(genes, list):
                     return f"{rs_where}.genes is not a list"
                 for g_position, gene_entry in enumerate(genes):

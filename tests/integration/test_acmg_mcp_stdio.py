@@ -1,30 +1,24 @@
 """MCP integration test: the two new ACMG/CSpec tools over stdio.
 
-Spawns the ToolUniverse SMCP stdio server restricted to the two new tools,
-then verifies MCP discovery and one full deterministic execution of
-ACMG_calculate_classification. No network: the ClinGen_search_cspec network
-path is covered by the recorded online smoke, not here.
+Spawns the ToolUniverse SMCP stdio server restricted to the two new tools
+and verifies, through a real MCP session: discovery of both tools, a legal
+deterministic computation, rejection of illegal input, and a needs_review
+pause. No network: the ClinGen_search_cspec network path is covered by the
+separately recorded online smoke.
+
+The server is always taken from THIS test interpreter's environment
+(``sys.prefix/bin``) -- never from a global PATH lookup -- so the test can
+never silently pass against a different installation. A missing entry point
+fails the suite; it is not skipped.
 """
 
 import asyncio
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
-import pytest
-
-
-def _server_command():
-    found = shutil.which("tooluniverse-smcp-stdio")
-    if found:
-        return found
-    candidate = Path(sys.prefix) / "bin" / "tooluniverse-smcp-stdio"
-    return str(candidate) if candidate.exists() else None
-
-
-SERVER = _server_command()
+SERVER = str(Path(sys.prefix) / "bin" / "tooluniverse-smcp-stdio")
 
 PATHOGENIC = [
     "PVS1", "PS1", "PS2", "PS3", "PS4",
@@ -52,7 +46,7 @@ def _ev(criterion, status="not_assessed", **kw):
 
 
 def _golden_evidence():
-    """Established PVS1 + PM2_Supporting (plan's fixed-material scenario)."""
+    """Synthetic fixture: interface and arithmetic only, no real variant."""
     special = {
         "PVS1": _ev(
             "PVS1",
@@ -60,16 +54,16 @@ def _golden_evidence():
             strength="VeryStrong",
             rationale="Canonical null variant; LoF established; NMD expected",
             source_refs=["PMID:31801624"],
-            rule_refs=["SVI PVS1 decision tree v1.1"],
+            rule_refs=["SVI PVS1 decision tree"],
             evidence_ids=["pvs1-nmd-lof"],
         ),
         "PM2": _ev(
             "PM2",
             "met",
             strength="Supporting",
-            rationale="Absent from gnomAD v4 with adequate coverage",
+            rationale="Absent from population databases with adequate coverage",
             source_refs=["gnomAD v4.1"],
-            rule_refs=["SVI PM2_Supporting 2020"],
+            rule_refs=["SVI PM2 v1.0"],
             evidence_ids=["gnomad-af-absent"],
         ),
     }
@@ -77,7 +71,6 @@ def _golden_evidence():
 
 
 def _golden_arguments():
-    """Synthetic fixture: interface and arithmetic only, no real variant."""
     return {
         "variant_context": {
             "variant": "NM_999999.1:c.1000C>T",
@@ -97,7 +90,11 @@ def _golden_arguments():
 
 
 def _run_mcp_session():
-    """Drive one stdio JSON-RPC session; returns (tool_names, calculator_result)."""
+    """Drive one stdio MCP session; returns (tool_names, results_by_case).
+
+    cases: computed (legal), rejected (illegal references), paused
+    (incomplete variant context).
+    """
 
     async def session():
         from mcp import ClientSession, StdioServerParameters
@@ -116,33 +113,85 @@ def _run_mcp_session():
                 "TOOLUNIVERSE_LIGHT_IMPORT": "1",
             },
         )
+
+        def parse(call):
+            try:
+                return json.loads(call.content[0].text)
+            except (ValueError, AttributeError, IndexError):
+                return {"isError": True, "raw": str(call)}
+
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as client:
                 await client.initialize()
                 listed = await client.list_tools()
                 names = [t.name for t in listed.tools]
 
-                call = await client.call_tool(
+                legal = await client.call_tool(
                     "ACMG_calculate_classification",
                     arguments=_golden_arguments(),
                 )
-                payload = json.loads(call.content[0].text)
-                return names, payload
+
+                rejected_args = _golden_arguments()
+                for record in rejected_args["evidence"]:
+                    if record["criterion"] == "PM2":
+                        record["evidence_ids"] = [None]
+                rejected = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=rejected_args,
+                )
+
+                paused_args = _golden_arguments()
+                paused_args["variant_context"] = dict(
+                    paused_args["variant_context"], disease=None
+                )
+                paused = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=paused_args,
+                )
+                return names, {
+                    "legal": parse(legal),
+                    "rejected": parse(rejected),
+                    "paused": parse(paused),
+                }
 
     return asyncio.run(session())
 
 
-@pytest.mark.skipif(SERVER is None, reason="tooluniverse-smcp-stdio not installed")
+def test_server_entry_comes_from_this_environment():
+    # Fail loudly rather than skip: acceptance requires this interpreter's
+    # own environment to expose the entry point.
+    assert Path(SERVER).exists(), (
+        f"tooluniverse-smcp-stdio entry point is missing from the current "
+        f"test environment ({SERVER}); run tests with the worktree venv "
+        "(.venv/bin/python -m pytest), not a global or PyPI installation"
+    )
+
+
 def test_mcp_discovers_and_executes_both_new_tools():
-    names, payload = _run_mcp_session()
+    names, results = _run_mcp_session()
 
     assert "ClinGen_search_cspec" in names
     assert "ACMG_calculate_classification" in names
 
-    assert payload["status"] == "success"
-    assert payload["metadata"] == {"calculator_type": "variant_classification"}
-    data = payload["data"]
+    legal = results["legal"]
+    assert legal["status"] == "success"
+    assert legal["metadata"] == {"calculator_type": "variant_classification"}
+    data = legal["data"]
     assert data["classification_status"] == "computed"
     assert data["classification"] == "Likely Pathogenic"
     assert data["total_score"] == 9
     assert data["pathogenic_points"] == 9
+
+    rejected = results["rejected"]
+    rejected_data = rejected.get("data") if isinstance(rejected, dict) else None
+    assert not (
+        isinstance(rejected_data, dict)
+        and rejected_data.get("classification_status") == "computed"
+    ), f"illegal input must not produce a classification, got: {rejected}"
+
+    paused = results["paused"]
+    assert paused["data"]["classification_status"] == "needs_review"
+    assert paused["data"]["classification"] is None
+    assert "incomplete_variant_context" in [
+        r["reason"] for r in paused["data"]["review_reasons"]
+    ]

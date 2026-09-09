@@ -32,8 +32,9 @@ Call `ClinGen_search_cspec(gene="<HGNC symbol>")`. Then decide:
 | Lookup result | Rule context to record |
 |---|---|
 | `success` with data (Released spec) | Read the specification's official page (`url` field) with `get_webpage_text_from_url`, including attachments and the assertion method it references. The API JSON alone is NOT the full specification. If any rule you need is incomplete after that, set `applicable_rules_complete=false`. |
-| `success`, empty data | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. |
-| `error`, timeout, or `partial_failures` for the spec you need | `cspec_lookup_status="unresolved"` or `"failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
+| `success`, empty data | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. ONLY a genuine empty `data` list means this; never an error. |
+| `error` (including damaged-index errors), timeout | `cspec_lookup_status="failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
+| The specification you need has `partial_failures`, `detail_fetch_failed`, `detail_structure_failed`, or `missing_materials` you could not fill by reading the official page | `cspec_lookup_status="unresolved"` — the spec exists but was not fully read; do NOT classify under it yet. |
 
 If the specification defines special combinations, joint point caps, or
 thresholds different from Tavtigian 2020, set
@@ -65,9 +66,14 @@ what each code requires. Statuses mean different things — do not merge them:
 Each scoring fact gets a stable `evidence_ids` entry. The same fact under two
 codes (e.g., one functional assay driving both PS3 and PM1) must be sent to
 review — the calculator enforces this. Different facts from the same paper are
-NOT duplicates. Unresolved phase (BP2/PM3), unconfirmed de novo (PS2/PM6), or
-under-validated assays leave the criterion at `needs_review` with the gap
-recorded — do not paper over them.
+NOT duplicates. Unresolved phase does not automatically pause everything:
+PM3 has an official phase-unknown branch (downweighted per-proband points —
+see `SVI_REFERENCE.md`) that you should use whenever the co-occurrence facts
+are complete; keep the gap only when the facts themselves are missing (no
+qualified co-occurrence, other variant unclassified, rarity unestablished).
+BP2 still requires phase evidence. Unconfirmed de novo (PS2/PM6 follows the
+SVI assumed-parentage tiers) and under-validated assays leave the criterion
+at `needs_review` with the gap recorded — do not paper over them.
 
 **6. Call the calculator.**
 `ACMG_calculate_classification` with exactly four fields:
