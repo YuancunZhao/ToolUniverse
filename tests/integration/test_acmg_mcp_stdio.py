@@ -77,12 +77,13 @@ def _golden_evidence():
 
 
 def _golden_arguments():
+    """Synthetic fixture: interface and arithmetic only, no real variant."""
     return {
         "variant_context": {
-            "variant": "NM_000715.3:c.1000C>T",
-            "gene": "MYOC",
-            "disease": None,
-            "inheritance_mode": None,
+            "variant": "NM_999999.1:c.1000C>T",
+            "gene": "TESTGENE",
+            "disease": "Synthetic fixture disease",
+            "inheritance_mode": "Autosomal dominant inheritance",
         },
         "rule_context": {
             "cspec_lookup_status": "no_released_spec",

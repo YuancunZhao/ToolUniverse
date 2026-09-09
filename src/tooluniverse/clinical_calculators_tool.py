@@ -13,6 +13,7 @@ clinical judgement.
 
 import math
 from typing import Dict, Any, Callable, List, Optional
+from urllib.parse import urlparse
 
 from .base_tool import BaseTool
 from .tool_registry import register_tool
@@ -903,52 +904,126 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
     variant_context = a["variant_context"]
     if not isinstance(variant_context, dict):
         raise _acmg_error("variant_context must be an object")
-    for key in ("variant", "gene"):
-        if not str(variant_context.get(key) or "").strip():
-            raise _acmg_error(
-                f"variant_context.{key} is required (a single normalized "
-                "variant and its gene); resolve ambiguity before classifying"
-            )
-    extra_vc = set(variant_context) - {
-        "variant",
-        "gene",
-        "disease",
-        "inheritance_mode",
-    }
+    _ACMG_VC_KEYS = ("variant", "gene", "disease", "inheritance_mode")
+    missing_vc = [k for k in _ACMG_VC_KEYS if k not in variant_context]
+    if missing_vc:
+        raise _acmg_error(
+            "variant_context is missing field(s): "
+            f"{', '.join(missing_vc)} (all four are required; pass null for "
+            "unknown disease/inheritance_mode)"
+        )
+    extra_vc = set(variant_context) - set(_ACMG_VC_KEYS)
     if extra_vc:
         raise _acmg_error(
             f"unexpected variant_context field(s): {', '.join(sorted(extra_vc))}"
         )
+    for key in ("variant", "gene"):
+        value = variant_context[key]
+        if not isinstance(value, str) or not value.strip():
+            raise _acmg_error(
+                f"variant_context.{key} must be a non-empty string, got "
+                f"{value!r} (a single normalized variant and its gene); "
+                "resolve ambiguity before classifying"
+            )
+    # disease/inheritance_mode stay open questions as null or blank: the
+    # review is kept, but no formal classification is issued from them.
+    incomplete_context: List[str] = []
+    for key in ("disease", "inheritance_mode"):
+        value = variant_context[key]
+        if value is None:
+            incomplete_context.append(key)
+        elif not isinstance(value, str):
+            raise _acmg_error(
+                f"variant_context.{key} must be a string or null, got "
+                f"{value!r}"
+            )
+        elif not value.strip():
+            incomplete_context.append(key)
 
     rule_context = a["rule_context"]
     if not isinstance(rule_context, dict):
         raise _acmg_error("rule_context must be an object")
-    extra_rc = set(rule_context) - {
+    _ACMG_RC_KEYS = (
         "cspec_lookup_status",
         "specification",
         "applicable_rules_complete",
         "combination_method",
-    }
+    )
+    missing_rc = [k for k in _ACMG_RC_KEYS if k not in rule_context]
+    if missing_rc:
+        raise _acmg_error(
+            "rule_context is missing field(s): " + ", ".join(missing_rc)
+        )
+    extra_rc = set(rule_context) - set(_ACMG_RC_KEYS)
     if extra_rc:
         raise _acmg_error(
             f"unexpected rule_context field(s): {', '.join(sorted(extra_rc))}"
         )
-    cspec_status = rule_context.get("cspec_lookup_status")
-    if cspec_status not in _ACMG_CSPEC_STATUSES:
+    cspec_status = rule_context["cspec_lookup_status"]
+    if not isinstance(cspec_status, str) or cspec_status not in (
+        _ACMG_CSPEC_STATUSES
+    ):
         raise _acmg_error(
             "rule_context.cspec_lookup_status must be one of "
             f"{sorted(_ACMG_CSPEC_STATUSES)}, got {cspec_status!r}"
         )
-    combination_method = rule_context.get("combination_method")
+    combination_method = rule_context["combination_method"]
     if not isinstance(combination_method, str) or not combination_method.strip():
         raise _acmg_error("rule_context.combination_method is required")
-    rules_complete = rule_context.get("applicable_rules_complete")
+    rules_complete = rule_context["applicable_rules_complete"]
+    if not isinstance(rules_complete, bool):
+        raise _acmg_error(
+            "rule_context.applicable_rules_complete must be a boolean "
+            f"(true/false), got {rules_complete!r}"
+        )
+    specification = rule_context["specification"]
+    if specification is not None:
+        if not isinstance(specification, dict):
+            raise _acmg_error(
+                "rule_context.specification must be null or an object, got "
+                f"{type(specification).__name__}"
+            )
+        _ACMG_SPEC_KEYS = ("id", "version", "source_url", "vcep")
+        missing_spec = [k for k in _ACMG_SPEC_KEYS if k not in specification]
+        if missing_spec:
+            raise _acmg_error(
+                "specification is missing field(s): "
+                + ", ".join(missing_spec)
+            )
+        extra_spec = set(specification) - set(_ACMG_SPEC_KEYS)
+        if extra_spec:
+            raise _acmg_error(
+                "unexpected specification field(s): "
+                + ", ".join(sorted(extra_spec))
+            )
+        for key in _ACMG_SPEC_KEYS:
+            value = specification[key]
+            if not isinstance(value, str) or not value.strip():
+                raise _acmg_error(
+                    f"specification.{key} must be a non-empty string, got "
+                    f"{value!r}"
+                )
+        parsed_url = urlparse(specification["source_url"])
+        if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+            raise _acmg_error(
+                "specification.source_url must be an http(s) URL with a "
+                f"host, got {specification['source_url']!r}"
+            )
+    if cspec_status == "no_released_spec" and specification is not None:
+        raise _acmg_error(
+            "contradictory rule_context: cspec_lookup_status="
+            "'no_released_spec' requires specification=null"
+        )
 
     blocking_issues = a["blocking_issues"]
-    if not isinstance(blocking_issues, list) or any(
-        not isinstance(i, str) for i in blocking_issues
-    ):
+    if not isinstance(blocking_issues, list):
         raise _acmg_error("blocking_issues must be a list of strings")
+    for issue in blocking_issues:
+        if not isinstance(issue, str) or not issue.strip():
+            raise _acmg_error(
+                f"blocking_issues entries must be non-blank strings, got "
+                f"{issue!r}"
+            )
 
     evidence = a["evidence"]
     if not isinstance(evidence, list):
@@ -974,21 +1049,33 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 f"unexpected key(s): {', '.join(sorted(extra_keys))}"
             )
         criterion = item["criterion"]
-        if criterion not in _ACMG_CRITERIA:
+        if not isinstance(criterion, str) or criterion not in _ACMG_CRITERIA:
             raise _acmg_error(f"unknown criterion code: {criterion!r}")
         if criterion in seen:
             raise _acmg_error(f"criterion {criterion} appears more than once")
         status = item["status"]
-        if status not in _ACMG_STATUSES:
+        if not isinstance(status, str) or status not in _ACMG_STATUSES:
             raise _acmg_error(
                 f"{criterion}: status must be one of "
                 f"{sorted(_ACMG_STATUSES)}, got {status!r}"
             )
+        rationale = item["rationale"]
+        if not isinstance(rationale, str):
+            raise _acmg_error(
+                f"{criterion}: rationale must be a string, got {rationale!r}"
+            )
         for ref_key in ("source_refs", "rule_refs", "evidence_ids"):
-            if not isinstance(item[ref_key], list):
+            refs = item[ref_key]
+            if not isinstance(refs, list):
                 raise _acmg_error(
                     f"{criterion}: {ref_key} must be a list of identifier strings"
                 )
+            for ref in refs:
+                if not isinstance(ref, str) or not ref.strip():
+                    raise _acmg_error(
+                        f"{criterion}: every {ref_key} entry must be a "
+                        f"non-blank string, got {ref!r}"
+                    )
         if status != "met":
             if item["strength"] is not None:
                 raise _acmg_error(
@@ -1003,23 +1090,27 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 )
             strength = item["strength"]
             if criterion == "BA1":
-                if strength not in (None, "StandAlone"):
+                if strength is not None and not (
+                    isinstance(strength, str) and strength == "StandAlone"
+                ):
                     raise _acmg_error(
                         "BA1 applies only at stand-alone strength; it does "
                         "not convert to points"
                     )
-            elif strength not in _ACMG_STRENGTH_POINTS:
+            elif not isinstance(strength, str) or strength not in (
+                _ACMG_STRENGTH_POINTS
+            ):
                 raise _acmg_error(
                     f"{criterion}: 'met' requires one of "
                     f"{sorted(_ACMG_STRENGTH_POINTS)} (or 'StandAlone' for "
                     f"BA1 only), got {strength!r}"
                 )
-            if not str(item["rationale"] or "").strip():
+            if not rationale.strip():
                 raise _acmg_error(
                     f"{criterion}: 'met' requires a non-empty rationale"
                 )
             for ref_key in ("source_refs", "rule_refs", "evidence_ids"):
-                if not [r for r in item[ref_key] if str(r).strip()]:
+                if not item[ref_key]:
                     raise _acmg_error(
                         f"{criterion}: 'met' requires non-empty {ref_key}"
                     )
@@ -1106,6 +1197,31 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "reason": "blocking_issues_present",
                 "detail": list(blocking_issues),
+            }
+        )
+    if incomplete_context:
+        review_reasons.append(
+            {
+                "reason": "incomplete_variant_context",
+                "detail": {
+                    "blank_or_null_fields": incomplete_context,
+                    "note": (
+                        "disease/inheritance_mode are unrecorded; the review "
+                        "is kept but no formal classification is issued"
+                    ),
+                },
+            }
+        )
+    if cspec_status == "released_spec_found" and specification is None:
+        review_reasons.append(
+            {
+                "reason": "missing_specification_identity",
+                "detail": (
+                    "cspec_lookup_status is 'released_spec_found' but "
+                    "specification is null; re-run ClinGen_search_cspec and "
+                    "carry the chosen specification's id, version, "
+                    "source_url and vcep"
+                ),
             }
         )
     if cspec_status in ("unresolved", "failed"):

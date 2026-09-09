@@ -66,12 +66,14 @@ def build_evidence(*met_items, base_status="not_assessed", per_criterion=None):
 
 def args(evidence, *, variant_context=None, rule_context=None, blocking_issues=None, **extra):
     payload = {
+        # Synthetic fixture: no real gene, disease, or variant is implied --
+        # these tests prove the interface contract and arithmetic only.
         "variant_context": variant_context
         or {
-            "variant": "NM_000715.3:c.1000C>T",
-            "gene": "MYOC",
-            "disease": None,
-            "inheritance_mode": None,
+            "variant": "NM_999999.1:c.1000C>T",
+            "gene": "TESTGENE",
+            "disease": "Synthetic fixture disease",
+            "inheritance_mode": "Autosomal dominant inheritance",
         },
         "rule_context": rule_context
         or {
@@ -491,11 +493,14 @@ def test_incomplete_specification_material_pauses():
     assert "incomplete_specification_material" in reasons
 
 
-def test_missing_rules_complete_flag_fails_closed():
+def test_missing_rules_complete_flag_is_input_error():
+    # All four rule_context keys are required; omitting one is a structural
+    # error, distinct from an explicit applicable_rules_complete=false.
     rc = _spec_rule_context("released_spec_found")
     del rc["applicable_rules_complete"]
     result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
-    assert result["data"]["classification_status"] == "needs_review"
+    assert result["status"] == "error"
+    assert "applicable_rules_complete" in result["error"]
 
 
 def test_unsupported_combination_method_pauses():
@@ -612,6 +617,231 @@ def test_pp3_pm1_combined_cap_allows_strong_sum():
     data = result["data"]
     assert data["classification_status"] == "computed"
     assert data["total_score"] == 4
+
+
+# --------------------------------------------------------------------------- #
+# Contract repair: strict types, completeness vs structure, references
+# --------------------------------------------------------------------------- #
+def test_variant_context_missing_key_is_error():
+    ctx = {"variant": "NM_999999.1:c.1000C>T", "gene": "TESTGENE"}
+    result = run(args(build_evidence(met("PM2", "Supporting")), variant_context=ctx))
+    assert result["status"] == "error"
+    assert "disease" in result["error"]
+
+
+@pytest.mark.parametrize("field", ["variant", "gene"])
+@pytest.mark.parametrize("bad", [123, {}, [], None, "   "])
+def test_variant_context_non_string_identity_is_error(field, bad):
+    ctx = {
+        "variant": "NM_999999.1:c.1000C>T",
+        "gene": "TESTGENE",
+        "disease": "Synthetic fixture disease",
+        "inheritance_mode": "Autosomal dominant inheritance",
+    }
+    ctx[field] = bad
+    result = run(args(build_evidence(met("PM2", "Supporting")), variant_context=ctx))
+    assert result["status"] == "error"
+
+
+def test_disease_null_pauses_not_classifies():
+    ctx = {
+        "variant": "NM_999999.1:c.1000C>T",
+        "gene": "TESTGENE",
+        "disease": None,
+        "inheritance_mode": "Autosomal dominant inheritance",
+    }
+    result = run(args(build_evidence(met("PM2", "Supporting")), variant_context=ctx))
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    reasons = [r["reason"] for r in data["review_reasons"]]
+    assert "incomplete_variant_context" in reasons
+
+
+def test_inheritance_mode_blank_pauses():
+    ctx = {
+        "variant": "NM_999999.1:c.1000C>T",
+        "gene": "TESTGENE",
+        "disease": "Synthetic fixture disease",
+        "inheritance_mode": "   ",
+    }
+    result = run(args(build_evidence(met("PM2", "Supporting")), variant_context=ctx))
+    assert "incomplete_variant_context" in [
+        r["reason"] for r in result["data"]["review_reasons"]
+    ]
+
+
+def test_disease_wrong_type_is_error():
+    ctx = {
+        "variant": "NM_999999.1:c.1000C>T",
+        "gene": "TESTGENE",
+        "disease": {"mondo_id": "MONDO:1"},
+        "inheritance_mode": "Autosomal dominant inheritance",
+    }
+    result = run(args(build_evidence(met("PM2", "Supporting")), variant_context=ctx))
+    assert result["status"] == "error"
+
+
+@pytest.mark.parametrize("bad", ["true", 1, None, []])
+def test_applicable_rules_complete_must_be_boolean(bad):
+    rc = _spec_rule_context("released_spec_found", complete=True)
+    rc["applicable_rules_complete"] = bad
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    assert result["status"] == "error"
+
+
+def test_specification_empty_object_is_error():
+    rc = _spec_rule_context("released_spec_found", complete=True)
+    rc["specification"] = {}
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    assert result["status"] == "error"
+
+
+def test_specification_missing_field_is_error():
+    rc = _spec_rule_context("released_spec_found", complete=True)
+    del rc["specification"]["version"]
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    assert result["status"] == "error"
+    assert "version" in result["error"]
+
+
+@pytest.mark.parametrize("bad_url", ["not-a-url", "ftp://example.org/doc", ""])
+def test_specification_bad_source_url_is_error(bad_url):
+    rc = _spec_rule_context("released_spec_found", complete=True)
+    rc["specification"]["source_url"] = bad_url
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    assert result["status"] == "error"
+    assert "source_url" in result["error"]
+
+
+def test_no_released_spec_with_specification_is_contradiction():
+    rc = {
+        "cspec_lookup_status": "no_released_spec",
+        "combination_method": "tavtigian2020",
+        "specification": _spec_rule_context("released_spec_found")["specification"],
+        "applicable_rules_complete": True,
+    }
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    assert result["status"] == "error"
+    assert "contradictory" in result["error"]
+
+
+def test_released_spec_found_without_specification_pauses():
+    rc = _spec_rule_context("released_spec_found", complete=True)
+    rc["specification"] = None
+    result = run(args(build_evidence(met("PM2", "Supporting")), rule_context=rc))
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    assert "missing_specification_identity" in [
+        r["reason"] for r in data["review_reasons"]
+    ]
+
+
+@pytest.mark.parametrize("field", [
+    "source_refs", "rule_refs", "evidence_ids",
+])
+@pytest.mark.parametrize("bad", [None, "", "   ", 123, {}])
+def test_met_rejects_invalid_reference_items(field, bad):
+    record = met("PM2", "Supporting")
+    record[field] = [bad]
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+    assert field in result["error"]
+
+
+def test_non_met_rejects_invalid_reference_items():
+    # Empty lists are fine for non-met records, but [null]/[{}]/numbers are
+    # not valid references in any state.
+    record = ev("PM2", "not_met", source_refs=[None])
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+
+
+def test_mixed_valid_and_invalid_reference_items_rejected():
+    record = met("PM2", "Supporting")
+    record["evidence_ids"] = ["fact-PM2", 42]
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+
+
+def test_rationale_non_string_is_error():
+    record = met("PM2", "Supporting")
+    record["rationale"] = 123
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+
+
+def test_blocking_issues_blank_string_is_error():
+    result = run(
+        args(build_evidence(met("PM2", "Supporting")), blocking_issues=["  "])
+    )
+    assert result["status"] == "error"
+
+
+def test_criterion_non_string_is_error():
+    evidence = build_evidence()
+    evidence.append(ev(["PM2"], "not_met"))
+    result = run(args(evidence))
+    assert result["status"] == "error"
+
+
+def test_status_non_string_is_error():
+    record = ev("PM2", 5)
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+
+
+def test_strength_non_string_for_met_is_error():
+    record = met("PM2", {"level": 4})
+    result = run(args(build_evidence(record)))
+    assert result["status"] == "error"
+
+
+# --------------------------------------------------------------------------- #
+# Public SDK entry: key scenarios through the tool-manager path
+# --------------------------------------------------------------------------- #
+def _sdk_run(payload):
+    from tooluniverse.tools import ACMG_calculate_classification
+
+    return ACMG_calculate_classification(
+        payload["variant_context"],
+        payload["rule_context"],
+        payload["evidence"],
+        payload["blocking_issues"],
+    )
+
+
+def test_sdk_computes_valid_synthetic_case():
+    result = _sdk_run(
+        args(build_evidence(met("PVS1", "VeryStrong"), met("PM2", "Supporting")))
+    )
+    assert result["status"] == "success"
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert data["total_score"] == 9
+
+
+def test_sdk_rejects_illegal_reference_item():
+    payload = args(build_evidence(met("PM2", "Supporting")))
+    for record in payload["evidence"]:
+        if record["criterion"] == "PM2":
+            record["evidence_ids"] = [None]
+    result = _sdk_run(payload)
+    # Rejected by schema validation or by the handler -- either way no
+    # formal classification may result.
+    data = result.get("data") if isinstance(result, dict) else None
+    assert not (isinstance(data, dict) and data.get("classification_status") == "computed")
+
+
+def test_sdk_pauses_incomplete_context():
+    payload = args(build_evidence(met("PM2", "Supporting")))
+    payload["variant_context"] = dict(payload["variant_context"], disease=None)
+    result = _sdk_run(payload)
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
 
 
 # --------------------------------------------------------------------------- #

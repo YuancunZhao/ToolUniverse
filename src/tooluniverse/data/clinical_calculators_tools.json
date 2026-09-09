@@ -967,26 +967,221 @@
  },
  {
   "name": "ACMG_calculate_classification",
-  "description": "Deterministic ACMG/AMP germline variant classification using the Tavtigian 2020 point system (Supporting/Moderate/Strong/VeryStrong = +/-1/2/4/8; >=10 Pathogenic, 6-9 Likely Pathogenic, 0-5 VUS, -6 to -1 Likely Benign, <=-7 Benign). Input is a complete 28-criterion review record plus variant and rule context; the calculator validates the contract and derives the score itself -- caller-supplied totals, classifications, point overrides, or thresholds are rejected. BA1 runs a stand-alone benign path; PP5/BP6 are retired and cannot score. Returns classification_status computed (classification, total score, per-criterion contributions, uncounted records) or needs_review (classification null with reasons: blocking issues, unresolved CSpec applicability, incomplete specification material, unsupported combination method, duplicate scoring facts, SVI combination-cap violations (PP1+PP4 locus evidence above +5; PP3+PM1 summed strength above Strong), BA1 conflict, or no scoring evidence). Does not output posterior probabilities; structured validity and arithmetic correctness are guaranteed, not independent verification of the evidence interpretation.",
+  "description": "Deterministic ACMG/AMP germline variant classification using the Tavtigian 2020 point system (Supporting/Moderate/Strong/VeryStrong = +/-1/2/4/8; >=10 Pathogenic, 6-9 Likely Pathogenic, 0-5 VUS, -6 to -1 Likely Benign, <=-7 Benign). Input is a complete 28-criterion review record plus variant and rule context; the calculator validates the contract and derives the score itself -- caller-supplied totals, classifications, point overrides, or thresholds are rejected. BA1 runs a stand-alone benign path; PP5/BP6 are retired and cannot score. Returns classification_status computed (classification, total score, per-criterion contributions, uncounted records) or needs_review (classification null with reasons: blocking issues, incomplete variant context (null/blank disease or inheritance mode), missing specification identity, unresolved CSpec applicability, incomplete specification material, unsupported combination method, duplicate scoring facts, SVI combination-cap violations (PP1+PP4 locus evidence above +5; PP3+PM1 summed strength above Strong), BA1 conflict, or no scoring evidence). Every rationale and reference entry must be a non-blank string. Does not output posterior probabilities; structured validity and arithmetic correctness are guaranteed, not independent verification of the evidence interpretation.",
   "type": "ClinicalCalculatorTool",
   "parameter": {
    "type": "object",
+   "additionalProperties": false,
    "properties": {
     "variant_context": {
      "type": "object",
-     "description": "Single normalized variant and its context: variant (required, e.g. 'NM_000715.3:c.1000C>T'), gene (required, HGNC symbol), disease (nullable), inheritance_mode (nullable). Identity or scenario ambiguity must go to blocking_issues, not extra keys."
+     "additionalProperties": false,
+     "required": [
+      "variant",
+      "gene",
+      "disease",
+      "inheritance_mode"
+     ],
+     "properties": {
+      "variant": {
+       "type": "string",
+       "minLength": 1,
+       "description": "Single normalized variant (e.g., 'NM_999999.1:c.1000C>T')"
+      },
+      "gene": {
+       "type": "string",
+       "minLength": 1,
+       "description": "HGNC gene symbol"
+      },
+      "disease": {
+       "type": [
+        "string",
+        "null"
+       ],
+       "description": "Disease being assessed; null/blank keeps the review open (needs_review, no formal classification)"
+      },
+      "inheritance_mode": {
+       "type": [
+        "string",
+        "null"
+       ],
+       "description": "Inheritance mode; null/blank keeps the review open (needs_review)"
+      }
+     }
     },
     "rule_context": {
      "type": "object",
-     "description": "cspec_lookup_status: 'released_spec_found' | 'no_released_spec' | 'unresolved' | 'failed'; specification: {id, version, source_url, vcep} or null; applicable_rules_complete: boolean (true only after the full specification, attachments and assertion method were read); combination_method: only 'tavtigian2020' is supported by this calculator."
+     "additionalProperties": false,
+     "required": [
+      "cspec_lookup_status",
+      "specification",
+      "applicable_rules_complete",
+      "combination_method"
+     ],
+     "properties": {
+      "cspec_lookup_status": {
+       "type": "string",
+       "enum": [
+        "released_spec_found",
+        "no_released_spec",
+        "unresolved",
+        "failed"
+       ]
+      },
+      "specification": {
+       "anyOf": [
+        {
+         "type": "null"
+        },
+        {
+         "type": "object",
+         "additionalProperties": false,
+         "required": [
+          "id",
+          "version",
+          "source_url",
+          "vcep"
+         ],
+         "properties": {
+          "id": {
+           "type": "string",
+           "minLength": 1
+          },
+          "version": {
+           "type": "string",
+           "minLength": 1
+          },
+          "source_url": {
+           "type": "string",
+           "pattern": "^https?://[^/\\s]",
+           "description": "Official specification page URL (http/https with a host)"
+          },
+          "vcep": {
+           "type": "string",
+           "minLength": 1
+          }
+         }
+        }
+       ],
+       "description": "Chosen Released specification identity, or null (must be null with no_released_spec; null with released_spec_found pauses classification)"
+      },
+      "applicable_rules_complete": {
+       "type": "boolean",
+       "description": "true only after the full specification (official page, attachments, assertion method) was read"
+      },
+      "combination_method": {
+       "type": "string",
+       "minLength": 1,
+       "description": "Only 'tavtigian2020' is supported; specification-specific methods pause classification"
+      }
+     }
     },
     "evidence": {
      "type": "array",
-     "description": "Exactly 28 records, one per ACMG/AMP code (PVS1, PS1-PS4, PM1-PM6, PP1-PP5, BA1, BS1-BS4, BP1-BP7). Each record has exactly: criterion, status (met | not_met | not_assessed | not_applicable | needs_review | deprecated), strength (Supporting | Moderate | Strong | VeryStrong | StandAlone; null unless met; StandAlone only for BA1), rationale, source_refs, rule_refs, evidence_ids (scoring-fact identifiers for traceability). Only 'met' scores and then requires legal strength, non-empty rationale, and non-empty source_refs/rule_refs/evidence_ids."
+     "minItems": 28,
+     "maxItems": 28,
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+       "criterion",
+       "status",
+       "strength",
+       "rationale",
+       "source_refs",
+       "rule_refs",
+       "evidence_ids"
+      ],
+      "properties": {
+       "criterion": {
+        "type": "string",
+        "enum": [
+         "PVS1",
+         "PS1",
+         "PS2",
+         "PS3",
+         "PS4",
+         "PM1",
+         "PM2",
+         "PM3",
+         "PM4",
+         "PM5",
+         "PM6",
+         "PP1",
+         "PP2",
+         "PP3",
+         "PP4",
+         "PP5",
+         "BA1",
+         "BS1",
+         "BS2",
+         "BS3",
+         "BS4",
+         "BP1",
+         "BP2",
+         "BP3",
+         "BP4",
+         "BP5",
+         "BP6",
+         "BP7"
+        ]
+       },
+       "status": {
+        "type": "string",
+        "enum": [
+         "met",
+         "not_met",
+         "not_assessed",
+         "not_applicable",
+         "needs_review",
+         "deprecated"
+        ]
+       },
+       "strength": {
+        "enum": [
+         "Supporting",
+         "Moderate",
+         "Strong",
+         "VeryStrong",
+         "StandAlone",
+         null
+        ],
+        "description": "null unless status is 'met'; 'StandAlone' only for BA1"
+       },
+       "rationale": {
+        "type": "string"
+       },
+       "source_refs": {
+        "type": "array",
+        "items": {
+         "type": "string",
+         "minLength": 1
+        }
+       },
+       "rule_refs": {
+        "type": "array",
+        "items": {
+         "type": "string",
+         "minLength": 1
+        }
+       },
+       "evidence_ids": {
+        "type": "array",
+        "items": {
+         "type": "string",
+         "minLength": 1
+        }
+       }
+      }
+     }
     },
     "blocking_issues": {
      "type": "array",
-     "description": "Unresolved problems that would affect the classification (e.g. ambiguous variant identity, missing segregation phase). Explicitly pass [] when none remain."
+     "items": {
+      "type": "string",
+      "minLength": 1
+     },
+     "description": "Unresolved problems affecting classification; [] when none"
     }
    },
    "required": [
