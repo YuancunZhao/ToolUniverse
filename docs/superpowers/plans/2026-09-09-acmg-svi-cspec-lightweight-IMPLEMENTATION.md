@@ -421,3 +421,47 @@ Disease Nuclear and Mitochondrial Expert Panel Specifications..."，页面
 正文明确以线粒体基因组为规范对象（"the mitochondrial genome would best
 fit with Table 1 'phenotypic consistency'..."）。核基因场景可据此排除该
 候选并记录来源；不能仅凭 API 缺少 `genes` 排除。
+
+## 收尾修复轮（2026-09-09，计划：2026-09-09-acmg-svi-cspec-final-fixes.md）
+
+起点 `559002a1`；两个提交：`897c1d34`（ID 校验）、`6513b17a`（候选裁决前置+
+优先级表+三处同步）。
+
+1. **ID 校验**：`_cspec_id` 原把数字/对象/空白经 `str()` 转成"有效"ID，详情中
+   非法 ID 的规则集因此被当作"无关规则集"过滤、绕过损坏披露。修复后非字符串
+   与空白/纯斜杠返回空串，走既有错误通道：索引命中/候选规则集非法 ID →
+   顶层 error；规范 @id 归一化为空（如 `///`）→ error（本轮补的守卫+反例）；
+   详情非法 ID → `ruleSets[n].@id` 结构错误披露、有效规则保留。字符串数字 ID
+   不受影响。失败反例先行（5 个参数化用例）。接口无变化，未重生成包装。
+2. **候选裁决前置**：Skill 改为每次成功查询都检查 data 与
+   unresolved_scope_specs——显式匹配不解决其他候选；同一规范同时在两处时按
+   候选 rule_set_ids 核实剩余范围、不得去重丢弃；no_released_spec 仅在全部
+   候选裁决后可达；旧响应缺字段时无论 data 是否为空都不得假定已检查。
+   优先级表（CSpec 优先/明确允许或确认无规范才用通用规则/缺项补读不视为
+   允许通用/规范标 not_applicable 不得用通用规则重启）以同一表述进入 SKILL
+   与 SVI_REFERENCE。评估与组合分离：计算器仍仅支持 tavtigian2020，特殊组合
+   继续 needs_review。
+3. **同步修正**：Codex 副本此前被裸 cp 覆盖回 `disable-model-invocation`
+   标记（Codex 校验会拒绝）——本轮经 `sync-codex-plugin-skills.sh`
+   重定向临时目录重建并只回填本 skill，frontmatter 归一化恢复
+   （disable-model-invocation 计数=0）。
+4. **固定响应场景检查**（文档化行为，非 LLM 验收）：匹配+候选（GN019 匹配、
+   GN015 候选并存，total 只计匹配）；同一规范两处（rule_set_ids 分离
+   635003681/[888]）；仅候选（说明不宣称"无规范"）；两者皆空（有效空结果）；
+   旧响应缺字段（按 skill 指引处理）。
+
+**自动化验收（pytest 实际输出）**：`env -u PYTHONPATH .venv/bin/python -m
+pytest <计划所列文件> --no-cov -p no:cacheprovider` → **347 passed, 7
+skipped, 1 deselected, 0 failed**（上轮参考 338/7/1，增量为本轮新增 ID 校验
+测试）；修改文件 ruff 通过；`git diff --check 559002a1..HEAD` 与
+`752188d0..HEAD` 干净；插件测试失败集与基线逐行一致（5 项上游既有）。
+SDK/MCP 的合法计算、非法输入拒绝、材料不完整暂停、特殊组合暂停用例均含于
+上述回归并通过。
+
+**真实 LLM 工作流验收：未验收**（本环境无外层宿主模型；未安装新宿主、未改
+用户配置；上述场景检查是工具行为记录，不称为 LLM 验收）。四场景
+（匹配+不可裁决候选、可排除候选、特殊组合、跳过计算器请求/内嵌指令）待有
+真实宿主时按计划表格补记调用轨迹。
+
+**剩余限制**：特殊组合算法（CSpec 专属组合/上限的机器可读表达）仍为
+needs_review 暂停、未实现；隐藏 .pth 的具体来源仍无进程级证据（见运行文档）。
