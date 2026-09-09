@@ -673,8 +673,16 @@ class ClinGenTool(BaseTool):
 
     @staticmethod
     def _cspec_id(iri: Any) -> str:
-        """Last path segment of a CSpec @id IRI, e.g. '.../id/GN019' -> 'GN019'."""
-        return str(iri or "").rstrip("/").rsplit("/", 1)[-1]
+        """Extract an ID from a non-empty string; invalid input yields empty.
+
+        Non-strings (numbers, objects) and blank/pure-slash strings yield ""
+        rather than being coerced through ``str()`` -- a coerced ID would
+        masquerade as valid downstream (e.g., a damaged detail rule set
+        being filtered out as "unrelated" instead of being disclosed).
+        """
+        if not isinstance(iri, str):
+            return ""
+        return iri.strip().rstrip("/").rsplit("/", 1)[-1].strip()
 
     @staticmethod
     def _cspec_organization(record: Dict[str, Any]) -> str:
@@ -1013,6 +1021,18 @@ class ClinGenTool(BaseTool):
                         ),
                     }
                 specification_id = self._cspec_id(record.get("@id"))
+                if not specification_id:
+                    return {
+                        "status": "error",
+                        "error": (
+                            "CSpec index record relevant to "
+                            f"{gene} has a @id that normalizes to an empty "
+                            "identifier; its specifications cannot be "
+                            "addressed. This is a data-structure failure, "
+                            "not a statement that no specification exists "
+                            f"for {gene}."
+                        ),
+                    }
                 # A Released record whose gene scope cannot be decided from
                 # the index (rule sets without gene lists, or no rule sets
                 # at all) is preserved as a candidate -- the index not

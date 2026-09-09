@@ -713,6 +713,79 @@ def test_detail_non_object_is_partial_structure_failure(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
+# ID validation: non-string / blank IDs must never normalize into valid ones
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("raw_id", [123, {"bad": "id"}, " \t "])
+@pytest.mark.parametrize("unresolved", [False, True])
+def test_invalid_rule_set_id_is_error(monkeypatch, raw_id, unresolved):
+    record = _index_record()
+    record["ruleSets"][0]["@id"] = raw_id
+    if unresolved:
+        del record["ruleSets"][0]["genes"]
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "no usable" in result["error"]
+
+
+def test_slash_only_spec_id_is_error(monkeypatch):
+    # A string @id that normalizes to empty (pure slashes) must not
+    # silently produce results with a blank specification_id.
+    record = _index_record()
+    record["@id"] = "///"
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "normalizes to an empty identifier" in result["error"]
+    assert "not a statement that no specification exists" in result["error"]
+
+
+def test_numeric_string_id_still_accepted(monkeypatch):
+    # String-typed IDs remain valid input regardless of their content.
+    record = _index_record()
+    record["ruleSets"][0]["@id"] = (
+        "https://cspec.genome.network/cspec/api/RuleSet/id/635003681"
+    )
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"][0]["rule_sets"][0]["rule_set_id"] == "635003681"
+
+
+def test_detail_rule_set_with_invalid_id_disclosed_not_filtered(monkeypatch):
+    # A non-string @id inside the detail cannot be attributed to any rule
+    # set: it must surface as structural damage -- never fall through to
+    # the "clearly unrelated rule set" filter that would hide it.
+    detail = _detail_payload()
+    detail["ruleSets"].append(
+        {"@id": 123, "criteriaCodes": [{"label": "PM2"}]}
+    )
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    # Valid criteria from the selected rule set survive...
+    assert [c["criterion"] for c in entry["criterion_modifications"]] == ["PM2"]
+    # ...and the unattributable damage is disclosed on all three channels.
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "ruleSets[1].@id" in m for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "GN019" in result["partial_failures"]
+    assert "ruleSets[1].@id" in result["partial_failures"]["GN019"]
+# --------------------------------------------------------------------------- #
 # Detail-internal damage: valid parts kept, damage disclosed with paths
 # --------------------------------------------------------------------------- #
 def _detail_with_criteria(criteria):
