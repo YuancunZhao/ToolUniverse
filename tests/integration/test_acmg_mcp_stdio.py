@@ -148,10 +148,20 @@ def _run_mcp_session():
                     "ACMG_calculate_classification",
                     arguments=paused_args,
                 )
+
+                incomplete_rules_args = _golden_arguments()
+                incomplete_rules_args["rule_context"][
+                    "applicable_rules_complete"
+                ] = False
+                incomplete_rules = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=incomplete_rules_args,
+                )
                 return names, {
                     "legal": parse(legal),
                     "rejected": parse(rejected),
                     "paused": parse(paused),
+                    "incomplete_rules": parse(incomplete_rules),
                 }
 
     return asyncio.run(session())
@@ -183,15 +193,23 @@ def test_mcp_discovers_and_executes_both_new_tools():
     assert data["pathogenic_points"] == 9
 
     rejected = results["rejected"]
-    rejected_data = rejected.get("data") if isinstance(rejected, dict) else None
-    assert not (
-        isinstance(rejected_data, dict)
-        and rejected_data.get("classification_status") == "computed"
-    ), f"illegal input must not produce a classification, got: {rejected}"
+    assert isinstance(rejected, dict), rejected
+    assert rejected.get("status") == "error", (
+        f"illegal input must be rejected with an explicit error, got: "
+        f"{rejected}"
+    )
+    assert rejected.get("error")
 
     paused = results["paused"]
     assert paused["data"]["classification_status"] == "needs_review"
     assert paused["data"]["classification"] is None
     assert "incomplete_variant_context" in [
         r["reason"] for r in paused["data"]["review_reasons"]
+    ]
+
+    incomplete = results["incomplete_rules"]
+    assert incomplete["data"]["classification_status"] == "needs_review"
+    assert incomplete["data"]["classification"] is None
+    assert "incomplete_specification_material" in [
+        r["reason"] for r in incomplete["data"]["review_reasons"]
     ]

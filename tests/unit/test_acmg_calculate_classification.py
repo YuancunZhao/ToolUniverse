@@ -503,6 +503,52 @@ def test_missing_rules_complete_flag_is_input_error():
     assert "applicable_rules_complete" in result["error"]
 
 
+def test_incomplete_generic_rules_pause():
+    payload = args(build_evidence(
+        met("PVS1", "VeryStrong"),
+        met("PM2", "Supporting"),
+    ))
+    payload["rule_context"]["applicable_rules_complete"] = False
+
+    data = run(payload)["data"]
+
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    assert "incomplete_specification_material" in {
+        reason["reason"] for reason in data["review_reasons"]
+    }
+
+
+def test_incomplete_material_detail_does_not_suggest_generic_bypass():
+    payload = args(build_evidence(met("PM2", "Supporting")))
+    payload["rule_context"]["applicable_rules_complete"] = False
+
+    reasons = run(payload)["data"]["review_reasons"]
+    detail = next(
+        r["detail"] for r in reasons
+        if r["reason"] == "incomplete_specification_material"
+    )
+    assert "generic rules" not in str(detail).lower() or "do not" in str(detail).lower()
+    # The old wording explicitly invited switching to generic rules; it must
+    # be gone.
+    assert "classify under generic rules explicitly" not in str(detail)
+
+
+def test_ba1_gated_by_material_completeness():
+    # BA1 must not short-circuit to Benign while the rule materials are
+    # incomplete, whatever the CSpec status.
+    payload = args(build_evidence(met("BA1", "StandAlone")))
+    payload["rule_context"]["applicable_rules_complete"] = False
+
+    data = run(payload)["data"]
+
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    assert "incomplete_specification_material" in {
+        r["reason"] for r in data["review_reasons"]
+    }
+
+
 def test_unsupported_combination_method_pauses():
     # MYOC-style case: CSpec carries combination caps the fixed point system
     # cannot express (and PVS1 is not applicable per the specification).
@@ -829,10 +875,11 @@ def test_sdk_rejects_illegal_reference_item():
         if record["criterion"] == "PM2":
             record["evidence_ids"] = [None]
     result = _sdk_run(payload)
-    # Rejected by schema validation or by the handler -- either way no
-    # formal classification may result.
-    data = result.get("data") if isinstance(result, dict) else None
-    assert not (isinstance(data, dict) and data.get("classification_status") == "computed")
+    # Rejected with an explicit error (schema validation or handler) -- a
+    # connection or parse failure must not satisfy this assertion either.
+    assert isinstance(result, dict)
+    assert result.get("status") == "error", result
+    assert "error" in result
 
 
 def test_sdk_pauses_incomplete_context():
@@ -842,6 +889,18 @@ def test_sdk_pauses_incomplete_context():
     data = result["data"]
     assert data["classification_status"] == "needs_review"
     assert data["classification"] is None
+
+
+def test_sdk_pauses_incomplete_rules_under_generic_context():
+    payload = args(build_evidence(met("PVS1", "VeryStrong"), met("PM2", "Supporting")))
+    payload["rule_context"]["applicable_rules_complete"] = False
+    result = _sdk_run(payload)
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert data["classification"] is None
+    assert "incomplete_specification_material" in {
+        r["reason"] for r in data["review_reasons"]
+    }
 
 
 # --------------------------------------------------------------------------- #

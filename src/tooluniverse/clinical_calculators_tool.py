@@ -1235,15 +1235,19 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 ),
             }
         )
-    if cspec_status == "released_spec_found" and rules_complete is not True:
+    if rules_complete is False:
         review_reasons.append(
             {
                 "reason": "incomplete_specification_material",
                 "detail": (
-                    "a Released specification applies but "
-                    "applicable_rules_complete is not true; read the full "
-                    "specification (official page, attachments, assertion "
-                    "method) or classify under generic rules explicitly"
+                    "applicable_rules_complete is false: the materials the "
+                    "rules being applied depend on -- for a CSpec, the "
+                    "official page, attachments, and assertion method; "
+                    "under generic ACMG/AMP + SVI rules, the reference "
+                    "material each assessment relies on -- have not been "
+                    "fully verified. Complete the review before "
+                    "classifying; do not proceed on an unfinished material "
+                    "basis"
                 ),
             }
         )
