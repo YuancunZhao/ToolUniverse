@@ -363,3 +363,61 @@ tests/test_claude_code_plugin.py → 与修复前基线逐项一致
 - **未验收（如实标注）**：真实宿主 LLM 工作流验收——"跳过计算器"请求与来源
   嵌入指令的实际调用轨迹记录，本轮环境无外层模型可用，未执行。静态文档检查
   与算术单测不能替代该项。
+
+## 剩余问题修复轮（2026-09-09，计划：2026-09-09-acmg-svi-cspec-remaining-fixes.md）
+
+起点 `f11c6351`；三个提交：`22f4048f`（材料完整性检查）、`a3cae1c7`（未知范围
+保留+详情损坏披露）、第三个（接口/生成文件/文档/记录）。
+
+**纠正上一轮的错误解释**：上一轮把"索引（及详情）不含 `genes` 键"推断为
+"确定空基因范围、不可能覆盖任何基因"。该推断错误：GN015 官方页面明确提供
+线粒体基因规则，API 未逐一列举 `genes` 不构成任何适用性结论。本轮删除该
+断言（代码注释、测试、本记录旧行仅留档不再作为依据），改为把此类规范保留
+为 `unresolved_scope_specs` 范围待判定候选，由 Skill 依官方材料逐个裁决。
+
+三项遗漏的修复：
+
+1. **通用规则材料不完整仍分类**：`applicable_rules_complete=false` 原只在
+   `released_spec_found` 下生效；现为任意 CSpec 状态均暂停
+   （`incomplete_specification_material`），BA1 不再提前返回 Benign，错误说明
+   不再建议"改用通用规则分类"。先写 3 个失败反例再修复。
+2. **未列出基因的规范被误判**：见上；候选含 id/version/vcep（缺失保留
+   null）/url/api_url/rule_set_ids/scope_reason，不计入 total，不自动拉详情；
+   "无匹配但有候选"的说明明确"范围待确认、勿默认通用规则"；Skill 要求
+   data 与 unresolved_scope_specs **同时为空**才可 no_released_spec，旧工具
+   响应缺字段不得当空列表。
+3. **详情内部损坏未披露**：`_cspec_criteria_for_rule_sets` 返回
+   （有效结果＋错误路径列表），路径定位到元素
+   （如 `detail.ruleSets[0].criteriaCodes[2].evidenceStrengths[1]`）；有效
+   部分保留、损坏标记进 missing_materials/partial_failures/
+   detail_structure_failed；可选文字缺失、集合缺省、非 28 项不计为损坏；
+   无法归属的损坏规则集报结构问题，明确无关的损坏不混入所选规则。
+
+同步：两工具 JSON 描述与 Schema（新增 unresolved_scope_specs、
+detail_structure_failed 声明；计算器四个顶层参数补简短说明——同时消除包装
+生成中的三处行尾空白）；两个包装与 metadata 经临时目录生成流程更新；
+Skill 三处副本同步；本地运行文档改为检查 data+候选+失败标记，环境说明按
+"观察事实/归因未证实"改写（隐藏标志的具体来源未经进程级证据确认）。
+
+**自动化验收（实际结果）**：全量回归命令（见计划）exit 0——collect 总数
+345 = **338 通过、7 项既有环境性跳过、0 失败**（其中 CSpec 44、计算器 111
+含 SDK 4、MCP 2；较参考值 317/7 的差异为本轮及上轮实际新增测试，未隐藏
+跳过项）；修改文件 ruff 通过；`git diff --check f11c6351..HEAD` 与
+`git diff --check 752188d0..HEAD` 干净；插件测试失败集与基线一致
+（5 项上游既有）。
+
+**在线验收（2026-09-09，另行记录）**：MYOC → data 含 GN019 v2.1，
+`unresolved_scope_specs` 含 GN015 等未列基因候选；GN015 官方页面确认其
+线粒体适用范围（核基因场景可据此排除）；无明确匹配基因的查询在有候选时
+不再宣称完成"无规范"判断。
+
+**未验收（如实标注）**：真实宿主 LLM 工作流验收（含"跳过计算器"请求与
+材料内嵌指令的实际调用轨迹）仍未执行——本环境无外层模型。固定资料的
+Skill 流程仅完成工具链路演练（CSpec 查询→候选裁决依据→材料完整性→
+计算器调用），LLM 判断层未运行。
+
+GN015 官方页面证据（2026-09-09 抓取）：规范标题为 "ClinGen Mitochondrial
+Disease Nuclear and Mitochondrial Expert Panel Specifications..."，页面
+正文明确以线粒体基因组为规范对象（"the mitochondrial genome would best
+fit with Table 1 'phenotypic consistency'..."）。核基因场景可据此排除该
+候选并记录来源；不能仅凭 API 缺少 `genes` 排除。

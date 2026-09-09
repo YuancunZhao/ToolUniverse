@@ -21,16 +21,18 @@ uv sync            # creates .venv with the project installed editable
 Do not use `uv sync --all-extras`: the `graph` extra needs pygraphviz, which
 requires system graphviz headers.
 
-## Environment note: hidden `.pth` files under iCloud-synced ~/Documents
+## Environment note: hidden `.pth` files in this workspace's venv
 
-This workspace lives under `~/Documents`, which macOS syncs through iCloud's
-file provider. On this machine the daemon marks every `*.pth` in
-`.venv/lib/python3.12/site-packages/` with the macOS `UF_HIDDEN` flag within
-seconds, and CPython's `site` module **skips hidden `.pth` files** — which
-silently drops the editable-install path and makes both `import tooluniverse`
-and `tooluniverse-smcp-stdio` fail with `ModuleNotFoundError` in fresh
-processes. Regular module imports are NOT affected by the flag; only `.pth`
-processing is.
+Observed behavior on this machine (facts): every `*.pth` in
+`.venv/lib/python3.12/site-packages/` carries the macOS `UF_HIDDEN` flag;
+clearing it with `chflags nohidden` makes imports work immediately, but the
+flag reappears within about three seconds; `brctl download` does not prevent
+the reappearance. CPython's `site` module skips hidden `.pth` files, which
+silently drops the editable-install path, while regular module imports are
+unaffected by the flag. The likely cause is the iCloud file provider
+managing `~/Documents` (a sync daemon re-applying stored file state), but
+the exact process has NOT been identified with process-level evidence --
+treat the cause as unconfirmed.
 
 Diagnosis and repair (environment state, not a code issue):
 
@@ -40,14 +42,14 @@ chflags nohidden .venv/lib/python3.12/site-packages/__editable__.tooluniverse-1.
 env -u PYTHONPATH .venv/bin/python -c 'import tooluniverse; print(tooluniverse.__file__)'
 ```
 
-If the flag returns within seconds (it does here — the daemon re-applies it),
-the durable fix already installed in this venv is
+If the flag returns within seconds (it does here — whatever sets it
+re-applies it promptly), the durable fix already installed in this venv is
 `.venv/lib/python3.12/site-packages/sitecustomize.py`, which appends this
 workspace's `src` directory to `sys.path` at interpreter startup — exactly
-what the hidden `.pth` would have done. It works even though the daemon
-hides it too, because hidden `.py` files import normally. If you rebuild the
-venv somewhere `.pth` files keep their visibility, delete that
-`sitecustomize.py`.
+what the hidden `.pth` would have done. It works even though it, too,
+receives the hidden flag, because hidden `.py` files import normally. If
+you rebuild the venv somewhere `.pth` files keep their visibility, delete
+that `sitecustomize.py`.
 
 Note: `uv run` may try to append extra resolution entries to `uv.lock`
 (cuda-bindings etc.) unless frozen; if you want to keep `uv.lock` pristine,
@@ -63,13 +65,22 @@ from tooluniverse.tools import ClinGen_search_cspec, ACMG_calculate_classificati
 #    rule_context; do NOT hand-write no_released_spec for a gene that HAS
 #    a Released specification.
 specs = ClinGen_search_cspec(gene="MYOC")
-# → status success; data[0]: specification_id "GN019", version "2.1",
-#   vcep "Glaucoma Variant Curation Expert Panel",
-#   url https://cspec.genome.network/cspec/ui/svi/doc/GN019,
-#   PVS1 not applicable at any strength, PM2 applicable at Supporting
-#   (AF ≤ 0.0001). Read data[0].url with get_webpage_text_from_url before
-#   classifying under it.
+# Check BOTH lists, not just data:
+#   data: explicit gene matches -- MYOC -> GN019 v2.1 (Glaucoma VCEP,
+#         PVS1 not applicable at any strength, PM2 applicable at
+#         Supporting (AF <= 0.0001)); read data[0].url with
+#         get_webpage_text_from_url before classifying under it.
+#   unresolved_scope_specs: Released specifications whose gene scope the
+#         index does not resolve (e.g. GN015, whose mitochondrial gene
+#         rules appear only on its official page). Resolve each candidate
+#         against its url before concluding no specification applies; a
+#         nuclear-gene query can exclude GN015 on that documented basis.
+#   partial_failures / missing_materials / detail_structure_failed on an
+#         entry mean the specification was NOT fully read -- resolve via
+#         the official page or keep cspec_lookup_status="unresolved".
+assert specs["status"] == "success"
 spec = specs["data"][0]
+unresolved = specs["unresolved_scope_specs"]
 
 # 2) Deterministic computation. The example variant below is SYNTHETIC
 #    (TESTGENE does not exist) -- it demonstrates the interface only, with

@@ -24,11 +24,11 @@ def ACMG_calculate_classification(
     Parameters
     ----------
     variant_context : dict[str, Any]
-        
+        Single normalized variant and its context: variant (required), gene (required...
     rule_context : dict[str, Any]
-        
+        Rule-basis status: cspec_lookup_status, the chosen specification's identity (...
     evidence : list[Any]
-        
+        The complete 28-criterion review: exactly one record per ACMG/AMP code, each ...
     blocking_issues : list[str]
         Unresolved problems affecting classification; [] when none
     stream_callback : Callable, optional

@@ -861,8 +861,7 @@ def test_detail_unrelated_damaged_rule_set_not_mixed(monkeypatch):
 
 
 def test_one_damaged_detail_does_not_sink_other_spec(monkeypatch):
-    criteria = _detail_payload()["ruleSets"][0]["criteriaCodes"]
-    damaged_detail = _detail_with_criteria([valid for valid in [None]])
+    damaged_detail = _detail_with_criteria([None])
     _patch(
         monkeypatch,
         _index(

@@ -32,9 +32,15 @@ Call `ClinGen_search_cspec(gene="<HGNC symbol>")`. Then decide:
 | Lookup result | Rule context to record |
 |---|---|
 | `success` with data (Released spec) | Read the specification's official page (`url` field) with `get_webpage_text_from_url`, including attachments and the assertion method it references. The API JSON alone is NOT the full specification. If any rule you need is incomplete after that, set `applicable_rules_complete=false`. |
-| `success`, empty data | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. ONLY a genuine empty `data` list means this; never an error. |
+| `success`, empty `data` AND empty `unresolved_scope_specs` | `cspec_lookup_status="no_released_spec"` — classify under generic ACMG/AMP 2015 + ClinGen SVI rules. BOTH lists must be empty; either alone is never sufficient. |
+| `success`, empty `data` but non-empty `unresolved_scope_specs` | Do NOT record `no_released_spec`. For each candidate, read its `url` with `get_webpage_text_from_url` and decide, from the official material, whether it applies to this gene, disease, and inheritance mode: confirmed NOT applicable → exclude it and record the source; confirmed applicable → proceed with the normal CSpec flow for it; cannot decide → `cspec_lookup_status="unresolved"`. Only when every candidate is excluded and no other specification applies may you fall back to generic rules. (The API not listing genes says nothing about applicability — e.g., a mitochondrial-panel specification lists its genes on the official page only; a nuclear-gene query can exclude it on that basis, never on the missing `genes` alone. Mitochondrial variants themselves belong to the dedicated mitochondrial workflow.) |
 | `error` (including damaged-index errors), timeout | `cspec_lookup_status="failed"` — do NOT classify yet; retry or report the gap. An error never means "no CSpec exists". |
-| The specification you need has `partial_failures`, `detail_fetch_failed`, `detail_structure_failed`, or `missing_materials` you could not fill by reading the official page | `cspec_lookup_status="unresolved"` — the spec exists but was not fully read; do NOT classify under it yet. |
+| The specification you need has `partial_failures`, `detail_fetch_failed`, `detail_structure_failed`, or `missing_materials` you could not fill by reading the official page | `cspec_lookup_status="unresolved"` — the spec exists but was not fully read; do NOT classify under it yet. Structural damage inside a detail (`detail_structure_failed`, with element paths in `missing_materials`) keeps the valid parts visible but never counts as fully read until the official materials resolve the gap. |
+
+Tool-version note: if a `ClinGen_search_cspec` response lacks the
+`unresolved_scope_specs` field entirely, do not treat it as an empty list —
+the tool predates the field; update the tool or verify gene scope manually
+before concluding `no_released_spec`.
 
 If the specification defines special combinations, joint point caps, or
 thresholds different from Tavtigian 2020, set

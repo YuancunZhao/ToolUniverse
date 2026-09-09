@@ -1007,7 +1007,8 @@
        ],
        "description": "Inheritance mode; null/blank keeps the review open (needs_review)"
       }
-     }
+     },
+     "description": "Single normalized variant and its context: variant (required), gene (required, HGNC symbol), disease and inheritance_mode (string or null; null/blank keeps the review open -- the calculator then pauses with incomplete_variant_context instead of issuing a formal classification)."
     },
     "rule_context": {
      "type": "object",
@@ -1067,14 +1068,15 @@
       },
       "applicable_rules_complete": {
        "type": "boolean",
-       "description": "true only after the full specification (official page, attachments, assertion method) was read"
+       "description": "true only when the materials required by the rules being applied have been fully verified: for a CSpec, its official page, attachments, and assertion method; under generic rules, the SVI reference material the assessment relies on. Not merely an indication that a CSpec page was opened. Any false value pauses classification."
       },
       "combination_method": {
        "type": "string",
        "minLength": 1,
        "description": "Only 'tavtigian2020' is supported; specification-specific methods pause classification"
       }
-     }
+     },
+     "description": "Rule-basis status: cspec_lookup_status, the chosen specification's identity (null unless released_spec_found), applicable_rules_complete (true only when the materials the applied rules depend on are fully verified -- a CSpec's official page, attachments and assertion method, or the SVI reference material a generic-rules assessment relies on), and combination_method (only 'tavtigian2020' is supported)."
     },
     "evidence": {
      "type": "array",
@@ -1173,7 +1175,8 @@
         }
        }
       }
-     }
+     },
+     "description": "The complete 28-criterion review: exactly one record per ACMG/AMP code, each with criterion, status, strength, rationale (string), and source_refs / rule_refs / evidence_ids lists of non-blank strings. Only 'met' records score; 'met' requires a legal strength, non-empty rationale, and non-empty reference lists."
     },
     "blocking_issues": {
      "type": "array",

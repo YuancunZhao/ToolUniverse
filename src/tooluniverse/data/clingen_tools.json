@@ -661,7 +661,7 @@
  },
  {
   "name": "ClinGen_search_cspec",
-  "description": "Find current Released ClinGen CSpec (Sequence Variant Interpretation) specifications for a gene: VCEP-specific ACMG/AMP criterion applicability, per-strength thresholds and downgrades, specification ID and version, assertion-method reference, and rule-set-bound gene-disease-inheritance mapping. Distinguishes a valid empty result (no Released specification -> use generic ACMG/AMP 2015 + ClinGen SVI rules) from lookup failure. The returned API JSON is a structured summary, not the full specification: read the official page (url field) with get_webpage_text_from_url before classifying. Essential first step of ACMG variant classification.",
+  "description": "Find current Released ClinGen CSpec (Sequence Variant Interpretation) specifications for a gene: VCEP-specific ACMG/AMP criterion applicability, per-strength thresholds and downgrades, specification ID and version, assertion-method reference, and rule-set-bound gene-disease-inheritance mapping. Specifications whose gene scope the index does not resolve (no genes listed) are preserved in unresolved_scope_specs as candidates with scope_reason gene_binding_unavailable -- the API not listing genes says nothing about applicability. Distinguishes a valid empty result (no Released specification and no unresolved candidates -> use generic ACMG/AMP 2015 + ClinGen SVI rules) from lookup failure. The returned API JSON is a structured summary, not the full specification: read the official page (url field) with get_webpage_text_from_url before classifying. Essential first step of ACMG variant classification.",
   "type": "ClinGenTool",
   "parameter": {
    "type": "object",
@@ -749,6 +749,10 @@
        },
        "detail_fetch_failed": {
         "type": "boolean"
+       },
+       "detail_structure_failed": {
+        "type": "boolean",
+        "description": "The detail document contained structural damage (element paths listed in missing_materials); valid parts are kept but the specification is not fully read until official materials resolve the gap."
        }
       }
      }
@@ -764,6 +768,45 @@
     },
     "provider": {
      "type": "string"
+    },
+    "unresolved_scope_specs": {
+     "type": "array",
+     "description": "Released specifications whose gene scope the index does not resolve; each carries specification_id, version, vcep, url, api_url, rule_set_ids, scope_reason='gene_binding_unavailable'. Not counted in total; resolve against official materials before concluding no specification applies.",
+     "items": {
+      "type": "object",
+      "properties": {
+       "specification_id": {
+        "type": "string"
+       },
+       "version": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "vcep": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "url": {
+        "type": "string"
+       },
+       "api_url": {
+        "type": "string"
+       },
+       "rule_set_ids": {
+        "type": "array",
+        "items": {
+         "type": "string"
+        }
+       },
+       "scope_reason": {
+        "type": "string"
+       }
+      }
+     }
     }
    }
   },
