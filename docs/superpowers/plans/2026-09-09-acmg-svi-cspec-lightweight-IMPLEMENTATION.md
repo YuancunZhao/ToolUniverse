@@ -465,3 +465,23 @@ SDK/MCP 的合法计算、非法输入拒绝、材料不完整暂停、特殊组
 
 **剩余限制**：特殊组合算法（CSpec 专属组合/上限的机器可读表达）仍为
 needs_review 暂停、未实现；隐藏 .pth 的具体来源仍无进程级证据（见运行文档）。
+
+## 整体审查修复轮（2026-09-10，计划：2026-09-10-acmg-svi-cspec-review-fixes.md）
+
+起点 `4257921e`。九项问题中问题 1–6（科学指导）在本节核对，问题 7–9（程序）
+见后续各提交。**六反例来源核对清单**（B2/B3）：
+
+| # | 反例 | 适用条件 → 预期 | 来源位置 |
+|---|---|---|---|
+| 1 | NMD 逃逸 + 无关键区域证据 + 缺失<10% + 其他条件满足 | PVS1 **Moderate**（不是 Strong） | PVS1 决策树（Abou Tayoun 2018, PMC6185798）：Strong 需 C 端关键区域证据或 >10% 截短；旧入口"逃逸即 Strong"简化表已删除 |
+| 2 | 非 canonical ±1/2 同义变异，SpliceAI 0.8，无 RNA | 剪接 **PP3** 路径可及（不能因"同义"排除） | Walker 2023（PMC10357475）：Δ≥0.2→PP3（保守 Supporting）；氨基酸预测器不适用≠PP3 排除 |
+| 3 | 功能性重复区内的框内缺失 | 不得仅凭 repeat 注释赋 **BP3** | ACMG/AMP 2015 Table 4（PMC4544753）：BP3 要求重复区无已知功能；SVI_REFERENCE BP3 已补条件 |
+| 4 | 低外显率疾病中的未发病携带者（trans） | 不能自动赋 **BP2** | ACMG/AMP 2015 Table 4：trans 分支限于"完全外显的显性基因/疾病"；cis 分支另行陈述 |
+| 5 | 两次合格的相位未知 LP 共现观察 | PM3 内部积分 0.5 → **PM3_Supporting**（不是 Moderate） | PM3 v1.0（2019-05-02 PDF）：相位未知 P=0.5/次（两次=1.0）、LP=0.25/次（四次=1.0）；SVI_REFERENCE 解释文字已修正 |
+| 6 | 两个未校准预测器一致 | 不能自动生成 Strong **PP3/BP4** | Pejaver 2022（PMC9748256）：强度来自预先选定校准工具；旧入口"2+ 一致=Strong"投票规则与共识兜底已删除 |
+
+反例 1–6 均为文档层修正（SVI_REFERENCE/旧入口文件）；无对应计算器逻辑变更
+（按计划不新增评估器）。文档示例守卫测试
+tests/unit/test_variant_interpretation_code_patterns.py 编译 CODE_PATTERNS
+预测示例并以桩数据验证汇总只返回原始结果（{"predictions": ...}，无
+acmg_support/acmg_recommendation/consensus）。

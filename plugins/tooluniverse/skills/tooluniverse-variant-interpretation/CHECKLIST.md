@@ -106,7 +106,7 @@ Pre-delivery verification checklist for variant interpretation reports.
 
 ### Common Errors to Avoid
 - [ ] PM2 without checking gnomAD
-- [ ] PP3 without multiple concordant predictions
+- [ ] PP3/BP4 assigned by predictor vote count instead of a pre-specified calibrated tool
 - [ ] PVS1 for non-null variants
 - [ ] PS3 without true functional evidence
 - [ ] Applying same evidence to multiple codes

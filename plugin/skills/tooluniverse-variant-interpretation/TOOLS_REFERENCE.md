@@ -219,13 +219,16 @@ quick = tu.tools.SpliceAI_get_max_delta(
 | DS_DG | Donor Gain (creates new donor) |
 | DS_DL | Donor Loss (disrupts existing) |
 
-**Score Interpretation for ACMG**:
-| Max Delta Score | Interpretation | ACMG Support |
-|-----------------|----------------|--------------|
-| ≥0.8 | High splice impact | PP3 (strong) |
-| 0.5-0.8 | Moderate impact | PP3 (supporting) |
-| 0.2-0.5 | Low impact | PP3 (weak) |
-| <0.2 | Likely no impact | BP7 (if synonymous) |
+**Raw Score Interpretation**:
+| Max Delta Score | Interpretation |
+|-----------------|----------------|
+| ≥0.8 | High splice impact |
+| 0.5-0.8 | Moderate impact |
+| 0.2-0.5 | Low impact |
+| <0.2 | Likely no impact |
+
+(Code assignment in the unified ACMG skill: SpliceAI ≥0.2 → PP3, ≤0.1 → BP4,
+conservatively at Supporting; BP7 position rules apply.)
 
 **When to Use**:
 - Intronic variants within ±50bp of splice sites
@@ -257,13 +260,16 @@ result = tu.tools.CADD_get_variant_score(
 # Returns: phred_score, raw_score, interpretation
 ```
 
-**CADD PHRED Score Interpretation**:
-| Score | Meaning | ACMG Support |
-|-------|---------|--------------|
-| ≥30 | Top 0.1% deleterious | PP3 (strong) |
-| ≥20 | Top 1% deleterious | PP3 (supporting) |
-| 15-20 | Uncertain | Neutral |
-| <15 | Likely benign | BP4 (supporting) |
+**CADD PHRED Score Interpretation** (raw score context):
+| Score | Meaning |
+|-------|---------|
+| ≥30 | Top 0.1% deleterious |
+| ≥20 | Top 1% deleterious |
+| 15-20 | Uncertain |
+| <15 | Likely benign |
+
+(PP3/BP4 assignment uses the calibrated CADD intervals in the unified ACMG
+skill's SVI_REFERENCE.md, not these descriptive bands.)
 
 ---
 
@@ -285,12 +291,13 @@ result = tu.tools.AlphaMissense_get_variant_score(
 # Returns: pathogenicity_score, classification
 ```
 
-**AlphaMissense Thresholds** (from Cheng et al., Science 2023):
-| Score | Classification | ACMG Support |
-|-------|----------------|--------------|
-| >0.564 | Pathogenic | PP3 (strong) |
-| 0.34-0.564 | Ambiguous | Neutral |
-| <0.34 | Benign | BP4 (strong) |
+**AlphaMissense Thresholds** (from Cheng et al., Science 2023; the
+Classification column is the provider's own label, reported as-is):
+| Score | Classification |
+|-------|----------------|
+| >0.564 | Pathogenic |
+| 0.34-0.564 | Ambiguous |
+| <0.34 | Benign |
 
 **Why Use AlphaMissense**:
 - ~90% accuracy on ClinVar pathogenic variants
@@ -374,11 +381,11 @@ result = tu.tools.EVE_get_variant_score(
 # Returns: eve_score, classification, gene, polyphen/sift from VEP
 ```
 
-**EVE Score Interpretation**:
-| Score | Classification | ACMG Support |
-|-------|----------------|--------------|
-| >0.5 | Likely pathogenic | PP3 |
-| ≤0.5 | Likely benign | BP4 |
+**EVE Score Interpretation** (provider labels, raw context):
+| Score | Classification |
+|-------|----------------|
+| >0.5 | Likely pathogenic |
+| ≤0.5 | Likely benign |
 
 **Note**: EVE covers ~3,000 disease-related genes. Use `EVE_get_gene_info` to check coverage.
 

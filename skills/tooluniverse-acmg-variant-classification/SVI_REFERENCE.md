@@ -303,7 +303,7 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
 - **Phase unknown is not a gap by itself:** when the co-occurrence is
   qualified (affected proband, other variant independently classified
   P/LP, both rare), apply the downweighted phase-unknown values above —
-  roughly two phase-unknown P (or LP) co-occurrences equal one confirmed.
+  per-observation arithmetic: phase-unknown P = 0.5 each, so TWO such observations reach 1.0 (Moderate); phase-unknown LP = 0.25 each, so FOUR are needed for 1.0 -- two qualified phase-unknown LP observations total 0.5 = PM3_Supporting, NOT Moderate.
   Keep the criterion at `needs_review` only when the facts themselves are
   missing (no qualified co-occurrence, other variant unclassified, rarity
   unestablished). BP2's phase requirements are separate and unchanged.

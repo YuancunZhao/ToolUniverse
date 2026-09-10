@@ -40,30 +40,33 @@ databases, thresholds used during assessment).
 
 ## gnomAD Frequency Thresholds (Rare Disease)
 
-| Frequency | ACMG Code | Interpretation |
-|-----------|-----------|----------------|
-| Absent | PM2_Supporting | Absent from controls |
-| <0.00001 | PM2_Supporting | Extremely rare |
-| <0.0001 | - | Rare (use with caution) |
-| >0.01 | BS1/BA1 | Too common for rare disease |
+| Frequency | Interpretation |
+|-----------|----------------|
+| Absent | Absent from population databases |
+| <0.00001 | Extremely rare |
+| <0.0001 | Rare (use with caution) |
+| >0.01 | Too common for a rare disease |
+
+(Code assignment -- PM2/BA1/BS1 and strengths -- happens in the unified ACMG
+skill against disease-aware maximum-credibility thresholds.)
 
 ## COSMIC Somatic Evidence
 
-| COSMIC Finding | Interpretation | ACMG Support |
-|----------------|----------------|--------------|
-| Recurrent hotspot (>100 samples) | Known oncogenic driver | PS3 (functional) |
-| Moderate frequency (10-100) | Likely oncogenic | PM1 (hotspot) |
-| Rare somatic (<10) | Unknown significance | No support |
+| COSMIC Finding | Interpretation |
+|----------------|----------------|
+| Recurrent hotspot (>100 samples) | Known oncogenic driver |
+| Moderate frequency (10-100) | Likely oncogenic |
+| Rare somatic (<10) | Unknown significance |
 
 ## DisGeNET Score Interpretation
 
-| GDA Score | Evidence Level | ACMG Support |
-|-----------|----------------|--------------|
-| >0.7 | Strong | PP4 (phenotype) |
-| 0.4-0.7 | Moderate | Supporting |
-| <0.4 | Weak | Insufficient |
+| GDA Score | Evidence Level |
+|-----------|----------------|
+| >0.7 | Strong |
+| 0.4-0.7 | Moderate |
+| <0.4 | Weak |
 
-## ClinGen Validity Levels (for ACMG PM1/PP4)
+## ClinGen Validity Levels (gene-disease context)
 
 | Classification | Meaning | ACMG Impact |
 |----------------|---------|-------------|
@@ -85,12 +88,12 @@ databases, thresholds used during assessment).
 
 ## Structural Impact Categories
 
-| Impact Level | Description | ACMG Support |
-|--------------|-------------|--------------|
-| **Critical** | Active site, catalytic residue | PM1 (strong) |
-| **High** | Buried residue, disulfide, structural core | PM1 (moderate) |
-| **Moderate** | Domain interface, binding site | PM1 (supporting) |
-| **Low** | Surface, flexible region | No support |
+| Impact Level | Description |
+|--------------|-------------|
+| **Critical** | Active site, catalytic residue |
+| **High** | Buried residue, disulfide, structural core |
+| **Moderate** | Domain interface, binding site |
+| **Low** | Surface, flexible region |
 
 ## Structural Impact Confidence (AlphaFold pLDDT)
 
@@ -119,40 +122,44 @@ databases, thresholds used during assessment).
 - Concordance of uncalibrated predictors is not PP3; discordant calibrated
   predictors -> neither code applies
 
-## SpliceAI Thresholds
+## SpliceAI Thresholds (raw score context)
 
-| Max Delta Score | Interpretation | ACMG Support |
-|-----------------|----------------|--------------|
-| >=0.8 | High pathogenicity | PP3 (strong) for splice-altering |
-| 0.5-0.8 | Moderate | PP3 (supporting) |
-| 0.2-0.5 | Low | Weak evidence |
-| <0.2 | Likely benign | BP7 (if synonymous) |
+| Max Delta Score | Interpretation |
+|-----------------|----------------|
+| >=0.8 | High predicted splice impact |
+| 0.5-0.8 | Moderate predicted splice impact |
+| 0.2-0.5 | Low predicted splice impact |
+| <0.2 | No predicted splice impact |
 
-## Literature Evidence Weights
+(Splicing code assignment follows the unified ACMG skill's calibrated
+rules: canonical +/-1,2 -> PVS1 tree; non-canonical SpliceAI >=0.2 -> PP3
+and <=0.1 -> BP4 conservatively at Supporting; BP7 position rules apply.)
 
-| Evidence | ACMG Code | Weight |
-|----------|-----------|--------|
-| Functional study (null) | PS3 | Strong |
-| Functional study (reduced) | PS3_Moderate | Moderate |
-| Case reports with segregation | PP1 | Supporting to Moderate |
-| Co-occurrence with pathogenic | BP2 | Supporting against |
+## Literature Evidence
+
+Collected literature findings are raw material for the unified ACMG skill.
+Functional studies are assessed there under the SVI validation framework
+(strength from validation, not study type); segregation under the
+co-segregation point system; co-occurrence under BP2's phase rules. No
+fixed code/strength mapping is applied at collection time.
 
 ## Regulatory Impact Categories
 
-| Category | Criteria | ACMG Support |
-|----------|----------|--------------|
-| **High impact** | Disrupts known TF binding motif | PP3 (supporting) |
-| **Moderate impact** | In active regulatory region | Consider context |
-| **Low impact** | No regulatory annotation | No support |
+| Category | Criteria |
+|----------|----------|
+| **High impact** | Disrupts known TF binding motif |
+| **Moderate impact** | In active regulatory region |
+| **Low impact** | No regulatory annotation |
+
+(Regulatory annotations are collection context; non-coding evidence codes
+are decided in the unified ACMG skill.)
 
 ## PVS1 Application for Truncating Variants
 
-| Scenario | PVS1 Strength |
-|----------|---------------|
-| Canonical LOF gene, NMD predicted | Very Strong |
-| NMD escape (last exon, last ~50 bp of penultimate exon) | Strong |
-| In-frame exon skipping / rescue transcript possible | Moderate/Supporting |
-| LoF not an established disease mechanism | Not applicable |
-
-Full decision tree, transcript and splice caveats: the ACMG skill's
-`SVI_REFERENCE.md`.
+PVS1 strength is decided ONLY by the SVI decision tree in the unified ACMG
+skill's `SVI_REFERENCE.md` -- it depends on NMD prediction, whether the
+removed C-terminal region is critical, the fraction of protein removed
+(>10% vs <10%), transcript relevance, and population LoF frequency. NMD
+escape alone does NOT imply Strong; without critical-region evidence and
+with <10% of the protein removed the tree gives Moderate. Never assign PVS1
+at any strength when LoF is not an established disease mechanism.

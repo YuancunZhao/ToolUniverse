@@ -164,22 +164,12 @@ def get_spliceai_prediction(tu, chrom, pos, ref, alt, genome="38"):
     )
 
     if result.get('data'):
-        max_score = result['data'].get('max_delta_score', 0)
-        interpretation = result['data'].get('interpretation', '')
-
-        if max_score >= 0.8:
-            acmg = 'PP3 (strong) - high splice impact'
-        elif max_score >= 0.5:
-            acmg = 'PP3 (supporting) - moderate splice impact'
-        elif max_score >= 0.2:
-            acmg = 'PP3 (weak) - possible splice impact'
-        else:
-            acmg = 'BP7 (if synonymous) - splice benign'
-
+        # Raw scores and the provider's own label only -- ACMG code and
+        # strength are decided in the unified ACMG skill (calibrated
+        # single-tool thresholds in its SVI_REFERENCE.md), never here.
         return {
-            'max_delta_score': max_score,
-            'interpretation': interpretation,
-            'acmg_support': acmg,
+            'max_delta_score': result['data'].get('max_delta_score', 0),
+            'interpretation': result['data'].get('interpretation', ''),
             'scores': result['data'].get('scores', [])
         }
     return None
@@ -248,11 +238,9 @@ def get_cadd_score(tu, chrom, pos, ref, alt):
     )
 
     if result.get('status') == 'success':
-        phred = result['data'].get('phred_score')
         return {
-            'score': phred,
-            'interpretation': result['data'].get('interpretation'),
-            'acmg_support': 'PP3' if phred >= 20 else ('BP4' if phred < 15 else 'neutral')
+            'score': result['data'].get('phred_score'),
+            'interpretation': result['data'].get('interpretation')
         }
     return None
 ```
@@ -274,20 +262,11 @@ def get_alphamissense_score(tu, uniprot_id, variant):
     )
 
     if result.get('status') == 'success' and result.get('data'):
-        score = result['data'].get('pathogenicity_score')
-        classification = result['data'].get('classification')
-
-        if classification == 'pathogenic':
-            acmg = 'PP3 (strong)'
-        elif classification == 'benign':
-            acmg = 'BP4 (strong)'
-        else:
-            acmg = 'neutral'
-
         return {
-            'score': score,
-            'classification': classification,
-            'acmg_support': acmg
+            'score': result['data'].get('pathogenicity_score'),
+            # The provider's own label, reported as-is -- it is raw material
+            # for the unified ACMG assessment, not an ACMG code assignment.
+            'classification': result['data'].get('classification')
         }
     return None
 ```
@@ -309,8 +288,7 @@ def get_eve_score(tu, chrom, pos, ref, alt):
             return {
                 'score': best_score.get('eve_score'),
                 'classification': best_score.get('classification'),
-                'gene': best_score.get('gene_symbol'),
-                'acmg_support': 'PP3' if best_score.get('eve_score', 0) > 0.5 else 'BP4'
+                'gene': best_score.get('gene_symbol')
             }
     return None
 ```
@@ -342,25 +320,12 @@ def comprehensive_pathogenicity_assessment(tu, variant_info):
     if eve:
         predictions['eve'] = eve
 
-    damaging_count = sum(1 for p in predictions.values()
-                         if 'PP3' in p.get('acmg_support', ''))
-    benign_count = sum(1 for p in predictions.values()
-                       if 'BP4' in p.get('acmg_support', ''))
-
-    if damaging_count >= 2 and benign_count == 0:
-        consensus = 'likely_damaging'
-        acmg = 'PP3 (multiple predictors concordant)'
-    elif benign_count >= 2 and damaging_count == 0:
-        consensus = 'likely_benign'
-        acmg = 'BP4 (multiple predictors concordant)'
-    else:
-        consensus = 'uncertain'
-        acmg = 'neutral (discordant predictions)'
-
+    # Aggregation only: returns the raw prediction results as gathered.
+    # No vote counting, no consensus label, no ACMG code -- strength comes
+    # from a pre-specified calibrated tool under the unified ACMG skill,
+    # never from the number of agreeing predictors.
     return {
-        'predictions': predictions,
-        'consensus': consensus,
-        'acmg_recommendation': acmg
+        'predictions': predictions
     }
 ```
 

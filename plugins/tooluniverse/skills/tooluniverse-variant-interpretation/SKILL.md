@@ -114,9 +114,9 @@ Before full ACMG classification, check if the variant already has an expert pane
 3. `AlphaMissense_get_variant_score` (0-1, needs UniProt ID) — missense only
 4. `EVE_get_variant_score` (0-1) — missense only
 5. `EnsemblVEP_annotate_hgvs` (VEP with colocated variants) — includes SIFT/PolyPhen
-6. If REVEL is still unavailable, note this as a limitation and rely on CADD + SIFT + PolyPhen consensus. REVEL absence does not prevent classification.
+6. If REVEL is still unavailable, note this as a limitation and record the raw CADD / SIFT / PolyPhen scores as material. REVEL absence does not prevent evidence collection.
 
-Consensus: Run CADD (all variants) + AlphaMissense + EVE (missense). 2+ concordant damaging = strong PP3; 2+ concordant benign = strong BP4.
+Code assignment: NEVER by predictor agreement. The ACMG code and strength come from a pre-specified calibrated tool under the unified ACMG skill's SVI_REFERENCE.md; concordance among uncalibrated predictors is context, not evidence.
 
 See `ACMG_CLASSIFICATION.md` for thresholds.
 
@@ -222,7 +222,7 @@ Not all computational predictors are equal. For missense variants:
 - **REVEL** (AUC ~0.95) — best single meta-predictor; weight highest
 - **AlphaMissense** (AUC ~0.94) — strong, structure-aware
 - **CADD** (AUC ~0.85) — good for all variant types, but less specific for missense
-- **SIFT/PolyPhen** (AUC ~0.80) — legacy tools; useful for consensus but not individually decisive
+- **SIFT/PolyPhen** (AUC ~0.80) — legacy tools; raw-score context only, never the basis for PP3/BP4 strength
 
 When predictors disagree: if REVEL says tolerated but SIFT/PolyPhen say damaging, lean toward REVEL. PP3/BP4 are applied from a single calibrated predictor meeting its pre-set threshold (see the ACMG skill's SVI_REFERENCE.md); when calibrated predictors disagree, neither code applies.
 

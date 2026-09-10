@@ -150,7 +150,7 @@
 - Extensive clinical documentation (>500 families)
 - Co-segregation in >100 affected individuals
 
-**PS3 Evidence**: Strong - multiple functional studies demonstrating loss of DNA repair function
+**PS3 Evidence**: assessed in the unified ACMG skill under the SVI functional framework (strength from assay validation, not the number of studies); multiple functional studies are the raw material
 
 *Source: `PubMed_search_articles`*
 
@@ -165,7 +165,7 @@
 | **PVS1** | Very Strong | Null variant (frameshift) in gene where LOF is established mechanism |
 | **PS4** | Strong | >5 affected individuals documented |
 | **PM2** | Supporting | Absent/extremely rare in general population (outside founders) |
-| **PP5** | Supporting | Expert panel (ENIGMA) reports pathogenic |
+| **PP5** | deprecated | Retired (ClinGen SVI); the ENIGMA expert-panel classification is attributed separately, never scored |
 
 ### Evidence Summary
 
@@ -173,7 +173,7 @@
 |------------|--------|
 | 1 Very Strong (PVS1) | None |
 | 1 Strong (PS4) | |
-| 2 Supporting (PM2, PP5) | |
+| 1 Supporting (PM2) | |
 
 ### Classification: **PATHOGENIC**
 
@@ -349,7 +349,7 @@
 | CADD | 29.5 (Phred) | Top 0.1% deleterious |
 | REVEL | 0.92 | Pathogenic range |
 
-**Concordance**: 4/4 predictors indicate damaging → **PP3 applies**
+**Concordance**: 4/4 predictors damaging (raw context only) → PP3 decided in the unified ACMG skill by the pre-specified calibrated tool's threshold, never by vote count
 
 *Source: `MyVariant_query_variants`*
 
