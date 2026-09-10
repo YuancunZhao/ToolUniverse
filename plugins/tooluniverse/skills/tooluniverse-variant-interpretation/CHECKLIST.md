@@ -1,6 +1,10 @@
 # Clinical Variant Interpreter Checklist
 
 Pre-delivery verification checklist for variant interpretation reports.
+All ACMG code/strength verification below refers to the unified
+`tooluniverse-acmg-variant-classification` skill's evaluation and the
+`ACMG_calculate_classification` calculator's output -- this checklist
+verifies that flow was followed, never replaces it.
 
 ## Report Quality Checklist
 
@@ -60,10 +64,11 @@ Pre-delivery verification checklist for variant interpretation reports.
 - [ ] PP1 (segregation) documented if available
 
 ### Phase 7: ACMG Classification
-- [ ] All evidence codes explicitly listed
-- [ ] Each code has strength modifier
-- [ ] Code justification provided
-- [ ] Classification calculated correctly
+- [ ] All 28 codes recorded (one record each, per the unified skill's contract)
+- [ ] Each `met` record has strength, rationale, and non-empty references
+- [ ] CSpec candidates adjudicated and material completeness recorded
+- [ ] Final classification and score taken verbatim from the
+      `ACMG_calculate_classification` output (or its `needs_review` reasons)
 - [ ] Classification stated in executive summary
 
 ### Phase 8: Clinical Recommendations
@@ -134,17 +139,11 @@ Pre-delivery verification checklist for variant interpretation reports.
 ## Evidence Grading
 
 ### All Classifications Must Have
-- [ ] Classification tier: ★★★, ★★☆, ★☆☆, or VUS
-- [ ] Evidence strength description
+- [ ] The calculator's `classification_status` and `classification`
+      reported verbatim (no star-tier or ad-hoc confidence grade --
+      confidence language beyond the calculator output is not added here)
+- [ ] Per-criterion contributions and uncounted records shown
 - [ ] Key supporting evidence highlighted
-
-### Tier Definitions
-| Tier | Symbol | Criteria |
-|------|--------|----------|
-| High confidence | ★★★ | Multiple independent lines, no conflicts |
-| Moderate confidence | ★★☆ | Good evidence, minor gaps |
-| Limited confidence | ★☆☆ | Minimal evidence, apply with caution |
-| Uncertain | VUS | Insufficient to classify |
 
 ---
 

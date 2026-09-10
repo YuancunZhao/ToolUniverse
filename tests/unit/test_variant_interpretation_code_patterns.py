@@ -49,6 +49,21 @@ def test_prediction_examples_contain_no_acmg_fields():
         )
 
 
+def test_tool_reference_has_no_alternative_acmg_evaluator():
+    # Documentation contract only: TOOLS_REFERENCE.md must not carry its own
+    # classifier or vote-based PP3/BP4 generator. This does NOT assert that
+    # any LLM follows the unified flow.
+    text = (SKILL_DIR / "TOOLS_REFERENCE.md").read_text()
+    forbidden = (
+        "def calculate_acmg_classification(",
+        "def get_multi_predictor_evidence(",
+        "'acmg_pp3'",
+        "'acmg_bp4'",
+    )
+    for marker in forbidden:
+        assert marker not in text, marker
+
+
 def test_comprehensive_assessment_returns_raw_predictions_only():
     block, _ = _prediction_block()
     code = compile(block, str(DOC), "exec")

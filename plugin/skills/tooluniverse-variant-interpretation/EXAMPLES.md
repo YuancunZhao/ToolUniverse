@@ -1,6 +1,14 @@
-# Clinical Variant Interpreter - Examples
+# Clinical Variant Interpreter - Material-Collection Examples
 
-## Example 1: Pathogenic BRCA1 Variant
+These are FIXED material-collection examples: the variant data, query
+methods, raw scores, and attributed external database classifications
+are illustrative and must not be read as current database query
+results. They deliberately contain no evidence scoring tables,
+combination rules, final classifications, star confidences, or
+upgrade rules -- classification happens only through the unified ACMG
+skill and its calculator.
+
+## Example 1: BRCA1 c.5266dupC — Material Collection
 
 ### User Query
 "Interpret the clinical significance of BRCA1 c.5266dupC"
@@ -20,11 +28,10 @@
 |-------|-------|
 | **Variant** | NM_007294.4:c.5266dupC (p.Gln1756ProfsTer74) |
 | **Gene** | BRCA1 |
-| **Classification** | **PATHOGENIC** ★★★ |
-| **Evidence Strength** | Very Strong (multiple independent lines) |
-| **Key Finding** | Frameshift variant in established LOF gene; well-documented pathogenic variant |
+| **External classifications (attributed)** | ClinVar/ENIGMA: Pathogenic (see section 3) |
+| **Key Finding** | Frameshift variant in a LoF-established gene; collected material below |
 
-**Clinical Action Required**: Hereditary breast/ovarian cancer risk management indicated.
+(Management decisions follow the unified classification flow, not this example.)
 
 ---
 
@@ -156,73 +163,13 @@
 
 ---
 
-## 7. ACMG Classification
+## 7. Handoff to the Unified ACMG Skill
 
-### Evidence Codes Applied
-
-| Code | Strength | Rationale |
-|------|----------|-----------|
-| **PVS1** | Very Strong | Null variant (frameshift) in gene where LOF is established mechanism |
-| **PS4** | Strong | >5 affected individuals documented |
-| **PM2** | Supporting | Absent/extremely rare in general population (outside founders) |
-| **PP5** | deprecated | Retired (ClinGen SVI); the ENIGMA expert-panel classification is attributed separately, never scored |
-
-### Evidence Summary
-
-| Pathogenic | Benign |
-|------------|--------|
-| 1 Very Strong (PVS1) | None |
-| 1 Strong (PS4) | |
-| 1 Supporting (PM2) | |
-
-### Classification: **PATHOGENIC**
-
-**Rationale**: Meets ACMG criteria for Pathogenic (1 Very Strong + 1 Strong + 2 Supporting). Well-established pathogenic variant with multiple lines of independent evidence.
-
-**Confidence**: ★★★ (High) - Expert panel reviewed, extensive clinical data
-
----
-
-## 8. Clinical Recommendations
-
-### For Affected Individual
-
-| Category | Recommendation |
-|----------|----------------|
-| **Confirmation** | No re-testing needed; well-documented variant |
-| **Cancer screening** | NCCN high-risk breast/ovarian protocols |
-| **Risk-reducing options** | Discuss prophylactic mastectomy, salpingo-oophorectomy |
-| **Medical management** | Consider PARP inhibitor eligibility if cancer |
-| **Genetic counseling** | Discuss implications, reproductive options |
-
-### For Family Members
-
-| Relationship | Action |
-|--------------|--------|
-| First-degree relatives | Offer cascade testing |
-| At-risk children | Consider testing at 18-25 years |
-| Partners | Reproductive counseling if planning children |
-
-### Testing Recommendations
-
-- Cascade genetic testing for first-degree relatives
-- Consider panel testing for other cancer genes if clinically indicated
-- Tumor testing for PARP inhibitor eligibility if cancer present
-
----
-
-## 9. Limitations & Uncertainties
-
-| Factor | Status |
-|--------|--------|
-| Classification certainty | High - well-documented |
-| Penetrance | Incomplete (~70% breast, ~40% ovarian by age 70) |
-| Modifier genes | May influence risk |
-| Environmental factors | May modify risk |
-
-**No significant limitations** - This is a well-characterized pathogenic variant with extensive clinical documentation.
-
----
+This example stops at material collection. Evidence evaluation (all 28
+codes, strengths, exclusions) happens in the unified
+`tooluniverse-acmg-variant-classification` skill against its
+`SVI_REFERENCE.md`, and the final classification comes only from the
+`ACMG_calculate_classification` calculator -- never from this file.
 
 ## Data Sources
 
@@ -237,7 +184,7 @@
 
 ---
 
-## Example 2: VUS Missense Requiring Structural Analysis
+## Example 2: TP53 p.R175C — Material Collection
 
 ### User Query
 "Interpret TP53 p.R175C - it's reported as a VUS"
@@ -257,11 +204,10 @@
 |-------|-------|
 | **Variant** | NM_000546.6:c.523C>T (p.Arg175Cys) |
 | **Gene** | TP53 |
-| **Classification** | **LIKELY PATHOGENIC** ★★☆ |
-| **Evidence Strength** | Moderate (structural + computational + clinical) |
-| **Key Finding** | Hotspot residue in DNA-binding domain; R175 is known pathogenic position (R175H documented) |
+| **External classifications (attributed)** | ClinVar: VUS for p.R175C itself; other R175 missense variants Pathogenic (see section 3) |
+| **Key Finding** | Hotspot residue in the DNA-binding domain; collected material below |
 
-**Reclassified from VUS based on structural analysis and PM5 evidence.**
+(Any reclassification would come from the unified ACMG flow, not this example.)
 
 ---
 
@@ -315,7 +261,7 @@
 | Submitters | 3 |
 | Conditions | Li-Fraumeni syndrome |
 
-**Note**: ClinVar classification may require update based on structural evidence.
+(External classifications are recorded as attributed facts; updating them is out of scope here.)
 
 ### Critical Context: R175 Position
 
@@ -327,7 +273,7 @@
 | p.R175S | Pathogenic |
 | **p.R175C** | VUS (being reclassified) |
 
-**PM5 Applies**: Multiple different missense changes at R175 are pathogenic.
+**PM5 material**: multiple different missense changes at R175 are externally classified pathogenic -- a PM5 fact candidate for the unified assessment.
 
 ### OMIM
 
@@ -391,7 +337,7 @@
 - R175 is in a critical structural region
 - Known mutational hotspot
 - Zinc coordination region essential for DNA binding
-- Structural analysis supports pathogenicity
+- Structural analysis collected as mechanistic context
 
 *Sources: PDB 2OCJ, structural analysis*
 
@@ -420,73 +366,13 @@
 
 ---
 
-## 7. ACMG Classification
+## 7. Handoff to the Unified ACMG Skill
 
-### Evidence Codes Applied
-
-| Code | Strength | Rationale |
-|------|----------|-----------|
-| **PM2** | Moderate | Absent from gnomAD (>140,000 individuals) |
-| **PM5** | Moderate | Different missense at same position (R175H) is pathogenic |
-| **PM1** | Moderate | Critical DNA-binding domain, zinc coordination region |
-| **PP3** | Supporting | All 4 predictors concordantly damaging |
-
-### Evidence Summary
-
-| Pathogenic | Benign |
-|------------|--------|
-| 0 Very Strong | None |
-| 0 Strong | |
-| 3 Moderate (PM2, PM5, PM1) | |
-| 1 Supporting (PP3) | |
-
-### Classification: **LIKELY PATHOGENIC**
-
-**Rationale**: 3 Moderate + 1 Supporting meets ACMG criteria for Likely Pathogenic. Strong structural evidence at known hotspot position supports classification upgrade from VUS.
-
-**Confidence**: ★★☆ (Moderate) - Structural evidence strong, but lacks direct R175C functional data
-
----
-
-## 8. Clinical Recommendations
-
-### For Affected Individual
-
-| Category | Recommendation |
-|----------|----------------|
-| **Confirmation** | Consider orthogonal confirmation |
-| **Clinical management** | Li-Fraumeni screening protocol |
-| **Cancer surveillance** | Comprehensive multi-organ screening |
-| **Genetic counseling** | Discuss uncertainty, manage expectations |
-
-### Family Testing Considerations
-
-- Likely Pathogenic classification supports cascade testing
-- Counsel families about classification confidence level
-- Consider research enrollment for functional studies
-
-### Recommended Surveillance (Li-Fraumeni Protocol)
-
-| Modality | Frequency | Starting Age |
-|----------|-----------|--------------|
-| Breast MRI | Annual | 20-25 |
-| Colonoscopy | Every 2-5 years | 25 |
-| Skin exam | Annual | 18 |
-| Whole-body MRI | Consider annual | 25 |
-
----
-
-## 9. Limitations & Uncertainties
-
-| Factor | Impact |
-|--------|--------|
-| **No direct functional data** | Classification relies on position analogy |
-| **ClinVar discordance** | Our Likely Pathogenic vs ClinVar VUS |
-| **Phenocopy risk** | Environmental factors could explain cancer |
-
-**Recommendation**: Consider this classification provisional pending functional studies. Reanalyze when new data available.
-
----
+This example stops at material collection. Evidence evaluation (all 28
+codes, strengths, exclusions) happens in the unified
+`tooluniverse-acmg-variant-classification` skill against its
+`SVI_REFERENCE.md`, and the final classification comes only from the
+`ACMG_calculate_classification` calculator -- never from this file.
 
 ## Data Sources
 
@@ -501,7 +387,7 @@
 
 ---
 
-## Example 3: Likely Benign Common Variant
+## Example 3: CFTR p.M470V — Material Collection
 
 ### User Query  
 "What is the significance of the CFTR p.M470V variant?"
@@ -517,9 +403,8 @@
 |-------|-------|
 | **Variant** | NM_000492.4:c.1408A>G (p.Met470Val) |
 | **Gene** | CFTR |
-| **Classification** | **BENIGN** ★★★ |
-| **Evidence Strength** | Very Strong (population frequency) |
-| **Key Finding** | Common variant (14% global AF); well-established benign polymorphism |
+| **External classifications (attributed)** | ClinVar: Benign (see section 3) |
+| **Key Finding** | Common variant (14% global AF); collected material below |
 
 ---
 
@@ -534,41 +419,18 @@
 | East Asian | 0.03 |
 | African | 0.08 |
 
-**Interpretation**: Far too common to cause rare disease like CF (prevalence 1/3,000). **BA1 applies**.
+**Interpretation** (raw material): at 14% global AF the variant is far more frequent than CF prevalence (1/3,000) would allow -- recorded as a frequency fact for the unified assessment (BA1 decided there, with the SVI exception list).
 
 ---
 
-## 7. ACMG Classification
+## 7. Handoff to the Unified ACMG Skill
 
-### Evidence Codes Applied
-
-| Code | Strength | Rationale |
-|------|----------|-----------|
-| **BA1** | Stand-Alone | AF >5% in gnomAD |
-| **BS1** | Strong | AF far exceeds disease frequency |
-| **BP4** | Supporting | Benign computational predictions |
-
-### Classification: **BENIGN**
-
-**Rationale**: BA1 alone is sufficient for Benign classification. This is a well-established benign polymorphism.
-
----
-
-## 8. Clinical Recommendations
-
-### For Individual
-- This variant is **NOT** disease-causing
-- Do not use for CF carrier screening interpretation
-- No clinical follow-up needed based on this variant
-
-### Important Notes
-- May be found in compound heterozygosity with pathogenic variants
-- Presence does NOT modify carrier status determined by other variants
-```
-
----
-
-## Example 4: Novel Variant with Limited Data
+This example stops at material collection. Evidence evaluation (all 28
+codes, strengths, exclusions) happens in the unified
+`tooluniverse-acmg-variant-classification` skill against its
+`SVI_REFERENCE.md`, and the final classification comes only from the
+`ACMG_calculate_classification` calculator -- never from this file.
+## Example 4: SCN5A c.4813+3A>G — Material Collection
 
 ### User Query
 "Interpret SCN5A c.4813+3A>G - novel splice variant"
@@ -584,11 +446,10 @@
 |-------|-------|
 | **Variant** | NM_000335.5:c.4813+3A>G |
 | **Gene** | SCN5A |
-| **Classification** | **VUS - FAVOR PATHOGENIC** ★☆☆ |
-| **Evidence Strength** | Limited (splice prediction only) |
-| **Key Finding** | Near-splice variant in cardiac arrhythmia gene; SpliceAI predicts donor loss |
+| **External classifications (attributed)** | ClinVar: VUS (see section 3) |
+| **Key Finding** | Near-splice variant in a cardiac arrhythmia gene; SpliceAI predicts donor loss (raw score below) |
 
-**Action**: Functional RNA studies recommended before clinical use.
+(RNA studies would be the next collection step; any classification follows the unified flow.)
 
 ---
 
@@ -606,35 +467,10 @@
 
 ---
 
-## 7. ACMG Classification
+## 7. Handoff to the Unified ACMG Skill
 
-### Evidence Codes Applied
-
-| Code | Strength | Rationale |
-|------|----------|-----------|
-| **PM2** | Supporting | Absent from gnomAD |
-| **PP3** | Supporting | SpliceAI predicts splice disruption |
-| **PM4** | Supporting | If causes in-frame deletion, alters protein |
-
-### Classification: **VUS (Favor Pathogenic)**
-
-**Rationale**: Insufficient evidence for Likely Pathogenic (would need 1 Strong + 1 Moderate or 3 Moderate). Splice prediction is suggestive but not confirmed.
-
----
-
-## 8. Clinical Recommendations
-
-### Recommended Studies
-1. **RNA studies** - RT-PCR from patient sample to confirm aberrant splicing
-2. **Family segregation** - Test affected relatives
-3. **Functional studies** - Minigene assay if RNA unavailable
-
-### Clinical Management
-- Classification is VUS: Do NOT use for clinical decisions
-- Continue phenotype-based cardiac management
-- Offer participation in research studies
-
-### Reclassification Potential
-- RNA showing exon skipping → Upgrade to Likely Pathogenic (PVS1)
-- Segregation in 2+ affected → Add PP1
-```
+This example stops at material collection. Evidence evaluation (all 28
+codes, strengths, exclusions) happens in the unified
+`tooluniverse-acmg-variant-classification` skill against its
+`SVI_REFERENCE.md`, and the final classification comes only from the
+`ACMG_calculate_classification` calculator -- never from this file.

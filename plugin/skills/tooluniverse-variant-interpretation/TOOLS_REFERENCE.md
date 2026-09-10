@@ -100,12 +100,9 @@ result = tu.tools.gnomad_search_variants(
 # Returns: AF, ancestry-specific AFs, AC, AN, homozygotes
 ```
 
-**ACMG Frequency Thresholds**:
-| Frequency | Code | Application |
-|-----------|------|-------------|
-| >5% | BA1 | Benign (stand-alone) |
-| >1% | BS1 | Strong benign |
-| Absent | PM2 | Supporting pathogenic |
+**Frequency reading** (raw facts only): record overall and
+ancestry-specific AF, coverage, and homozygote counts. BA1/BS1/PM2
+assignment uses disease-aware thresholds in the unified ACMG skill.
 
 **Ancestry-Specific Populations**:
 | Code | Population |
@@ -140,10 +137,10 @@ result = tu.tools.ClinGen_search_gene_validity(gene="BRCA1")
 **Validity Classification Interpretation**:
 | Classification | ACMG Impact | Usage |
 |----------------|-------------|-------|
-| **Definitive** | Supports PS4, PP4 | Strong gene-disease evidence |
-| **Strong** | Supports PP4 | Good evidence for classification |
-| **Moderate** | Supports PP4 (weak) | Use with caution |
-| **Limited** | Do not apply PP4 | Insufficient evidence |
+| **Definitive** | Strong gene-disease evidence |
+| **Strong** | Good evidence |
+| **Moderate** | Use with caution |
+| **Limited** | Insufficient evidence |
 | **Disputed/Refuted** | Contra-evidence | Gene likely NOT causative |
 
 ### Dosage Sensitivity
@@ -162,7 +159,7 @@ result = tu.tools.ClinGen_search_dosage_sensitivity(gene="MECP2")
 **Dosage Score Interpretation** (for CNVs):
 | Score | Meaning | Usage |
 |-------|---------|-------|
-| **3** | Sufficient evidence | HI/TS established - PVS1 for LOF CNVs |
+| **3** | Sufficient evidence | HI/TS established |
 | **2** | Emerging evidence | Some support |
 | **1** | Little evidence | Minimal support |
 | **0/40** | No evidence / Dosage unlikely | Unknown or unlikely dosage effect |
@@ -176,9 +173,9 @@ result = tu.tools.ClinGen_search_dosage_sensitivity(gene="MECP2")
 | `ClinGen_get_actionability_pediatric` | Pediatric actionability | `gene` (optional) |
 
 **Why ClinGen is Critical**:
-- Required for **PP4** (phenotype specificity)
+- Phenotype context collected for the unified assessment
 - Establishes gene-disease validity before classification
-- Dosage scores critical for **PVS1** in CNV interpretation
+- Dosage scores are LoF-mechanism context (CNV interpretation has its own workflow)
 - Actionability informs return of incidental findings
 
 ---
@@ -343,12 +340,12 @@ result = tu.tools.ESM_score_variant_sae_batch(
 **Mapping SAE categories → ACMG support**:
 | SAE category lost | Mechanistic claim | ACMG line |
 |---|---|---|
-| `catalytic` | Active-site disruption | PS3 (functional) candidate; supports PP3 |
-| `ligand-binding` | Substrate/cofactor binding loss | Supports PP3 |
-| `ptm` | Post-translational modification site | Supports PP3 |
-| `domain` / `motif` | Domain integrity loss | Supports PP3 |
-| `structural-stability` | Disulfide / coiled-coil disruption | Supports PP3 |
-| `transmembrane` / `signal-peptide` | Targeting / membrane integration | Supports PP3 |
+| `catalytic` | Active-site disruption |
+| `ligand-binding` | Substrate/cofactor binding loss |
+| `ptm` | Post-translational modification site |
+| `domain` / `motif` | Domain integrity loss |
+| `structural-stability` | Disulfide / coiled-coil disruption |
+| `transmembrane` / `signal-peptide` | Targeting / membrane integration |
 | (no interpretable change) | No mechanistic signal | Do not strengthen PP3 above the predictor score alone |
 
 **Requires**: `ESM_API_KEY` (free non-commercial token at https://forge.evolutionaryscale.ai) and `pip install 'esm @ git+https://github.com/evolutionaryscale/esm@ee891c52'` (PyPI esm 3.2.x lacks SAEConfig). Outputs governed by EvolutionaryScale Cambrian Inference License — non-commercial use only.
@@ -393,72 +390,12 @@ result = tu.tools.EVE_get_variant_score(
 
 ### Integrating Prediction Tools
 
-**Best Practice for VUS Classification**:
-
-```python
-def get_multi_predictor_evidence(tu, variant_info):
-    """
-    Combine multiple predictors for robust PP3/BP4 assignment.
-    """
-    evidence = []
-    
-    # 1. CADD (all variants)
-    cadd = tu.tools.CADD_get_variant_score(
-        chrom=variant_info['chrom'],
-        pos=variant_info['pos'],
-        ref=variant_info['ref'],
-        alt=variant_info['alt']
-    )
-    if cadd.get('status') == 'success':
-        score = cadd['data']['phred_score']
-        evidence.append({
-            'tool': 'CADD',
-            'score': score,
-            'damaging': score >= 20
-        })
-    
-    # 2. AlphaMissense (missense only)
-    if variant_info.get('uniprot_id') and variant_info.get('aa_change'):
-        am = tu.tools.AlphaMissense_get_variant_score(
-            uniprot_id=variant_info['uniprot_id'],
-            variant=variant_info['aa_change']
-        )
-        if am.get('status') == 'success' and am.get('data'):
-            evidence.append({
-                'tool': 'AlphaMissense',
-                'score': am['data'].get('pathogenicity_score'),
-                'classification': am['data'].get('classification'),
-                'damaging': am['data'].get('classification') == 'pathogenic'
-            })
-    
-    # 3. EVE (via VEP)
-    eve = tu.tools.EVE_get_variant_score(
-        chrom=variant_info['chrom'],
-        pos=variant_info['pos'],
-        ref=variant_info['ref'],
-        alt=variant_info['alt']
-    )
-    if eve.get('status') == 'success':
-        eve_scores = eve['data'].get('eve_scores', [])
-        if eve_scores:
-            evidence.append({
-                'tool': 'EVE',
-                'score': eve_scores[0].get('eve_score'),
-                'damaging': eve_scores[0].get('eve_score', 0) > 0.5
-            })
-    
-    # Consensus
-    damaging = sum(1 for e in evidence if e.get('damaging'))
-    benign = sum(1 for e in evidence if not e.get('damaging'))
-    
-    return {
-        'predictions': evidence,
-        'damaging_count': damaging,
-        'benign_count': benign,
-        'acmg_pp3': damaging >= 2 and benign == 0,
-        'acmg_bp4': benign >= 2 and damaging == 0
-    }
-```
+PP3/BP4 are NOT assigned here. Collect raw predictions with the examples in
+`CODE_PATTERNS.md` (Phase 3: Computational Predictions) and assign
+codes/strengths in the unified ACMG skill
+(`tooluniverse-acmg-variant-classification`), whose `SVI_REFERENCE.md`
+holds the calibrated single-tool thresholds. Predictor agreement is
+context, never code assignment.
 
 ---
 
@@ -954,70 +891,11 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
 
 ### Example 3: ACMG Classification
 
-```python
-def calculate_acmg_classification(evidence_codes):
-    """Calculate ACMG classification from evidence codes."""
-    
-    # Count evidence
-    pathogenic = {
-        'very_strong': [],
-        'strong': [],
-        'moderate': [],
-        'supporting': []
-    }
-    benign = {
-        'stand_alone': [],
-        'strong': [],
-        'supporting': []
-    }
-    
-    for code, strength in evidence_codes:
-        if code.startswith(('PVS', 'PS', 'PM', 'PP')):
-            # Pathogenic evidence
-            if strength == 'very_strong':
-                pathogenic['very_strong'].append(code)
-            elif strength == 'strong':
-                pathogenic['strong'].append(code)
-            elif strength == 'moderate':
-                pathogenic['moderate'].append(code)
-            else:
-                pathogenic['supporting'].append(code)
-        else:
-            # Benign evidence
-            if code == 'BA1':
-                benign['stand_alone'].append(code)
-            elif strength == 'strong':
-                benign['strong'].append(code)
-            else:
-                benign['supporting'].append(code)
-    
-    # Apply ACMG rules
-    if benign['stand_alone']:
-        return 'Benign'
-    
-    if len(benign['strong']) >= 2:
-        return 'Benign'
-    
-    vs = len(pathogenic['very_strong'])
-    s = len(pathogenic['strong'])
-    m = len(pathogenic['moderate'])
-    p = len(pathogenic['supporting'])
-    
-    if (vs >= 1 and (s >= 1 or m >= 1 or m >= 2 or p >= 2)) or \
-       (s >= 2) or \
-       (s >= 1 and m >= 3):
-        return 'Pathogenic'
-    
-    if (vs >= 1 and m >= 1) or \
-       (s >= 1 and m >= 1 or m >= 2) or \
-       (s >= 1 and p >= 2):
-        return 'Likely Pathogenic'
-    
-    if len(benign['strong']) >= 1 and len(benign['supporting']) >= 1:
-        return 'Likely Benign'
-    
-    return 'VUS'
-```
+Removed: this example reimplemented the 2015 combining table and returned a
+final classification. Classification is performed ONLY by the
+`ACMG_calculate_classification` calculator through the unified ACMG skill
+(`tooluniverse-acmg-variant-classification`); evidence evaluation guidance
+lives in its `SVI_REFERENCE.md`.
 
 ---
 
@@ -1056,72 +934,21 @@ def calculate_acmg_classification(evidence_codes):
 
 ---
 
-## ACMG Code Quick Reference
+## ACMG Codes
 
-### Pathogenic Codes
-| Code | Strength | Trigger |
-|------|----------|---------|
-| PVS1 | Very Strong | Null in LOF gene |
-| PS1 | Strong | Same AA as pathogenic |
-| PS2 | Strong | De novo (confirmed) |
-| PS3 | Strong | Functional studies |
-| PS4 | Strong | Prevalence in affected |
-| PM1 | Moderate | Functional domain |
-| PM2 | Moderate | Absent from controls |
-| PM3 | Moderate | Trans with pathogenic |
-| PM4 | Moderate | Protein length change |
-| PM5 | Moderate | Novel at known position |
-| PM6 | Moderate | De novo (unconfirmed) |
-| PP1 | Supporting | Segregation |
-| PP2 | Supporting | Low missense rate gene |
-| PP3 | Supporting | Computational predictions |
-| PP4 | Supporting | Phenotype specific |
-| PP5 | Supporting | Reputable source |
-
-### Benign Codes
-| Code | Strength | Trigger |
-|------|----------|---------|
-| BA1 | Stand-alone | MAF >5% |
-| BS1 | Strong | High frequency |
-| BS2 | Strong | Homozygotes healthy |
-| BS3 | Strong | No functional effect |
-| BS4 | Strong | No segregation |
-| BP1 | Supporting | Missense in LOF gene |
-| BP2 | Supporting | Observed trans |
-| BP3 | Supporting | In-frame, no function |
-| BP4 | Supporting | Benign predictions |
-| BP5 | Supporting | Alternate explanation |
-| BP6 | Supporting | Reputable source |
-| BP7 | Supporting | Synonymous |
-
----
+The 28 ACMG/AMP codes, their applicability conditions, strengths, and
+disqualifications are maintained ONCE in the unified ACMG skill's
+`SVI_REFERENCE.md`. This file intentionally keeps no per-code trigger
+table.
 
 ## Quality Thresholds
 
-### Computational Predictions (Updated)
-| Predictor | Damaging | Uncertain | Benign |
-|-----------|----------|-----------|--------|
-| **AlphaMissense** | >0.564 | 0.34-0.564 | <0.34 |
-| **CADD PHRED** | ≥20 | 15-20 | <15 |
-| **EVE** | >0.5 | - | ≤0.5 |
-| SIFT | <0.05 | 0.05-0.15 | >0.15 |
-| PolyPhen-2 | >0.85 | 0.15-0.85 | <0.15 |
-| REVEL | >0.75 | 0.5-0.75 | <0.5 |
+### Computational Predictions
 
-**Recommended Order of Use**:
-1. AlphaMissense (highest accuracy for missense, ~90%)
-2. CADD (works for all variant types)
-3. EVE (unsupervised, complements AlphaMissense)
-4. SIFT/PolyPhen (legacy, for comparison)
-
-### Concordance for PP3/BP4
-| Predictors Agreeing | ACMG Application |
-|---------------------|------------------|
-| All damaging (≥3) | PP3 (supporting pathogenic) |
-| All benign (≥3) | BP4 (supporting benign) |
-| Mixed | Neither |
-
----
+Per-tool raw-score interpretation stays in each tool's section above; the
+calibrated PP3/BP4 thresholds are maintained once in the unified ACMG
+skill's `SVI_REFERENCE.md`. No concordance/vote table is maintained here:
+predictor agreement is context, never code assignment.
 
 ## Rate Limits
 

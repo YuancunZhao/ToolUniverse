@@ -94,7 +94,7 @@ Apply for intronic (non-splice), promoter, UTR, or intergenic variants near dise
 | `run_chrombpnet_variant_effect` | Δ in chromatin accessibility (ATAC / DNase), base-resolution | ~2 kb | remote MCP server |
 | `Evo2_score_variant` | Genome-foundation-model delta log-likelihood; covers coding **and** non-coding | up to 1 Mb | hosted NIM — needs `NVIDIA_API_KEY` |
 
-**Reading the score:** these return Δ (alt − ref) effect sizes, *not* calibrated pathogenicity probabilities. A large predicted disruption in a tissue-relevant track is mechanistic support (PS3_supporting / PP3) for a non-coding variant; near-zero across tracks supports BP4. Rank or calibrate against known regulatory variants rather than applying an absolute cutoff.
+**Reading the score:** these return Δ (alt − ref) effect sizes, *not* calibrated pathogenicity probabilities. Record the deltas per tissue-relevant track as raw facts; whether they support or oppose pathogenicity is decided in the unified ACMG skill -- no direct code mapping is applied here. Rank or calibrate against known regulatory variants rather than applying an absolute cutoff.
 
 **Which to pick:** start with `AlphaGenome_score_variant` (broadest readout, longest context, frontier accuracy) when its key is set; `run_enformer_variant_effect` / `run_borzoi_variant_effect` are the named, self-hostable equivalents (Enformer for general regulation, Borzoi when expression/splicing is the question); `run_chrombpnet_variant_effect` when the hypothesis is specifically chromatin accessibility; `Evo2_score_variant` as a sequence-only check that also works on coding variants. If no key/server is provisioned, fall back to the ChIPAtlas/ENCODE annotation above and note the predictive gap rather than guessing.
 
@@ -147,7 +147,7 @@ mech = tu.tools.ESM_explain_variant_mechanism(
 ```
 
 Returns `mechanism_summary`, per-feature lost/gained tables, and category aggregates. Use the category aggregate to support or qualify the pathogenicity verdict in the report:
-- `catalytic` / `ligand-binding` / `ptm` lost → mechanistic support for PP3
+- `catalytic` / `ligand-binding` / `ptm` lost → record as mechanistic context for the unified assessment
 - `secondary-structure` / `structural-stability` gained on a stable WT region → mechanistic basis for "destabilizing" claim
 - No interpretable change at top-K → does not weaken AlphaMissense alone, but flag for caution
 
@@ -161,7 +161,7 @@ Returns `mechanism_summary`, per-feature lost/gained tables, and category aggreg
 
 Tools: `CELLxGENE_get_expression_data`, `CELLxGENE_get_cell_metadata`, `GTEx_get_median_gene_expression`
 
-Confirms gene expression in disease-relevant tissues. Supports PP4 if highly restricted; challenges classification if not expressed in affected tissue.
+Confirms gene expression in disease-relevant tissues; record expression breadth as raw context -- phenotype-specificity assessment (PP4) happens in the unified ACMG skill.
 
 ## Phase 5: Literature Evidence
 
@@ -186,12 +186,11 @@ classification.
 
 ### Gene-Specific Population Frequency Thresholds
 
-BS1 (allele frequency too high for disorder) requires gene-specific calibration, not a universal cutoff:
-- **High-penetrance genes** (BRCA1, TP53): BS1 threshold ~0.0001
-- **Moderate-penetrance genes** (PALB2, ATM, CHEK2): BS1 threshold ~0.001
-- **Low-penetrance/common disease genes**: BS1 threshold higher, depends on disease prevalence
-- **Formula**: BS1 threshold = (disease prevalence × max allelic contribution × max genetic contribution) / penetrance
-- When in doubt, compare the variant's AF to the highest AF of any known pathogenic variant in the same gene — if it exceeds that, BS1 is likely applicable.
+Record ancestry-specific allele frequencies and disease prevalence as raw
+facts. BS1/BA1/PM2 thresholds are gene- and disease-specific and are
+decided in the unified ACMG skill (disease-aware maximum credible
+frequency, Whiffin 2017 framework) -- no fixed cutoff or heuristic is
+applied at collection time.
 
 
 ### Handling Conflicting Evidence: Functional vs Epidemiological
@@ -199,7 +198,7 @@ BS1 (allele frequency too high for disorder) requires gene-specific calibration,
 This is one of the most challenging scenarios in variant interpretation. When a biochemical assay shows damage but population/epidemiological data shows no disease association:
 
 1. **Epidemiological data generally trumps in-vitro assays** for clinical classification. A variant found at ~0.1% frequency with no disease association in 40K+ cases is unlikely to be clinically significant, even if it reduces protein function in a tube.
-2. **Apply PS3/BS3 carefully**: ClinGen's SVI recommends that PS3 (functional evidence for pathogenicity) requires the assay to be validated against known pathogenic AND known benign controls. A single biochemical study without such validation is PS3_Supporting at best.
+2. **Record functional-study quality as facts**: validation status (known pathogenic AND benign controls, replication) is raw material; PS3/BS3 strength assignment follows the SVI validation framework in the unified ACMG skill.
 3. **Hypomorphic variants**: Some variants genuinely reduce protein function (detectable in sensitive assays) but not enough to cause disease. This is biologically real and does not make them pathogenic.
 4. **Document the conflict explicitly** in the report. State: "Biochemical assay X shows [result], but case-control study Y with N cases found no significant disease association. Per ACMG guidelines, the epidemiological evidence is weighted more heavily for clinical classification."
 
@@ -238,11 +237,11 @@ If a primary tool fails, use these alternatives:
 
 ## Special Scenarios
 
-**Novel Missense VUS**: Check PM5 (other pathogenic at same residue), get AlphaFold2 structure, apply PM1/PP3 as appropriate.
+**Novel Missense VUS**: collect same-residue variants, structure, and domain context as raw facts; PM5/PM1/PP3 are assessed in the unified ACMG skill.
 
-**Truncating Variant**: Check LOF mechanism, NMD escape, alternative isoforms, ClinGen LOF curation. Apply PVS1 at appropriate strength.
+**Truncating Variant**: collect LoF mechanism evidence, NMD expectation, and isoform context; PVS1 strength comes from the SVI decision tree in the unified ACMG skill.
 
-**Splice Variant**: Run SpliceAI, assess canonical splice distance, in-frame skipping potential. Apply PP3/BP7 based on scores.
+**Splice Variant**: run SpliceAI and record canonical-splice distance and in-frame skipping potential as facts; PP3/BP7/PVS1 assignment follows the calibrated splicing rules in the unified ACMG skill.
 
 ---
 
