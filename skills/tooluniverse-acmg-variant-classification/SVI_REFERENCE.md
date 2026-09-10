@@ -4,18 +4,12 @@ Companion to `SKILL.md`. For each criterion: the facts you must hold before
 marking it `met`, when it applies, how strengths adjust, what excludes it or
 forbids double counting, and the governing source.
 
-**Precedence:** an applicable Released CSpec/VCEP specification overrides this
-file for that gene. Where no generic rule exists, this file says so — never
-invent a threshold to fill the gap; leave the criterion at `not_assessed` /
-`needs_review` or carry a blocking issue.
-
-| Situation | Strategy |
-|---|---|
-| An applicable Released CSpec has its own provision | Use the CSpec's conditions, thresholds, strengths, and disqualifications |
-| The CSpec explicitly allows the generic provision, or complete materials confirm that part follows the base rules | Use generic ACMG/AMP + ClinGen SVI |
-| No applicable CSpec, confirmed | Use generic ACMG/AMP + ClinGen SVI |
-| API gaps, incomplete material, or unresolved applicability | Read the official materials further; never interpret absence as permission to use generic rules |
-| The CSpec marks a criterion not applicable | Record `not_applicable`; never re-enable it via generic rules |
+**Precedence:** an applicable Released CSpec/VCEP specification overrides
+this file for that gene. Where no generic rule exists, this file says so —
+never invent a threshold to fill the gap. The full rule-precedence table
+and the status-semantics table are maintained once, in the companion
+`SKILL.md` (workflow steps 2 and 4); this file keeps only the per-criterion
+rules.
 
 **Sources & versions** (as indexed by the ClinGen variant-classification
 guidance page, checked 2026-09): Richards et al. 2015 (ACMG/AMP original);
@@ -64,18 +58,12 @@ against source text on 2026-09-09 — none from memory):
   PM1: specification-defined regions only) and gene/disease specifications
   as the only source of thresholds — do not invent them.
 
-## Status semantics (record precisely)
+## Status semantics
 
-| Status | Meaning |
-|---|---|
-| `met` | Evidence affirmatively satisfies the criterion at the recorded strength |
-| `not_met` | Examined; does not satisfy |
-| `not_assessed` | Not evaluated (data absent, out of scope, no time) — say why |
-| `not_applicable` | Cannot apply to this variant/gene (mechanism, variant type, or specification says so) |
-| `needs_review` | Evidence exists but unresolved (phase, validation, conflict) |
-| `deprecated` | Retired code (PP5, BP6) — recorded, never scored |
-
-Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
+The six record statuses (`met` / `not_met` / `not_assessed` /
+`not_applicable` / `needs_review` / `deprecated`) are defined once in the
+companion `SKILL.md` (workflow step 4). Only `met` scores; unknown ≠ not
+evaluated ≠ not applicable ≠ not met.
 
 ## Cross-cutting rules
 
@@ -403,8 +391,12 @@ Unknown ≠ not evaluated ≠ not applicable ≠ not met. Only `met` scores.
   SpliceAI Δ ≥0.2 → PP3 (calibrated Moderate, conservatively applied at
   Supporting); Δ ≤0.1 → BP4 (same conservative Supporting); 0.1–0.2 →
   uninformative, no code.
-- **Exclusions:** synonymous variants (BP7 path), canonical splice (PVS1
-  path); RNA-confirmed splice outcomes replace predictive PP3/BP4.
+- **Exclusions:** amino-acid-impact predictors do not apply to synonymous
+  variants -- but a synonymous variant still enters the QUALIFIED SPLICING
+  PP3 path (non-canonical +/-1/2, SpliceAI delta >=0.2, no RNA result):
+  "synonymous" alone never excludes PP3. Canonical splice sites go to the
+  PVS1 path; RNA-confirmed splice outcomes replace the corresponding
+  predictive PP3/BP4 evidence (Walker et al. 2023).
 - **Source:** Pejaver et al., AJHG 2022 (PMC9748256); Walker et al. 2023
   (PMC10357475).
 
@@ -504,16 +496,25 @@ BP7/PVS1 instead.
 - Mirror of PP2; mutually exclusive with it. Facts: gene where only
   truncating variants cause disease; variant is missense.
 
-### BP2 — observed in cis with a pathogenic variant, or in trans without disease (Supporting)
-- **Facts:** phase (cis/trans) established by family/molecular data.
-- **Unknown phase → `needs_review` with the gap recorded**; never assume
-  phase from co-occurrence alone.
+### BP2 — co-occurrence with a pathogenic variant (Supporting)
+- **Trans branch:** the variant is observed in trans with a pathogenic
+  variant -- applies ONLY for a fully penetrant dominant gene/disease; an
+  unaffected carrier in a low-penetrance or recessive context does not
+  earn BP2 (ACMG/AMP 2015 Table 4).
+- **Cis branch:** the variant is observed in cis with a pathogenic
+  variant -- applies under the original rule for any inheritance pattern.
+- **Phase evidence required:** unknown phase → `needs_review` with the gap
+  recorded; never assume cis/trans from co-occurrence alone.
 
-### BP3 — in-frame indel in a repeat region (Supporting)
-- Mirror of PM4's region logic: the in-frame indel falls INSIDE a
-  recognized repeat/low-complexity region (UniProt/InterPro). If the gene
-  mechanism or a specification makes such indels pathogenic, BP3 may be
-  `not_applicable` under that specification.
+### BP3 — in-frame indel in a repeat region with no known function (Supporting)
+- The in-frame insertion/deletion must sit INSIDE a repeat or low-
+  complexity region (UniProt/InterPro) that has NO established functional
+  role. A repeat/low-complexity annotation alone is NOT sufficient: an
+  in-frame deletion inside a FUNCTIONAL repeat must not receive BP3 on the
+  annotation alone -- assess the region's function or defer to the
+  applicable specification. If the gene mechanism or a specification makes
+  such indels pathogenic, BP3 may be `not_applicable` under that
+  specification.
 
 ### BP4 — computational evidence for benignity (calibrated thresholds)
 - Shares PP3's calibrated single-tool framework (one pre-specified tool,
