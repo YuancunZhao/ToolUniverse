@@ -494,3 +494,38 @@ acmg_support/acmg_recommendation/consensus）。
 的全部内容（例如 OCR extra）**——这是保留的上游不一致，不宣称锁一致性检查
 通过；现有环境不是"按恢复后的锁重新安装"，测试直接使用 `.venv/bin/python`，
 任何 `uv run`/安装命令必须 `--frozen` 防止回写。运行文档同步改写。
+
+### 整体审查修复轮·验收记录（E3–E4，2026-09-10）
+
+本轮四个提交：`6d6249fb`（unify guidance，问题 1–6）、`04d6848c`（binding and
+rule-set gaps，问题 7–8）、`d8c0629e`（deduplicate fact owners，问题 9）、
+`fed3b973`（restore official dependency lock，E2）。
+
+**程序反例修复证据（问题 7–9）**：
+- 7：索引匹配两个规则集、详情缺第二规则集（整体缺失或 criteriaCodes
+  缺省/空）→ `criterion_specifications (rule_set_id=…)` 具名材料缺口；完整
+  响应不被误标；有效规则保留、不混用（3 个失败反例先行，修复后过）。
+- 8：diseases=[有效项, null]/42/字符串/对象、inheritance 元素/标签损坏 →
+  顶层 error 带全路径；TypeError 不逃逸；合法缺省不受影响；校验仅限请求
+  基因条目（失败反例先行）。
+- 9：单项内重复 fact（SDK 路径）→ 正常 computed（PVS1+PM2_Supporting=9 LP）；
+  单项内重复+跨项共用 → 仍暂停且属主列表无重复；原始记录保留。
+
+**自动化回归（pytest 实际输出，恢复锁文件之后执行）**：计划命令扩展至含
+tools_package_imports/packaging_dependencies/smcp_schema_passthrough/
+codex_plugin/code_patterns 守卫共 22 个文件 → **672 passed, 8 skipped,
+1 deselected, 0 failed，exit 0**（跳过项含 1 项新增环境性跳过）。修改
+Python 文件 ruff 全过。`git diff --check 4257921e..HEAD`、
+`752188d0..HEAD` 均干净。
+
+**Claude 插件构建与测试（临时快照，同环境同参数，无 maxfail）**：
+`git archive` 快照 + `git show` 补入 tests/（conftest + 插件测试）；
+`scripts/build-plugin.sh` 双侧 exit 0（dist 写入快照目录）；
+tests/test_claude_code_plugin.py 实际失败集合逐行一致（各 5 项：
+uvx_refresh_flag、example_params_match_schema[research/researcher]、
+slash_commands_documented、mentions_tu_run_cli[research]），基线通过数与
+当前一致——无新增失败。上轮"83 passed、6 失败"的口径与本次快照方法不同
+（本次含 conftest 的完整插件测试文件、双侧一致环境），以本轮实录为准。
+
+**LLM 工作流验收：未验收**（无真实宿主；不安装宿主、不改配置；工具链演练
+不称为 LLM 验收）。
