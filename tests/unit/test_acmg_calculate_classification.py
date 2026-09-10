@@ -929,3 +929,40 @@ def test_uncounted_records_cover_all_non_met():
             "direction": "pathogenic",
         }
     ]
+
+
+# --------------------------------------------------------------------------- #
+# Repeated fact references within ONE criterion are not double counting
+# --------------------------------------------------------------------------- #
+def test_repeated_fact_within_one_code_does_not_block_sdk():
+    record = met("PVS1", "VeryStrong", fact="assay-1")
+    record["evidence_ids"].append("assay-1")
+    payload = args(build_evidence(record, met("PM2", "Supporting")))
+
+    data = _sdk_run(payload)["data"]
+
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert data["total_score"] == 9
+
+
+def test_repeated_fact_within_one_code_and_cross_code_sharing():
+    # Same fact repeated inside PVS1 AND referenced by PM2: the review
+    # still pauses (genuinely shared across codes), but the owner list
+    # must not repeat the criterion.
+    record = met("PVS1", "VeryStrong", fact="assay-1")
+    record["evidence_ids"].extend(["assay-1", "assay-1"])
+    pm2 = met("PM2", "Supporting", fact="assay-1")
+    payload = args(build_evidence(record, pm2))
+
+    data = run(payload)["data"]
+
+    assert data["classification_status"] == "needs_review"
+    reasons = {r["reason"]: r for r in data["review_reasons"]}
+    detail = reasons["duplicate_scoring_facts"]["detail"]
+    assert set(detail["shared_evidence_ids"]["assay-1"]) == {"PVS1", "PM2"}
+    # No criterion appears twice in the owner list despite the repeats.
+    assert len(detail["shared_evidence_ids"]["assay-1"]) == 2
+    # The raw evidence record is preserved untouched, duplicates included.
+    pvs1 = next(e for e in data["evidence"] if e["criterion"] == "PVS1")
+    assert pvs1["evidence_ids"] == ["assay-1", "assay-1", "assay-1"]

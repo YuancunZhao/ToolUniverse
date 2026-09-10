@@ -1282,7 +1282,10 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
         )
     fact_owners: Dict[str, List[str]] = {}
     for record in scored:
-        for fact in record["evidence_ids"]:
+        # dict.fromkeys deduplicates WITHIN one record, preserving order: a
+        # repeated reference inside a single criterion is not double
+        # counting, and the owner list must name each criterion once.
+        for fact in dict.fromkeys(record["evidence_ids"]):
             fact_owners.setdefault(str(fact), []).append(record["criterion"])
     duplicates = {
         fact: codes for fact, codes in fact_owners.items() if len(codes) > 1
