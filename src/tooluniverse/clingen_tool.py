@@ -768,6 +768,57 @@ class ClinGenTool(BaseTool):
                             f"{rs_where}.genes[{g_position}].label is missing "
                             "or not a string"
                         )
+                    if label.strip().upper() != gene.upper():
+                        # The nested disease/inheritance binding check below
+                        # is limited to the requested gene's entries; damage
+                        # under other genes' entries simply does not match.
+                        continue
+                    g_where = f"{rs_where}.genes[{g_position}]"
+                    binding_error = ClinGenTool._cspec_binding_structure_error(
+                        gene_entry, g_where
+                    )
+                    if binding_error:
+                        return binding_error
+        return None
+
+    @staticmethod
+    def _cspec_binding_structure_error(
+        gene_entry: Dict[str, Any], where: str
+    ) -> Optional[str]:
+        """Validate the requested gene's disease/inheritance binding shape.
+
+        Missing, null, or empty `diseases`/`modeOfInheritance` stay legal
+        defaults; a wrong container type, a non-object element, or a
+        missing/unusable label is reported with its full path so damaged
+        bindings surface as top-level errors instead of being silently
+        dropped by `_cspec_diseases` normalization (which keeps its
+        responsibilities unchanged).
+        """
+        diseases = gene_entry.get("diseases")
+        if diseases is not None:
+            if not isinstance(diseases, list):
+                return f"{where}.diseases is not a list"
+            for d_index, disease in enumerate(diseases):
+                d_where = f"{where}.diseases[{d_index}]"
+                if not isinstance(disease, dict):
+                    return f"{d_where} is not an object"
+                d_label = disease.get("label")
+                if not isinstance(d_label, str) or not d_label.strip():
+                    return f"{d_where}.label is missing or not a usable string"
+                moi = disease.get("modeOfInheritance")
+                if moi is not None:
+                    if not isinstance(moi, list):
+                        return f"{d_where}.modeOfInheritance is not a list"
+                    for m_index, item in enumerate(moi):
+                        m_where = f"{d_where}.modeOfInheritance[{m_index}]"
+                        if not isinstance(item, dict):
+                            return f"{m_where} is not an object"
+                        m_label = item.get("@label")
+                        if not isinstance(m_label, str) or not m_label.strip():
+                            return (
+                                f"{m_where}.@label is missing or not a "
+                                "usable string"
+                            )
         return None
 
     def _cspec_matching_rule_sets(
@@ -1105,6 +1156,17 @@ class ClinGenTool(BaseTool):
                         )
                     )
                     entry["criterion_modifications"] = criteria
+                    # Per-rule-set coverage: a matched rule set whose
+                    # criteria are absent from the detail is a named
+                    # material gap even when other rule sets parsed fine --
+                    # a non-empty overall list must not hide it.
+                    covered_ids = {item["rule_set_id"] for item in criteria}
+                    for rule_set_id in rule_set_ids:
+                        if rule_set_id not in covered_ids:
+                            entry["missing_materials"].append(
+                                "criterion_specifications "
+                                f"(rule_set_id={rule_set_id})"
+                            )
                     detail_structures.extend(criteria_errors)
                     entry["version"] = (
                         entry["version"] or self._cspec_version(detail)

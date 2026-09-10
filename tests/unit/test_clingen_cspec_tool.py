@@ -954,3 +954,177 @@ def test_one_damaged_detail_does_not_sink_other_spec(monkeypatch):
     assert by_id["GN020"]["criterion_modifications"][0]["criterion"] == "PM2"
     assert by_id["GN019"]["detail_structure_failed"] is True
     assert set(result["partial_failures"]) == {"GN019"}
+
+
+# --------------------------------------------------------------------------- #
+# Per-rule-set material coverage (issue 7)
+# --------------------------------------------------------------------------- #
+def _two_rule_set_index():
+    record = _index_record()
+    record["ruleSets"].append(
+        {
+            "@id": "https://cspec.genome.network/cspec/api/RuleSet/id/777",
+            "genes": [
+                {
+                    "@type": "Gene",
+                    "label": "MYOC",
+                    "diseases": [
+                        {
+                            "label": "MONDO:0009999",
+                            "modeOfInheritance": [
+                                {"@label": "Autosomal recessive inheritance"}
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    return record
+
+
+def test_second_rule_set_missing_from_detail_is_disclosed(monkeypatch):
+    # Index matches two rule sets; the detail carries criteria only for the
+    # first -- the second rule set's materials are missing, and the gap
+    # must name the rule set id instead of passing silently because the
+    # overall criteria list is non-empty.
+    _patch(monkeypatch, _index(_two_rule_set_index()))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    assert [c["rule_set_id"] for c in entry["criterion_modifications"]] == [
+        "635003681"
+    ]
+    assert (
+        "criterion_specifications (rule_set_id=777)" in entry["missing_materials"]
+    ), entry["missing_materials"]
+    # A legitimate absence is a material gap, not structural damage.
+    assert entry.get("detail_structure_failed") is not True
+    assert "GN019" not in result.get("partial_failures", {})
+
+
+@pytest.mark.parametrize("codes", [None, []])
+def test_second_rule_set_with_empty_criteria_is_disclosed(monkeypatch, codes):
+    detail = _detail_payload()
+    detail["ruleSets"].append(
+        {
+            "@id": "https://cspec.genome.network/cspec/api/RuleSet/id/777",
+            "genes": [{"label": "MYOC"}],
+            "criteriaCodes": codes,
+        }
+    )
+    _patch(
+        monkeypatch,
+        _index(_two_rule_set_index()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    assert [c["rule_set_id"] for c in entry["criterion_modifications"]] == [
+        "635003681"
+    ]
+    assert (
+        "criterion_specifications (rule_set_id=777)" in entry["missing_materials"]
+    )
+    assert entry.get("detail_structure_failed") is not True
+
+
+def test_complete_response_not_flagged_for_rule_set_gaps(monkeypatch):
+    detail = _detail_payload()
+    detail["ruleSets"].append(
+        {
+            "@id": "https://cspec.genome.network/cspec/api/RuleSet/id/777",
+            "genes": [{"label": "MYOC"}],
+            "criteriaCodes": _detail_payload()["ruleSets"][0]["criteriaCodes"],
+        }
+    )
+    _patch(
+        monkeypatch,
+        _index(_two_rule_set_index()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert not any(
+        "rule_set_id=" in m for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+
+
+# --------------------------------------------------------------------------- #
+# Disease / inheritance binding validation (issue 8)
+# --------------------------------------------------------------------------- #
+def test_diseases_with_null_element_is_error(monkeypatch):
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["diseases"].append(None)
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "diseases[1]" in result["error"]
+
+
+@pytest.mark.parametrize("bad", [42, "MONDO:1", {"label": "MONDO:1"}])
+def test_diseases_wrong_container_is_error(monkeypatch, bad):
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["diseases"] = bad
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "error"
+    assert "diseases is not a list" in result["error"]
+
+
+def test_inheritance_bad_element_and_label_are_errors(monkeypatch):
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["diseases"][0]["modeOfInheritance"] = [42]
+    _patch(monkeypatch, _index(record))
+    assert _tool().run({"gene": "MYOC"})["status"] == "error"
+
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["diseases"][0]["modeOfInheritance"] = [
+        {"no_label": True}
+    ]
+    _patch(monkeypatch, _index(record))
+    result = _tool().run({"gene": "MYOC"})
+    assert result["status"] == "error"
+    assert "@label" in result["error"]
+
+
+def test_binding_defaults_stay_legal(monkeypatch):
+    record = _index_record()
+    gene = record["ruleSets"][0]["genes"][0]
+    gene["diseases"] = []  # empty list is a legal default
+    _patch(monkeypatch, _index(record))
+    assert _tool().run({"gene": "MYOC"})["status"] == "success"
+
+    record = _index_record()
+    del record["ruleSets"][0]["genes"][0]["diseases"]
+    _patch(monkeypatch, _index(record))
+    assert _tool().run({"gene": "MYOC"})["status"] == "success"
+
+    record = _index_record()
+    record["ruleSets"][0]["genes"][0]["diseases"][0]["modeOfInheritance"] = None
+    _patch(monkeypatch, _index(record))
+    assert _tool().run({"gene": "MYOC"})["status"] == "success"
+
+
+def test_binding_validation_limited_to_requested_gene(monkeypatch):
+    # Malformed bindings on a DIFFERENT gene's entry must not fail this
+    # gene's lookup; that record simply does not match.
+    record = _index_record(spec_id="GNBRCA", gene="BRCA1", rule_set_id="222")
+    record["ruleSets"][0]["genes"][0]["diseases"] = 42
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
