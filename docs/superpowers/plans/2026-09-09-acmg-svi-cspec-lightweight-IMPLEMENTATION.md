@@ -485,3 +485,12 @@ needs_review 暂停、未实现；隐藏 .pth 的具体来源仍无进程级证�
 tests/unit/test_variant_interpretation_code_patterns.py 编译 CODE_PATTERNS
 预测示例并以桩数据验证汇总只返回原始结果（{"predictions": ...}，无
 acmg_support/acmg_recommendation/consensus）。
+
+### 整体审查修复轮·锁文件与记录（E2，2026-09-10）
+
+按用户选择执行 `git restore --source=752188d0 -- uv.lock`；
+`git diff 752188d0 -- uv.lock` 为空（0 行）。未改 `pyproject.toml`、未重新
+解析依赖、未重建 `.venv`。如实记录：**恢复的官方锁本身未同步当前 manifest
+的全部内容（例如 OCR extra）**——这是保留的上游不一致，不宣称锁一致性检查
+通过；现有环境不是"按恢复后的锁重新安装"，测试直接使用 `.venv/bin/python`，
+任何 `uv run`/安装命令必须 `--frozen` 防止回写。运行文档同步改写。

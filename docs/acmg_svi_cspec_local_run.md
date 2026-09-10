@@ -51,9 +51,15 @@ receives the hidden flag, because hidden `.py` files import normally. If
 you rebuild the venv somewhere `.pth` files keep their visibility, delete
 that `sitecustomize.py`.
 
-Note: `uv run` may try to append extra resolution entries to `uv.lock`
-(cuda-bindings etc.) unless frozen; if you want to keep `uv.lock` pristine,
-export `UV_FROZEN=1` or pass `--frozen`.
+Note on `uv.lock` (2026-09-10): the file is restored to the official
+baseline `752188d0` byte-for-byte. The restored lock itself does not
+cover everything the current `pyproject.toml` manifest can resolve (for
+example the OCR extra), so `uv` may want to re-add entries -- this is a
+retained upstream inconsistency, NOT a verified lock-consistency pass.
+The existing `.venv` was NOT reinstalled against the restored lock; run
+tests with `.venv/bin/python` directly, and pass `--frozen` (or
+`UV_FROZEN=1`) to any `uv run`/install command so the re-resolution is
+never written back.
 
 ## SDK (Python)
 
