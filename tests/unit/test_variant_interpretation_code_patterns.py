@@ -107,3 +107,38 @@ def test_comprehensive_assessment_returns_raw_predictions_only():
     assert result["predictions"]["cadd"]["score"] == 33.1
     assert result["predictions"]["alphamissense"]["classification"] == "pathogenic"
     assert result["predictions"]["eve"]["score"] == 0.82
+
+
+def test_old_entry_shortcuts_are_gone():
+    # Documentation contract only: the confirmed old shortcut markers must
+    # not reappear in the three old-entry files. This does NOT assert that
+    # any LLM follows the unified flow.
+    forbidden_by_file = {
+        "TOOLS_REFERENCE.md": (
+            "COSMIC Evidence for ACMG",
+            "DisGeNET Score for ACMG",
+            "Mapping SAE categories → ACMG support",
+            "(PS3_supporting / PP3)",
+        ),
+        "EXAMPLES.md": (
+            "PM1 applies (moderate)",
+            "Supports PM2 (absent from controls)",
+            "**PS3**: Not directly applicable",
+            "**PS1**: Not applicable",
+        ),
+        "SKILL.md": (
+            "Epidemiological data generally trumps",
+            "epidemiological evidence is weighted more heavily",
+            "lean toward REVEL",
+            "the mechanistic evidence ACMG PS3/PP3 actually needs",
+        ),
+    }
+    violations = []
+    for name, markers in forbidden_by_file.items():
+        content = (SKILL_DIR / name).read_text()
+        for marker in markers:
+            if marker in content:
+                violations.append(f"{name}: {marker!r}")
+    assert not violations, "old evaluation shortcuts remain: " + "; ".join(
+        violations
+    )
