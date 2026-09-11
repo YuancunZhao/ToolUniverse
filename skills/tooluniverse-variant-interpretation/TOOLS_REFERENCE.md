@@ -885,8 +885,7 @@ def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
     analysis = {
         'structure_source': structure_source,
         'domains': identify_domain(domains, residue_position),
-        'functional_sites': find_nearby_sites(functions, residue_position),
-        'pm1_applicable': assess_pm1(domains, functions, residue_position)
+        'functional_sites': find_nearby_sites(functions, residue_position)
     }
     
     return analysis

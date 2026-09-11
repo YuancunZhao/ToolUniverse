@@ -59,6 +59,8 @@ def test_tool_reference_has_no_alternative_acmg_evaluator():
         "def get_multi_predictor_evidence(",
         "'acmg_pp3'",
         "'acmg_bp4'",
+        "pm1_applicable",
+        "assess_pm1",
     )
     for marker in forbidden:
         assert marker not in text, marker
