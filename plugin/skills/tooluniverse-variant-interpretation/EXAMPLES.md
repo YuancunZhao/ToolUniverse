@@ -243,7 +243,7 @@ codes, strengths, exclusions) happens in the unified
 
 **Homozygotes**: 0
 
-**Interpretation**: Absent from gnomAD (>140,000 individuals). Supports PM2 (absent from controls).
+**Observation (raw)**: not detected in gnomAD (database version and coverage recorded above; 0 carriers across all listed ancestries, 0 homozygotes). Recorded as a frequency fact -- rarity/absence criteria are assessed in the unified ACMG skill.
 
 *Source: `gnomad_search_variants`, accessed 2026-02-04*
 
@@ -333,11 +333,12 @@ codes, strengths, exclusions) happens in the unified
 
 ### Structural Conclusion
 
-**PM1 applies (moderate)**: 
+**Collected structural observations**:
 - R175 is in a critical structural region
 - Known mutational hotspot
 - Zinc coordination region essential for DNA binding
-- Structural analysis collected as mechanistic context
+- Structural analysis recorded as mechanistic context (no domain/hotspot
+  code or strength is pre-judged here)
 
 *Sources: PDB 2OCJ, structural analysis*
 
@@ -359,8 +360,8 @@ codes, strengths, exclusions) happens in the unified
 - Same position as extensively characterized R175H
 - Mechanism (zinc coordination disruption) likely conserved
 
-**PS3**: Not directly applicable (no R175C-specific functional study)
-**PS1**: Not applicable (amino acid change differs from R175H)
+No direct functional experiment specific to R175C was collected in this example.
+Candidate-vs-comparison amino-acid change: R175C differs from the characterized R175H.
 
 *Source: `PubMed_search_articles`*
 

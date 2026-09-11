@@ -84,7 +84,7 @@ Apply for intronic (non-splice), promoter, UTR, or intergenic variants near dise
 
 **Annotation — what regulatory element is here:** `ChIPAtlas_enrichment_analysis`, `ChIPAtlas_get_peak_data`, `ENCODE_search_experiments`, `ENCODE_get_experiment`. These tell you whether the variant falls in a known TF-binding peak, enhancer, or open-chromatin region.
 
-**Prediction — what the variant *does* to regulation:** annotation says an element is present, not whether this specific allele disrupts it. Sequence-based deep-learning models answer that directly: they read the reference and alternate DNA windows and predict the change in regulatory signal. This is what turns "the variant is in an enhancer" into "the variant is predicted to reduce accessibility/expression in the relevant tissue" — the mechanistic evidence ACMG PS3/PP3 actually needs for a non-coding variant, where SIFT/PolyPhen/AlphaMissense do not apply.
+**Prediction — what the variant *does* to regulation:** annotation says an element is present, not whether this specific allele disrupts it. Sequence-based deep-learning models answer that directly: they read the reference and alternate DNA windows and predict the change in regulatory signal. This is what turns "the variant is in an enhancer" into "the variant is predicted to reduce accessibility/expression in the relevant tissue" for non-coding loci, where SIFT/PolyPhen/AlphaMissense do not apply. The deltas are raw prediction magnitudes; whether they count as functional or computational evidence is decided in the unified ACMG skill.
 
 | Tool | Predicts | Context | Access |
 |---|---|---|---|
@@ -195,35 +195,40 @@ applied at collection time.
 
 ### Handling Conflicting Evidence: Functional vs Epidemiological
 
-This is one of the most challenging scenarios in variant interpretation. When a biochemical assay shows damage but population/epidemiological data shows no disease association:
+When a biochemical assay shows damage but population/epidemiological data
+shows no disease association, record both sides as facts and let the
+unified ACMG skill weigh them under the applicable specification:
 
-1. **Epidemiological data generally trumps in-vitro assays** for clinical classification. A variant found at ~0.1% frequency with no disease association in 40K+ cases is unlikely to be clinically significant, even if it reduces protein function in a tube.
-2. **Record functional-study quality as facts**: validation status (known pathogenic AND benign controls, replication) is raw material; PS3/BS3 strength assignment follows the SVI validation framework in the unified ACMG skill.
-3. **Hypomorphic variants**: Some variants genuinely reduce protein function (detectable in sensitive assays) but not enough to cause disease. This is biologically real and does not make them pathogenic.
-4. **Document the conflict explicitly** in the report. State: "Biochemical assay X shows [result], but case-control study Y with N cases found no significant disease association. Per ACMG guidelines, the epidemiological evidence is weighted more heavily for clinical classification."
+1. **Functional side**: the assay's result, study subjects, sample size,
+   statistical outcome, and validation quality (known pathogenic AND
+   benign controls, replication) -- raw material for PS3/BS3 under the SVI
+   validation framework.
+2. **Epidemiological side**: cohort/case-control design, population,
+   sample size, and association statistics, recorded as returned.
+3. **The conflict itself**: state the two results side by side (assay X
+   shows [result]; study Y with N cases found [result]). Which line of
+   evidence prevails for classification is decided by the unified ACMG
+   skill per the applicable specification -- this skill records, it does
+   not rank.
+4. **Hypomorphic variants**: a genuine partial reduction of function is
+   biological context worth recording; it is not itself a classification
+   decision.
 
 ### CSpec and VCEP Specifications Take Precedence
 
-A Released ClinGen CSpec (VCEP specification) overrides generic rules for its
-genes (PM1 hotspot regions, PM2 at Supporting, BA1 exceptions, combination
-caps, ...). Before classifying:
-- `ClinGen_search_cspec(gene="<symbol>")` -- Released specifications with
-  criterion applicability, versions, and official page URLs
-- Read the specification's official page -- the API JSON alone is not the
-  full specification
-- Combinations or thresholds the Tavtigian 2020 calculator cannot express
-  pause the classification for expert review
-- No Released specification -> generic ACMG/AMP 2015 + ClinGen SVI rules
+Applicable Released CSpec specifications override the generic rules for
+their genes, and their candidate adjudication flow (including
+unresolved-scope candidates and material completeness) is maintained ONCE
+in the unified ACMG skill -- see its `SKILL.md` step 2. This skill's job
+ends at collecting the specification material via
+`ClinGen_search_cspec(gene="<symbol>")` and handing off.
 
-### Predictor Weighting
+### Predictor Use
 
-Not all computational predictors are equal. For missense variants:
-- **REVEL** (AUC ~0.95) — best single meta-predictor; weight highest
-- **AlphaMissense** (AUC ~0.94) — strong, structure-aware
-- **CADD** (AUC ~0.85) — good for all variant types, but less specific for missense
-- **SIFT/PolyPhen** (AUC ~0.80) — legacy tools; raw-score context only, never the basis for PP3/BP4 strength
-
-When predictors disagree: if REVEL says tolerated but SIFT/PolyPhen say damaging, lean toward REVEL. PP3/BP4 are applied from a single calibrated predictor meeting its pre-set threshold (see the ACMG skill's SVI_REFERENCE.md); when calibrated predictors disagree, neither code applies.
+Record raw predictor results as returned. Tool selection and calibrated
+thresholds follow the unified ACMG skill's `SVI_REFERENCE.md` (one
+pre-specified tool, chosen before seeing results) -- do not change the
+assessment plan after seeing scores, and do not decide PP3/BP4 here.
 
 ### Tool Failure Fallbacks
 

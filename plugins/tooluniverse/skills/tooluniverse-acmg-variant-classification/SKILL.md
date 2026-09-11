@@ -68,17 +68,13 @@ scope manually before concluding anything about applicability.
 | The CSpec marks a criterion not applicable | Record `not_applicable`; never re-enable it via generic rules |
 
 Evidence assessment and final combination stay separate: this skill
-interprets a CSpec's special evidence rules, but the calculator currently
-supports only the fixed `tavtigian2020` method. Special combination
-methods, joint caps, or classification thresholds continue to return
-`needs_review` — never substitute a generic method to bypass the pause.
-
-If the specification defines special combinations, joint point caps, or
-thresholds different from Tavtigian 2020, set
-`combination_method` to the specification's method (not `"tavtigian2020"`):
-the calculator will pause with `needs_review` and keep the evidence for
-expert review. **Never silently fall back to generic classification when a
-specification paused the run.**
+interprets a CSpec's special evidence rules, but the calculator supports
+only the fixed `tavtigian2020` method. When the applicable specification
+defines special combinations, joint point caps, or thresholds beyond
+Tavtigian 2020, set `combination_method` to the specification's own method
+(not `"tavtigian2020"`): the calculator pauses with `needs_review` and
+keeps the evidence for expert review. **Never substitute a generic method
+or silently fall back to generic classification to bypass the pause.**
 
 **3. Collect raw facts.** Population frequency (gnomAD per ancestry),
 computational predictions, ClinVar/CIViC entries, functional data, domain

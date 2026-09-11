@@ -142,3 +142,36 @@ def test_old_entry_shortcuts_are_gone():
     assert not violations, "old evaluation shortcuts remain: " + "; ".join(
         violations
     )
+
+
+_SYNCED_SKILLS = (
+    "tooluniverse-acmg-variant-classification",
+    "tooluniverse-variant-interpretation",
+)
+
+
+def test_published_copies_match_sources():
+    # Content-consistency check for both ACMG-related skills across the
+    # Claude (plugin/skills) and Codex (plugins/tooluniverse/skills)
+    # distributions: plain Markdown files must match the canonical source
+    # byte-for-byte; for Codex SKILL.md only the body after the frontmatter
+    # is compared (frontmatter legality is covered by test_codex_plugin).
+    repo = Path(__file__).resolve().parents[2]
+    problems = []
+    for skill in _SYNCED_SKILLS:
+        source_dir = repo / "skills" / skill
+        for source in sorted(source_dir.rglob("*.md")):
+            relative = source.relative_to(source_dir)
+            for destination in ("plugin/skills", "plugins/tooluniverse/skills"):
+                target = repo / destination / skill / relative
+                if not target.exists():
+                    problems.append(f"missing: {target}")
+                    continue
+                expected = source.read_text()
+                actual = target.read_text()
+                if destination.startswith("plugins/") and source.name == "SKILL.md":
+                    expected = expected.split("---", 2)[2]
+                    actual = actual.split("---", 2)[2]
+                if actual != expected:
+                    problems.append(f"differs: {target}")
+    assert not problems, "; ".join(problems)

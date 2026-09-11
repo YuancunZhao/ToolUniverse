@@ -135,13 +135,13 @@ result = tu.tools.ClinGen_search_gene_validity(gene="BRCA1")
 ```
 
 **Validity Classification Interpretation**:
-| Classification | ACMG Impact | Usage |
-|----------------|-------------|-------|
+| Classification | Meaning |
+|----------------|---------|
 | **Definitive** | Strong gene-disease evidence |
 | **Strong** | Good evidence |
 | **Moderate** | Use with caution |
 | **Limited** | Insufficient evidence |
-| **Disputed/Refuted** | Contra-evidence | Gene likely NOT causative |
+| **Disputed/Refuted** | Contra-evidence; gene likely NOT causative |
 
 ### Dosage Sensitivity
 
@@ -224,8 +224,9 @@ quick = tu.tools.SpliceAI_get_max_delta(
 | 0.2-0.5 | Low impact |
 | <0.2 | Likely no impact |
 
-(Code assignment in the unified ACMG skill: SpliceAI ≥0.2 → PP3, ≤0.1 → BP4,
-conservatively at Supporting; BP7 position rules apply.)
+(Code assignment follows the calibrated splicing rules in the unified
+ACMG skill's `SVI_REFERENCE.md` -- this section deliberately does not
+restate the thresholds.)
 
 **When to Use**:
 - Intronic variants within ±50bp of splice sites
@@ -337,16 +338,16 @@ result = tu.tools.ESM_score_variant_sae_batch(
 # Forge cost: 20 calls (1 ref + 19 mut), not 38 (2 per variant)
 ```
 
-**Mapping SAE categories → ACMG support**:
-| SAE category lost | Mechanistic claim | ACMG line |
-|---|---|---|
+**SAE categories → predicted mechanistic change** (raw material):
+| SAE category lost | Predicted mechanistic change |
+|---|---|
 | `catalytic` | Active-site disruption |
 | `ligand-binding` | Substrate/cofactor binding loss |
 | `ptm` | Post-translational modification site |
 | `domain` / `motif` | Domain integrity loss |
 | `structural-stability` | Disulfide / coiled-coil disruption |
 | `transmembrane` / `signal-peptide` | Targeting / membrane integration |
-| (no interpretable change) | No mechanistic signal | Do not strengthen PP3 above the predictor score alone |
+| (no interpretable change) | Recorded as an observation; no mechanistic signal |
 
 **Requires**: `ESM_API_KEY` (free non-commercial token at https://forge.evolutionaryscale.ai) and `pip install 'esm @ git+https://github.com/evolutionaryscale/esm@ee891c52'` (PyPI esm 3.2.x lacks SAEConfig). Outputs governed by EvolutionaryScale Cambrian Inference License — non-commercial use only.
 
@@ -427,12 +428,11 @@ gene_muts = tu.tools.COSMIC_get_mutations_by_gene(
 # Returns: All mutations with cancer type distribution
 ```
 
-**COSMIC Evidence for ACMG**:
-| Finding | ACMG Code | Application |
-|---------|-----------|-------------|
-| Recurrent somatic hotspot | PS3 | Functional evidence |
-| Frequent in COSMIC (>100) | PM1 | Hotspot/functional domain |
-| Rare in COSMIC | - | Consider other evidence |
+**COSMIC raw observations**: record recurrence counts, mutation
+distribution across cancer types, and hotspot status exactly as returned.
+Somatic-recurrence material (hotspot status, counts) is context the
+unified ACMG skill evaluates -- no ACMG code mapping is applied at
+collection time.
 
 ### OMIM - Mendelian Disease Context
 
@@ -512,12 +512,10 @@ vda = tu.tools.DisGeNET_get_vda(
 )
 ```
 
-**DisGeNET Score for ACMG**:
-| Score | Strength | ACMG Code |
-|-------|----------|-----------|
-| >0.7 | Strong gene-disease | PP4 (phenotype specific) |
-| 0.4-0.7 | Moderate evidence | Supporting |
-| <0.4 | Weak/Literature only | Insufficient |
+**DisGeNET association score**: the returned score is a gene-disease
+association strength from DisGeNET's sources, reported as-is with its
+source attribution. Phenotype-specificity assessment (PP4) happens in the
+unified ACMG skill; no strength mapping is applied here.
 
 ---
 
@@ -559,7 +557,12 @@ peaks = tu.tools.ChIPAtlas_get_peak_data(
 
 ### Sequence Deep-Learning Variant-Effect Predictors
 
-Predict the functional impact of a non-coding (and, for Evo 2, any) variant directly from sequence — the mechanistic evidence (PS3_supporting / PP3) that SIFT/PolyPhen/AlphaMissense cannot give for non-coding loci. Outputs are Δ (alt − ref) effect sizes, not calibrated probabilities.
+Predict the functional impact of a non-coding (and, for Evo 2, any)
+variant directly from sequence -- what amino-acid predictors cannot give
+for non-coding loci. Outputs are Δ (alt − ref) effect sizes, not
+calibrated probabilities; they are prediction magnitudes only and cannot
+decide an evidence code at collection time. Whether these magnitudes
+support or oppose pathogenicity is assessed in the unified ACMG skill.
 
 | Tool | Predicts | Access |
 |------|----------|--------|
