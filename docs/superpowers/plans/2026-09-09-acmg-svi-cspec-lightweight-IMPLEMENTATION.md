@@ -56,7 +56,7 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
   tests/unit/test_variant_interpretation_code_patterns.py \
   --maxfail=0 --no-cov -p no:cacheprovider
 ```
-（本轮最终数字见第 5 节验收结论；完整输出可按上命令复跑。）
+（最终数字见第 6 节验收记录；完整输出可按上命令复跑。）
 
 Claude 插件对照（临时快照，双侧同环境同参数）：
 `git archive <sha>` + `git show` 补入 tests → `scripts/build-plugin.sh` →
@@ -76,10 +76,10 @@ v2.1 明确匹配 + GN015 等范围待判定候选；未知基因 → 有效空�
 3. **锁文件**：`uv.lock` 逐字节等于官方基线（按用户选择恢复）；该锁未覆盖
    当前 manifest 的部分内容（如 OCR extra）——保留的上游不一致，非锁一致性
    验证通过；`.venv` 未按恢复锁重装，uv 命令须 `--frozen`。
-4. **环境**：本机 iCloud 文件管理持续把 venv 内 `.pth` 标记为 UF_HIDDEN
-   （chflags 后约 3 秒回归；具体进程未经证实）；以 venv 内
-   `sitecustomize.py` 补路径为持久应对，详见本地运行文档。
-5. **上游插件测试既有失败**（不在本项目范围）：6 项完整清单见第 5 节。
+4. **环境**：观察到 `.pth` 的 `UF_HIDDEN` 标记清除后再次出现，具体来源
+   未确定；以 venv 内 `sitecustomize.py` 补路径为持久应对，详见本地运行
+   文档。
+5. **上游插件测试既有失败**（不在本项目范围）：6 项完整清单见第 6 节。
 
 ## 5. 历史追溯
 
@@ -101,8 +101,8 @@ v2.1 明确匹配 + GN015 等范围待判定候选；未知基因 → 有效空�
   （同义≠排除，非 canonical+SpliceAI≥0.2 可进剪接 PP3）；BP2 条目（trans 限
   完全外显显性、cis 任意遗传、相位必需，标题已改）；BP3 条目（须无已知功能
   重复区）。逐条对照计划反例人工核对，非以测试代替。
-- **回归实测**：13 文件 `--maxfail=0` → **673 passed, 8 skipped,
-  1 deselected, 0 failed，exit 0**（较起点 672 为新增守卫测试；跳过项为既有
+- **回归实测**：22 文件 `--maxfail=0` → **675 passed, 8 skipped,
+  1 deselected, 0 failed，exit 0**（数字随轮次实测更新；跳过项为既有
   环境性）。ruff 通过；`git diff --check` 对本轮起点与官方基线均干净；
   `uv.lock` 与基线 0 差异；两个 JSON 与本轮起点解析结果相等。
 - **Claude 插件完整对照**（临时快照，双侧 build exit 0，同一 venv 解释器，
@@ -113,3 +113,28 @@ v2.1 明确匹配 + GN015 等范围待判定候选；未知基因 → 有效空�
   test_mentions_tu_run_cli[research.md]、[researcher.md]——无新增失败，
   本项目不修复。此前"五项失败"记录系不完整对照所致，以本六项完整集合为准。
 - **LLM 工作流：未验收**（无宿主轨迹；守卫测试只验证文档契约）。
+
+---
+
+## 7. 最终清理轮（2026-09-11，计划 2026-09-11-acmg-svi-cspec-final-cleanup.md）
+
+起点 `b53396ba`；三个提交：`4a7e0843`（旧入口残留评估规则清理+针对性回归
+检查）、`baaa3486`（双 Skill 三处同步+内容一致性检查）、第三个（本节记录
+与验收）。生产 API、Schema、计算器、CSpec 查询逻辑、包装、metadata、两个
+工具 JSON、依赖与锁文件本轮零修改。
+
+- **旧入口残留**（12 处标记先在 HEAD 版本确认命中、清理后归零）：COSMIC/
+  DisGeNET 赋码表、调控 `PS3_supporting / PP3` 映射、SAE ACMG 列、ClinGen
+  陈旧表头、SpliceAI 重复阈值；EXAMPLES 的 PM2/PM1/PS3/PS1 正文判定；
+  SKILL 的"流行病学优先"原则与报告模板回声、Predictor Weighting AUC 排名
+  与 lean toward REVEL、调控"PS3/PP3 所需证据"、CSpec 裁决流程复述。
+- **分发同步补齐**：上一轮三处科学修正只落了 canonical——一致性检查
+  （先失败，抓到两处分发共 9 个未同步文件）后，Claude 直接同步、Codex 经
+  `sync-codex-plugin-skills.sh`（临时 DEST + 本 venv python）回填两个
+  Skill；PP3 同义剪接路径、BP2 trans 限制、BP3 无已知功能条件在三版本
+  逐字核对一致；未动其他 Skill。
+- **本轮回归实测**：22 文件 `--maxfail=0` → **675 passed, 8 skipped,
+  1 deselected, 0 failed，exit 0**（较上轮 +2 为新增的两个文档检查）；
+  ruff 通过；插件快照对照与官方基线失败集合逐行一致（见第 6 节六项清单），
+  无新增失败。
+- **LLM 工作流：未验收**（未安装宿主、未改配置；文档检查不替代）。
