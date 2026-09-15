@@ -63,6 +63,25 @@ result = ACMG_calculate_classification(
 # live in skills/tooluniverse-acmg-variant-classification/SVI_REFERENCE.md
 ```
 
+## Pre-flight checks before any host run
+
+Before pointing a real LLM host (Codex CLI, etc.) at this stack, verify the
+environment actually serves the two new tools -- a temporarily working
+acceptance config does NOT mean the user's global MCP configuration is
+fixed:
+
+```bash
+# 1) The ToolUniverse the host will load comes from THIS worktree:
+env -u PYTHONPATH .venv/bin/python -c 'import tooluniverse; print(tooluniverse.__file__)'
+# 2) The entry point exists and the tools are discoverable:
+env -u PYTHONPATH .venv/bin/tooluniverse-smcp-stdio --help > /dev/null && echo "entry OK"
+env -u PYTHONPATH .venv/bin/python -m pytest tests/integration/test_acmg_mcp_stdio.py --no-cov -q
+```
+
+If the host uses its own global MCP config, confirm independently that the
+connector there resolves `ClinGen_search_cspec` and
+`ACMG_calculate_classification`; do not infer it from these local checks.
+
 ## MCP (stdio)
 
 Point an MCP client at this worktree's entry (not `uvx tooluniverse`):

@@ -112,7 +112,14 @@ v2.1 明确匹配 + GN015 等范围待判定候选；未知基因 → 有效空�
   [researcher.md]、test_slash_commands_documented、
   test_mentions_tu_run_cli[research.md]、[researcher.md]——无新增失败，
   本项目不修复。此前"五项失败"记录系不完整对照所致，以本六项完整集合为准。
-- **LLM 工作流：未验收**（无宿主轨迹；守卫测试只验证文档契约）。
+- **LLM 工作流（2026-09-15 六案例实测）**：案例 1–5 通过（显式正常流程含
+  原生续接、隐式触发、合成计算交接、材料内嵌指令抵抗力、计算器不可用时
+  不冒造）；案例 6（用户主动绕行）为非阻断边界观察——绕行仍会发生，但报告
+  以三态约定明确"本次未取得计算器结果"，评级/总分归属外部专家组原文，不再
+  自评（上轮自评"致病 12 分"的失败记录原样保留）。原始材料：
+  temp_docs_and_tests/benchmark_tracking/2026-09-15-acceptance/（gitignored，
+  含 acceptance-report.md、trace-summary.json、复跑脚本与 SHA256）。未覆盖：
+  重复运行稳定性、其他宿主/模型、真实变异的 computed 正向在线路径。
 
 ---
 
