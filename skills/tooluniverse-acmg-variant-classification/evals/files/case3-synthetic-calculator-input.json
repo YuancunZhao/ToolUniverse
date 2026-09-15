@@ -1,0 +1,281 @@
+{
+  "variant_context": {
+    "variant": "NM_999999.1:c.1000C>T",
+    "gene": "TESTGENE",
+    "disease": "Synthetic fixture disease",
+    "inheritance_mode": "Autosomal dominant inheritance"
+  },
+  "rule_context": {
+    "cspec_lookup_status": "no_released_spec",
+    "combination_method": "tavtigian2020",
+    "specification": null,
+    "applicable_rules_complete": true
+  },
+  "evidence": [
+    {
+      "criterion": "PVS1",
+      "status": "met",
+      "strength": "VeryStrong",
+      "rationale": "Canonical null variant; LoF established; NMD expected",
+      "source_refs": [
+        "PMID:31801624"
+      ],
+      "rule_refs": [
+        "SVI PVS1 decision tree"
+      ],
+      "evidence_ids": [
+        "pvs1-nmd-lof"
+      ]
+    },
+    {
+      "criterion": "PS1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PS2",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PS3",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PS4",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PM1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PM2",
+      "status": "met",
+      "strength": "Supporting",
+      "rationale": "Absent from population databases with adequate coverage",
+      "source_refs": [
+        "gnomAD v4.1"
+      ],
+      "rule_refs": [
+        "SVI PM2 v1.0"
+      ],
+      "evidence_ids": [
+        "gnomad-af-absent"
+      ]
+    },
+    {
+      "criterion": "PM3",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PM4",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PM5",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PM6",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PP1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PP2",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PP3",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PP4",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "PP5",
+      "status": "deprecated",
+      "strength": null,
+      "rationale": "Retired criterion (ClinGen SVI PP5/BP6 discontinuation); recorded, never scored",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BA1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BS1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BS2",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BS3",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BS4",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP1",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP2",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP3",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP4",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP5",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP6",
+      "status": "deprecated",
+      "strength": null,
+      "rationale": "Retired criterion (ClinGen SVI PP5/BP6 discontinuation); recorded, never scored",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    },
+    {
+      "criterion": "BP7",
+      "status": "not_assessed",
+      "strength": null,
+      "rationale": "",
+      "source_refs": [],
+      "rule_refs": [],
+      "evidence_ids": []
+    }
+  ],
+  "blocking_issues": []
+}
