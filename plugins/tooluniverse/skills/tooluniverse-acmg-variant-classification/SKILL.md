@@ -57,7 +57,7 @@ Tool-version note: if a `ClinGen_search_cspec` response lacks the
 cannot assume the candidates were checked; update the tool or verify gene
 scope manually before concluding anything about applicability.
 
-**Rule precedence** (same wording in `SVI_REFERENCE.md`):
+**Rule precedence** (maintained here; `SVI_REFERENCE.md` links back):
 
 | Situation | Strategy |
 |---|---|
@@ -119,14 +119,31 @@ The calculator derives the score itself. Supplied totals, expected
 classifications, point overrides, or thresholds are rejected as illegal input.
 
 **7. Present the result.**
-Report the calculator's `classification`, `total_score`, and per-criterion
-contributions **verbatim**. Attribute external conclusions separately: a
-ClinVar expert-panel classification or a VCEP assertion is someone else's
-answer — cite it as such; it is never your PP5/BP6 (both retired).
+Report strictly according to what actually happened, in one of three
+situations:
 
-If `classification_status="needs_review"`: state `classification` is withheld,
-list every `review_reasons` entry, and describe what would resolve each. Do
-not substitute your own classification.
+1. **Calculator returned `computed`:** quote the actual `classification`,
+   `total_score`, and per-criterion contributions verbatim from the return
+   value.
+2. **Calculator returned `needs_review`:** `classification` stays null in
+   the report. List EVERY `review_reasons` entry and what would resolve
+   each. Show only the provisional contributions the calculator actually
+   returned (e.g. `pathogenic_points`/`benign_points`); the calculator
+   returns NO `total_score` on this path — never fabricate one, and never
+   substitute your own classification.
+3. **Calculator unavailable, call failed, or not called:** state plainly
+   that this run obtained NO calculator result. A discussion, your own
+   reasoning, or an external classification must not be presented as a
+   classification completed by this workflow.
+
+Attribute external conclusions separately in every situation: a ClinVar
+expert-panel classification or a VCEP assertion is someone else's answer —
+cite it as such; it is never your PP5/BP6 (both retired).
+
+If the user explicitly cancels the tool-based flow, say so: this workflow
+was not completed for this request. External ClinVar/VCEP conclusions may
+still be cited with attribution — that is reporting someone else's answer,
+not performing this workflow's classification.
 
 ## Tool Wiring
 
@@ -165,18 +182,27 @@ not substitute your own classification.
 
 ## Output Format
 
+Match the template to what actually happened — exactly one of:
+
 ```markdown
 # ACMG Variant Classification Report
 ## Variant: [HGVS] — Gene [symbol], transcript [MANE], type [variant type]
 ## Applied specification: [CSpec id + version + VCEP] or [generic ACMG/AMP 2015 + SVI]
-## Classification: [calculator's classification and total_score, verbatim]
-   or: Classification withheld — needs_review (list review_reasons)
+## Calculator outcome: computed | needs_review | not obtained this run
+## Classification: [verbatim from the calculator return] | null (withheld)
+   | not obtained this run
+## Score: [verbatim total_score] | [no total_score — provisional
+   pathogenic/benign points only, as returned] | none
+## Review reasons: [every entry, verbatim] | n/a
 ## Met criteria: | Criterion | Strength | Rationale | Sources | Rule refs | Fact ids |
 ## Benign criteria: same columns
 ## Not met / not assessed / not applicable (with one-line reasons)
 ## External classifications (attributed, not counted): ClinVar/VCEP entries
 ## Gaps and unresolved items (what would change the result)
 ```
+
+The three "Calculator outcome" rows must agree with the actual return
+value (or its absence); never mix a discussion-grade assessment into them.
 
 ## Deeper Guidance
 

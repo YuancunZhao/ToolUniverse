@@ -102,7 +102,19 @@ Apply for intronic (non-splice), promoter, UTR, or intergenic variants near dise
 
 ## Phase 2.9: Short-Circuit Check
 
-Before full ACMG classification, check if the variant already has an expert panel classification in ClinVar. Use `MyVariant_query_variants` with the rsID or HGVS notation — the `clinvar` field in the response includes clinical significance, review status, and RCV records. If an expert panel has already classified the variant as Pathogenic or Benign, note this prominently and focus on confirming/contextualizing rather than de novo classification.
+Before a fresh assessment, check whether the variant already has an expert
+panel classification in ClinVar. Use `MyVariant_query_variants` with the
+rsID or HGVS notation — the `clinvar` field includes clinical
+significance, review status, and RCV records. Two distinct requests:
+
+- **The user asks what expert conclusions exist**: retrieve and cite them
+  directly with attribution (source, review status, date) — this is
+  reporting someone else's answer, not classifying.
+- **The user asks for this workflow's (re-)evaluation**: still enter the
+  unified ACMG flow in
+  `tooluniverse-acmg-variant-classification`; existing expert conclusions
+  are context attributed alongside the calculator's result, never a
+  substitute for it.
 
 ## Phase 3: Computational Predictions
 
