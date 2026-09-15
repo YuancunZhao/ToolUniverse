@@ -163,6 +163,10 @@ def test_published_copies_match_sources():
     for skill in _SYNCED_SKILLS:
         source_dir = repo / "skills" / skill
         for source in sorted(source_dir.rglob("*.md")):
+            if "evals" in source.relative_to(source_dir).parts:
+                # evals/ is excluded from both distribution sync flows by
+                # upstream design -- dev-side acceptance material only.
+                continue
             relative = source.relative_to(source_dir)
             for destination in ("plugin/skills", "plugins/tooluniverse/skills"):
                 target = repo / destination / skill / relative
