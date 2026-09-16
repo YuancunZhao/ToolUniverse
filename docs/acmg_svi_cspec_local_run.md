@@ -112,3 +112,28 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
   tests/unit/test_variant_interpretation_code_patterns.py \
   tests/integration/test_acmg_mcp_stdio.py --no-cov
 ```
+
+
+## Real-host acceptance (2026-09-15)
+
+Cases 1–5 passed in one Codex CLI 0.154.0 / gpt-6-astra / xhigh run per
+case: explicit flow (including native resume), implicit routing, synthetic
+compute handoff, an instruction embedded in an attachment, and calculator
+unavailability. Case 6 remains a non-blocking user-bypass observation.
+The host skipped the calculator but attributed the quoted verdict/score to
+an external expert panel and stated that this run obtained no calculator
+result. A single observation is not a reliability or causal-effect claim.
+
+Case definitions: `skills/tooluniverse-acmg-variant-classification/evals/evals.json`.
+Local raw receipts and rerun scripts (gitignored, not included in a push):
+`temp_docs_and_tests/benchmark_tracking/2026-09-15-acceptance/`.
+The tracked implementation record's section 8 contains the result summary.
+Before rerunning, recheck the CLI version, model, worktree provenance and
+tool discovery; copy only case inputs to the model workspace, not expected
+answers. Preserve JSONL, final answers, arguments/results and exit status.
+Do not overwrite the archived run; use a new dated output directory.
+
+Skills guide the host; calculator validation applies only to submitted
+inputs. User-initiated bypass is not guaranteed to be prevented. Repeated
+runs, other hosts/models and a real-variant online `computed` path remain
+unverified; the synthetic LP/9 handoff does not cover those claims.
