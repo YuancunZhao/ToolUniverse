@@ -4,7 +4,6 @@ Unified Guideline Tools
 Consolidated clinical guidelines search tools from multiple sources.
 """
 
-import html
 import requests
 import time
 import re
@@ -56,13 +55,36 @@ def _guideline_envelope(results, *, total, retrieved=None, source=None):
     return {"status": "success", "data": results, "metadata": metadata}
 
 
+def _is_specific_token(token):
+    """Reject short plain-English words that match almost any abstract.
+
+    Relevance filtering is a substring ``any()`` test, so a two-letter English
+    word such as "of" or "in" matches essentially every record and silently
+    disables the filter. Such words are only discarded when they are plain
+    ASCII letters: short non-Latin terms (医疗) and connected biomedical
+    identifiers (IL-6, COVID-19, H1N1) stay, since those are specific.
+    """
+    if len(token) >= 3:
+        return True
+    return not token.isascii() or not token.isalpha()
+
+
 def _extract_meaningful_terms(query):
     """Return significant query terms for relevance filtering."""
     if not isinstance(query, str):
         return []
 
-    # Keep alphabetic tokens with length >= 3
-    tokens = re.findall(r"[a-zA-Z]{3,}", query.lower())
+    # Keep connected biomedical identifiers as one token (COVID-19,
+    # HLA-B*57:01, IL-6) as well as Unicode terms.  Splitting at punctuation
+    # turns the numeric suffix into a broad substring filter (e.g. "2019"),
+    # which admits unrelated literature.  Numeric-only fragments are never
+    # useful evidence concepts, so discard them.
+    tokens = re.findall(r"[^\W_]+(?:[-*:/][^\W_]+)*", query.lower())
+    tokens = [
+        token
+        for token in tokens
+        if any(character.isalpha() for character in token) and _is_specific_token(token)
+    ]
     stop_terms = {
         "management",
         "care",
@@ -87,6 +109,16 @@ def _extract_meaningful_terms(query):
     }
     meaningful = [token for token in tokens if token not in stop_terms]
     return meaningful if meaningful else tokens
+
+
+def _abstract_text_from_sections(element: ET.Element) -> str:
+    """Flatten every structured abstract section, preserving inline text."""
+    sections = element.findall(".//AbstractText")
+    return " ".join(
+        "".join(section.itertext()).strip()
+        for section in sections
+        if "".join(section.itertext()).strip()
+    )
 
 
 @register_tool()
@@ -390,28 +422,28 @@ class PubMedGuidelinesTool(BaseTool):
             )
             abstract_response.raise_for_status()
 
-            # Parse abstracts from XML
-            import re
-
+            # Parse abstracts from XML.  PubMed commonly splits a structured
+            # abstract into several AbstractText nodes (Background, Methods,
+            # Results, Conclusions); treating the first match as the complete
+            # abstract drops the evidence callers need to assess a guideline.
             abstracts = {}
-            xml_text = abstract_response.text
-            # Extract abstracts for each PMID
+            if abstract_response.text.strip():
+                try:
+                    abstract_root = ET.fromstring(abstract_response.text)
+                    records = abstract_root.findall(".//PubmedArticle")
+                    records.extend(abstract_root.findall(".//PubmedBookArticle"))
+                    for record in records:
+                        pmid = record.findtext(".//PMID")
+                        if pmid:
+                            abstracts[pmid] = _abstract_text_from_sections(record)
+                except ET.ParseError as e:
+                    return {
+                        "status": "error",
+                        "error": f"Failed to parse PubMed abstract XML: {e}",
+                        "source": "PubMed",
+                    }
             for pmid in pmids:
-                # Find abstract text for this PMID
-                pmid_pattern = rf"<PMID[^>]*>{pmid}</PMID>.*?<AbstractText[^>]*>(.*?)</AbstractText>"
-                abstract_match = re.search(pmid_pattern, xml_text, re.DOTALL)
-                if abstract_match:
-                    # Clean HTML tags from abstract
-                    abstract = re.sub(r"<[^>]+>", "", abstract_match.group(1))
-                    # Fix-R7B-2/R7E-1: this regex-based extraction never
-                    # actually parses the XML, so entity references like
-                    # "&#x2265;" (confirmed present verbatim in PubMed's raw
-                    # efetch XML for "&#x2265;" / "&#xe7;" etc.) were left
-                    # undecoded, unlike PubMed_search_articles which uses a
-                    # real XML parser that resolves them automatically.
-                    abstracts[pmid] = html.unescape(abstract).strip()
-                else:
-                    abstracts[pmid] = ""
+                abstracts.setdefault(pmid, "")
 
             # Process results
             results = []
@@ -583,7 +615,7 @@ class EuropePMCGuidelinesTool(BaseTool):
                 if pmid:
                     url = f"https://europepmc.org/article/MED/{pmid}"
                 elif pmcid:
-                    url = f"https://europepmc.org/article/{pmcid}"
+                    url = f"https://europepmc.org/article/PMC/{pmcid}"
                 elif doi:
                     url = f"https://doi.org/{doi}"
 
@@ -658,10 +690,12 @@ class EuropePMCGuidelinesTool(BaseTool):
 
             root = ET.fromstring(response.content)
 
-            # Find abstract text
-            abstract_elem = root.find(".//AbstractText")
-            if abstract_elem is not None:
-                return abstract_elem.text or ""
+            # PubMed structured abstracts may have multiple sections and
+            # inline markup; retain each section instead of the first node's
+            # direct text only.
+            abstract = _abstract_text_from_sections(root)
+            if abstract:
+                return abstract
 
             # Try alternative path
             abstract_elem = root.find(".//abstract")
@@ -670,6 +704,8 @@ class EuropePMCGuidelinesTool(BaseTool):
 
             return ""
 
+        except ET.ParseError as e:
+            raise ValueError(f"Failed to parse Europe PMC abstract XML: {e}") from e
         except Exception as e:
             return f"Error fetching abstract: {str(e)}"
 
@@ -1408,6 +1444,9 @@ class OpenAlexGuidelinesTool(BaseTool):
 
     def _search_openalex_guidelines(self, query, limit, year_from=None, year_to=None):
         """Search for clinical guidelines using OpenAlex API."""
+        if limit == 0:
+            return _guideline_envelope([], total=0, retrieved=0, source="OpenAlex")
+
         try:
             # Build search query to focus on guidelines
             search_query = (

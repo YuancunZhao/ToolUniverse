@@ -34,6 +34,7 @@ default_tool_files = {
     "semantic_scholar": os.path.join(
         current_dir, "data", "semantic_scholar_tools.json"
     ),
+    "consensus": os.path.join(current_dir, "data", "consensus_tools.json"),
     "pubtator": os.path.join(current_dir, "data", "pubtator_tools.json"),
     "EFO": os.path.join(current_dir, "data", "efo_tools.json"),
     "Enrichr": os.path.join(current_dir, "data", "enrichr_tools.json"),
@@ -362,6 +363,9 @@ default_tool_files = {
     ),
     "mcp_auto_loader_noodle": os.path.join(
         current_dir, "data", "mcp_auto_loader_noodle.json"
+    ),
+    "mcp_auto_loader_exa": os.path.join(
+        current_dir, "data", "mcp_auto_loader_exa.json"
     ),
     "cryoet": os.path.join(current_dir, "data", "cryoet_tools.json"),
     "esm": os.path.join(current_dir, "data", "esm_tools.json"),

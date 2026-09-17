@@ -2,7 +2,7 @@
     "manifest_version": "0.4",
     "name": "tooluniverse",
     "display_name": "ToolUniverse",
-    "version": "1.4.1",
+    "version": "1.5.0",
     "description": "ToolUniverse: an ecosystem for democratizing AI scientists with 2,500+ scientific tools.",
     "long_description": "ToolUniverse is an ecosystem for creating AI scientist systems from any large language model (LLM). It standardizes how LLMs interact with tools, integrating thousands of machine learning models, datasets, APIs, and scientific packages for data analysis, knowledge retrieval, and experimental design. This bundle exposes ToolUniverse capability via the Model Context Protocol (MCP), enabling AI assistants to perform complex scientific tasks.",
     "author": {
@@ -19,7 +19,7 @@
     "support": "https://github.com/mims-harvard/ToolUniverse/issues",
     "icon": "icon.png",
     "server": {
-        "type": "python",
+        "type": "uv",
         "entry_point": "src/run_stdio.py",
         "mcp_config": {
             "command": "uv",
@@ -27,10 +27,6 @@
                 "run",
                 "--directory",
                 "${__dirname}",
-                "--with",
-                ".",
-                "--python",
-                "3.12",
                 "${__dirname}${/}src${/}run_stdio.py"
             ],
             "env": {
@@ -48,7 +44,7 @@
             "linux"
         ],
         "runtimes": {
-            "python": ">=3.10,<3.14"
+            "python": ">=3.10 <3.15"
         }
     },
     "keywords": [
