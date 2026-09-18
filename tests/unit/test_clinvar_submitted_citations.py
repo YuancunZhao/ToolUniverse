@@ -57,7 +57,8 @@ def _vcv_xml(citation_blocks: dict):
                 )
         assertions.append(
             f"<ClinicalAssertion>"
-            f'<ClinVarAccession Acc="{scv}" Version="1" SubmitterName="Lab {scv}"/>'
+            f'<ClinVarAccession Accession="{scv}" Version="1" '
+            f'SubmitterName="Lab {scv}"/>'
             f"<Classification><GermlineClassification>Pathogenic"
             f"</GermlineClassification></Classification>"
             f"{cite_xml}"
@@ -231,6 +232,87 @@ def test_non_pubmed_citation_source_warned_not_exposed():
     subs = result["data"]["submissions"]
     assert subs[0]["citations"] == []
     assert any("not PubMed" in w for w in result["data"].get("citation_warnings", []))
+    # Fix-R2-20260922: the parse warning must NOT be overridden by the
+    # empty-PMID shortcut -- enrichment is not complete here.
+    assert result["data"]["citations_complete"] is False
+
+
+# ---------- Fix-R2-20260922: enrichment failure never discards data ----------
+
+
+@pytest.mark.parametrize("bad_payload", [[], None, "ok", 123])
+def test_non_object_esummary_payload_warns_and_keeps_records(bad_payload):
+    """Top-level [], null or a scalar must yield a completion warning, not
+    an escaping AttributeError -- the variant record, SCV, PMID and source
+    path all survive."""
+    xml = _vcv_xml({"SCV1": [("Classification/Citation", "31573083")]})
+    result = _run_with(xml, titles_payload=bad_payload)
+    assert result["status"] == "success"
+    sub = result["data"]["submissions"][0]
+    assert sub["scv_accession"] == "SCV1.1"
+    assert sub["citations"][0]["pmid"] == "31573083"
+    assert sub["citations"][0]["source_path"] == "Classification/Citation"
+    assert sub["citations"][0]["title"] is None
+    assert result["data"]["citations_complete"] is False
+    warnings = result["data"]["citation_warnings"]
+    assert any("was not a JSON object" in w for w in warnings)
+    assert any("31573083" in w for w in warnings)
+
+
+def test_corrupted_result_object_warns_and_keeps_records():
+    xml = _vcv_xml({"SCV1": [("Classification/Citation", "31573083")]})
+    result = _run_with(xml, titles_payload={"result": "corrupted"})
+    assert result["status"] == "success"
+    assert result["data"]["submissions"][0]["citations"][0]["pmid"] == "31573083"
+    assert result["data"]["citations_complete"] is False
+    assert any("missing 'result' object" in w for w in result["data"]["citation_warnings"])
+
+
+@pytest.mark.parametrize("bad_title", ["", "   ", 12.5, None, ["t"]])
+def test_blank_or_non_string_title_stays_null_with_pmid_disclosed(bad_title):
+    xml = _vcv_xml({"SCV1": [("Classification/Citation", "31573083")]})
+    result = _run_with(xml, titles_payload=_titles({"31573083": bad_title}))
+    assert result["status"] == "success"
+    citation = result["data"]["submissions"][0]["citations"][0]
+    assert citation["pmid"] == "31573083"
+    assert citation["title"] is None
+    assert result["data"]["citations_complete"] is False
+    assert any(
+        "No PubMed title retrieved for PMID(s): 31573083" in w
+        for w in result["data"]["citation_warnings"]
+    )
+
+
+def test_partial_title_success_keeps_the_successful_half():
+    xml = _vcv_xml(
+        {
+            "SCV1": [
+                ("Classification/Citation", "111"),
+                ("AttributeSet/Citation", "222"),
+            ]
+        }
+    )
+    result = _run_with(xml, titles_payload=_titles({"111": "Good title", "222": ""}))
+    assert result["status"] == "success"
+    citations = result["data"]["submissions"][0]["citations"]
+    by_pmid = {c["pmid"]: c for c in citations}
+    assert by_pmid["111"]["title"] == "Good title"
+    assert by_pmid["222"]["title"] is None
+    assert result["data"]["citations_complete"] is False
+    assert any("222" in w for w in result["data"]["citation_warnings"])
+
+
+def test_request_failure_already_warns_without_raising():
+    """Pre-existing Fix-E behavior, re-pinned under Fix-R2: a transport
+    failure yields warnings + incomplete citations, never an exception."""
+    xml = _vcv_xml({"SCV1": [("Classification/Citation", "31573083")]})
+    result = _run_with(
+        xml, titles_error=_requests.exceptions.ConnectionError("boom")
+    )
+    assert result["status"] == "success"
+    assert result["data"]["submissions"][0]["citations"][0]["pmid"] == "31573083"
+    assert result["data"]["citations_complete"] is False
+    assert any("request failed" in w for w in result["data"]["citation_warnings"])
 
 
 def test_existing_submission_fields_unchanged():

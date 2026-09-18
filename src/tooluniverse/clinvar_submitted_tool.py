@@ -329,8 +329,13 @@ class ClinVarSubmittedRecordsTool(BaseTool):
                     "No PubMed title retrieved for PMID(s): "
                     + ", ".join(sorted(set(missing)))
                 )
-        data["citations_complete"] = (
-            all_pmids == [] or (not citation_warnings and all(t is not None for t in titles.values()))
+        # Fix-R2-20260922: complete only when BOTH parsing and enrichment
+        # finished cleanly. "No citations at all" is complete, but a
+        # parse warning must NOT be overridden by the empty-PMID shortcut
+        # (e.g. a non-PubMed citation ID produced a warning and zero
+        # outputtable PMIDs -- enrichment cannot be called complete).
+        data["citations_complete"] = not citation_warnings and (
+            not all_pmids or all(titles.get(pmid) is not None for pmid in all_pmids)
         )
         if citation_warnings:
             data["citation_warnings"] = citation_warnings
@@ -378,6 +383,15 @@ class ClinVarSubmittedRecordsTool(BaseTool):
             payload = response.json()
         except ValueError as exc:
             return {}, [f"PubMed title backfill returned invalid JSON: {exc}"]
+        # Fix-R2-20260922: the top-level JSON value is not guaranteed to be
+        # an object -- a proxy can hand back [], null or a scalar, and
+        # calling .get on those would raise AttributeError out of the tool
+        # and discard the already-retrieved variant record.
+        if not isinstance(payload, dict):
+            return {}, [
+                "PubMed title backfill response was not a JSON object "
+                f"(got {type(payload).__name__}); all titles left unresolved"
+            ]
         result = payload.get("result", {})
         if not isinstance(result, dict):
             return {}, ["PubMed title backfill response missing 'result' object"]
@@ -385,7 +399,13 @@ class ClinVarSubmittedRecordsTool(BaseTool):
         for pmid in pmids:
             article = result.get(pmid)
             if isinstance(article, dict):
-                titles[pmid] = article.get("title")
+                # Fix-R2-20260922: a title is only usable as a non-blank
+                # string; missing/blank/wrong-typed values stay None so the
+                # PMID is disclosed downstream as unresolved.
+                title = article.get("title")
+                titles[pmid] = (
+                    title if isinstance(title, str) and title.strip() else None
+                )
             else:
                 titles[pmid] = None
         return titles, []
