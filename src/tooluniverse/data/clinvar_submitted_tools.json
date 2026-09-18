@@ -2,7 +2,7 @@
   {
     "type": "ClinVarSubmittedRecordsTool",
     "name": "ClinVar_get_submitted_records",
-    "description": "Retrieve the individual per-submitter assertions (SCV / ClinicalAssertion records) for a ClinVar variant. Unlike ClinVar_search_variants / ClinVar_get_variant_details / ClinVar_get_clinical_significance (which use esummary and return only the single AGGREGATE germline classification), this tool calls NCBI eutils efetch (rettype=vcv) and parses the full VariationArchive XML to expose every submitter's own classification, review status, condition and last-evaluated date. Use this when you need to see who classified a variant and how (e.g. to inspect conflicting interpretations behind a 'Conflicting classifications of pathogenicity' aggregate). Keyless NCBI endpoint.",
+    "description": "Retrieve the individual per-submitter assertions (SCV / ClinicalAssertion records) for a ClinVar variant. Unlike ClinVar_search_variants / ClinVar_get_variant_details / ClinVar_get_clinical_significance (which use esummary and return only the single AGGREGATE germline classification), this tool calls NCBI eutils efetch (rettype=vcv) and parses the full VariationArchive XML to expose every submitter's own classification, review status, condition, last-evaluated date, and the PubMed citations each submitter attached (titles backfilled with one batched PubMed esummary call; citations_complete=false plus citation_warnings disclose any incomplete part). Use this when you need to see who classified a variant and how (e.g. to inspect conflicting interpretations behind a 'Conflicting classifications of pathogenicity' aggregate). Keyless NCBI endpoint.",
     "parameter": {
       "type": "object",
       "properties": {
@@ -113,9 +113,44 @@
                       "null"
                     ],
                     "description": "Date the submitter last evaluated the classification (YYYY-MM-DD)."
+                  },
+                  "citations": {
+                    "type": "array",
+                    "description": "Citations this submitter attached to the assertion, from both XML locations (Classification/Citation and AttributeSet/Citation). Deduplicated within this submission and source path only; the same PMID under different submitters or paths stays separate.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "pmid": {
+                          "type": "string",
+                          "description": "PubMed id (digits only; non-PubMed citation ids are not exposed and are reported via citation_warnings)."
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Article title backfilled from PubMed; null when the batch title fetch failed or returned no usable title (disclosed via citation_warnings)."
+                        },
+                        "source_path": {
+                          "type": "string",
+                          "description": "XML path the citation was read from: 'Classification/Citation' or 'AttributeSet/Citation'."
+                        }
+                      }
+                    }
                   }
                 }
               }
+            },
+            "citations_complete": {
+              "type": "boolean",
+              "description": "True only when citation parsing AND title enrichment both finished cleanly (a record with no citations at all can be complete); any parse or enrichment warning makes it false."
+            },
+            "citation_warnings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Present only when something in citation handling was imperfect (non-PubMed citation ids skipped, title fetch failures, unresolved titles). Citations never replace or drop the variant/submission details."
             }
           },
           "required": [

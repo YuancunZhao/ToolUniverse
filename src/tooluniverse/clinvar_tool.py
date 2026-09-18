@@ -11,6 +11,7 @@ import requests
 import time
 from typing import Dict, Any, List, Optional, Tuple
 from .base_tool import BaseTool
+from .clinvar_submitted_tool import ClinVarSubmittedRecordsTool
 from .tool_registry import register_tool
 
 # Human-readable clinical-significance classes whose NCBI clinsig [prop] token is
@@ -1235,7 +1236,61 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
             "raw_data": variant_data,
         }
 
+        # Fix-R3-20260922: submitter citations, obtained by reusing the
+        # submitted-records tool's fetch+parse path (one VCV efetch plus
+        # one batched PubMed esummary) exactly once -- no second XML or
+        # PubMed implementation here. A details (esummary) failure returned
+        # above; a citation-fetch failure below keeps the details with
+        # empty citations, citations_complete=false and a warning.
+        citations = self._submitter_citations(variant_id)
+        result["data"]["citations"] = citations["citations"]
+        result["data"]["citations_complete"] = citations["citations_complete"]
+        if citations["citation_warnings"]:
+            result["data"]["citation_warnings"] = citations["citation_warnings"]
+
         return result
+
+    def _submitter_citations(self, variant_id) -> Dict[str, Any]:
+        """Flatten submitter citations via ClinVarSubmittedRecordsTool.
+
+        Fix-R3-20260922: the flattened ``citations`` list keeps PER-SUBMITTER
+        attribution -- two submitters citing the same PMID appear as two
+        entries (unlike the submitted-records tool's dedup within one
+        submission), each carrying its scv_accession and submitter. Any
+        failure of the citation fetch degrades to empty citations +
+        ``citations_complete=False`` + an explicit warning; it never touches
+        the already-retrieved variant details.
+        """
+        submitted = ClinVarSubmittedRecordsTool(
+            {"name": "ClinVar_get_submitted_records"}
+        ).run({"variant_id": variant_id})
+        if submitted.get("status") != "success":
+            return {
+                "citations": [],
+                "citations_complete": False,
+                "citation_warnings": [
+                    "Submitter citation fetch failed: "
+                    f"{submitted.get('error', 'unknown error')}"
+                ],
+            }
+        data = submitted.get("data", {})
+        citations: List[Dict[str, Any]] = []
+        for submission in data.get("submissions", []):
+            for citation in submission.get("citations", []):
+                citations.append(
+                    {
+                        "pmid": citation.get("pmid"),
+                        "title": citation.get("title"),
+                        "source_path": citation.get("source_path"),
+                        "scv_accession": submission.get("scv_accession"),
+                        "submitter": submission.get("submitter"),
+                    }
+                )
+        return {
+            "citations": citations,
+            "citations_complete": bool(data.get("citations_complete", False)),
+            "citation_warnings": list(data.get("citation_warnings", [])),
+        }
 
 
 @register_tool("ClinVarGetClinicalSignificance")

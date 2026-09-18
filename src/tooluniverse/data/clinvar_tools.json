@@ -159,7 +159,7 @@
     {
         "type": "ClinVarGetVariantDetails",
         "name": "ClinVar_get_variant_details",
-        "description": "Get variant summary information from ClinVar by variant ID. Returns accession, title, genes, clinical significance, review status, chromosome location, and variation name. For the same variant, this provides a different field view than ClinVar_get_clinical_significance.",
+        "description": "Get variant summary information from ClinVar by variant ID. Returns accession, title, genes, clinical significance, review status, chromosome location, variation name, and the submitter citations flattened from the SCV records (per-submitter attribution kept; fetched via the ClinVar_get_submitted_records path, with citations_complete=false and citation_warnings when any part is incomplete). For the same variant, this provides a different field view than ClinVar_get_clinical_significance.",
         "parameter": {
             "type": "object",
             "properties": {
@@ -230,6 +230,55 @@
                         "review_status": {
                             "type": "string",
                             "description": "ClinVar review status for the germline classification"
+                        },
+                        "citations": {
+                            "type": "array",
+                            "description": "Submitter citations flattened from the per-submitter (SCV) records, fetched via the same path as ClinVar_get_submitted_records (one VCV efetch plus one batched PubMed esummary). Each entry keeps its own attribution: two submitters citing the same PMID appear as two entries.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "pmid": {
+                                        "type": "string",
+                                        "description": "PubMed id (digits only)."
+                                    },
+                                    "title": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "Article title from PubMed; null when unresolved (disclosed via citation_warnings)."
+                                    },
+                                    "source_path": {
+                                        "type": "string",
+                                        "description": "XML path the citation was read from: 'Classification/Citation' or 'AttributeSet/Citation'."
+                                    },
+                                    "scv_accession": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "SCV accession of the submitter whose assertion carries this citation."
+                                    },
+                                    "submitter": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ],
+                                        "description": "Submitting organization name for that assertion."
+                                    }
+                                }
+                            }
+                        },
+                        "citations_complete": {
+                            "type": "boolean",
+                            "description": "True only when citation parsing AND title enrichment finished cleanly; a citation-fetch failure leaves the variant details intact with empty citations and false here."
+                        },
+                        "citation_warnings": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Present only when citation handling was imperfect (fetch failure, skipped non-PubMed ids, unresolved titles)."
                         },
                         "raw_data": {
                             "type": "object",
