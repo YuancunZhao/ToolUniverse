@@ -140,6 +140,57 @@ def _aggregate_classification(
     return {"description": None, "review_status": None}
 
 
+# The two locations a ClinicalAssertion cites literature: a citation attached
+# to the classification itself (e.g. the functional-study basis of a
+# Pathogenic call) and a citation attached to an AttributeSet (e.g. the
+# methodology reference of the asserting lab). Both are reported, each with
+# its provenance, because the same PMID can legitimately appear in both
+# places for different reasons.
+_CITATION_SOURCE_PATHS = ("Classification/Citation", "AttributeSet/Citation")
+
+
+def _citations_from_assertion(
+    assertion: ET.Element, warnings: List[str]
+) -> List[Dict[str, Any]]:
+    """Collect per-submitter citations from a ClinicalAssertion.
+
+    Returns ``[{"pmid": ..., "title": None, "source_path": ...}, ...]`` --
+    titles are backfilled later from PubMed esummary. Only PubMed-sourced
+    IDs are exposed as ``pmid``; any other citation source is recorded as a
+    warning instead of being silently dropped. Duplicate (pmid, source_path)
+    pairs within the same submission are collapsed; the same PMID under a
+    DIFFERENT source_path is kept so the classification-vs-methodology
+    provenance survives.
+    """
+    citations: List[Dict[str, Any]] = []
+    seen = set()
+    scv_hint = None
+    accession = assertion.find("ClinVarAccession")
+    if accession is not None:
+        scv_hint = accession.get("Accession")
+    for source_path in _CITATION_SOURCE_PATHS:
+        for citation in assertion.findall(source_path):
+            for id_element in citation.findall("ID"):
+                source = id_element.get("Source")
+                pmid = (id_element.text or "").strip()
+                if not pmid:
+                    continue
+                if source != "PubMed":
+                    warnings.append(
+                        f"{scv_hint or 'submission'} {source_path}: citation "
+                        f"ID source {source!r} is not PubMed; not exposed as pmid"
+                    )
+                    continue
+                key = (pmid, source_path)
+                if key in seen:
+                    continue
+                seen.add(key)
+                citations.append(
+                    {"pmid": pmid, "title": None, "source_path": source_path}
+                )
+    return citations
+
+
 @register_tool("ClinVarSubmittedRecordsTool")
 class ClinVarSubmittedRecordsTool(BaseTool):
     """Return per-submitter (SCV / ClinicalAssertion) ClinVar records."""
@@ -231,9 +282,12 @@ class ClinVarSubmittedRecordsTool(BaseTool):
 
         aggregate = {"description": None, "review_status": None}
         submissions: List[Dict[str, Any]] = []
+        citation_warnings: List[str] = []
         if record is not None:
             aggregate = _aggregate_classification(record.find("Classifications"))
-            submissions = self._parse_assertions(record.find("ClinicalAssertionList"))
+            submissions, citation_warnings = self._parse_assertions(
+                record.find("ClinicalAssertionList")
+            )
 
         data = {
             "variation_id": variation_id,
@@ -244,6 +298,42 @@ class ClinVarSubmittedRecordsTool(BaseTool):
             "total_submissions": len(submissions),
             "submissions": submissions,
         }
+        # Fix-E-20260918: expose each submitter's citations (PMID, title,
+        # source path) and a single completeness flag. Titles are not in the
+        # VCV XML, so they are backfilled with ONE batch PubMed esummary
+        # request; backfill failure leaves title=None, records a warning and
+        # flips citations_complete to False -- it never discards the variant
+        # details that were already successfully retrieved.
+        all_pmids = sorted(
+            {
+                citation["pmid"]
+                for submission in submissions
+                for citation in submission.get("citations", [])
+            }
+        )
+        titles: Dict[str, Optional[str]] = {}
+        if all_pmids:
+            titles, backfill_warnings = self._backfill_pubmed_titles(all_pmids)
+            citation_warnings.extend(backfill_warnings)
+            for submission in submissions:
+                for citation in submission.get("citations", []):
+                    citation["title"] = titles.get(citation["pmid"])
+            missing = [
+                citation["pmid"]
+                for submission in submissions
+                for citation in submission.get("citations", [])
+                if citation.get("title") is None
+            ]
+            if missing:
+                citation_warnings.append(
+                    "No PubMed title retrieved for PMID(s): "
+                    + ", ".join(sorted(set(missing)))
+                )
+        data["citations_complete"] = (
+            all_pmids == [] or (not citation_warnings and all(t is not None for t in titles.values()))
+        )
+        if citation_warnings:
+            data["citation_warnings"] = citation_warnings
         metadata = {
             "source": "NCBI ClinVar efetch (rettype=vcv)",
             "endpoint": self.EFETCH_URL,
@@ -259,12 +349,56 @@ class ClinVarSubmittedRecordsTool(BaseTool):
         return {"status": "success", "data": data, "metadata": metadata}
 
     @staticmethod
+    def _backfill_pubmed_titles(
+        pmids: List[str],
+    ) -> "tuple[Dict[str, Optional[str]], List[str]]":
+        """Fetch article titles for PMIDs with ONE batch PubMed esummary call.
+
+        Mirrors the request shape of pubmed_tool.py's summary fetch (same
+        endpoint, same retmode) without adding a dependency on that tool's
+        session/rate-limit machinery. Returns (titles, warnings); a failed
+        fetch/parse yields ({}, [warning]) so every title stays None and
+        citations_complete flips to False downstream.
+        """
+        url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+        try:
+            response = requests.get(
+                url,
+                params={"db": "pubmed", "id": ",".join(pmids), "retmode": "json"},
+                timeout=30,
+                headers={"User-Agent": "ToolUniverse/1.0"},
+            )
+        except requests.exceptions.RequestException as exc:
+            return {}, [f"PubMed title backfill request failed: {exc}"]
+        if response.status_code != 200:
+            return {}, [
+                f"PubMed title backfill returned HTTP {response.status_code}"
+            ]
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            return {}, [f"PubMed title backfill returned invalid JSON: {exc}"]
+        result = payload.get("result", {})
+        if not isinstance(result, dict):
+            return {}, ["PubMed title backfill response missing 'result' object"]
+        titles: Dict[str, Optional[str]] = {}
+        for pmid in pmids:
+            article = result.get(pmid)
+            if isinstance(article, dict):
+                titles[pmid] = article.get("title")
+            else:
+                titles[pmid] = None
+        return titles, []
+
+    @staticmethod
     def _parse_assertions(
         assertion_list: Optional[ET.Element],
-    ) -> List[Dict[str, Any]]:
+    ) -> "tuple[List[Dict[str, Any]], List[str]]":
+        """Return (submissions, parse_warnings)."""
         if assertion_list is None:
-            return []
+            return [], []
 
+        parse_warnings: List[str] = []
         submissions: List[Dict[str, Any]] = []
         for assertion in assertion_list.findall("ClinicalAssertion"):
             accession = assertion.find("ClinVarAccession")
@@ -287,6 +421,9 @@ class ClinVarSubmittedRecordsTool(BaseTool):
                     "submitter": submitter,
                     "condition": _first_preferred_condition(assertion.find("TraitSet")),
                     "last_evaluated": classification["last_evaluated"],
+                    "citations": _citations_from_assertion(
+                        assertion, parse_warnings
+                    ),
                 }
             )
-        return submissions
+        return submissions, parse_warnings
