@@ -36,7 +36,7 @@ def _tool():
     return ClinVarSearchVariants({"name": "ClinVar_search_variants"})
 
 
-def _esearch_result(count, ids=None, query_translation=""):
+def _esearch_result(count, ids=None, query_translation="qt[All Fields]"):
     return {
         "status": "success",
         "data": {
@@ -179,7 +179,7 @@ def test_all_valid_params_have_no_ignored_parameters_key():
         "_make_request",
         return_value={
             "status": "success",
-            "data": {"esearchresult": {"idlist": [], "count": "1", "querytranslation": ""}},
+            "data": {"esearchresult": {"idlist": [], "count": "1", "querytranslation": "BRCA2[gene]"}},
         },
     ):
         result = tool.run({"gene": "BRCA2"})

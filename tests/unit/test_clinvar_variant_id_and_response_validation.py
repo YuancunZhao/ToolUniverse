@@ -30,8 +30,8 @@ import pytest
 
 from tooluniverse.clinvar_tool import (
     ClinVarSearchVariants,
-    _esearch_structural_error,
     _normalize_variant_id,
+    _validate_esearch_payload,
 )
 
 pytestmark = pytest.mark.unit
@@ -141,7 +141,7 @@ def test_missing_esearchresult_is_structural_error_not_fake_success():
     ],
 )
 def test_broken_esearch_payloads_are_structural_errors(esearch):
-    assert _esearch_structural_error({"esearchresult": esearch}) is not None
+    assert _validate_esearch_payload({"esearchresult": esearch})[0] is not None
 
 
 def test_valid_empty_result_is_still_success():
@@ -198,13 +198,14 @@ def test_structural_error_includes_raw_response_for_disclosure():
     assert result["raw_response"] == payload["data"]
 
 
-def test_hyphen_retry_failure_keeps_original_result_not_fake_empty():
-    """A structurally broken fallback must not masquerade as success-zero.
+def test_hyphen_retry_failure_is_explicit_error_not_fake_empty():
+    """Fix-R1-20260922: a broken replacement retry is an explicit error.
 
-    The hyphen retry only swaps in the fallback when it is a success with
-    count > 0; a broken fallback leaves the (valid) original result, and a
-    broken ORIGINAL is a structural error -- neither path can produce a
-    fake "success, 0 results".
+    The hyphen retry exists because the strict query's zero may be an index
+    artifact, so a retry that itself fails must surface as an error -- the
+    old behavior of silently keeping the original zero attributed a broken
+    pipeline to biology ("success, 0 results"). This test previously pinned
+    that wrong silent-zero behavior and was rewritten with the fix.
     """
     # Original result valid with 0 hits; fallback (2nd call) broken.
     payloads = [
@@ -224,8 +225,7 @@ def test_hyphen_retry_failure_keeps_original_result_not_fake_empty():
         ClinVarSearchVariants, "_make_request", side_effect=payloads
     ) as mock_request:
         result = _tool().run({"gene": "BRCA-2"})
-    assert result["status"] == "success"
-    assert result["data"]["total_count"] == 0
-    # at most: esearch + hyphen-retry + gene-resolution attempts, all
-    # individually guarded -- and none turned the result into an error
-    assert mock_request.call_count >= 1
+    assert result["status"] == "error"
+    assert "hyphen-stripped gene retry" in result["error"]
+    assert "invalid" in result["error"]
+    assert mock_request.call_count == 2

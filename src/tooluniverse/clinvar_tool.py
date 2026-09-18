@@ -9,7 +9,7 @@ import json
 import re
 import requests
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from .base_tool import BaseTool
 from .tool_registry import register_tool
 
@@ -701,14 +701,20 @@ class ClinVarSearchVariants(ClinVarRESTTool):
 
         data = result.get("data", {})
         # Fix-D-20260918: a broken/truncated eSearch payload must not
-        # degrade into "query succeeded, zero results".
-        structural_error = _esearch_structural_error(data)
+        # degrade into "query succeeded, zero results". Fix-R1-20260922:
+        # the validator now also rejects explicit API errors and malformed
+        # count/idlist/translation, and returns the retainable
+        # errorlist/warninglist entries to disclose with the result.
+        structural_error, query_warnings = _validate_esearch_payload(data)
         if structural_error is not None:
             return {
                 "status": "error",
                 "error": structural_error,
                 "raw_response": data,
             }
+        # Warnings from lookups that only EXPLAIN an already-established
+        # zero (never replace the result) -- see Fix-R1-20260922.
+        auxiliary_warnings: List[str] = []
 
         # Fix-R49A-1: the hyphen-preserved gene query above found nothing --
         # retry once with the hyphen stripped, for the informally-hyphenated
@@ -717,14 +723,14 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # "gene" is always the first query part appended when present.
             fallback_query_parts = [f"{gene_hyphen_variant}[gene]"] + query_parts[1:]
             fallback_params = dict(params, term=" AND ".join(fallback_query_parts))
-            fallback_result = self._make_request(self.endpoint, fallback_params)
-            if (
-                fallback_result.get("status") == "success"
-                and "esearchresult" in fallback_result.get("data", {})
-                and int(fallback_result["data"]["esearchresult"].get("count", 0)) > 0
-            ):
-                result = fallback_result
-                data = result["data"]
+            retry_data, retry_error, retry_warnings = self._replacement_retry(
+                fallback_params, "hyphen-stripped gene"
+            )
+            if retry_error is not None:
+                return {"status": "error", "error": retry_error}
+            if int(retry_data["esearchresult"].get("count", 0)) > 0:
+                data = retry_data
+                query_warnings = retry_warnings
 
         # Fix-R62A-1: some gene symbols are HGNC-deprecated/renamed entirely,
         # not just informally hyphenated -- e.g. "GBA" (glucocerebrosidase,
@@ -738,19 +744,20 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # alias of gene ID 2629, current official symbol "GBA1") instead of
         # hardcoding a growing alias list.
         if "gene" in arguments and int(data["esearchresult"].get("count", 0)) == 0:
-            resolved_gene = self._resolve_deprecated_gene_symbol(gene)
+            resolved_gene, alias_warning = self._resolve_deprecated_gene_symbol(gene)
+            if alias_warning:
+                auxiliary_warnings.append(alias_warning)
             if resolved_gene and resolved_gene.upper() != gene.upper():
                 resolved_query_parts = [f"{resolved_gene}[gene]"] + query_parts[1:]
                 resolved_params = dict(params, term=" AND ".join(resolved_query_parts))
-                resolved_result = self._make_request(self.endpoint, resolved_params)
-                if (
-                    resolved_result.get("status") == "success"
-                    and "esearchresult" in resolved_result.get("data", {})
-                    and int(resolved_result["data"]["esearchresult"].get("count", 0))
-                    > 0
-                ):
-                    result = resolved_result
-                    data = result["data"]
+                retry_data, retry_error, retry_warnings = self._replacement_retry(
+                    resolved_params, f"alias-resolved gene {resolved_gene}"
+                )
+                if retry_error is not None:
+                    return {"status": "error", "error": retry_error}
+                if int(retry_data["esearchresult"].get("count", 0)) > 0:
+                    data = retry_data
+                    query_warnings = retry_warnings
 
         # Fix-R9B-1: the [dis] field only matches ClinVar's own indexed
         # disease/phenotype name for a record, which frequently differs from
@@ -781,28 +788,26 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 condition_dis_index
             ][: -len("[dis]")]
             freetext_params = dict(params, term=" AND ".join(freetext_query_parts))
-            freetext_result = self._make_request(self.endpoint, freetext_params)
-            if (
-                freetext_result.get("status") == "success"
-                and "esearchresult" in freetext_result.get("data", {})
-                and int(freetext_result["data"]["esearchresult"].get("count", 0)) > 0
-            ):
-                result = freetext_result
-                data = result["data"]
+            retry_data, retry_error, retry_warnings = self._replacement_retry(
+                freetext_params, "condition free-text"
+            )
+            if retry_error is not None:
+                return {"status": "error", "error": retry_error}
+            if int(retry_data["esearchresult"].get("count", 0)) > 0:
+                data = retry_data
+                query_warnings = retry_warnings
                 condition_freetext_retry = True
 
         esearch = data["esearchresult"]
         ids = esearch["idlist"]
         count = int(esearch["count"])
         # Fix-D-20260918: retainable query warnings are surfaced, not fatal
-        # -- a real OR query with phrasesnotfound can still have valid hits,
-        # so warninglist must never turn a populated result into an error.
-        query_warnings = []
-        warninglist = esearch.get("warninglist")
-        if isinstance(warninglist, dict):
-            for key, value in warninglist.items():
-                if isinstance(value, list):
-                    query_warnings.extend(f"{key}: {v}" for v in value)
+        # -- a real OR query with phrasesnotfound (errorlist, its REAL
+        # position in eSearch responses) can still have valid hits, so
+        # errorlist/warninglist must never turn a populated result into an
+        # error. The warnings tracked here are the ADOPTED payload's; the
+        # auxiliary explain-zero warnings collected above are appended below.
+        query_warnings = list(query_warnings) + auxiliary_warnings
 
         variants = []
         if ids:
@@ -875,16 +880,20 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             response_data.update(disclosure)
             condition_applied = disclosure.get("condition_filter_applied")
         if count == 0:
-            response_data.update(
-                self._explain_empty_result(
-                    arguments=arguments,
-                    gene=gene,
-                    condition_term=condition_query_term,
-                    condition_applied=condition_applied,
-                    clnsig_param=_clnsig_param,
-                    clnsig_components=clnsig_components,
-                )
+            extras = self._explain_empty_result(
+                arguments=arguments,
+                gene=gene,
+                condition_term=condition_query_term,
+                condition_applied=condition_applied,
+                clnsig_param=_clnsig_param,
+                clnsig_components=clnsig_components,
             )
+            # Fix-R1-20260922: auxiliary explain-zero failures ride along as
+            # query_warnings; the zero result itself is untouched.
+            zero_warnings = extras.pop("zero_result_warnings", None)
+            response_data.update(extras)
+            if zero_warnings:
+                response_data.setdefault("query_warnings", []).extend(zero_warnings)
         if unrecognized:
             response_data["ignored_parameters"] = unrecognized
         if compound_clnsig:
@@ -917,6 +926,10 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         condition are checked on their own before anything is blamed.
         """
         extras: Dict[str, Any] = {}
+        # Fix-R1-20260922: these evidence lookups only explain an
+        # already-valid zero; their failures are warnings, never errors,
+        # and the caller merges them into query_warnings.
+        zero_warnings: List[str] = []
         condition = arguments.get("condition")
         has_gene = "gene" in arguments
 
@@ -952,11 +965,13 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             )
             if present
         ]
-        gene_only_count = (
-            self._count_for_term(f"{gene}[gene]")
-            if has_gene and other_filters
-            else None
-        )
+        gene_only_count: Optional[int] = None
+        if has_gene and other_filters:
+            gene_only_count, gene_check_warning = self._count_for_term(
+                f"{gene}[gene]"
+            )
+            if gene_check_warning:
+                zero_warnings.append(gene_check_warning)
         if gene_only_count is not None:
             extras["gene_only_match_count"] = gene_only_count
         # The same evidence, for the condition: `condition` is the only other
@@ -965,13 +980,17 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # name, a misspelling) empties the result just as silently as a wrong
         # gene symbol -- yet it used to go unmentioned while the hint sent the
         # caller off to re-verify the symbol.
-        condition_only_count = (
-            self._count_for_term(f"{condition_term}[dis]")
-            if condition_term is not None
-            else None
-        )
+        condition_only_count: Optional[int] = None
+        if condition_term is not None:
+            condition_only_count, condition_check_warning = self._count_for_term(
+                f"{condition_term}[dis]"
+            )
+            if condition_check_warning:
+                zero_warnings.append(condition_check_warning)
         if condition_only_count is not None:
             extras["condition_only_match_count"] = condition_only_count
+        if zero_warnings:
+            extras["zero_result_warnings"] = zero_warnings
 
         gene_verdict = ""
         if has_gene and gene_only_count:
@@ -1051,11 +1070,16 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             )
         return extras
 
-    def _count_for_term(self, term: str) -> "int | None":
+    def _count_for_term(self, term: str) -> Tuple[Optional[int], Optional[str]]:
         """Count-only eSearch for `term` (retmax=0, no summaries fetched).
 
         Used to establish, rather than assume, which input caused an empty
-        result. Best-effort: returns None on any failure, never raises.
+        result. Fix-R1-20260922: this lookup only EXPLAINS an already-valid
+        zero, so its failure keeps the original result and yields a warning
+        -- the zero stands but its attribution is unknown, and the caller
+        must not read it as "this gene/condition has no records". Returns
+        ``(count, failure_warning)``; ``(None, None)`` never happens for a
+        completed check, and the method never raises.
         """
         try:
             result = self._make_request(
@@ -1063,17 +1087,68 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 {"db": "clinvar", "term": term, "retmode": "json", "retmax": 0},
             )
             if result.get("status") != "success":
-                return None
-            return int(result["data"]["esearchresult"]["count"])
-        except (KeyError, TypeError, ValueError, AttributeError):
-            return None
+                return None, self._zero_check_warning(term, "request failed")
+            data = result.get("data", {})
+            error, _warnings = _validate_esearch_payload(data)
+            if error is not None:
+                return None, self._zero_check_warning(term, error)
+            # retmax=0 legitimately pairs a positive count with an empty
+            # idlist -- the validator above allows exactly that.
+            return int(data["esearchresult"]["count"]), None
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            return None, self._zero_check_warning(term, f"{type(exc).__name__}")
 
-    def _resolve_deprecated_gene_symbol(self, gene: str) -> Optional[str]:
+    @staticmethod
+    def _zero_check_warning(term: str, reason: str) -> str:
+        return (
+            f"zero-result attribution check for '{term}' failed ({reason}): "
+            "total_count 0 is reported from the original query, but it could "
+            "not be verified against this term, so do not read it as "
+            "'no ClinVar records exist for this input'"
+        )
+
+    def _replacement_retry(
+        self, retry_params: Dict[str, Any], label: str
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str], List[str]]:
+        """Run one replacement retry and validate it through the SAME
+        eSearch validator as the first query.
+
+        Fix-R1-20260922: the replacement retries (hyphen-stripped gene,
+        alias-resolved gene, condition free-text) exist because a zero on
+        the strict query may be an index artifact -- so a retry that itself
+        fails (request error or a structurally broken payload) must surface
+        as an explicit error instead of silently keeping the original zero:
+        reporting that zero would attribute it to biology when the retry
+        pipeline is broken. A VALID zero retry still just leaves the
+        original (valid) zero in place. Returns ``(data, error,
+        query_warnings)``; exactly one of data/error is None.
+        """
+        retry_result = self._make_request(self.endpoint, retry_params)
+        if retry_result.get("status") != "success":
+            return (
+                None,
+                f"{label} retry failed: "
+                f"{retry_result.get('error', retry_result.get('status'))}",
+                [],
+            )
+        retry_data = retry_result.get("data", {})
+        retry_error, retry_warnings = _validate_esearch_payload(retry_data)
+        if retry_error is not None:
+            return None, f"{label} retry returned an invalid response: {retry_error}", []
+        return retry_data, None, retry_warnings
+
+    def _resolve_deprecated_gene_symbol(
+        self, gene: str
+    ) -> Tuple[Optional[str], Optional[str]]:
         """Look up `gene` in NCBI's own gene database (which tracks
         deprecated/previous symbols as aliases, e.g. "GBA" -> current
-        official symbol "GBA1") and return its current official symbol.
-        Best-effort: returns None on any failure or if no gene is found,
-        never raises -- this is a fallback, not a hard requirement."""
+        official symbol "GBA1") and return ``(current_symbol, warning)``.
+
+        Fix-R1-20260922: this lookup is auxiliary -- it only runs to explain
+        an already-valid zero, so a request/payload failure returns a
+        warning (the zero cannot be checked against a renamed symbol) while
+        a healthy empty lookup still means "not renamed" and yields
+        ``(None, None)``. Never raises."""
         try:
             search_result = self._make_request(
                 "/esearch.fcgi",
@@ -1084,21 +1159,35 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 },
             )
             if search_result.get("status") != "success":
-                return None
-            ids = (
-                search_result.get("data", {}).get("esearchresult", {}).get("idlist", [])
-            )
+                return None, self._gene_alias_warning("gene-database search failed")
+            esearch = search_result.get("data", {}).get("esearchresult")
+            ids = esearch.get("idlist") if isinstance(esearch, dict) else None
+            if not isinstance(ids, list):
+                return None, self._gene_alias_warning(
+                    "gene-database response was invalid"
+                )
             if not ids:
-                return None
+                return None, None
             summary_result = self._make_request(
                 "/esummary.fcgi", {"db": "gene", "id": ids[0], "retmode": "json"}
             )
             if summary_result.get("status") != "success":
-                return None
-            gene_data = summary_result.get("data", {}).get("result", {}).get(ids[0], {})
-            return gene_data.get("name") or None
-        except Exception:
-            return None
+                return None, self._gene_alias_warning("gene summary fetch failed")
+            gene_data = summary_result.get("data", {}).get("result", {})
+            entry = gene_data.get(ids[0]) if isinstance(gene_data, dict) else None
+            name = entry.get("name") if isinstance(entry, dict) else None
+            return (name or None), None
+        except Exception as exc:
+            return None, self._gene_alias_warning(f"{type(exc).__name__} raised")
+
+    @staticmethod
+    def _gene_alias_warning(reason: str) -> str:
+        return (
+            f"gene-alias lookup failed ({reason}): the possibility that the "
+            "gene symbol is HGNC-deprecated/renamed could not be checked, so "
+            "do not read total_count 0 as 'ClinVar holds no records for "
+            "this gene'"
+        )
 
 
 @register_tool("ClinVarGetVariantDetails")
@@ -1282,49 +1371,108 @@ def _normalize_variant_id(raw):
     return number, None
 
 
-def _esearch_structural_error(data):
-    """Return an error message when an eSearch payload is structurally broken.
+_ESEARCH_COUNT_RE = re.compile(r"\d+")
 
-    Fix-D-20260918: a missing/malformed ``esearchresult`` used to pass
-    through as the caller's (fake) success -- ``{"status": "success",
-    "data": {}}`` from a broken proxy or a truncated response degraded to
-    "query succeeded, zero results". Required structure: an
-    ``esearchresult`` object carrying a parseable ``count``, a list
-    ``idlist``, and a ``querytranslation`` key (an empty translation
-    STRING is present-but-empty, not missing). Retainable query warnings
-    (``warninglist``, e.g. phrasesnotfound on a real OR query that still
-    has hits) are NOT structural faults -- they are surfaced separately.
+
+def _validate_esearch_payload(data):
+    """Validate an eSearch payload; return ``(error, query_warnings)``.
+
+    Fix-D-20260918 / Fix-R1-20260922: a missing/malformed ``esearchresult``
+    used to pass through as the caller's (fake) success -- ``{"status":
+    "success", "data": {}}`` from a broken proxy or a truncated response
+    degraded to "query succeeded, zero results". Required structure: an
+    ``esearchresult`` object carrying a non-negative integer ``count``
+    (bool/negative/float/"--1" are broken payloads, not zero results), a
+    list ``idlist`` of UID strings, and a non-blank ``querytranslation``
+    string, with no explicit API ``error`` at the top level or inside
+    ``esearchresult``. Retainable query warnings -- ``errorlist`` entries
+    (a real OR query can report ``phrasesnotfound`` and still return valid
+    hits) and ``warninglist`` entries -- are NOT structural faults; they
+    are returned separately for the caller to disclose. A count-only
+    query (``retmax=0``) legitimately pairs a positive ``count`` with an
+    empty ``idlist``, so ``count`` is never checked against the idlist
+    length.
     """
-    if not isinstance(data, dict) or "esearchresult" not in data:
+    if not isinstance(data, dict):
         return (
             "eSearch response is structurally invalid: 'esearchresult' "
             f"missing from data ({type(data).__name__}) -- this is a "
-            "broken response, not an empty result"
+            "broken response, not an empty result",
+            [],
+        )
+    # An explicit API error is checked BEFORE structure: an error response
+    # carries no esearchresult to validate.
+    error_value = data.get("error")
+    if isinstance(error_value, str) and error_value.strip():
+        return (f"eSearch API error: {error_value.strip()}", [])
+    if isinstance(error_value, list) and error_value:
+        joined = "; ".join(str(entry) for entry in error_value)
+        return (f"eSearch API error: {joined}", [])
+    if "esearchresult" not in data:
+        return (
+            "eSearch response is structurally invalid: 'esearchresult' "
+            f"missing from data ({type(data).__name__}) -- this is a "
+            "broken response, not an empty result",
+            [],
         )
     esearch = data["esearchresult"]
     if not isinstance(esearch, dict):
         return (
             "eSearch response is structurally invalid: 'esearchresult' is "
-            f"{type(esearch).__name__}, not an object"
+            f"{type(esearch).__name__}, not an object",
+            [],
         )
+    inner_error = esearch.get("error")
+    if isinstance(inner_error, str) and inner_error.strip():
+        return (f"eSearch API error: {inner_error.strip()}", [])
+    if isinstance(inner_error, list) and inner_error:
+        joined = "; ".join(str(entry) for entry in inner_error)
+        return (f"eSearch API error: {joined}", [])
     count = esearch.get("count")
-    if count is None or not (isinstance(count, (str, int)) and str(count).strip().lstrip("-").isdigit()):
+    # bool is an int subclass -- reject it explicitly alongside negatives,
+    # floats and non-decimal strings ("--1" must not survive a sign-strip).
+    if isinstance(count, bool) or not (
+        (isinstance(count, int) and count >= 0)
+        or (
+            isinstance(count, str)
+            and _ESEARCH_COUNT_RE.fullmatch(count.strip()) is not None
+        )
+    ):
         return (
             "eSearch response is structurally invalid: 'count' missing or "
-            f"not a number ({count!r})"
+            f"not a non-negative integer ({count!r})",
+            [],
         )
     idlist = esearch.get("idlist")
     if not isinstance(idlist, list):
         return (
             "eSearch response is structurally invalid: 'idlist' missing or "
-            f"not a list ({type(idlist).__name__})"
+            f"not a list ({type(idlist).__name__})",
+            [],
         )
-    if "querytranslation" not in esearch:
+    for uid in idlist:
+        if isinstance(uid, bool) or not isinstance(uid, str) or not uid.strip().isdigit():
+            return (
+                "eSearch response is structurally invalid: 'idlist' "
+                f"contains a non-UID entry ({uid!r})",
+                [],
+            )
+    translation = esearch.get("querytranslation")
+    if not isinstance(translation, str) or not translation.strip():
         return (
             "eSearch response is structurally invalid: 'querytranslation' "
-            "missing -- eSearch always returns one for a real query"
+            "missing, null, or blank -- eSearch always returns one for a "
+            "real query",
+            [],
         )
-    return None
+    query_warnings = []
+    for section in ("errorlist", "warninglist"):
+        entries = esearch.get(section)
+        if isinstance(entries, dict):
+            for key, value in entries.items():
+                if isinstance(value, list):
+                    query_warnings.extend(f"{key}: {v}" for v in value)
+    return None, query_warnings
 
 
 def _overlap_search_term(chrom, start, end, tag, margin):

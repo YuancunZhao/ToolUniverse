@@ -38,7 +38,7 @@ def _tool():
     return ClinVarSearchVariants({"name": "ClinVar_search_variants"})
 
 
-def _esearch(count, query_translation="", ids=None):
+def _esearch(count, query_translation="qt[All Fields]", ids=None):
     return {
         "status": "success",
         "data": {
@@ -85,14 +85,18 @@ def test_indexed_condition_is_reported_as_disease_filtered():
     assert "condition_search_field" not in data
 
 
-def test_no_disclosure_is_invented_without_a_translation():
-    """No querytranslation echoed back -> no evidence either way, so the tool
-    must not cry wolf (this is the shape older mocked tests use)."""
+def test_no_disclosure_is_invented_without_condition_evidence():
+    """A real translation that does NOT echo the condition term -> no
+    evidence either way, so the tool must not cry wolf. (Fix-R1-20260922:
+    a BLANK translation is now a structural error -- a real eSearch always
+    returns one -- so this guard uses a real translation that merely lacks
+    the condition's [dis] tag instead.)"""
     result, _ = _run(
         {"gene": "FBN1", "condition": "Marfan syndrome"},
-        lambda params: _esearch(100, ""),
+        lambda params: _esearch(100, "FBN1[gene]"),
     )
     data = result["data"]
+    assert result["status"] == "success"
     assert "condition_filter_warning" not in data
     assert "condition_filter_applied" not in data
 
