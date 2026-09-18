@@ -25,10 +25,10 @@ def _term_for(gene_value):
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": gene_value})
-    return mock_request.call_args[0][1]["term"]
+    return next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
 
 
 def test_trailing_gene_qualifier_is_stripped():

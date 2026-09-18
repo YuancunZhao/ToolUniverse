@@ -63,7 +63,7 @@ def test_hyphenated_official_symbol_is_queried_with_hyphen_preserved():
         result = tool.run({"gene": "HLA-B"})
 
     assert mock_request.call_count == 1
-    assert mock_request.call_args[0][1]["term"] == "HLA-B[gene]"
+    assert next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1]) == "HLA-B[gene]"
     assert result["data"]["total_count"] == 130
 
 
@@ -135,7 +135,7 @@ def test_plain_gene_symbol_unaffected():
         tool.run({"gene": "BRCA2"})
 
     assert mock_request.call_count == 1
-    assert "BRCA2[gene]" in mock_request.call_args[0][1]["term"]
+    assert "BRCA2[gene]" in next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
 
 
 def test_unrecognized_param_alone_names_itself_in_error():

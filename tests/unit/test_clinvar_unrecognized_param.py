@@ -40,13 +40,16 @@ def test_recognized_gene_param_still_dispatches_request():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"gene": "BRCA1"})
 
     assert result["status"] == "success"
-    mock_request.assert_called_once()
-    assert "BRCA1[gene]" in mock_request.call_args[0][1]["term"]
+    # A populated idlist now triggers the follow-up /esummary.fcgi fetch,
+    # so assert the eSearch dispatch (first call) rather than call_count==1.
+    first_call = mock_request.call_args_list[0]
+    assert first_call[0][0] == "/esearch.fcgi"
+    assert "BRCA1[gene]" in first_call[0][1]["term"]
 
 
 def test_gene_symbol_alias_still_works():
@@ -54,9 +57,9 @@ def test_gene_symbol_alias_still_works():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"gene_symbol": "BRCA1"})
 
     assert result["status"] == "success"
-    assert "BRCA1[gene]" in mock_request.call_args[0][1]["term"]
+    assert "BRCA1[gene]" in next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])

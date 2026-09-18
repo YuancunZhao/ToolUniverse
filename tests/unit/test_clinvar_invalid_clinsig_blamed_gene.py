@@ -40,7 +40,13 @@ def _run(arguments, count="0"):
         "_make_request",
         return_value={
             "status": "success",
-            "data": {"esearchresult": {"count": count, "idlist": []}},
+            "data": {
+                "esearchresult": {
+                    "count": count,
+                    "idlist": [],
+                    "querytranslation": "probe",
+                }
+            },
         },
     ) as mock_request:
         result = tool.run(arguments)
@@ -150,7 +156,13 @@ def _dispatching_run(arguments, probe_response):
     with `probe_response` and everything else with an empty result set."""
     empty = {
         "status": "success",
-        "data": {"esearchresult": {"count": "0", "idlist": []}},
+        "data": {
+            "esearchresult": {
+                "count": "0",
+                "idlist": [],
+                "querytranslation": "empty",
+            }
+        },
     }
 
     def responder(_endpoint, params=None, **_kwargs):
@@ -173,7 +185,13 @@ def test_valid_gene_with_a_filter_blames_the_filter_not_the_gene():
         {"gene": "NLRP7", "clinical_significance": "Established risk allele"},
         {
             "status": "success",
-            "data": {"esearchresult": {"count": "434", "idlist": []}},
+            "data": {
+                "esearchresult": {
+                    "count": "434",
+                    "idlist": [],
+                    "querytranslation": "probe",
+                }
+            },
         },
     )
 

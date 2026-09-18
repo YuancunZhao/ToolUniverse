@@ -24,10 +24,10 @@ def _term_for(arguments):
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run(arguments)
-    return mock_request.call_args[0][1]["term"]
+    return next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
 
 
 def test_slash_value_expands_to_or_of_components():
@@ -54,7 +54,13 @@ def test_compound_note_only_on_compound_value():
         "_make_request",
         return_value={
             "status": "success",
-            "data": {"esearchresult": {"count": "5", "idlist": []}},
+            "data": {
+                "esearchresult": {
+                    "count": "5",
+                    "idlist": [],
+                    "querytranslation": "RYR1[gene]",
+                }
+            },
         },
     ):
         compound = tool.run(

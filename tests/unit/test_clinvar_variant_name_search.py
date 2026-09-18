@@ -34,12 +34,12 @@ def test_variant_name_single_string_builds_field_tag():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"gene": "HBB", "variant_name": "Glu6Val"})
 
     assert result["status"] == "success"
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert "HBB[gene]" in term
     assert '"Glu6Val"[Variant name]' in term
     assert "AND" in term
@@ -50,11 +50,11 @@ def test_variant_name_list_combines_with_or():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": "HBB", "variant_name": ["Glu7Val", "Glu6Val"]})
 
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert '"Glu7Val"[Variant name]' in term
     assert '"Glu6Val"[Variant name]' in term
     assert " OR " in term
@@ -67,12 +67,12 @@ def test_variant_name_alone_is_a_valid_search_no_gene_required():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"variant_name": "V600E"})
 
     assert result["status"] == "success"
-    assert '"V600E"[Variant name]' in mock_request.call_args[0][1]["term"]
+    assert '"V600E"[Variant name]' in next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
 
 
 def test_variant_name_is_a_recognized_parameter_not_flagged_as_unrecognized():
@@ -90,11 +90,11 @@ def test_empty_or_blank_variant_name_entries_are_dropped():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": "HBB", "variant_name": ["", "  ", "Glu6Val"]})
 
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert '"Glu6Val"[Variant name]' in term
     assert "OR" not in term  # only one real candidate survived, no OR needed
 
@@ -109,12 +109,12 @@ def test_variant_is_aliased_to_variant_name_when_gene_also_present():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"gene": "KRAS", "variant": "G12C"})
 
     assert result["status"] == "success"
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert "KRAS[gene]" in term
     assert '"G12C"[Variant name]' in term  # the variant filter is actually applied
 
@@ -124,12 +124,12 @@ def test_variant_alias_not_flagged_as_unrecognized_when_alone():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         result = tool.run({"variant": "G12C"})
 
     assert result["status"] == "success"
-    assert '"G12C"[Variant name]' in mock_request.call_args[0][1]["term"]
+    assert '"G12C"[Variant name]' in next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
 
 
 def test_explicit_variant_name_takes_precedence_over_variant_alias():
@@ -137,10 +137,10 @@ def test_explicit_variant_name_takes_precedence_over_variant_alias():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": "KRAS", "variant_name": "G12D", "variant": "G12C"})
 
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert '"G12D"[Variant name]' in term
     assert "G12C" not in term

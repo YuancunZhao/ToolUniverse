@@ -40,7 +40,7 @@ def test_parse_gnomad_reads_nested_gene():
     assert out["gene_id"] == "ENSG00000157764"
     assert out["symbol"] == "BRAF"
     # missing gene → empty (not a misleading partial)
-    assert t._parse_gnomad({"status": "success", "data": {}}) == {}
+    assert t._parse_gnomad({"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}) == {}
 
 
 def test_parse_civic_reads_nested_nodes_and_filters():
@@ -340,7 +340,7 @@ def test_sub_call_error_detects_error_status_dict():
     {"status": "error", ...}, not by raising."""
     t = _tool()
     assert t._sub_call_error({"status": "error", "error": "boom"}) == "boom"
-    assert t._sub_call_error({"status": "success", "data": {}}) is None
+    assert t._sub_call_error({"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}) is None
     assert t._sub_call_error(None) is None
 
 
@@ -474,7 +474,7 @@ def test_rsid_only_query_resolves_gene_via_dbsnp_before_other_sources():
             }
         if call["name"] == "gnomad_get_gene":
             return {"status": "success", "data": {"gene": {"gene_id": "ENSG00000111275"}}}
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",
@@ -601,7 +601,7 @@ def test_rsid_only_query_derives_variant_token_for_exact_matching():
                     ],
                 },
             }
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",
@@ -696,7 +696,7 @@ def test_gene_and_rsid_given_together_still_resolves_variant_token():
                     }
                 },
             }
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",
@@ -729,7 +729,7 @@ def test_explicit_gene_wins_over_rsid_resolved_gene_when_both_given():
                 "status": "success",
                 "data": {"hgvs_notation": "...|GENE=SOMEOTHERGENE:1"},
             }
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",
@@ -779,7 +779,7 @@ def test_clinvar_uses_targeted_variant_name_search_when_it_finds_exact_match():
                 "bulk gene-level ClinVar fetch was called even though the "
                 "targeted variant_name search already found an exact match"
             )
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",
@@ -827,7 +827,7 @@ def test_clinvar_falls_back_to_gene_level_browse_when_targeted_search_finds_noth
                     ],
                 },
             }
-        return {"status": "success", "data": {}}
+        return {"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}}
 
     with patch(
         "tooluniverse.execute_function.ToolUniverse.run_one_function",

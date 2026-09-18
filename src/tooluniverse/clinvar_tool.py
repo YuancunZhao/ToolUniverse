@@ -449,6 +449,7 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # parsed, which names were used. Attached to search_params below.
         variant_name_compat = None
         variant_names_used = None
+        variant_id_normalized = None
 
         # An expression the caller wrote themselves goes to Entrez untouched.
         if arguments.get("raw_term"):
@@ -512,10 +513,21 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # across the record (not via [dis]/[gene]/[Variant name]).
             query_parts.append(str(arguments["rsid"]).strip())
 
-        if "variant_id" in arguments:
-            # Feature-70B-004: [variant_id] is not recognized by ClinVar eSearch.
-            # Use [uid] to look up by numeric variation ID.
-            query_parts.append(f"{arguments['variant_id']}[uid]")
+        if "variant_id" in arguments and arguments["variant_id"] is not None:
+            # Feature-70B-004: [variant_id] is not recognized by ClinVar
+            # eSearch. Use [uid] to look up by numeric variation ID.
+            # Fix-D-20260918: anything other than a positive numeric ID or
+            # a suffix-free VCV accession pasted into "<N>[uid]" silently
+            # returned count 0 with an empty translation (confirmed live:
+            # "rs2151556776[uid]" -> 0 hits, while the same rsID as free
+            # text hits VCV 2737810). Validate and normalize BEFORE the
+            # request instead of letting eSearch answer a query that
+            # cannot match; never silently rewrite the caller's argument.
+            uid, vid_error = _normalize_variant_id(arguments["variant_id"])
+            if vid_error is not None:
+                return {"status": "error", "error": vid_error}
+            variant_id_normalized = uid
+            query_parts.append(f"{uid}[uid]")
 
         if arguments.get("variant_name") is not None:
             # Fix-R78B-1: the Fix-R5D-1/R8C-1 comment above assumed there was
@@ -688,8 +700,15 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             return result
 
         data = result.get("data", {})
-        if "esearchresult" not in data:
-            return result
+        # Fix-D-20260918: a broken/truncated eSearch payload must not
+        # degrade into "query succeeded, zero results".
+        structural_error = _esearch_structural_error(data)
+        if structural_error is not None:
+            return {
+                "status": "error",
+                "error": structural_error,
+                "raw_response": data,
+            }
 
         # Fix-R49A-1: the hyphen-preserved gene query above found nothing --
         # retry once with the hyphen stripped, for the informally-hyphenated
@@ -773,8 +792,17 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 condition_freetext_retry = True
 
         esearch = data["esearchresult"]
-        ids = esearch.get("idlist", [])
-        count = int(esearch.get("count", 0))
+        ids = esearch["idlist"]
+        count = int(esearch["count"])
+        # Fix-D-20260918: retainable query warnings are surfaced, not fatal
+        # -- a real OR query with phrasesnotfound can still have valid hits,
+        # so warninglist must never turn a populated result into an error.
+        query_warnings = []
+        warninglist = esearch.get("warninglist")
+        if isinstance(warninglist, dict):
+            for key, value in warninglist.items():
+                if isinstance(value, list):
+                    query_warnings.extend(f"{key}: {v}" for v in value)
 
         variants = []
         if ids:
@@ -819,6 +847,8 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 "JSON array and was parsed with json.loads; pass a real "
                 "JSON array to avoid ambiguity"
             )
+        if variant_id_normalized is not None:
+            search_params["variant_id_used"] = variant_id_normalized
         query_translation = esearch.get("querytranslation", "")
         response_data = {
             "total_count": count,
@@ -829,6 +859,8 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         }
         if response_warnings:
             response_data["warnings"] = response_warnings
+        if query_warnings:
+            response_data["query_warnings"] = query_warnings
         # Whether `condition` acted as a disease filter on the count above is
         # part of what the count MEANS, so it belongs beside it at the top
         # level rather than inside a note the caller has to read to notice.
@@ -1189,6 +1221,110 @@ _CANDIDATE_CAP = 500
 # though ClinVar's own start/stop span two. This pad keeps such records out of
 # the filtered part of the query, so the filter can never cost a real overlap.
 _EDGE_PAD = 10
+
+
+def _normalize_variant_id(raw):
+    """Validate/normalize a ClinVar ``variant_id`` into a numeric UID.
+
+    Fix-D-20260918: an rsID (or any malformed value) pasted into
+    ``<N>[uid]`` silently returned count 0 with an empty translation --
+    ``rs2151556776[uid]`` finds nothing while the free-text form hits VCV
+    2737810. Accepted forms, normalized to the numeric variation ID:
+
+    - a positive integer (JSON number) or its digit-string form (``2737810``)
+    - a suffix-free VCV accession (``VCV002737810``)
+
+    Everything else returns an explicit error: rsIDs point at dbSNP, not the
+    ClinVar variation-ID index (the message names the free-text form that
+    works); versioned VCV accessions, zeros, blanks, booleans and other
+    types are rejected before any request is made. Returns
+    ``(uid, None)`` or ``(None, error_message)``.
+    """
+    if isinstance(raw, bool):
+        return None, (
+            f"variant_id must be a ClinVar variation ID or suffix-free "
+            f"VCV accession, got boolean {raw}"
+        )
+    if isinstance(raw, int):
+        number: int = raw
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None, "variant_id is blank: pass a ClinVar variation ID or VCV accession"
+        m = re.fullmatch(r"(?i)VCV\.?(\d+)(\.\d+)?", text)
+        if m:
+            if m.group(2):
+                return None, (
+                    f"variant_id {text!r} carries a version suffix; use the "
+                    "accession without it (e.g. VCV002737810)"
+                )
+            number = int(m.group(1))
+        elif re.fullmatch(r"(?i)rs\d+", text):
+            return None, (
+                f"variant_id {text!r} is a dbSNP rsID, but the ClinVar "
+                "[uid] index only matches numeric variation IDs; search the "
+                f'rsID as free text instead: query="{text}"'
+            )
+        elif text.isdigit():
+            number = int(text)
+        else:
+            return None, (
+                f"variant_id must be a positive ClinVar variation ID or a "
+                f"suffix-free VCV accession, got {raw!r}"
+            )
+    else:
+        return None, (
+            f"variant_id must be a positive integer or VCV accession "
+            f"string, got {type(raw).__name__}"
+        )
+    if number <= 0:
+        return None, f"variant_id must be a positive ID, got {number}"
+    return number, None
+
+
+def _esearch_structural_error(data):
+    """Return an error message when an eSearch payload is structurally broken.
+
+    Fix-D-20260918: a missing/malformed ``esearchresult`` used to pass
+    through as the caller's (fake) success -- ``{"status": "success",
+    "data": {}}`` from a broken proxy or a truncated response degraded to
+    "query succeeded, zero results". Required structure: an
+    ``esearchresult`` object carrying a parseable ``count``, a list
+    ``idlist``, and a ``querytranslation`` key (an empty translation
+    STRING is present-but-empty, not missing). Retainable query warnings
+    (``warninglist``, e.g. phrasesnotfound on a real OR query that still
+    has hits) are NOT structural faults -- they are surfaced separately.
+    """
+    if not isinstance(data, dict) or "esearchresult" not in data:
+        return (
+            "eSearch response is structurally invalid: 'esearchresult' "
+            f"missing from data ({type(data).__name__}) -- this is a "
+            "broken response, not an empty result"
+        )
+    esearch = data["esearchresult"]
+    if not isinstance(esearch, dict):
+        return (
+            "eSearch response is structurally invalid: 'esearchresult' is "
+            f"{type(esearch).__name__}, not an object"
+        )
+    count = esearch.get("count")
+    if count is None or not (isinstance(count, (str, int)) and str(count).strip().lstrip("-").isdigit()):
+        return (
+            "eSearch response is structurally invalid: 'count' missing or "
+            f"not a number ({count!r})"
+        )
+    idlist = esearch.get("idlist")
+    if not isinstance(idlist, list):
+        return (
+            "eSearch response is structurally invalid: 'idlist' missing or "
+            f"not a list ({type(idlist).__name__})"
+        )
+    if "querytranslation" not in esearch:
+        return (
+            "eSearch response is structurally invalid: 'querytranslation' "
+            "missing -- eSearch always returns one for a real query"
+        )
+    return None
 
 
 def _overlap_search_term(chrom, start, end, tag, margin):

@@ -26,11 +26,11 @@ def test_compound_clinsig_ors_filter_and_prop_forms():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": "HFE", "clinical_significance": "risk factor"})
 
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert '"clinsig risk factor"[Filter]' in term
     assert "clinsig_risk_factor[prop]" in term
     assert " OR " in term
@@ -41,10 +41,10 @@ def test_single_word_clinsig_still_ors_both_forms():
     with patch.object(
         ClinVarSearchVariants,
         "_make_request",
-        return_value={"status": "success", "data": {}},
+        return_value={"status": "success", "data": {"esearchresult": {"count": "1", "idlist": ["16870"], "querytranslation": "x[All Fields]"}}},
     ) as mock_request:
         tool.run({"gene": "HFE", "clinical_significance": "Pathogenic"})
 
-    term = mock_request.call_args[0][1]["term"]
+    term = next(c[0][1]["term"] for c in mock_request.call_args_list if "term" in c[0][1])
     assert '"clinsig pathogenic"[Filter]' in term
     assert "clinsig_pathogenic[prop]" in term
