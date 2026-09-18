@@ -5,6 +5,7 @@ This tool provides access to the ClinVar database for clinical variant informati
 disease associations, and clinical significance data.
 """
 
+import json
 import re
 import requests
 import time
@@ -443,6 +444,11 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # Build search query
         query_parts = []
         compound_clnsig = False
+        # Fix-C-20260918 diagnostics: what variant_name actually arrived as
+        # (string vs list) and, when a stringified JSON array was compat-
+        # parsed, which names were used. Attached to search_params below.
+        variant_name_compat = None
+        variant_names_used = None
 
         # An expression the caller wrote themselves goes to Entrez untouched.
         if arguments.get("raw_term"):
@@ -511,7 +517,7 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # Use [uid] to look up by numeric variation ID.
             query_parts.append(f"{arguments['variant_id']}[uid]")
 
-        if arguments.get("variant_name"):
+        if arguments.get("variant_name") is not None:
             # Fix-R78B-1: the Fix-R5D-1/R8C-1 comment above assumed there was
             # "no such parameter" -- but ClinVar eSearch DOES support a real
             # [Variant name] field tag (confirmed live: "HBB[gene] AND
@@ -531,6 +537,21 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # every candidate must be tried) -- combined with OR so one
             # request covers all candidates.
             names = arguments["variant_name"]
+            # Fix-C-20260918: some MCP hosts serialize a JSON-array
+            # argument into a single string. Without this compat step the
+            # whole string was treated as ONE name and the quote-stripping
+            # below folded it into a single malformed term that matches
+            # nothing (see _coerce_stringified_name_array). Only the exact
+            # stringified-array shape is parsed; plain names and legal HGVS
+            # internal brackets are never touched, and malformed arrays are
+            # reported rather than comma-split.
+            if isinstance(names, str):
+                try:
+                    names, variant_name_compat = _coerce_stringified_name_array(
+                        names
+                    )
+                except ValueError as exc:
+                    return {"status": "error", "error": str(exc)}
             names = names if isinstance(names, list) else [names]
             names = [str(n).strip() for n in names if str(n).strip()]
             # An rsID passed as variant_name (e.g. rs776746) belongs in a bare
@@ -540,6 +561,20 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             names = [n for n in names if n not in rsid_names]
             for _rs in rsid_names:
                 query_parts.append(_rs)
+            variant_names_used = names + rsid_names
+            # A variant_name that yields no usable term at all (blank string,
+            # empty array, nothing but whitespace) used to be silently
+            # dropped -- the same silent-ignore class as Fix-R5D-1. Report it
+            # instead, unless every element routed to the rsid path above.
+            if not names and not rsid_names:
+                return {
+                    "status": "error",
+                    "error": (
+                        "variant_name was provided but contained no usable "
+                        "names: pass a non-empty string or a JSON array of "
+                        "non-empty strings"
+                    ),
+                }
             # NCBI's [Variant name] index mangles the '.' in an unquoted HGVS
             # reference prefix ('p.Glu342Lys' -> 'p0x2eGlu342Lys') and matches
             # nothing, so a clinician typing standard HGVS got a silent
@@ -766,6 +801,24 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             }.items()
             if v is not None
         }
+        # Fix-C-20260918: disclose what variant_name arrived as and what was
+        # actually queried, and warn when a stringified JSON array had to be
+        # compat-parsed -- the caller should fix the serialization, but the
+        # query itself is now correct either way.
+        response_warnings = []
+        if variant_names_used is not None:
+            search_params["variant_name_received_type"] = (
+                variant_name_compat["received_type"]
+                if variant_name_compat
+                else ("list" if isinstance(arguments.get("variant_name"), list) else "string")
+            )
+            search_params["variant_names_used"] = variant_names_used
+        if variant_name_compat is not None:
+            response_warnings.append(
+                "variant_name arrived as a string containing a stringified "
+                "JSON array and was parsed with json.loads; pass a real "
+                "JSON array to avoid ambiguity"
+            )
         query_translation = esearch.get("querytranslation", "")
         response_data = {
             "total_count": count,
@@ -774,6 +827,8 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             "query_translation": query_translation,
             "search_params": search_params,
         }
+        if response_warnings:
+            response_data["warnings"] = response_warnings
         # Whether `condition` acted as a disease filter on the count above is
         # part of what the count MEANS, so it belongs beside it at the top
         # level rather than inside a note the caller has to read to notice.
@@ -1161,6 +1216,73 @@ def _overlap_search_term(chrom, start, end, tag, margin):
             f"{chrom}[chr] AND {upstream_lo}:{upstream_hi}[{tag}] NOT 1:1[VLEN]"
         )
     return " OR ".join(f"({p})" for p in parts)
+
+
+def _coerce_stringified_name_array(raw):
+    """Compatibility-parse a stringified JSON array of variant names.
+
+    Some MCP hosts serialize a JSON-array argument into a single string
+    before it reaches the server (observed live:
+    ``'["NM_001042492.3:c.6642+26C>G", "c.6642+26C>G"]'``). Treated as one
+    name, the quote-stripping further down folded it into the malformed
+    single term ``"[NM_...c.6642+26C>G, c.6642+26C>G]"[Variant name]``
+    that matches nothing.
+
+    Only the exact stringified-array shape is parsed -- the string must
+    BOTH start with ``[`` and end with ``]`` AND parse via stdlib
+    ``json.loads`` into a list whose elements are all strings. Everything
+    else keeps its original meaning: a plain name (even one with legal
+    internal HGVS brackets such as ``NM_000518.5(HBB):c.20A>T``) never
+    starts with ``[``, so it is never touched. Malformed arrays (e.g.
+    ``[A, B]`` without JSON quoting) raise a ValueError instead of being
+    comma-split, and non-string or nested-array elements are rejected
+    with the offending positions named.
+
+    Returns ``(names_list, {"received_type": ..., "parsed_from": ...})``
+    for the search-params disclosure; raises ValueError on malformed or
+    non-string content.
+    """
+    if not isinstance(raw, str):
+        # Non-strings (a real list already, or a scalar) keep the existing
+        # list-wrapping/coercion path untouched.
+        return raw, None
+    text = raw.strip()
+    # A string that STARTS with '[' can only be an attempted array -- no
+    # legitimate ClinVar variant name begins with a bracket -- so attempt
+    # the JSON parse and report failure instead of querying a guaranteed-
+    # zero malformed name. Plain names and HGVS with INTERNAL brackets
+    # never start with '[' and are untouched.
+    if not text.startswith("["):
+        return raw, None
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        raise ValueError(
+            "variant_name looks like a stringified JSON array but is not "
+            f"valid JSON: {text!r}. Pass a real JSON array "
+            '(["name1", "name2"]) or a single name; comma-splitting is '
+            "not guessed."
+        )
+    if not isinstance(parsed, list):
+        # json.loads of a '['-prefixed string can only yield an array or
+        # fail, so this is defensive: anything else is not a name list.
+        raise ValueError(
+            f"variant_name stringified payload is a JSON "
+            f"{type(parsed).__name__}, not an array: {text!r}"
+        )
+    bad = [
+        (i, item)
+        for i, item in enumerate(parsed)
+        if not isinstance(item, str)
+    ]
+    if bad:
+        raise ValueError(
+            "variant_name stringified array must contain only strings; "
+            "got "
+            + ", ".join(f"[{i}]={item!r}" for i, item in bad)
+            + f" in {text!r}"
+        )
+    return parsed, {"received_type": "string", "parsed_from": "stringified_json_array"}
 
 
 _OVERLAP_NOTE = (

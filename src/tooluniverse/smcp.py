@@ -1710,13 +1710,22 @@ class SMCP(FastMCP):
         """Translate common JSON Schema limits into Pydantic Field limits."""
         constraints: Dict[str, Any] = {}
         param_type = param_info.get("type")
+        # JSON Schema permits list-typed "type" (e.g. ["string", "null"]);
+        # set membership would raise "unhashable type: 'list'" for those, so
+        # the membership tests below use tuples (equality-based, list-safe),
+        # and a list-typed "type" is normalized to its primary (first
+        # non-null) member so nullable fields still map their constraints.
+        param_type = param_info.get("type")
+        if isinstance(param_type, list):
+            primaries = [t for t in param_type if t != "null"]
+            param_type = primaries[0] if primaries else param_type
         if param_type == "string":
             mapping = {
                 "minLength": "min_length",
                 "maxLength": "max_length",
                 "pattern": "pattern",
             }
-        elif param_type in {"integer", "number"}:
+        elif param_type in ("integer", "number"):
             mapping = {
                 "minimum": "ge",
                 "maximum": "le",
