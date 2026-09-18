@@ -1,7 +1,7 @@
 [
   {
     "name": "SpliceAI_predict_splice",
-    "description": "Predict splice-altering effects using SpliceAI deep learning model. Returns delta scores for acceptor gain (DS_AG), acceptor loss (DS_AL), donor gain (DS_DG), donor loss (DS_DL). Scores ≥0.2 suggest splice impact, ≥0.5 moderate, ≥0.8 high pathogenicity. Critical for intronic/exonic variant interpretation.",
+    "description": "Predict splice-altering effects using SpliceAI deep learning model. Returns delta scores for acceptor gain (DS_AG), acceptor loss (DS_AL), donor gain (DS_DG), donor loss (DS_DL). Scores ≥0.2 suggest splice impact, ≥0.5 moderate, ≥0.8 high pathogenicity. Critical for intronic/exonic variant interpretation. Delta scores are normalized to floats in [0,1] (the API serializes them as strings); malformed, non-finite or out-of-range scores fail with an explicit error instead of a default 0.0 maximum, and non-integer DP_* depths are kept as-is with a field-path warning.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",
@@ -41,9 +41,11 @@
           "properties": {
             "variant": {"type": "string"},
             "genome": {"type": "string"},
-            "scores": {"type": "array"},
+            "scores": {"type": "array", "description": "Per-transcript objects; DS_AG/DS_AL/DS_DG/DS_DL normalized to floats in [0,1], DP_* depths as integers when integral. The max is computed only over the four DS_* keys."},
             "max_delta_score": {"type": "number"},
-            "interpretation": {"type": "string"}
+            "interpretation": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}, "description": "Field-path warnings, e.g. non-integer DP_* depths left unconverted."},
+            "raw_response": {"type": "object", "description": "Verbatim service JSON payload, unmodified."}
           }
         },
         "source": {"type": "string"}
@@ -55,7 +57,7 @@
   },
   {
     "name": "SpliceAI_get_max_delta",
-    "description": "Get simplified maximum SpliceAI delta score and pathogenicity interpretation for a variant. Returns single max score across all splice effects (AG/AL/DG/DL) with interpretation: benign (<0.2), low (0.2-0.5), moderate (0.5-0.8), high (≥0.8). Best for quick variant triage.",
+    "description": "Get simplified maximum SpliceAI delta score and pathogenicity interpretation for a variant. Returns single max score across all splice effects (AG/AL/DG/DL) with interpretation: benign (<0.2), low (0.2-0.5), moderate (0.5-0.8), high (≥0.8). Best for quick variant triage. Returns a normalized numeric maximum (the API serializes DS scores as strings); malformed payloads fail with an explicit error and DP_* anomalies surface as warnings.",
     "type": "SpliceAITool",
     "parameter": {
       "type": "object",
@@ -87,7 +89,8 @@
             "genome": {"type": "string"},
             "max_delta_score": {"type": "number"},
             "interpretation": {"type": "string"},
-            "pathogenicity_threshold": {"type": "string"}
+            "pathogenicity_threshold": {"type": "string"},
+            "warnings": {"type": "array", "items": {"type": "string"}, "description": "Field-path warnings, e.g. non-integer DP_* depths left unconverted."}
           }
         },
         "source": {"type": "string"}
