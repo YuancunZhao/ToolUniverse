@@ -180,3 +180,43 @@ Schema、计算器、CSpec 查询逻辑、生成包装或依赖；锁文件保�
   仅本地归档，不随 push 分发）；上轮失败材料在相邻 `2026-09-14-acceptance/`。
 - 临时 MCP 配置成功不等于用户全局连接器已经修复；启动检查见
   `docs/acmg_svi_cspec_local_run.md`。不新增状态机、签名、hooks 或另一套分类器。
+
+## 9. 官方 upstream 同步与 MCP 工具缺陷修复（2026-09-17）
+
+集成工作区 `/Users/zhaoyuancun/Documents/ToolUniverse-upstream-20260917-tool-fixes`
+（分支 `codex/upstream-20260917-tool-fixes`，自 `4fb85fd` 新建），按 A→B→C→D→E
+各一个提交完成；运行细节、真实 API 验收与离线计数见
+`docs/acmg_svi_cspec_local_run.md` 的同名小节（唯一运行记录，不另建体系）。
+
+- A `0a2cbe6a`：合并官方 `2128ff57`（upstream main，领先 `752188d0` 约 50 提交，
+  版本 1.5.0；SSH 拉取，`--no-autostash`）。六个文档冲突按既定规则解决：保留
+  Atlas/Folklore 新工具文档；保留 Atlas 预计算/活模型区分，AVI_SCORE 不描述为
+  临床校准的致病概率；保留“工具只收集原始预测、统一 ACMG skill 决断”分工；
+  不恢复“预测直接映射 PS3/PP3/BP4”。分发副本经官方同步脚本同步（Codex 副本
+  仅标准 frontmatter 归一化差异）。
+- B `173481be`：SpliceAI 字符串 DS 分值解析 + 硬错误 + DP 取整告警 +
+  raw_response 原样返回；实测 0.0→0.997。
+- C `1029716c`：ClinVar 字符串化 JSON 数组 variant_name 兼容解析（stdlib
+  json.loads，仅完整外括号、仅字符串元素，畸形显式报错，不猜逗号切分）；
+  search_params 披露接收类型/实际用名/告警；`_strict_field_constraints`
+  列表类型 TypeError 修复；官方生成器重生成缺失 variant_name 的 SDK 包装。
+  CLI 与真实 stdio `tools/call` 双验证。
+- D `831c2848`：variant_id 接受正整数/纯数字/无后缀 VCV→数字 UID；rsID 显式
+  报错并建议 `query="rs…"`；空/零/布尔/带版本号预拒；eSearch 结构校验
+  （count/idlist/querytranslation），坏载荷不再伪成功空结果；有命中的
+  phrasesnotfound 告警保留为 success。
+- E `970f63aa`：VCV 提交者引用从两处 XML 路径暴露为 submissions[].citations
+  （pmid/title/source_path，按提交+路径去重），单批 PubMed esummary 标题回填，
+  citations_complete 标记；引用失败不丢变体详情。
+
+离线验收：5 个新增/更新测试文件 96 passed；11 个 fixture 更新文件 +
+test_clinvar_submitted.py 共 140 passed；ACMG 回归范围 180+5+2 passed；
+xdist 全套件失败集合与合并前基线（独立归因 worktree `4fb85fd`）完全一致
+（18 个全部机器级：14 个 /usr/local/bin 损坏 x86_64 二进制、2 个 scipy
+1.15.3 wheel 与 darwin 27 不兼容、2 个 xdist borzoi 抖动串行可过），B–E
+零新增失败。差异审计：对 upstream 67 个差异文件全部可归属，upstream SHA
+为祖先，`git diff --check` 两区间均 0。
+
+宿主归因：字符串化数组输入的发送方未确定——服务端缺陷已确认并修复，
+不依赖归因结论；未捕获真实宿主帧。未推送、未发包、未改全局 MCP 配置。
+真实宿主六案例未在本轮复跑（上轮结果见第 8 节）。

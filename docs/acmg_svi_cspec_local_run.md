@@ -137,3 +137,89 @@ Skills guide the host; calculator validation applies only to submitted
 inputs. User-initiated bypass is not guaranteed to be prevented. Repeated
 runs, other hosts/models and a real-variant online `computed` path remain
 unverified; the synthetic LP/9 handoff does not cover those claims.
+
+
+## Upstream sync + tool-defect fixes (2026-09-17)
+
+This section is the run record for the official-upstream merge and the
+four tool-defect fixes, executed in the integration worktree
+`/Users/zhaoyuancun/Documents/ToolUniverse-upstream-20260917-tool-fixes`
+(branch `codex/upstream-20260917-tool-fixes`, created from `4fb85fd`).
+
+Branch order (A→B→C→D→E, one commit each):
+
+- `0a2cbe6a` merge official `2128ff57` (upstream main, ~50 commits past
+  the `752188d0` baseline; version 1.5.0). Fetched over SSH because
+  github.com HTTPS is blocked on this network. Six conflicts in the
+  variant-interpretation docs resolved per the fixed rules: new
+  Atlas/Folklore tool docs kept; Atlas precomputed-vs-live-model
+  distinction kept and AVI_SCORE never described as clinically
+  calibrated pathogenicity probability; the local "tools collect raw
+  predictions, the unified ACMG skill decides" division kept; upstream's
+  "predictions map directly to PS3/PP3/BP4" rule NOT restored.
+  Distribution copies synced via the official sync script (Codex copy
+  differs only by the script's standard frontmatter normalization).
+- `173481be` SpliceAI: string DS_* values (e.g. `"0.997"`) parsed;
+  missing/empty/invalid DS is a hard error (never a silent 0.0); max is
+  over DS_AG/AL/DG/DL only; DP_* converted to int without truncation,
+  with field-path warnings; `raw_response` returned verbatim; errors and
+  warnings propagate to both SpliceAI tools. Real-API check: the variant
+  that previously scored 0.0 now returns max delta 0.997.
+- `1029716c` ClinVar: a `variant_name` that arrives as a *stringified*
+  JSON array (the observed host behavior) is compat-parsed with stdlib
+  `json.loads` — only full outer-bracket strings with only string
+  elements; anything malformed is an explicit error (no comma-split
+  guessing). `search_params` now discloses the received type, the names
+  actually used, and a warning when compat parsing fired. Also fixes the
+  strict-schema builder's TypeError on list-typed parameters and
+  regenerates the `ClinVar_search_variants` SDK wrapper (which had no
+  `variant_name` parameter) via the official generator. Verified live:
+  real-array and stringified-array calls return the same variant with
+  the disclosure warning on the stringified path.
+- `831c2848` ClinVar: `variant_id` accepts a positive integer, a
+  digit-string, or a suffix-free `VCV…` and resolves it to the numeric
+  UID; an rsID is an explicit error suggesting `query="rs…"`; blank /
+  zero / bool / versioned forms are rejected before any request; the
+  eSearch response is structurally validated (count/idlist/
+  querytranslation) so a broken payload is an error, not a fake-empty
+  success. A `phrasesnotfound` warning with real hits stays a success
+  with the warning retained. Verified live for `VCV002737810`.
+- `970f63aa` ClinVar submitted records: submitter citations are exposed
+  from BOTH XML locations (`Classification/Citation` and
+  `AttributeSet/Citation`) as `submissions[].citations` with
+  pmid/title/source_path, deduplicated per submission+path; titles are
+  backfilled by one batched PubMed esummary call (no new dependencies);
+  `citations_complete` marks whether every citation carried a title;
+  citation failures never drop the variant details. Verified live: VCV
+  2737810 returns citations_complete=true with PMIDs 31573083 and
+  28492532 from the two different XML paths.
+
+Offline verification on this machine (2026-09-17):
+
+- The five new/updated test files (SpliceAI parsing, stringified
+  variant_name, strict-schema list types, variant_id/eSearch validation,
+  submitter citations): 96 passed, 0 failed.
+- The eleven fixture-updated ClinVar tests plus `test_clinvar_submitted.py`:
+  140 passed, 0 failed.
+- ACMG regression scope (ClinGen CSpec tool + ACMG calculator +
+  code-pattern tests + stdio MCP): 180 + 5 + 2 passed.
+- Full offline suite under xdist reproduces exactly the 18 failures that
+  the pre-merge baseline (`4fb85fd` in a separate attribution worktree)
+  already had: 14 from the broken x86_64 Homebrew binaries in
+  `/usr/local/bin` (python/rsync/Rscript, "Bad CPU type"), 2 scipy
+  1.15.3-wheel-vs-darwin-27 collection errors, 2 xdist borzoi flakes
+  that pass serially. Zero merge- or fix-introduced failures. A serial
+  full run cannot complete on this machine because the same broken
+  binaries segfault the single pytest process (~75% through); the xdist
+  baseline-vs-final comparison above is the acceptance evidence.
+- Real `tooluniverse-smcp-stdio` (temp driver, no global config
+  touched): a default-mode `tools/call` with the stringified-array
+  `variant_name` returns variant 2737810 with the disclosure warning.
+  `--hooks` (the stdio flag; `--hooks-enabled` is the HTTP server's)
+  loads only the three hook-toolset tools, so ClinVar is absent there —
+  upstream toolset behavior, recorded as-is.
+
+Host attribution for the stringified-array input: undetermined. The
+server-side fix is verified regardless of which host sent it; no real
+host frames were captured. Nothing in this run pushed, published, or
+changed any global MCP configuration.
