@@ -5,7 +5,8 @@ this checkout — NOT in the PyPI release — so point every runtime at this
 worktree's environment until this branch ships.
 
 Worktree: `/Users/zhaoyuancun/Documents/ToolUniverse-acmg-svi-cspec-lightweight`
-(branch `codex/acmg-svi-cspec-lightweight`, official baseline `752188d0`)
+(branch `codex/acmg-svi-cspec-lightweight`, official baseline `2128ff57`
+since 2026-09-17; earlier sections describe the `752188d0` era)
 
 ## First-time setup (frozen)
 
@@ -161,10 +162,11 @@ Branch order (A→B→C→D→E, one commit each):
   differs only by the script's standard frontmatter normalization).
 - `173481be` SpliceAI: string DS_* values (e.g. `"0.997"`) parsed;
   missing/empty/invalid DS is a hard error (never a silent 0.0); max is
-  over DS_AG/AL/DG/DL only; DP_* converted to int without truncation,
-  with field-path warnings; `raw_response` returned verbatim; errors and
-  warnings propagate to both SpliceAI tools. Real-API check: the variant
-  that previously scored 0.0 now returns max delta 0.997.
+  over DS_AG/AL/DG/DL only; DP_* only integer values are converted;
+  non-integers keep their original value with a warning; `raw_response`
+  returned verbatim; errors and warnings propagate to both SpliceAI tools.
+  Real-API check: the variant that previously scored 0.0 now returns max
+  delta 0.997.
 - `1029716c` ClinVar: a `variant_name` that arrives as a *stringified*
   JSON array (the observed host behavior) is compat-parsed with stdlib
   `json.loads` — only full outer-bracket strings with only string
@@ -223,3 +225,73 @@ Host attribution for the stringified-array input: undetermined. The
 server-side fix is verified regardless of which host sent it; no real
 host frames were captured. Nothing in this run pushed, published, or
 changed any global MCP configuration.
+
+
+## ClinVar follow-up fixes + acceptance corrections (2026-09-18)
+
+Current official baseline: `2128ff57` (the dated sections above keep
+their historical wording). All work happened directly in THIS worktree on
+`codex/acmg-svi-cspec-lightweight`; no new branches or worktrees. The
+2026-09-17 integration worktree/branch were removed after this round
+(merge history preserved on this branch).
+
+Commits (R1→R2→R3):
+
+- `0ab6f451` fix(clinvar): validate esearch responses across retry paths
+  — every eSearch request (first query, the three replacement retries,
+  the count-only attribution lookups) goes through one
+  `_validate_esearch_payload` entry: count must be a non-negative integer
+  (bool/negative/float/"--1" rejected); idlist must be a list of UID
+  strings (retmax=0's count>0-with-empty-idlist is legitimate and count is
+  never checked against idlist length); querytranslation must be a
+  non-blank string; explicit API errors (top level or inside
+  esearchresult) are errors, never empty successes; errorlist AND
+  warninglist are both read, with real-position
+  errorlist.phrasesnotfound retained as a warning. Broken replacement
+  retries (hyphen-stripped gene, alias-resolved gene, condition
+  free-text) now return explicit errors instead of silently keeping a
+  success-zero; auxiliary explain-zero lookups (gene-alias resolver,
+  count-only checks) failing keep the result and add warnings saying the
+  zero's attribution is unknown.
+- `815d8979` fix(clinvar): preserve records when citation enrichment
+  fails — the PubMed esummary top level/`result`/article objects are
+  type-checked before `.get()` ([]/null/scalar responses warn instead of
+  raising AttributeError); titles count only as non-blank strings
+  (missing/blank/wrong-typed stay null with the PMID disclosed); partial
+  success keeps the successful half; `citations_complete` is no longer
+  short-circuited to true by an empty PMID list when parse warnings
+  exist.
+- `01c5d9c4` feat(clinvar): include submitter citations in variant
+  details — `ClinVarGetVariantDetails` reuses the submitted-records
+  fetch+parse path once and flattens `citations[]` entries
+  (pmid/title/source_path/scv_accession/submitter) with per-submitter
+  attribution (same PMID across SCVs stays separate); an esummary failure
+  keeps its original error; a citation-fetch failure keeps the details
+  with empty citations, `citations_complete=false`, and a warning. Both
+  ClinVar tool schemas/descriptions updated (wrapper files embed no
+  schema/description — regeneration verified unnecessary).
+
+Acceptance (logs in
+`temp_docs_and_tests/benchmark_tracking/2026-09-18-r1-r3-acceptance/`,
+gitignored):
+
+- Tests PASSED: five prior fix files 108 outcomes + fixture suites and
+  this round's negative cases 172 outcomes, all passing; ACMG 23-file
+  regression 717 outcomes, 0 failed, 8 skipped (under a clean PATH; the
+  default PATH fails 3 codex_plugin tests via the machine's broken
+  /usr/local/bin binaries).
+- CONSISTENT-with-baseline (not "all pass"): full offline xdist suite
+  reproduces exactly the 18 known machine-level failures documented in
+  the 2026-09-17 section. Not rerun: the serial full suite (segfaults on
+  this machine).
+- Plugin comparison, official `2128ff57` clean snapshot vs this branch,
+  same interpreter and commands: snapshot 7 failed vs branch 6 failed;
+  the only difference is snapshot-side `test_build_codex_plugin`
+  (Xcode-license machine issue, exit 69). The other 6 failures match on
+  both sides.
+- Real tool-chain calls (not mocks): details 2737810 → 2 citations,
+  complete=true (live); RPE65 free-text retry path → 1 hit;
+  GBA alias-resolved retry path → 791 hits; SpliceAI max delta 0.827;
+  stdio MCP `tools/call` → 2 citations, complete=true.
+- NOT EXECUTED (not accepted): the six real-LLM host cases were not
+  rerun against this HEAD; the 2026-09-15 record does not substitute.
