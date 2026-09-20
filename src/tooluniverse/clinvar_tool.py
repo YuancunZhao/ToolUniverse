@@ -1149,7 +1149,19 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         an already-valid zero, so a request/payload failure returns a
         warning (the zero cannot be checked against a renamed symbol) while
         a healthy empty lookup still means "not renamed" and yields
-        ``(None, None)``. Never raises."""
+        ``(None, None)``. Never raises.
+
+        Fix-A-20260922: the gene-db eSearch response is validated through
+        the SAME ``_validate_esearch_payload`` entry as the ClinVar queries
+        (an API error, blank translation, malformed count or non-UID idlist
+        entry is a broken response, not a healthy "no alias found"), and
+        the validator's non-fatal reminders (errorlist/warninglist) are
+        retained labelled with the alias-lookup provenance instead of being
+        dropped. The gene esummary hit record must likewise provide a
+        non-blank string ``name`` -- a missing/blank/wrong-typed name (or
+        a corrupted result object) warns rather than silently reporting
+        "no alias", and a numeric name can never reach the caller's
+        ``.upper()``."""
         try:
             search_result = self._make_request(
                 "/esearch.fcgi",
@@ -1161,14 +1173,16 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             )
             if search_result.get("status") != "success":
                 return None, self._gene_alias_warning("gene-database search failed")
-            esearch = search_result.get("data", {}).get("esearchresult")
-            ids = esearch.get("idlist") if isinstance(esearch, dict) else None
-            if not isinstance(ids, list):
+            search_data = search_result.get("data", {})
+            search_error, search_warnings = _validate_esearch_payload(search_data)
+            if search_error is not None:
                 return None, self._gene_alias_warning(
-                    "gene-database response was invalid"
+                    f"gene-database response was invalid ({search_error})"
                 )
+            notes = [f"gene-alias lookup reported: {w}" for w in search_warnings]
+            ids = search_data["esearchresult"]["idlist"]
             if not ids:
-                return None, None
+                return None, ("\n".join(notes) if notes else None)
             summary_result = self._make_request(
                 "/esummary.fcgi", {"db": "gene", "id": ids[0], "retmode": "json"}
             )
@@ -1177,7 +1191,11 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             gene_data = summary_result.get("data", {}).get("result", {})
             entry = gene_data.get(ids[0]) if isinstance(gene_data, dict) else None
             name = entry.get("name") if isinstance(entry, dict) else None
-            return (name or None), None
+            if not isinstance(name, str) or not name.strip():
+                return None, self._gene_alias_warning(
+                    "gene summary record lacked a usable symbol name"
+                )
+            return name, ("\n".join(notes) if notes else None)
         except Exception as exc:
             return None, self._gene_alias_warning(f"{type(exc).__name__} raised")
 

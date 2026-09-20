@@ -114,7 +114,7 @@ def test_hyphenated_gene_with_no_real_match_stays_zero_after_fallback():
         side_effect=[
             _esearch_result(0),
             _esearch_result(0),
-            {"status": "success", "data": {"esearchresult": {"idlist": []}}},
+            _gene_db_result([]),
         ],
     ) as mock_request:
         result = tool.run({"gene": "NOT-A-REAL-GENE"})
@@ -189,7 +189,20 @@ def test_all_valid_params_have_no_ignored_parameters_key():
 
 
 def _gene_db_result(ids):
-    return {"status": "success", "data": {"esearchresult": {"idlist": ids}}}
+    # Fix-A-20260922: a real gene-db eSearch response carries count and a
+    # querytranslation alongside the idlist; the alias resolver now
+    # validates the payload through _validate_esearch_payload, so a fixture
+    # without them would be a broken response, not a healthy one.
+    return {
+        "status": "success",
+        "data": {
+            "esearchresult": {
+                "idlist": ids,
+                "count": str(len(ids)),
+                "querytranslation": "sym[All Fields] AND human[orgn]",
+            }
+        },
+    }
 
 
 def _gene_summary_result(gene_id, current_symbol):

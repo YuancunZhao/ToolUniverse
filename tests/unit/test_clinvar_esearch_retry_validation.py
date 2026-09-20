@@ -178,10 +178,7 @@ def test_legitimate_zero_stays_success_without_warnings():
         [
             _esearch(0, translation="ZZZ[gene]"),
             # gene-alias resolver (auxiliary): healthy empty lookup
-            {
-                "status": "success",
-                "data": {"esearchresult": {"count": "0", "idlist": []}},
-            },
+            _gene_esearch([], count="0"),
         ],
     )
     assert result["status"] == "success"
@@ -215,7 +212,7 @@ def test_alias_retry_broken_payload_is_explicit_error():
             {
                 "status": "success",
                 "data": {
-                    "esearchresult": {"count": "1", "idlist": ["2629"]}
+                    "esearchresult": {"count": "1", "idlist": ["2629"], "querytranslation": "GBA[sym] AND human[orgn]"}
                 },
             },
             # gene-db esummary: resolves the rename
@@ -236,10 +233,7 @@ def test_freetext_retry_broken_payload_is_explicit_error():
         [
             _esearch(0, translation='RPE65[gene] AND "lca"[dis]'),
             # gene-alias resolver: healthy empty lookup (no rename)
-            {
-                "status": "success",
-                "data": {"esearchresult": {"count": "0", "idlist": []}},
-            },
+            _gene_esearch([], count="0"),
             # condition free-text retry: broken payload
             {"status": "success", "data": {"esearchresult": "truncated"}},
         ],
@@ -276,10 +270,7 @@ def test_count_only_attribution_failure_keeps_zero_with_warning():
         [
             _esearch(0, translation='ZZZ[gene] AND "cancer"[dis]'),
             # gene-alias resolver: healthy empty lookup
-            {
-                "status": "success",
-                "data": {"esearchresult": {"count": "0", "idlist": []}},
-            },
+            _gene_esearch([], count="0"),
             # condition free-text retry: valid zero (not adopted)
             _esearch(0, translation="ZZZ[gene] AND cancer"),
             # gene-only attribution check: structurally broken
@@ -313,3 +304,150 @@ def test_phrasesnotfound_errorlist_with_hits_flows_to_query_warnings():
     assert any(
         "phrasesnotfound" in w for w in result["data"].get("query_warnings", [])
     )
+
+
+# ---------- Fix-A-20260922: gene-alias lookup payload validation ----------
+
+
+def _gene_esearch(
+    ids, count=None, translation="GBA[sym] AND human[orgn]", esearch_extra=None
+):
+    """A gene-db esearch payload with overridable structure fields."""
+    esearch = {
+        "idlist": ids,
+        "querytranslation": translation,
+    }
+    if count is None:
+        esearch["count"] = str(len(ids))
+    else:
+        esearch["count"] = count
+    if esearch_extra:
+        esearch.update(esearch_extra)
+    return {"status": "success", "data": {"esearchresult": esearch}}
+
+
+def _gene_summary(name):
+    return {"status": "success", "data": {"result": {"2629": {"name": name}}}}
+
+
+@pytest.mark.parametrize(
+    "gene_esearch_payload",
+    [
+        # API error carried in the payload
+        {"status": "success", "data": {"error": "Invalid db name"}},
+        # esearchresult present but translation blank
+        _gene_esearch([], count="0", translation="   "),
+        # illegal count
+        _gene_esearch(["2629"], count="-1"),
+        # non-UID idlist entry (int, not a digit string)
+        _gene_esearch([2629]),
+    ],
+)
+def test_broken_gene_alias_esearch_warns_not_silent(gene_esearch_payload):
+    """A structurally broken gene-db eSearch response must surface as an
+    alias-lookup warning, never as a healthy 'no alias found'."""
+    result, mock_request = _run(
+        {"gene": "GBA"},
+        [
+            _esearch(0, translation="GBA[gene]"),
+            gene_esearch_payload,
+        ],
+    )
+    assert result["status"] == "success"
+    assert result["data"]["total_count"] == 0
+    warnings = result["data"]["query_warnings"]
+    assert any(
+        "gene-alias lookup failed" in w and "do not read total_count 0" in w
+        for w in warnings
+    ), f"expected alias warning, got {warnings}"
+
+
+def test_gene_alias_esearch_query_warnings_kept_with_source():
+    """Non-fatal reminders from the gene-db eSearch (errorlist/warninglist)
+    are retained, labelled with the alias-lookup provenance."""
+    payload = _gene_esearch(
+        [], count="0", esearch_extra=None
+    )
+    payload["data"]["esearchresult"]["errorlist"] = {
+        "phrasesnotfound": ["GBA[sym]"]
+    }
+    result, _ = _run(
+        {"gene": "GBA"},
+        [_esearch(0, translation="GBA[gene]"), payload],
+    )
+    assert result["status"] == "success"
+    warnings = result["data"]["query_warnings"]
+    assert any("gene-alias" in w and "phrasesnotfound" in w for w in warnings)
+
+
+@pytest.mark.parametrize("bad_name", ["", "   ", 123, 4.5])
+def test_gene_summary_bad_name_warns_not_silent(bad_name):
+    """A hit record whose name is missing/blank/wrong-typed must warn, not
+    silently report 'no alias' -- and a numeric name must never reach the
+    caller's .upper()."""
+    result, mock_request = _run(
+        {"gene": "GBA"},
+        [
+            _esearch(0, translation="GBA[gene]"),
+            _gene_esearch(["2629"]),
+            _gene_summary(bad_name),
+        ],
+    )
+    assert result["status"] == "success"
+    warnings = result["data"]["query_warnings"]
+    assert any("gene-alias lookup failed" in w for w in warnings), (
+        f"expected alias warning for name={bad_name!r}, got {warnings}"
+    )
+
+
+def test_gene_summary_corrupted_entry_warns_not_silent():
+    result, _ = _run(
+        {"gene": "GBA"},
+        [
+            _esearch(0, translation="GBA[gene]"),
+            _gene_esearch(["2629"]),
+            {"status": "success", "data": {"result": "corrupted"}},
+        ],
+    )
+    assert result["status"] == "success"
+    assert any(
+        "gene-alias lookup failed" in w for w in result["data"]["query_warnings"]
+    )
+
+
+def test_gene_alias_healthy_zero_still_no_warning():
+    result, mock_request = _run(
+        {"gene": "GBA"},
+        [
+            _esearch(0, translation="GBA[gene]"),
+            _gene_esearch([], count="0"),
+        ],
+    )
+    assert result["status"] == "success"
+    assert result["data"]["total_count"] == 0
+    assert "query_warnings" not in result["data"]
+
+
+def test_gene_alias_valid_rename_still_triggers_replacement():
+    payloads = [
+        _esearch(0, translation="GBA[gene]"),
+        _gene_esearch(["2629"]),
+        _gene_summary("GBA1"),
+        _esearch(786, translation="GBA1[gene]"),
+    ]
+    result, mock_request = _run({"gene": "GBA"}, payloads)
+    assert result["status"] == "success"
+    assert result["data"]["total_count"] == 786
+    assert mock_request.call_args_list[3][0][1]["term"] == "GBA1[gene]"
+
+
+def test_gene_alias_replacement_broken_is_explicit_error():
+    payloads = [
+        _esearch(0, translation="GBA[gene]"),
+        _gene_esearch(["2629"]),
+        _gene_summary("GBA1"),
+        {"status": "success", "data": {}},  # broken replacement
+    ]
+    result, _ = _run({"gene": "GBA"}, payloads)
+    assert result["status"] == "error"
+    assert "alias-resolved gene GBA1 retry" in result["error"]

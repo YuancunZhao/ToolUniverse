@@ -307,7 +307,9 @@ def test_unknown_gene_with_a_valid_condition_still_reaches_the_gene_guidance():
         if params.get("retmax") == 0:
             return _esearch(0, term)
         if params.get("db") == "gene":
-            return {"status": "success", "data": {"esearchresult": {"idlist": []}}}
+            # Fix-A-20260922: complete gene-db payload (count + translation)
+            # so the alias resolver validates it as a healthy empty lookup.
+            return _esearch(0, "sym[All Fields] AND human[orgn]")
         return _esearch(0, 'NOTAGENE123[gene] AND "breast cancer"[dis]')
 
     result, _ = _run({"gene": "NOTAGENE123", "condition": "breast cancer"}, responder)
