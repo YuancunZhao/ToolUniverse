@@ -1012,7 +1012,35 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 f"condition.{gene_verdict} " + _CONDITION_INDEX_GUIDANCE
             )
             return extras
-        # 2. The condition name matches nothing in ClinVar's disease index at
+        # 2. Fix-B-20260922: the condition-only evidence query itself
+        #    failed (request error or a broken payload). Without that
+        #    count it is UNKNOWN whether the condition name (a synonym, a
+        #    locus name, a misspelling ClinVar's disease index does not
+        #    carry) is what emptied the result -- so no "recognized
+        #    disease term" claim, no "(None record(s))" placeholder, and
+        #    no definitive attribution to the other filter(s). The
+        #    already-established gene-only count, if any, is kept and
+        #    reported; the failure itself also rides along as a
+        #    query_warning via zero_warnings above.
+        if condition_term is not None and condition_only_count is None:
+            hint = (
+                f"No ClinVar records matched. The zero-result check for the "
+                f"condition '{condition}' could not be completed, so it is "
+                "unknown whether the condition name is something ClinVar's "
+                "disease index does not carry (a synonym, a locus name, a "
+                "misspelling) or whether the other search input(s) produced "
+                "the empty result -- retry with the condition removed to "
+                "tell them apart."
+            )
+            if has_gene and gene_only_count is not None:
+                hint += (
+                    f" The gene symbol '{arguments['gene']}' does match "
+                    f"{gene_only_count} record(s) on its own, so the symbol "
+                    "alone is not what emptied the result."
+                )
+            extras["zero_result_hint"] = hint + " " + _CONDITION_INDEX_GUIDANCE
+            return extras
+        # 3. The condition name matches nothing in ClinVar's disease index at
         #    all, so it -- not the gene, not the other filters -- is what
         #    emptied the result.
         if condition_term is not None and condition_only_count == 0:

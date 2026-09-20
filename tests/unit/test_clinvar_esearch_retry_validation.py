@@ -451,3 +451,75 @@ def test_gene_alias_replacement_broken_is_explicit_error():
     result, _ = _run({"gene": "GBA"}, payloads)
     assert result["status"] == "error"
     assert "alias-resolved gene GBA1 retry" in result["error"]
+
+
+# ---------- Fix-B-20260922: failed condition attribution stays inconclusive ----------
+
+
+def _condition_variant_name_payloads(condition_check_payload):
+    """Main query zero + free-text retry zero + a (bad) condition-only
+    count check -- the `condition + variant_name` input shape."""
+    return [
+        _esearch(0, translation='"Lebers congenital amaurosis"[dis] AND "x"[Variant name]'),
+        _esearch(0, translation="Lebers congenital amaurosis AND x"),
+        condition_check_payload,
+    ]
+
+
+@pytest.mark.parametrize(
+    "condition_check_payload",
+    [
+        # structural damage: querytranslation null
+        {"status": "success", "data": {"esearchresult": {"count": "0", "idlist": [], "querytranslation": None}}},
+        # request-level failure
+        {"status": "error", "error": "HTTP 503"},
+    ],
+)
+def test_failed_condition_check_not_declared_valid(condition_check_payload):
+    """When the condition-only count query fails, the hint must NOT claim
+    the condition is a recognized disease term, must not print 'None
+    record(s)', and must not definitively attribute the zero to the other
+    filter (variant_name)."""
+    result, _ = _run(
+        {"condition": "Lebers congenital amaurosis", "variant_name": "x"},
+        _condition_variant_name_payloads(condition_check_payload),
+    )
+    assert result["status"] == "success"
+    assert result["data"]["total_count"] == 0
+    hint = result["data"].get("zero_result_hint", "")
+    assert "None record(s)" not in hint, hint
+    assert "recognized ClinVar disease term" not in hint, hint
+    assert "comes from the other filter" not in hint, hint
+    assert "condition_only_match_count" not in result["data"]
+    assert any(
+        "zero-result attribution check" in w for w in result["data"]["query_warnings"]
+    )
+    assert "unknown" in hint or "could not" in hint or "failed" in hint, hint
+
+
+def test_failed_condition_check_with_gene_keeps_gene_evidence():
+    """With gene+condition+variant_name and only the CONDITION check
+    failing: the already-established gene-only count stays, the gene is
+    not blamed, and the condition stays inconclusive."""
+    payloads = [
+        _esearch(0, translation='TP53[gene] AND "lcaxx"[dis] AND "x"[Variant name]'),
+        # gene-alias resolver: healthy empty lookup
+        _gene_esearch([], count="0"),
+        # free-text retry: valid zero (not adopted)
+        _esearch(0, translation="TP53[gene] AND lcaxx AND x"),
+        # gene-only count check: succeeds
+        _esearch(434, translation="TP53[gene]"),
+        # condition-only count check: structurally broken
+        {"status": "success", "data": {"esearchresult": {"count": "0", "idlist": [], "querytranslation": None}}},
+    ]
+    result, _ = _run(
+        {"gene": "TP53", "condition": "lcaxx", "variant_name": "x"}, payloads
+    )
+    assert result["status"] == "success"
+    data = result["data"]
+    assert data["gene_only_match_count"] == 434
+    assert "condition_only_match_count" not in data
+    hint = data.get("zero_result_hint", "")
+    assert "None record(s)" not in hint
+    assert "recognized ClinVar disease term" not in hint
+    assert "unknown" in hint or "could not" in hint or "failed" in hint, hint
