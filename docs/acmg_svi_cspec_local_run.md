@@ -305,15 +305,15 @@ gitignored):
 Two defect fixes on top of the 2026-09-18 state (start `1b42f4be`, both
 fail-first/pass-after under pytest):
 
-- `cb349d8f` `fix(clinvar): validate gene alias lookup responses` -- the
-  NCBI gene-db esearch/esummary responses feeding
-  `_resolve_deprecated_gene_symbol` now go through
-  `_validate_esearch_payload` before their idlist/name are read (API
-  error, blank translation, illegal count, non-UID idlist each return
-  the alias warning instead of silently proceeding); the esummary `name`
-  must be a non-blank string, so a numeric name can no longer reach the
-  caller's `.upper()`. Auxiliary discipline kept: failure warns, healthy
-  empty lookup still means "not renamed".
+- `cb349d8f` `fix(clinvar): validate gene alias lookup responses` -- in
+  `_resolve_deprecated_gene_symbol`, the gene eSearch response is
+  validated through the shared `_validate_esearch_payload` before its
+  idlist is read (API error, blank translation, illegal count, non-UID
+  idlist each return the alias warning instead of silently proceeding);
+  the gene esummary response is checked separately for its result
+  structure and a non-blank string `name`, so a numeric name can no
+  longer reach the caller's `.upper()`. Auxiliary discipline kept:
+  failure warns, healthy empty lookup still means "not renamed".
 - `d9468438` `fix(clinvar): keep failed condition attribution
   inconclusive` -- in `_explain_empty_result`, when the condition-only
   count query could not complete (`condition_only_count is None`) the
@@ -334,8 +334,9 @@ Count correction: the 2026-09-18 section's ACMG-23 figure has been
 corrected in place (717 → 682 passed / 8 skipped / 690 executed
 outcomes) from the archived `acmg23b.log`; the archived logs themselves
 are unchanged. For the record, recollecting the same 23-file scope at
-this round's HEAD yields 690 selected / 691 collected / 1 deselected
-(all passing) -- noted as a new observation, not claimed to appear in
+this round's HEAD yields 690 selected / 691 collected / 1 deselected --
+a collection-stage figure only (pytest collection, not an execution
+result), noted as a new observation and not claimed to appear in
 the 2026-09-18 captures.
 
 Online receipts (not mocks; saved under
@@ -370,3 +371,18 @@ automated regression (295/295), CLI/stdio online receipts above, and
 the six-case real-LLM acceptance which was NOT rerun this round and
 stays 未执行、未验收. No serial full-suite rerun; online totals are
 point-in-time values.
+
+Follow-up fix (2026-09-20, one commit on top of `c183bcfa`): in the
+condition-check-failed branch of `_explain_empty_result`, the hint no
+longer appends its own gene clause -- with a gene-only count of 0 the
+old text read "does match 0 record(s) ... so the symbol alone is not
+what emptied the result", wrongly excluding a gene that itself matches
+nothing from the possible causes. The hint now reuses the shared
+`gene_verdict`, which is emitted only for a positive gene-only count.
+The with-gene regression case became a three-state parametrized test
+(gene-only 0 / 434 / request failure, all with the condition check
+broken; the 0 state failed against the pre-fix code). Plan regression
+command at that commit: 297 passed, 0 failed, exit 0; ruff clean;
+`git diff --check` clean vs `c183bcfa` and `2128ff57`. Online calls
+and the six-case LLM acceptance were not rerun; the receipts above
+keep their original run SHA and are not evidence for this commit.

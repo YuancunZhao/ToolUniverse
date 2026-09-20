@@ -1032,13 +1032,7 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 "the empty result -- retry with the condition removed to "
                 "tell them apart."
             )
-            if has_gene and gene_only_count is not None:
-                hint += (
-                    f" The gene symbol '{arguments['gene']}' does match "
-                    f"{gene_only_count} record(s) on its own, so the symbol "
-                    "alone is not what emptied the result."
-                )
-            extras["zero_result_hint"] = hint + " " + _CONDITION_INDEX_GUIDANCE
+            extras["zero_result_hint"] = hint + gene_verdict + " " + _CONDITION_INDEX_GUIDANCE
             return extras
         # 3. The condition name matches nothing in ClinVar's disease index at
         #    all, so it -- not the gene, not the other filters -- is what

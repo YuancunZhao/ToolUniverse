@@ -274,10 +274,10 @@ env -u PYTHONPATH .venv/bin/tu run ClinVar_get_submitted_records \
 （起点 `1b42f4be`）上又落两个补修提交与一份文档更正：
 
 - `cb349d8f` fix(clinvar): validate gene alias lookup responses——
-  db=gene esearch/esummary 响应统一过 `_validate_esearch_payload`
+  Gene eSearch 响应复用统一校验器 `_validate_esearch_payload`
   （API error/空 translation/非法 count/非 UID → 别名告警而非静默
-  放行）；esummary name 须为非空白字符串；辅助失败仅告警、健康空
-  查询仍视为"未被改名"。
+  放行）；Gene esummary 单独检查结果结构和非空白字符串名称；
+  辅助失败仅告警、健康空查询仍视为"未被改名"。
 - `d9468438` fix(clinvar): keep failed condition attribution
   inconclusive——condition-only 计数失败时零结果提示改为归因未知
   并建议去掉 condition 重试；不再输出 "None record(s)"，不设

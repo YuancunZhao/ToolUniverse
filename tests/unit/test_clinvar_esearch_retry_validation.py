@@ -497,18 +497,37 @@ def test_failed_condition_check_not_declared_valid(condition_check_payload):
     assert "unknown" in hint or "could not" in hint or "failed" in hint, hint
 
 
-def test_failed_condition_check_with_gene_keeps_gene_evidence():
+@pytest.mark.parametrize(
+    "gene_check_payload, expected_gene_count",
+    [
+        # gene-only check succeeds with a valid count of 0: the gene itself
+        # matches nothing, so it REMAINS a candidate cause of the empty
+        # result -- the hint must not exculpate it.
+        (_esearch(0, translation="TP53[gene]"), 0),
+        # gene-only check succeeds with records: the count is kept and the
+        # hint may say the gene is not the problem.
+        (_esearch(434, translation="TP53[gene]"), 434),
+        # gene-only check fails at the request level: neither single-input
+        # count exists and neither input may be excluded.
+        ({"status": "error", "error": "HTTP 503"}, None),
+    ],
+)
+def test_failed_condition_check_with_gene_keeps_gene_evidence(
+    gene_check_payload, expected_gene_count
+):
     """With gene+condition+variant_name and only the CONDITION check
-    failing: the already-established gene-only count stays, the gene is
-    not blamed, and the condition stays inconclusive."""
+    failing (three gene-check states): the original success/zero result
+    survives, established gene-only counts are kept verbatim (0 included),
+    a failed gene check leaves its field absent with a warning, and the
+    condition attribution stays unknown in every state."""
     payloads = [
         _esearch(0, translation='TP53[gene] AND "lcaxx"[dis] AND "x"[Variant name]'),
         # gene-alias resolver: healthy empty lookup
         _gene_esearch([], count="0"),
         # free-text retry: valid zero (not adopted)
         _esearch(0, translation="TP53[gene] AND lcaxx AND x"),
-        # gene-only count check: succeeds
-        _esearch(434, translation="TP53[gene]"),
+        # gene-only count check: the state under test
+        gene_check_payload,
         # condition-only count check: structurally broken
         {"status": "success", "data": {"esearchresult": {"count": "0", "idlist": [], "querytranslation": None}}},
     ]
@@ -517,9 +536,30 @@ def test_failed_condition_check_with_gene_keeps_gene_evidence():
     )
     assert result["status"] == "success"
     data = result["data"]
-    assert data["gene_only_match_count"] == 434
+    assert data["total_count"] == 0
+    if expected_gene_count is None:
+        assert "gene_only_match_count" not in data
+        # both auxiliary checks failed, each with its own warning
+        gene_warning = [
+            w for w in data["query_warnings"] if "TP53[gene]" in w
+        ]
+        condition_warning = [
+            w for w in data["query_warnings"] if "lcaxx[dis]" in w
+        ]
+        assert len(gene_warning) == 1, data["query_warnings"]
+        assert len(condition_warning) == 1, data["query_warnings"]
+        assert all(
+            "zero-result attribution check" in w for w in gene_warning + condition_warning
+        )
+    else:
+        assert data["gene_only_match_count"] == expected_gene_count
     assert "condition_only_match_count" not in data
     hint = data.get("zero_result_hint", "")
     assert "None record(s)" not in hint
     assert "recognized ClinVar disease term" not in hint
     assert "unknown" in hint or "could not" in hint or "failed" in hint, hint
+    if expected_gene_count == 0:
+        # a 0-count gene must NOT be declared innocent of the empty result
+        assert "not what emptied" not in hint, hint
+        assert "is not the problem" not in hint, hint
+        assert "does match 0 record" not in hint, hint

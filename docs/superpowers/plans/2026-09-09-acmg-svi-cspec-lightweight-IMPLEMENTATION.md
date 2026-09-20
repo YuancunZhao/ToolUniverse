@@ -244,11 +244,12 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
 `codex/acmg-svi-cspec-lightweight` 上）：
 
 - `cb349d8f` `fix(clinvar): validate gene alias lookup responses`：
-  基因别名查询（db=gene esearch/esummary）响应先过
-  `_validate_esearch_payload` 再读 idlist/name（API error/空
-  translation/非法 count/非 UID 各自归入别名告警）；esummary name
-  必须为非空白字符串，杜绝数字名流入调用方 `.upper()`；辅助查询
-  失败仅告警、健康空查询仍表示"未被改名"的纪律保持不变。
+  基因别名查询中，Gene eSearch 响应复用统一校验器
+  `_validate_esearch_payload` 再读 idlist（API error/空
+  translation/非法 count/非 UID 各自归入别名告警）；Gene esummary
+  则单独检查结果结构和非空白字符串名称，杜绝数字名流入调用方
+  `.upper()`；辅助查询失败仅告警、健康空查询仍表示"未被改名"
+  的纪律保持不变。
 - `d9468438` `fix(clinvar): keep failed condition attribution
   inconclusive`：condition-only 计数查询失败
   （`condition_only_count is None`）时提示改为"归因未知、建议去掉
