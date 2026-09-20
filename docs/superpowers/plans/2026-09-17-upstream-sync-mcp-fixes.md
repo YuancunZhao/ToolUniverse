@@ -249,8 +249,11 @@ env -u PYTHONPATH .venv/bin/tu run ClinVar_get_submitted_records \
 2026-09-18-r1-r3-acceptance/，gitignored）：
 
 - 修复回归：五文件 108 + fixture/新反例 172 outcomes 全过。
-- ACMG 23 文件：717 outcomes、0 failed、8 skipped（干净 PATH；默认
-  PATH 下 codex_plugin 3 项为机器级 /usr/local/bin 损坏二进制所致）。
+- ACMG 23 文件：682 passed、8 skipped，共 690 项执行结果（干净
+  PATH；默认 PATH 下 codex_plugin 3 项为机器级 /usr/local/bin 损坏
+  二进制所致。2026-09-20 更正：原文误记 "717 outcomes、0 failed"，
+  依归档 acmg23b.log 点数实际为 682+8，本计划同步修正，日志原文
+  保留）。
 - 插件对照：官方 2128ff57 干净快照 vs 最终分支，同解释器同命令——
   快照 7 failed vs 分支 6 failed，差集仅快照侧 test_build_codex_plugin
   （Xcode license 机器级 exit 69）；其余 6 项两侧一致。
@@ -264,3 +267,33 @@ env -u PYTHONPATH .venv/bin/tu run ClinVar_get_submitted_records \
 
 清理：临时 worktree /tmp/up-wt 与快照 /tmp/upstream-2128ff57 已删；
 集成 worktree 与临时分支删除命令及前置检查见运行文档。
+
+## 2026-09-19/20 修订：A/B 补修、计数更正与在线回执
+
+继 2026-09-18 修订之后，在保留分支 `codex/acmg-svi-cspec-lightweight`
+（起点 `1b42f4be`）上又落两个补修提交与一份文档更正：
+
+- `cb349d8f` fix(clinvar): validate gene alias lookup responses——
+  db=gene esearch/esummary 响应统一过 `_validate_esearch_payload`
+  （API error/空 translation/非法 count/非 UID → 别名告警而非静默
+  放行）；esummary name 须为非空白字符串；辅助失败仅告警、健康空
+  查询仍视为"未被改名"。
+- `d9468438` fix(clinvar): keep failed condition attribution
+  inconclusive——condition-only 计数失败时零结果提示改为归因未知
+  并建议去掉 condition 重试；不再输出 "None record(s)"，不设
+  condition_only_match_count，不做识别结论。
+- 统一回归：295 passed / 295 collected / exit 0（A/B 反例先失败后
+  通过）；ruff 与两个基线区间的 `git diff --check` 均干净。
+- 计数更正：上文 ACMG-23 数字已就地改为 682/8/690（依据与保留
+  原则见该条目内注）；本轮同范围重收 690 selected /
+  691 collected / 1 deselected 单独记录。
+- 在线回执：`temp_docs_and_tests/benchmark_tracking/
+  2026-09-19-followup-verification/`（CONTEXT.txt 含运行时间
+  2026-09-20 11:35:14 CST、HEAD d9468438、解释器/入口路径；CLI
+  四例 + stdio 同会话两调用，stdout/stderr/exit 分文件）。时点
+  观察值：details 2737810 citations=2 complete=True；GBA total=791
+  translation=GBA1[gene]；RPE65 total=1 走 [All Fields] 重试；本次
+  SpliceAI 变异体 chr17-31337608-C-G max=0.997 与原始 DS 一致
+  （上文 0.827 为当时另一记录，未改动）。
+- 六案例真实 LLM 验收仍未执行、未验收；无串行全量重跑；无新增
+  公共参数/schema/依赖。

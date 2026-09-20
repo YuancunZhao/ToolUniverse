@@ -231,7 +231,47 @@ R2 `815d8979`（引文补全失败保留记录）、R3 `01c5d9c4`（详情工具
 `docs/acmg_svi_cspec_local_run.md` 的 2026-09-18 小节（唯一运行记录）。
 
 验收结论（按证据强度区分）：修复回归 108+172 outcomes 与 ACMG 23 文件
-717/0/8 为"测试通过"；xdist 全量 18 项失败为"与基线失败集合一致"
+682 passed / 8 skipped（共 690 项执行结果；2026-09-20 依归档
+acmg23b.log 点数更正，原文误记 717）为"测试通过"；xdist 全量 18 项失败
+为"与基线失败集合一致"
 （机器级，非全绿）；插件对照快照 7 vs 分支 6、差集仅快照侧 Xcode
 license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未验收。
 集成 worktree 与临时分支已在文档提交后删除（见运行文档清理小节）。
+
+## 11. 2026-09-19/20 补修与验收记录更正
+
+按 2026-09-19 计划执行（起点 `1b42f4be`，仍全部在保留分支
+`codex/acmg-svi-cspec-lightweight` 上）：
+
+- `cb349d8f` `fix(clinvar): validate gene alias lookup responses`：
+  基因别名查询（db=gene esearch/esummary）响应先过
+  `_validate_esearch_payload` 再读 idlist/name（API error/空
+  translation/非法 count/非 UID 各自归入别名告警）；esummary name
+  必须为非空白字符串，杜绝数字名流入调用方 `.upper()`；辅助查询
+  失败仅告警、健康空查询仍表示"未被改名"的纪律保持不变。
+- `d9468438` `fix(clinvar): keep failed condition attribution
+  inconclusive`：condition-only 计数查询失败
+  （`condition_only_count is None`）时提示改为"归因未知、建议去掉
+  condition 重试"，不再落入 "None record(s)"；不输出
+  condition_only_match_count、不做识别/归因结论；gene-only 计数
+  仍照常报告。
+- 统一回归（计划原文命令、干净 PATH、`-o addopts=''`）：
+  295 passed / 295 collected / exit 0（retry 校验文件增至 51 测，
+  含 A/B 反例，均为先失败后通过）；ruff 干净；对
+  `1b42f4be..HEAD` 与 `2128ff57..HEAD` 的 `git diff --check`
+  干净。
+- 记录更正：ACMG-23 历史数字 717 → 682 passed / 8 skipped /
+  690 项执行结果（依 2026-09-18 归档 acmg23b.log 点数，日志原文
+  保留）；本轮同范围重收为 690 selected / 691 collected /
+  1 deselected，作为新观察单独记录，不声称出自旧日志。
+- 在线回执（目录
+  `temp_docs_and_tests/benchmark_tracking/2026-09-19-followup-verification/`，
+  gitignored；CONTEXT.txt 记录运行时间/HEAD/解释器与入口路径，
+  stdout/stderr/exit 分文件保存）：CLI details 2737810 双引文
+  complete=true；CLI GBA total 791、translation `GBA1[gene]`；CLI
+  RPE65+condition total 1、[All Fields] 自由词重试、condition 未
+  应用带告警；CLI SpliceAI chr17-31337608-C-G（genome 38）max
+  0.997 与原始 DS 行计算最大值一致；stdio 同会话两个 tools/call
+  均成功且无错误标记，原始 JSONL 已存档。计数为时点观察值。
+- 边界保持：六案例真实 LLM 验收本轮未执行、仍为未验收；未重跑
+  串行全量；无新增公共参数/schema/依赖，未重生成包装文件。

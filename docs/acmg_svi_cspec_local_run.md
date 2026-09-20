@@ -277,7 +277,11 @@ gitignored):
 
 - Tests PASSED: five prior fix files 108 outcomes + fixture suites and
   this round's negative cases 172 outcomes, all passing; ACMG 23-file
-  regression 717 outcomes, 0 failed, 8 skipped (under a clean PATH; the
+  regression 682 passed, 8 skipped -- 690 executed outcomes in total
+  (corrected 2026-09-20 by counting the archived `acmg23b.log` progress
+  lines: 682 dots + 8 skips; the original text below said "717
+  outcomes", a miscount of the same log; the pytest terminal summary
+  line was truncated out of that capture). Under a clean PATH; the
   default PATH fails 3 codex_plugin tests via the machine's broken
   /usr/local/bin binaries).
 - CONSISTENT-with-baseline (not "all pass"): full offline xdist suite
@@ -295,3 +299,74 @@ gitignored):
   stdio MCP `tools/call` → 2 citations, complete=true.
 - NOT EXECUTED (not accepted): the six real-LLM host cases were not
   rerun against this HEAD; the 2026-09-15 record does not substitute.
+
+## Gene-alias validation, inconclusive condition attribution, receipts (2026-09-19/20)
+
+Two defect fixes on top of the 2026-09-18 state (start `1b42f4be`, both
+fail-first/pass-after under pytest):
+
+- `cb349d8f` `fix(clinvar): validate gene alias lookup responses` -- the
+  NCBI gene-db esearch/esummary responses feeding
+  `_resolve_deprecated_gene_symbol` now go through
+  `_validate_esearch_payload` before their idlist/name are read (API
+  error, blank translation, illegal count, non-UID idlist each return
+  the alias warning instead of silently proceeding); the esummary `name`
+  must be a non-blank string, so a numeric name can no longer reach the
+  caller's `.upper()`. Auxiliary discipline kept: failure warns, healthy
+  empty lookup still means "not renamed".
+- `d9468438` `fix(clinvar): keep failed condition attribution
+  inconclusive` -- in `_explain_empty_result`, when the condition-only
+  count query could not complete (`condition_only_count is None`) the
+  hint now states the attribution is unknown and suggests retrying
+  without the condition, instead of falling through to the
+  condition-count branch and printing "None record(s)". No
+  `condition_only_match_count` key, no recognition claim, no definitive
+  variant_name attribution; gene-only count is still reported when
+  available.
+
+Unified fix regression (plan's exact command, clean PATH, `-o
+addopts=''`): 295 passed / 295 collected, exit 0 -- the retry-validation
+file grew to 51 tests (Fix-A and Fix-B counterexamples included). ruff
+clean; `git diff --check` clean for `1b42f4be..HEAD` and
+`2128ff57..HEAD`.
+
+Count correction: the 2026-09-18 section's ACMG-23 figure has been
+corrected in place (717 → 682 passed / 8 skipped / 690 executed
+outcomes) from the archived `acmg23b.log`; the archived logs themselves
+are unchanged. For the record, recollecting the same 23-file scope at
+this round's HEAD yields 690 selected / 691 collected / 1 deselected
+(all passing) -- noted as a new observation, not claimed to appear in
+the 2026-09-18 captures.
+
+Online receipts (not mocks; saved under
+`temp_docs_and_tests/benchmark_tracking/2026-09-19-followup-verification/`,
+gitignored; CONTEXT.txt records run time 2026-09-20 11:35:14 CST, HEAD
+`d9468438`, interpreter and entry-point paths; each receipt keeps raw
+stdout/stderr/exit code in separate files). Counts are point-in-time
+observations, not assertions:
+
+- CLI `ClinVar_get_variant_details` variant_id 2737810: success, 2
+  citations (PMIDs 31573083, 28492532; both SCV004299284.3, Labcorp
+  Genetics (formerly Invitae)), citations_complete=true, exit 0.
+- CLI `ClinVar_search_variants` gene GBA, max_results 10: success,
+  total 791, query_translation `GBA1[gene]` (alias-resolved replacement
+  path live), no query warnings, 10 variant ids, exit 0.
+- CLI `ClinVar_search_variants` RPE65 + condition "Lebers congenital
+  amaurosis": success, total 1, translation shows the [All Fields]
+  free-text retry, condition_filter_applied=false with the expected
+  warning, exit 0.
+- CLI `SpliceAI_get_max_delta` chr17-31337608-C-G, genome 38: success;
+  raw DS row AG 0.206 / AL 0.05 / DG 0.997 / DL 0.807, tool
+  max_delta_score 0.997 equals the computed max of those four values,
+  interpretation high_pathogenicity, exit 0.
+- stdio MCP, one session (initialize + two tools/call): details
+  2737810 success with 2 citations / citations_complete=true and GBA
+  search success with total 791 / translation `GBA1[gene]`; neither
+  response carries an error flag. Raw JSONL of requests and responses,
+  stderr, and exit code saved as `stdio-session.*`.
+
+Acceptance tiers remain distinct: code-fix tests (fail-first evidence),
+automated regression (295/295), CLI/stdio online receipts above, and
+the six-case real-LLM acceptance which was NOT rerun this round and
+stays 未执行、未验收. No serial full-suite rerun; online totals are
+point-in-time values.
