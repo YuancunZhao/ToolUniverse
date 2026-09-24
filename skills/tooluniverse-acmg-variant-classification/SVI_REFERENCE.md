@@ -379,8 +379,8 @@ evaluated ≠ not applicable ≠ not met.
 - **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP2 — missense-enrichment gene (Supporting default)
-- **Facts:** missense is the established disease mechanism AND the gene has
-  a significantly depleted benign missense rate.
+- **Facts:** missense variants are a common disease mechanism AND the gene
+  has a low rate of benign missense variation.
 - **Constraint is supporting information, not a pass/fail gate:** gene
   constraint metrics (e.g., gnomAD missense z-score) must be interpreted
   and explained as part of the evidence; a specific value such as
@@ -397,8 +397,11 @@ evaluated ≠ not applicable ≠ not met.
   the variant's results** (Pejaver et al. 2022; scanning multiple tools for
   the strongest evidence is explicitly warned against). No majority voting
   across uncalibrated predictors; no post-hoc selection of the tool that
-  happens to support the desired direction; tools outside the calibrated
-  panel are not usable for scoring. Results from other (including
+  happens to support the desired direction. Use only a preselected tool
+  and thresholds supported by an applicable calibration or rule. The tools
+  listed in this reference are not an exhaustive allowlist. Do not transfer
+  thresholds between tools or score solely from a vendor's label.
+  Results from other (including
   non-preselected) predictors may be recorded as context — if they reveal
   a genuine applicability or data-quality problem with the preselected
   tool or its input, address that specific problem explicitly; mere

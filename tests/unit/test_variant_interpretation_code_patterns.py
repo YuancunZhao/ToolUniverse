@@ -197,11 +197,14 @@ def test_acmg_reference_has_no_known_overrestrictive_shortcuts():
             "gnomAD missense z-score > 3.09 is the common convention",
             'specifications define "healthy" thresholds (age, exam) — otherwise record needs_review',
             "epidemiological contradictions take precedence",
+            "tools outside the calibrated panel are not usable for scoring",
+            "significantly depleted benign missense rate",
         ),
         "SKILL.md": (
             "discordant calibrated predictors → neither",
             "Ambiguous evidence → not_met or needs_review",
             "and under-validated assays leave the criterion at needs_review",
+            "no scoring with tools outside the calibrated panel",
         ),
     }
     failures = []
