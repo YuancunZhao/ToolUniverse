@@ -181,3 +181,34 @@ def test_published_copies_match_sources():
                 if actual != expected:
                     problems.append(f"differs: {target}")
     assert not problems, "; ".join(problems)
+
+
+def test_acmg_reference_has_no_known_overrestrictive_shortcuts():
+    # 2026-09-24 review: these exact sentences were confirmed wrong
+    # (eligibility confused with evidence guardrails). The check only
+    # prevents the known erroneous wording from reappearing; it does NOT
+    # prove scientific correctness or that any LLM follows the rules.
+    root = SKILL_DIR.parent / "tooluniverse-acmg-variant-classification"
+    forbidden = {
+        "SVI_REFERENCE.md": (
+            "PM1: specification-defined regions only",
+            "Without either, PM1 is not_met",
+            "discordant calibrated predictors → neither",
+            "gnomAD missense z-score > 3.09 is the common convention",
+            'specifications define "healthy" thresholds (age, exam) — otherwise record needs_review',
+            "epidemiological contradictions take precedence",
+        ),
+        "SKILL.md": (
+            "discordant calibrated predictors → neither",
+            "Ambiguous evidence → not_met or needs_review",
+            "and under-validated assays leave the criterion at needs_review",
+        ),
+    }
+    failures = []
+    for name, markers in forbidden.items():
+        text = (root / name).read_text().replace("**", "").replace("`", "")
+        normalized = " ".join(text.split()).casefold()
+        for marker in markers:
+            if marker.casefold() in normalized:
+                failures.append(f"{name}: {marker}")
+    assert not failures, "\n".join(failures)

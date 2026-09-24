@@ -858,6 +858,43 @@ def _sdk_run(payload):
     )
 
 
+# 2026-09-24 guardrail docs fix: the calculator has always accepted
+# PM1 met/Moderate with no Released CSpec (the generic ACMG/AMP 2015
+# rule). This regression FIXES that contract so a future eligibility
+# gate cannot silently appear; it was NOT failing before the docs fix
+# and must not be presented as a bug fix.
+@pytest.mark.parametrize("invoke", [run, _sdk_run], ids=["handler", "sdk"])
+def test_pm1_moderate_without_cspec_uses_generic_rule(invoke):
+    payload = args(
+        build_evidence(
+            met("PM1", "Moderate", paper="synthetic:domain-evidence",
+                rule="Richards2015:PM1", fact="synthetic-domain-1"),
+            per_criterion={
+                "PP5": {"status": "deprecated"},
+                "BP6": {"status": "deprecated"},
+            },
+        ),
+        rule_context={
+            "cspec_lookup_status": "no_released_spec",
+            "specification": None,
+            "applicable_rules_complete": True,
+            "combination_method": "tavtigian2020",
+        },
+    )
+    assert len(payload["evidence"]) == 28
+    result = invoke(payload)
+    assert result["status"] == "success"
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == 2
+    assert data["point_contributions"] == [
+        {"criterion": "PM1", "strength": "Moderate",
+         "points": 2, "direction": "pathogenic"}
+    ]
+    assert not data.get("review_reasons")
+
+
 def test_sdk_computes_valid_synthetic_case():
     result = _sdk_run(
         args(build_evidence(met("PVS1", "VeryStrong"), met("PM2", "Supporting")))

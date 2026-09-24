@@ -53,10 +53,12 @@ against source text on 2026-09-09 — none from memory):
   exception list (July 2018): >5% stand-alone benign; enumerated exceptions;
   lower gene-specific thresholds via defined criteria.
 - **No SVI criteria-specific recommendation exists for PS4, PM1, BP5,
-  PS1, or PM5** (checked against the guidance index): for those, use the
-  cited generic routes (PS4: curation SOP OR>5 CI excluding 1 / PS4-LRCalc;
-  PM1: specification-defined regions only) and gene/disease specifications
-  as the only source of thresholds — do not invent them.
+  PS1, or PM5** in the guidance index cited here. Their generic
+  applicability comes from ACMG/AMP 2015 and the additional published
+  routes cited in their entries. An applicable specification takes
+  precedence. Absence of a specification does not disable a generic
+  criterion; non-default thresholds or strengths require an explicit
+  supporting basis.
 
 ## Status semantics
 
@@ -196,8 +198,11 @@ evaluated ≠ not applicable ≠ not met.
 - **RNA-splicing assays are NOT PS3/BS3** — they feed PVS1/BP7 per the
   splicing framework (Walker et al. 2023).
 - **Double counting:** one assay → one code, never PS3 and PM1 from the
-  same assay fact; epidemiological contradictions take precedence and must
-  be documented, not averaged away.
+  same assay fact. Conflicting functional and epidemiological evidence is
+  not resolved by category: record the quality, validation, disease
+  mechanism relevance, and applicability of each side separately;
+  a substantive unresolved conflict goes to `needs_review` rather than
+  one class of evidence automatically winning.
 - **Source:** Brnich et al., Genome Medicine 2020 (PMC6938631); gene
   specifications list pre-validated assays.
 
@@ -228,23 +233,41 @@ evaluated ≠ not applicable ≠ not met.
 - **Source:** ClinGen variant curation SOP; Rowlands et al. 2024
   (PMC11503184); specifications override.
 
-### PM1 — hotspot / critical functional domain (no SVI criteria-specific recommendation)
-- **No SVI criteria-specific recommendation exists for PM1** (checked
-  against the ClinGen guidance index): there is no generic numeric
-  definition of a hotspot or critical region.
-- **Facts:** variant lies in a VCEP-specified critical region, or a
-  well-defined functional domain with quantified depletion of benign
-  missense variation (domain architecture from UniProt/InterPro; gnomAD
-  regional constraint); somatic hotspot data may support PM1 in cancer-gene
-  contexts per the specification.
-- **Apply** only from a specification-defined region or quantified domain
-  depletion. Without either, PM1 is `not_met` — never a hand-scaled PM1.
-- **Combination limit:** PP3 + PM1 summed strength must not exceed Strong
-  (Pejaver et al. 2022); the calculator enforces this.
-- **Double counting:** the same domain fact used with PM1 must not also
-  carry PP2 — one fact, one code.
-- **Source:** specifications are the threshold source; combination limit
-  from Pejaver et al. 2022 (PMC9748256).
+### PM1 — mutational hotspot / critical functional domain (Moderate by default)
+
+- **Basic applicability:** Under ACMG/AMP 2015, PM1 applies when the
+  variant lies in a mutational hotspot and/or a critical, well-established
+  functional domain without benign variation. The default strength is
+  **Moderate**.
+- **No specification prerequisite:** An applicable VCEP/CSpec is not
+  required for the generic rule. A formal quantitative domain-depletion
+  analysis is not a universal prerequisite for default Moderate strength.
+- **Evidence:** Document the region, its boundaries, the variant's
+  location, its established hotspot or critical-domain relevance, and
+  the evidence supporting absence of benign variation. A domain
+  annotation alone is insufficient. Missing data are not evidence of
+  absence.
+- **Applicable specifications:** Follow an applicable Released CSpec
+  under the precedence rules in SKILL.md; do not infer inapplicability
+  merely because no specification exists.
+- **Strength adjustment:** Treat a non-default strength as a separate
+  decision requiring a documented applicable rule or justified
+  calibration. Cite that basis in rule_refs and explain it in rationale.
+  Quantitative depletion alone does not automatically authorize a
+  strength change. There is no PM1-specific ClinGen SVI recommendation
+  defining a universal strength-adjustment ladder.
+- **Status:** Lack of a CSpec or quantitative depletion estimate alone
+  must not cause not_met. Follow SKILL.md to distinguish satisfied,
+  evaluated-but-unsatisfied, unevaluated, and unresolved conditions.
+- **Combination limit:** PP3 + PM1 must not exceed Strong in total
+  (4 points in this workflow), following Pejaver et al. 2022.
+- **Double counting:** Do not reuse the same fact for PM1 and another
+  criterion, including PP2 or PS3. Distinct facts are not duplicates
+  merely because they concern one domain or occur in one publication.
+- **Sources:** Richards et al. 2015, Table 3 (basic applicability and
+  default strength); Tavtigian et al. 2020 (point framework, not PM1
+  eligibility); Pejaver et al. 2022 (combination cap); applicable CSpec
+  and the cited rule/calibration for any non-default strength.
 
 ### PM2 — absent / extremely rare (Supporting by SVI decision)
 - **Facts:** gnomAD (and matching ancestry) frequency with callability —
@@ -357,8 +380,13 @@ evaluated ≠ not applicable ≠ not met.
 
 ### PP2 — missense-enrichment gene (Supporting default)
 - **Facts:** missense is the established disease mechanism AND the gene has
-  a significantly depleted benign missense rate (gnomAD missense z-score
-  > 3.09 is the common convention; VCEP definitions override).
+  a significantly depleted benign missense rate.
+- **Constraint is supporting information, not a pass/fail gate:** gene
+  constraint metrics (e.g., gnomAD missense z-score) must be interpreted
+  and explained as part of the evidence; a specific value such as
+  z > 3.09 neither automatically satisfies PP2 nor automatically
+  disqualifies it. An applicable specification may define concrete
+  conditions that replace this judgement.
 - **Exclusions:** mutually exclusive with BP1; LoF-only genes → PP2
   `not_applicable`.
 - **Source:** ACMG/AMP 2015; gnomAD constraint (Karczewski et al.);
@@ -368,8 +396,13 @@ evaluated ≠ not applicable ≠ not met.
 - **Use ONE pre-specified calibrated tool, chosen genome-wide BEFORE seeing
   the variant's results** (Pejaver et al. 2022; scanning multiple tools for
   the strongest evidence is explicitly warned against). No majority voting
-  across uncalibrated predictors; discordant calibrated predictors → neither
-  PP3 nor BP4.
+  across uncalibrated predictors; no post-hoc selection of the tool that
+  happens to support the desired direction; tools outside the calibrated
+  panel are not usable for scoring. Results from other (including
+  non-preselected) predictors may be recorded as context — if they reveal
+  a genuine applicability or data-quality problem with the preselected
+  tool or its input, address that specific problem explicitly; mere
+  disagreement alone does not clear either PP3 or BP4.
 - **Preferred tools (PP3 to Strong / BP4 to Moderate)** — exact calibrated
   intervals:
 
@@ -469,8 +502,13 @@ evaluated ≠ not applicable ≠ not met.
   healthy heterozygotes for a dominant high-penetrance disease), with
   age-of-onset context.
 - **Caveats:** late-onset, reduced penetrance, and phenocopies weaken the
-  argument; specifications define "healthy" thresholds (age, exam) —
-  otherwise record `needs_review`.
+  argument. Where an applicable CSpec defines "healthy" (age, exam)
+  requirements, use them; without one, assess against the ACMG/AMP 2015
+  base conditions — genotyped healthy adults of the relevant genotype,
+  with early-and-complete penetrance expected for the disease. A genuine
+  gap in that evidence (unverified health status, missing genotype,
+  onset age inconsistent with full penetrance) is what requires
+  re-review — absence of a specification is not itself such a gap.
 - **Source:** ACMG/AMP 2015; specification-defined criteria where present.
 
 ### BS3 — functional evidence against pathogenicity
@@ -523,8 +561,10 @@ BP7/PVS1 instead.
   0.016–0.183 Moderate, 0.003–0.016 Strong, ≤0.003 VeryStrong; CADD
   17.3–22.7 Supporting, 0.15–17.3 Moderate, ≤0.15 Strong (other tools in
   the PP3 table).
-- Discordant calibrated predictors → neither PP3 nor BP4; concordance of
-  uncalibrated tools proves nothing either way.
+- Other (including non-preselected) predictor results may be recorded as
+  context; concordance of uncalibrated tools proves nothing either way, and
+  disagreement alone does not clear PP3/BP4 — see the PP3 entry for the
+  applicability/data-quality exception.
 - Splicing (Walker et al. 2023): SpliceAI Δ ≤0.1 → BP4 (calibrated
   Moderate, conservatively applied at Supporting); 0.1–0.2 uninformative —
   no code.
