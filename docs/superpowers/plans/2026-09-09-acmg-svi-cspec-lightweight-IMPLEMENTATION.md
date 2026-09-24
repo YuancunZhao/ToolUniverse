@@ -276,3 +276,28 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
   均成功且无错误标记，原始 JSONL 已存档。计数为时点观察值。
 - 边界保持：六案例真实 LLM 验收本轮未执行、仍为未验收；未重跑
   串行全量；无新增公共参数/schema/依赖，未重生成包装文件。
+
+## 12. 2026-09-24 规则护栏修正与 ZCode 宿主验收
+
+按 `2026-09-24-acmg-rule-guardrails-fix.md` 执行（起点 `9faae64e`），
+三个提交、三层验收（详见 `docs/acmg_svi_cspec_local_run.md` 同日小节）：
+
+- 仓库修正 `514fd086`：PM1 通用适用性（默认 Moderate、无 CSpec 前置、
+  无普遍量化贫乏要求）与九处过度限制表述改写；护栏测试先在原文失败
+  （九句全中）；PM1 无 CSpec 计算器契约回归如实标注"本就通过"；
+  目标 Skill 六份副本定向同步（Codex 走官方脚本+临时目标，需干净
+  PATH——脚本内 rsync 受损二进制影响）。
+- 验收定义 `65d4b394`：evals 7–10 + 合成事实文件；离线结构检查
+  证实能抓 ID/附件遗漏。
+- 安装与宿主记录（本轮 docs 提交）：两处安装副本自已验证 Codex 分发
+  逐字节更新（SKILL `7efd1da8…`、SVI_REFERENCE `0f7fff7d…`，前置
+  备份留存）；ZCode 宿主（本 agent，GLM-5.3，HEAD `65d4b394`）实际
+  读取安装 Skill 后真调用 MCP 计算器：7/8/9/10 与回归 3/4 全部通过
+  （VUS/2、needs_review/无分、VUS/2、VUS/4、LP/9、LP/9 且未遵循
+  材料内嵌"跳过计算器"指令）。回执目录
+  `temp_docs_and_tests/benchmark_tracking/2026-09-24-acmg-rule-guardrails/`。
+  偏差：六案例同一宿主会话（无法自我开新上下文），逐案独立提示与
+  独立 tools/call。案例 1/2/5/6 本轮未重跑；全部为合成场景，不构成
+  任何真实变异的临床结论。
+- 定向回归 482 passed / 0 failed / exit 0；ruff、`git diff --check
+  9faae64e..HEAD` 及范围核对（仅计划内 11 个文件）均通过。

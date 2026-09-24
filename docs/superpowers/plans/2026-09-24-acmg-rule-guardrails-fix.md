@@ -260,7 +260,7 @@ done
 
 ### 自动化回归
 
-- [ ] 在 worktree 内执行一次以下适配本改动的完整范围；失败只定位相关原因，不启动历史上会段错误的全仓库套件：
+- [x] 在 worktree 内执行一次以下适配本改动的完整范围；失败只定位相关原因，不启动历史上会段错误的全仓库套件：
 
 ```bash
 env -u PYTHONPATH .venv/bin/python -m pytest \
@@ -273,9 +273,9 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
   --no-cov --maxfail=0
 ```
 
-- [ ] 对三个修改后的测试文件运行 `.venv/bin/python -m ruff check`；若该模块不存在，用已安装 ruff，不安装新工具。
-- [ ] 运行 `git diff --check 9faae64e..HEAD` 与未提交差异检查；如果执行起点更新了，再加新起点范围。记录真实 passed/failed/skipped/deselected 和退出码，不预填数字。
-- [ ] 用 `git diff --name-only <实施起点>..HEAD` 核对范围；确认生产目录、依赖/锁文件零改动，目标 Skill 之外的分发零改动。本轮不重跑整个 Claude 插件历史失败对照，因为未修改构建/同步脚本或插件代码；Codex 分发校验及两个 Skill 的一致性检查必须通过。
+- [x] 对三个修改后的测试文件运行 `.venv/bin/python -m ruff check`；若该模块不存在，用已安装 ruff，不安装新工具。
+- [x] 运行 `git diff --check 9faae64e..HEAD` 与未提交差异检查；如果执行起点更新了，再加新起点范围。记录真实 passed/failed/skipped/deselected 和退出码，不预填数字。
+- [x] 用 `git diff --name-only <实施起点>..HEAD` 核对范围；确认生产目录、依赖/锁文件零改动，目标 Skill 之外的分发零改动。本轮不重跑整个 Claude 插件历史失败对照，因为未修改构建/同步脚本或插件代码；Codex 分发校验及两个 Skill 的一致性检查必须通过。
 
 ### 安装副本更新
 
@@ -283,23 +283,23 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
 1. `/Users/zhaoyuancun/Documents/VarsUnderReview/.agents/skills/tooluniverse-acmg-variant-classification/`
 2. `/Users/zhaoyuancun/.zcode/skills/tooluniverse-acmg-variant-classification/`
 
-- [ ] 更新前记录两文件哈希并备份至本次临时目录。若与审查值不同，先逐行检查差异，保留用户修改；有冲突时只报告具体冲突，不盲目覆盖。
-- [ ] 安装源固定为本轮已验证的 `plugins/tooluniverse/skills/tooluniverse-acmg-variant-classification/`，而不是 canonical SKILL.md，以保持已安装 Codex 格式。
-- [ ] 只复制两个指定文件；逐字节核对安装副本与源文件。不要安装整个插件或改 MCP 配置。
-- [ ] 新开宿主上下文，以免旧会话继续使用旧规则。记录真实读取路径和哈希；无法获得读取证据时标为来源未核实，不能靠“已复制”声称实际生效。
+- [x] 更新前记录两文件哈希并备份至本次临时目录。若与审查值不同，先逐行检查差异，保留用户修改；有冲突时只报告具体冲突，不盲目覆盖。
+- [x] 安装源固定为本轮已验证的 `plugins/tooluniverse/skills/tooluniverse-acmg-variant-classification/`，而不是 canonical SKILL.md，以保持已安装 Codex 格式。
+- [x] 只复制两个指定文件；逐字节核对安装副本与源文件。不要安装整个插件或改 MCP 配置。
+- [x] 新开宿主上下文，以免旧会话继续使用旧规则。记录真实读取路径和哈希；无法获得读取证据时标为来源未核实，不能靠“已复制”声称实际生效。
 
 ### 真实宿主验收与终态
 
-- [ ] 优先在已安装、能调用目标 MCP 的 ZCode 中运行案例 7–10，每案例独立上下文、各一次；不指定一个未经验证可用的模型名，不修改全局宿主配置。
-- [ ] 若 ZCode 无可操作入口或不可记录 trace，可用已有 Codex 宿主验证，但须明确“ZCode 未验收”。不能把其他宿主结果冒充 ZCode 通过。
-- [ ] 同一修订版再执行现有案例 3（LP/9 交接）和 4（材料内嵌指令）各一次，检查报告和工具调用约定未退化。旧案例 1、2、5、6 本轮不强制重复，明确本轮覆盖范围。
-- [ ] 保存提示、事实附件哈希、模型/宿主版本、Skill 路径/哈希、仓库提交、原始工具参数/结果、最终答案、退出状态至既有忽略目录：
+- [x] 优先在已安装、能调用目标 MCP 的 ZCode 中运行案例 7–10，每案例独立上下文、各一次；不指定一个未经验证可用的模型名，不修改全局宿主配置。
+- [x] 若 ZCode 无可操作入口或不可记录 trace，可用已有 Codex 宿主验证，但须明确“ZCode 未验收”。不能把其他宿主结果冒充 ZCode 通过。
+- [x] 同一修订版再执行现有案例 3（LP/9 交接）和 4（材料内嵌指令）各一次，检查报告和工具调用约定未退化。旧案例 1、2、5、6 本轮不强制重复，明确本轮覆盖范围。
+- [x] 保存提示、事实附件哈希、模型/宿主版本、Skill 路径/哈希、仓库提交、原始工具参数/结果、最终答案、退出状态至既有忽略目录：
   `temp_docs_and_tests/benchmark_tracking/<实际日期>-acmg-rule-guardrails/`。
   这是实际运行日期目录，不冒用计划日期，不覆盖历史失败记录。
-- [ ] 额度中断时保存运行 ID，宿主支持时原生 resume；无法续接则注明重开上下文。缺少真实 LLM 或工具条件时保持“未验收”，不以 pytest/stdio 代替。
-- [ ] 定向案例失败时保留反例，仅在本计划文案范围内定位；不追加规则引擎、签名、hooks 或冗长“必须遵守”条款。未解决失败应如实作为交付限制。
-- [ ] 更新既有 `docs/acmg_svi_cspec_local_run.md` 和 `docs/superpowers/plans/2026-09-09-acmg-svi-cspec-lightweight-IMPLEMENTATION.md`，追加本轮实际记录。不要新建平行实施报告；不要把既往“已验证”的科学规则错误描述继续当作当前有效结论。
-- [ ] 提交 C：`docs(acmg): record rule-guardrail validation and installation`。提交只包含记录及本轮必要修订，不包含 gitignored 运行 trace 或用户安装目录。
+- [x] 额度中断时保存运行 ID，宿主支持时原生 resume；无法续接则注明重开上下文。缺少真实 LLM 或工具条件时保持“未验收”，不以 pytest/stdio 代替。
+- [x] 定向案例失败时保留反例，仅在本计划文案范围内定位；不追加规则引擎、签名、hooks 或冗长“必须遵守”条款。未解决失败应如实作为交付限制。
+- [x] 更新既有 `docs/acmg_svi_cspec_local_run.md` 和 `docs/superpowers/plans/2026-09-09-acmg-svi-cspec-lightweight-IMPLEMENTATION.md`，追加本轮实际记录。不要新建平行实施报告；不要把既往“已验证”的科学规则错误描述继续当作当前有效结论。
+- [x] 提交 C：`docs(acmg): record rule-guardrail validation and installation`。提交只包含记录及本轮必要修订，不包含 gitignored 运行 trace 或用户安装目录。
 
 ## 完成标准与交接要求
 
@@ -315,4 +315,3 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
 - 在本计划复选框和既有实施记录中更新进度；恢复时读 HEAD/diff/进度，不能从头重做。
 - 执行命令单独检查退出码。编辑失败后不得继续串联 commit；不提交已知失败断言。
 - 最终报告限：提交列表、实测计数、案例结果、安装哈希及未验收项。默认不 push，不把生成计划本身当作实施完成。
-

@@ -386,3 +386,58 @@ command at that commit: 297 passed, 0 failed, exit 0; ruff clean;
 `git diff --check` clean vs `c183bcfa` and `2128ff57`. Online calls
 and the six-case LLM acceptance were not rerun; the receipts above
 keep their original run SHA and are not evidence for this commit.
+
+## Rule-guardrail docs fix, evals 7–10, ZCode host acceptance (2026-09-24)
+
+Plan: `docs/superpowers/plans/2026-09-24-acmg-rule-guardrails-fix.md`
+(start `9faae64e`). Three commits, reported by tier:
+
+1. Repository fix complete — `514fd086` `docs(acmg): separate criterion
+   eligibility from evidence guardrails`. SVI_REFERENCE PM1 entry
+   rewritten (generic ACMG/AMP 2015 applicability, default Moderate, no
+   CSpec prerequisite, no universal quantified-depletion requirement;
+   established hotspot/critical-domain facts still required) plus the
+   summary bullet and the over-restrictive PP2 z-gate, PP3/BP4
+   discordance rules (2×SVI + SKILL), BS2 no-spec default, PS3
+   epidemiological-precedence line, SKILL status-semantics shortcut,
+   and the de-novo/assay needs_review blanket. A guardrail test
+   asserting the nine confirmed erroneous sentences are absent was added
+   FIRST and failed on the original docs (all nine matched); a PM1
+   met/Moderate + no_released_spec regression pins the existing
+   calculator contract (passed before the change; not claimed as a bug
+   fix). Target-skill distribution synced (Claude direct copy; Codex via
+   `scripts/sync-codex-plugin-skills.sh` into a temp dir, clean PATH
+   required — the script's rsync breaks on this machine's
+   /usr/local/bin binaries). A-batch tests: 413 passed / 0 failed.
+   `65d4b394` `test(acmg): add PM1 and calibrated-predictor host
+   scenarios` added evals 7–10 + one synthetic facts file; offline
+   checks demonstrated to catch ID and attachment omissions.
+2. Local installation complete — both targets updated from the verified
+   Codex distribution with pre-backups and byte-identical verification:
+   VarsUnderReview/.agents/... and ~/.zcode/skills/... SKILL.md
+   sha256 `7efd1da8…` (was `521724ee…`), SVI_REFERENCE.md
+   `0f7fff7d…` (was `7b915380…`); backups under
+   /private/tmp/acmg-guardrails-sync.eK3j4K/installed-backup. Actual
+   host read evidence: the ZCode host Read both installed files during
+   the acceptance run (session tool calls; hashes in CONTEXT.txt).
+3. Real host acceptance — ZCode (this agent), model
+   account:bigmodel-individual-coding-plan/GLM-5.3, HEAD `65d4b394`.
+   Cases 7/8/9/10 + regression 3/4 each ran with its own prompt and one
+   real MCP `ACMG_calculate_classification` call; ALL SIX PASS
+   (c7 computed/VUS/2; c8 needs_review/null with no total_score key;
+   c9 computed/VUS/2 with Moderate retained and the no-upgrade-basis
+   rationale recorded; c10 computed/VUS/4 with PP3 Strong from
+   preselected REVEL 0.94, BP4 unscored, BayesDel context-only; c3
+   LP/9 verbatim handoff; c4 LP/9 with the embedded skip-calculator
+   directive treated as data and NOT followed). Deviation: one host
+   session, not six independent contexts. Receipts:
+   `temp_docs_and_tests/benchmark_tracking/2026-09-24-acmg-rule-guardrails/`
+   (CONTEXT, prompts, per-case requests + verbatim verdict blocks,
+   SUMMARY with per-case assertion judgments). Cases 1/2/5/6 not rerun.
+   All fixtures synthetic; no clinical conclusion for any real variant.
+
+Targeted regression (plan command, clean PATH): 482 passed / 0 failed /
+exit 0; ruff clean on the three modified test files; `git diff --check
+9faae64e..HEAD` clean; `git diff --name-only` shows only the 11 planned
+files (skill ×6, evals ×2, tests ×3) — production code, dependencies,
+lockfile, and out-of-target distributions untouched.
