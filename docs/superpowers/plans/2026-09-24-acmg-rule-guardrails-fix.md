@@ -203,7 +203,7 @@ def test_pm1_moderate_without_cspec_uses_generic_rule(invoke):
 将该测试放在 `_sdk_run` 定义之后。不要为它修改生产代码。原有组合上限、材料不完整等反例原样运行。
 
 - [x] 同步仓库目标副本，按下文“定向同步”执行。运行两个修改后的测试文件及 `test_codex_plugin.py`；确认无目标外分发变化。
-- [ ] 提交 A：`docs(acmg): separate criterion eligibility from evidence guardrails`。显式暂存本批文件，不使用 `git add .`。
+- [x] 提交 A：`514fd086`（`docs(acmg): separate criterion eligibility from evidence guardrails`）。显式暂存本批文件，不使用 `git add .`。
 
 ### 定向同步（A 及后续确有文档修改时使用）
 
@@ -254,7 +254,7 @@ done
 
 - [x] 先新增案例及附件，再更新 ID 断言；验证离线结构检查能发现 ID/附件遗漏。
 - [x] 不编写按关键词自动判断医学答案的评分器；逐条对照 assertions 与实际 trace 判定。
-- [ ] 提交 B：`test(acmg): add PM1 and calibrated-predictor host scenarios`。
+- [x] 提交 B：`65d4b394`（`test(acmg): add PM1 and calibrated-predictor host scenarios`）。
 
 ## C. 定向回归、更新实际安装副本、运行宿主并记录
 
@@ -286,18 +286,18 @@ env -u PYTHONPATH .venv/bin/python -m pytest \
 - [x] 更新前记录两文件哈希并备份至本次临时目录。若与审查值不同，先逐行检查差异，保留用户修改；有冲突时只报告具体冲突，不盲目覆盖。
 - [x] 安装源固定为本轮已验证的 `plugins/tooluniverse/skills/tooluniverse-acmg-variant-classification/`，而不是 canonical SKILL.md，以保持已安装 Codex 格式。
 - [x] 只复制两个指定文件；逐字节核对安装副本与源文件。不要安装整个插件或改 MCP 配置。
-- [x] 新开宿主上下文，以免旧会话继续使用旧规则。记录真实读取路径和哈希；无法获得读取证据时标为来源未核实，不能靠“已复制”声称实际生效。
+- [ ] 两处目标安装的实际加载仍待核实。历史运行仅同会话演练；补验收已在 Codex 独立上下文实读与修订分发哈希相同的 case-local 副本，但不能据此证明目标安装目录被加载。
 
 ### 真实宿主验收与终态
 
-- [x] 优先在已安装、能调用目标 MCP 的 ZCode 中运行案例 7–10，每案例独立上下文、各一次；不指定一个未经验证可用的模型名，不修改全局宿主配置。
-- [x] 若 ZCode 无可操作入口或不可记录 trace，可用已有 Codex 宿主验证，但须明确“ZCode 未验收”。不能把其他宿主结果冒充 ZCode 通过。
-- [x] 同一修订版再执行现有案例 3（LP/9 交接）和 4（材料内嵌指令）各一次，检查报告和工具调用约定未退化。旧案例 1、2、5、6 本轮不强制重复，明确本轮覆盖范围。
-- [x] 保存提示、事实附件哈希、模型/宿主版本、Skill 路径/哈希、仓库提交、原始工具参数/结果、最终答案、退出状态至既有忽略目录：
+- [ ] 优先在已安装、能调用目标 MCP 的 ZCode 中运行案例 7–10，每案例独立上下文、各一次；历史演练共用上下文且已读预期答案，独立验收未完成。
+- [ ] Codex 补验收已运行，ZCode 未独立验收；案例 7–10 获得计算器回执后因额度中断缺最终回答，仍为 PARTIAL。补验收路径、会话 ID 与恢复步骤见 `docs/acmg_svi_cspec_local_run.md` 末节。
+- [x] 同一修订版 `13d198fe` 在 Codex 独立执行案例 3（LP/9 交接）和 4（材料内嵌指令），两例 PASS，完整最终回答已保存。历史同会话演练另行保留；旧案例 1、2、5、6 未重跑。
+- [ ] 保存提示、事实附件哈希、模型/宿主版本、Skill 路径/哈希、仓库提交、原始工具参数/结果、最终答案、退出状态至既有忽略目录。历史归档缺完整可见轨迹、完整响应和逐案最终回答；case9 摘要与请求说明不一致，不据摘要反推。目标目录：
   `temp_docs_and_tests/benchmark_tracking/<实际日期>-acmg-rule-guardrails/`。
   这是实际运行日期目录，不冒用计划日期，不覆盖历史失败记录。
-- [x] 额度中断时保存运行 ID，宿主支持时原生 resume；无法续接则注明重开上下文。缺少真实 LLM 或工具条件时保持“未验收”，不以 pytest/stdio 代替。
-- [x] 定向案例失败时保留反例，仅在本计划文案范围内定位；不追加规则引擎、签名、hooks 或冗长“必须遵守”条款。未解决失败应如实作为交付限制。
+- 条件要求（本次已触发）：案例 7–10 的额度中断、会话 ID、原始轨迹和退出状态已保存；最终回答缺失，归档项仍未全部完成。原生 resume 尚未验证，恢复时另存续接回执；无法续接则注明重开上下文。不以 pytest/stdio 代替宿主验收。
+- 条件要求（历史运行缺独立判定）：定向案例失败时保留反例，仅在本计划文案范围内定位；不追加规则引擎、签名、hooks 或冗长“必须遵守”条款。未解决失败应如实作为交付限制。
 - [x] 更新既有 `docs/acmg_svi_cspec_local_run.md` 和 `docs/superpowers/plans/2026-09-09-acmg-svi-cspec-lightweight-IMPLEMENTATION.md`，追加本轮实际记录。不要新建平行实施报告；不要把既往“已验证”的科学规则错误描述继续当作当前有效结论。
 - [x] 提交 C：`docs(acmg): record rule-guardrail validation and installation`。提交只包含记录及本轮必要修订，不包含 gitignored 运行 trace 或用户安装目录。
 
