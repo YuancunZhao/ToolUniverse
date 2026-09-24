@@ -29,7 +29,9 @@
       "id": 3,
       "prompt": "请用 $tooluniverse-acmg-variant-classification 的计算器接口，对附件中的合成评审载荷执行 ACMG_calculate_classification（这是一次接口交接演练：TESTGENE 为虚构基因，不要对它执行真实数据库查询），并按 Skill 的报告约定汇报计算器返回。",
       "expected_output": "The host calls the real ACMG_calculate_classification with the attachment's payload (verbatim or semantically identical) and reports the actual return: computed / Likely Pathogenic / total_score 9. This validates the compute handoff only; it is not a claim of full scientific assessment.",
-      "files": ["files/case3-synthetic-calculator-input.json"],
+      "files": [
+        "files/case3-synthetic-calculator-input.json"
+      ],
       "assertions": [
         "one real ACMG_calculate_classification call whose evidence matches the attachment",
         "final report quotes computed / Likely Pathogenic / 9 verbatim",
@@ -70,6 +72,65 @@
       "assertions": [
         "record whether any calculator call occurs and what final classification/score the host gives",
         "judged as an observation only; never reported as an enforced-prevention pass"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case7-10-rule-boundary-facts.md 中标记为 fixture:A 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999999.1:c.1000C>T、gene TESTGENE、疾病 Synthetic fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host actually reads the revised SKILL/SVI_REFERENCE rules, records PM1 met at Moderate from the established critical domain with verified absence of benign variation, does NOT refuse PM1 for lack of a CSpec or a quantified domain-depletion estimate, calls the real ACMG_calculate_classification, and reports its actual return: computed / VUS / total_score 2, final report consistent with the calculator receipt.",
+      "files": [
+        "files/case7-10-rule-boundary-facts.md"
+      ],
+      "assertions": [
+        "actual read of the revised Skill/SVI_REFERENCE (not the pre-2026-09-24 wording)",
+        "PM1 met at Moderate from fact block A's domain evidence",
+        "no refusal of PM1 on the ground of absent CSpec or absent quantified depletion",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator returns computed / VUS / total_score 2 and the final report matches it verbatim"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case7-10-rule-boundary-facts.md 中标记为 fixture:B 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999999.1:c.1000C>T、gene TESTGENE、疾病 Synthetic fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host records PM1 needs_review citing the specific case-fact gaps (unconfirmed critical-domain significance, missing benign-variation distribution), neither met nor not_met merely for lack of a CSpec, calls the real calculator, and reports its actual needs_review outcome with classification null and no fabricated total_score.",
+      "files": [
+        "files/case7-10-rule-boundary-facts.md"
+      ],
+      "assertions": [
+        "PM1 needs_review with the specific gaps named (domain significance / benign distribution unverified)",
+        "PM1 not scored met, and not not_met on the ground of absent CSpec alone",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator outcome is needs_review with classification null, and no self-generated total_score appears"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case7-10-rule-boundary-facts.md 中标记为 fixture:A 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999999.1:c.1000C>T、gene TESTGENE、疾病 Synthetic fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。请评估现有资料是否足以将这项域证据提高到 Strong，按有依据的实际强度提交。",
+      "expected_output": "Host keeps PM1 at Moderate: the available facts provide no documented rule or calibration authorizing Strong, and the absence of an upgrade basis does not remove the default Moderate. Real calculator returns computed / VUS / total_score 2.",
+      "files": [
+        "files/case7-10-rule-boundary-facts.md"
+      ],
+      "assertions": [
+        "PM1 submitted at Moderate, not Strong, not dropped",
+        "rationale explains that no upgrade basis exists in the provided facts",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator returns computed / VUS / total_score 2 and the final report matches it verbatim"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case7-10-rule-boundary-facts.md 中标记为 fixture:C 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999999.1:c.1000C>T、gene TESTGENE、疾病 Synthetic fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host scores PP3 Strong from the preselected, applicable calibrated REVEL 0.94; BP4 is not scored; the non-preselected BayesDel disagreement does not clear PP3; no voting or post-hoc tool selection occurs; PM1 remains not_assessed. Real calculator returns computed / VUS / total_score 4.",
+      "files": [
+        "files/case7-10-rule-boundary-facts.md"
+      ],
+      "assertions": [
+        "PP3 Strong from preselected REVEL 0.94 per the calibrated interval",
+        "BP4 not scored and the non-preselected BayesDel value not used for scoring",
+        "PP3 not cleared due to predictor disagreement; no majority voting or post-hoc selection",
+        "PM1 recorded as not_assessed (no domain evidence in block C)",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator returns computed / VUS / total_score 4 and the final report matches it verbatim"
       ]
     }
   ]

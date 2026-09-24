@@ -252,8 +252,8 @@ done
 
 “与 7 相同”只是本表压缩表达：写入 evals.json 的每个 prompt 必须展开成完整、自包含文本，不得引用其他 case 的 prompt。以上是固定资料的真实 LLM 判断验收，不是在线临床证据收集能力验收。
 
-- [ ] 先新增案例及附件，再更新 ID 断言；验证离线结构检查能发现 ID/附件遗漏。
-- [ ] 不编写按关键词自动判断医学答案的评分器；逐条对照 assertions 与实际 trace 判定。
+- [x] 先新增案例及附件，再更新 ID 断言；验证离线结构检查能发现 ID/附件遗漏。
+- [x] 不编写按关键词自动判断医学答案的评分器；逐条对照 assertions 与实际 trace 判定。
 - [ ] 提交 B：`test(acmg): add PM1 and calibrated-predictor host scenarios`。
 
 ## C. 定向回归、更新实际安装副本、运行宿主并记录
