@@ -1149,6 +1149,46 @@ class ClinGenTool(BaseTool):
                             "detail response is not an object"
                         )
                         detail = {}
+                    # F03 (2026-10-13): the merged entry must not present
+                    # detail material under index identity when the detail's
+                    # own @id, version or cspecStatus contradicts the index
+                    # record it was fetched for. Absent optional metadata is
+                    # NOT a failure; a present contradiction is disclosed
+                    # through the existing partial-failure channels with the
+                    # field and both values, while the usable rules are
+                    # kept. Version comparison is exact after whitespace
+                    # stripping (no equivalence inference); status
+                    # comparison ignores case.
+                    detail_id = self._cspec_id(detail.get("@id"))
+                    if detail_id and detail_id != specification_id:
+                        detail_structures.append(
+                            f"detail @id {detail_id} does not match index "
+                            f"@id {specification_id}"
+                        )
+                    index_version = entry["version"] or ""
+                    detail_version = self._cspec_version(detail)
+                    if index_version and detail_version and (
+                        detail_version != index_version
+                    ):
+                        detail_structures.append(
+                            f"detail version {detail_version!r} does not "
+                            f"match index version {index_version!r}"
+                        )
+                    detail_status = detail.get("cspecStatus")
+                    if (
+                        isinstance(detail_status, str)
+                        and detail_status.strip()
+                    ):
+                        index_status = str(record.get("status") or "").strip()
+                        if index_status and (
+                            detail_status.strip().casefold()
+                            != index_status.casefold()
+                        ):
+                            detail_structures.append(
+                                f"detail cspecStatus "
+                                f"{detail_status.strip()!r} does not match "
+                                f"index status {index_status!r}"
+                            )
                     rule_set_ids = [rs["rule_set_id"] for rs in rule_sets]
                     criteria, criteria_errors = (
                         self._cspec_criteria_for_rule_sets(

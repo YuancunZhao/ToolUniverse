@@ -935,16 +935,15 @@ def test_detail_unrelated_damaged_rule_set_not_mixed(monkeypatch):
 
 def test_one_damaged_detail_does_not_sink_other_spec(monkeypatch):
     damaged_detail = _detail_with_criteria([None])
+    healthy_gn020 = _detail_payload(spec_id="GN020", rule_set_id="777")
+    healthy_gn020["version"] = "3.0"  # match its index record
     _patch(
         monkeypatch,
         _index(
             _index_record(),
             _index_record(spec_id="GN020", version="3.0", rule_set_id="777"),
         ),
-        detail_payloads={
-            "GN019": damaged_detail,
-            "GN020": _detail_payload(rule_set_id="777"),
-        },
+        detail_payloads={"GN019": damaged_detail, "GN020": healthy_gn020},
     )
 
     result = _tool().run({"gene": "MYOC"})
@@ -1128,3 +1127,114 @@ def test_binding_validation_limited_to_requested_gene(monkeypatch):
 
     assert result["status"] == "success"
     assert result["data"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Index/detail identity, version and status contradictions (F03, 2026-10-13):
+# the merged entry must not present detail material under index identity when
+# the detail's own @id, version or cspecStatus contradicts the index.
+# --------------------------------------------------------------------------- #
+def test_detail_id_mismatch_is_disclosed(monkeypatch):
+    # Index says GN019; the detail fetched at GN019's URL identifies itself
+    # as GN020 -- the rules inside may belong to another specification.
+    detail = _detail_payload(spec_id="GN020")
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    entry = result["data"][0]
+    assert entry["specification_id"] == "GN019"
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "@id" in m and "GN019" in m and "GN020" in m
+        for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "GN019" in result["partial_failures"]
+    assert "GN020" in result["partial_failures"]["GN019"]
+
+
+def test_detail_version_mismatch_is_disclosed(monkeypatch):
+    detail = _detail_payload()
+    detail["version"] = "2.2"  # index says 2.1
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "version" in m and "2.1" in m and "2.2" in m
+        for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "version" in result["partial_failures"]["GN019"]
+    # Index identity is kept for the entry; the contradiction is
+    # disclosed, not silently resolved to the detail's version.
+    assert entry["version"] == "2.1"
+
+
+def test_detail_retired_status_is_disclosed(monkeypatch):
+    detail = _detail_payload()
+    detail["cspecStatus"] = "Retired"  # index says Released
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "cspecStatus" in m and "Retired" in m and "Released" in m
+        for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "cspecStatus" in result["partial_failures"]["GN019"]
+
+
+def test_detail_identity_metadata_absent_stays_compatible(monkeypatch):
+    # @id / version / cspecStatus are optional on the detail: their absence
+    # must not add new failure conditions.
+    detail = _detail_payload()
+    del detail["@id"]
+    del detail["version"]
+    del detail["cspecStatus"]
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry.get("detail_structure_failed") is not True
+    assert "GN019" not in result.get("partial_failures", {})
+    assert entry["criterion_modifications"][0]["criterion"] == "PM2"
+    # Index version still wins when the detail carries none.
+    assert entry["version"] == "2.1"
+
+
+def test_detail_status_case_insensitive_match_is_consistent(monkeypatch):
+    detail = _detail_payload()
+    detail["cspecStatus"] = "released"  # case differs, value matches
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry.get("detail_structure_failed") is not True
+    assert entry["missing_materials"] == []
