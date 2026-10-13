@@ -518,3 +518,84 @@ test host. If the session cannot be resumed, document that limitation and open a
 new case-only context. Reassess against assertions only after output is saved.
 Quota recovery and native continuation have not yet been verified. ZCode also
 remains a separate missing acceptance item. No push was performed.
+
+## Review-fix round (2026-10-13)
+
+Scope: the 11 confirmed findings (F01–F11) in
+`/private/tmp/ToolUniverse-acmg-code-review-2026-10-13.md`, executed per
+`docs/superpowers/plans/2026-10-13-review-fixes.md` in five
+reproduce-then-fix batches. Plan boundary held: single branch, no
+dependency/lockfile/global-config/skill changes, no push.
+
+Commits (each preceded by failing counterexamples, then verified):
+
+- `3cddec03` — A/F01: ClinVar submitter citations captured on the
+  ObservedInList/ObservedIn/ObservedData path (6 counterexamples failed first).
+- `8a892c7a` — B/F02,F08,F09: SVI_REFERENCE wording (PVS1 in-frame splice
+  reconstitution never blanket-excluded; BayesDel_noAF binding; PS1/PM5 facts
+  and Source), evals 11–15 with a new fixture file, doc-guard tests; three
+  distribution copies and both install targets updated (pre-sync backup
+  retained under the 2026-09-24 flow).
+- `037241de` — C/F03: ClinGen detail/index id, version and cspecStatus
+  contradictions disclosed through the existing failure channels (3 of 5 new
+  tests failed first).
+- `5e659e23` — D/F04–F07: single OR group for array `variant_name`; retries
+  that replace only the gene term; `details_complete`/`missing_variant_ids`
+  contract; the old nine positional SDK arguments restored with
+  `variant_name` appended tenth; registered return_schema rewritten and the
+  wrapper regenerated (19 of 21 new tests failed first; 2 were compatibility
+  guards).
+- `ddbebdfb` — E/F10,F11: CHECKLIST duplicate-table removed in favor of a
+  calculator-receipt checklist; TOOLS_REFERENCE/CODE_PATTERNS parameter and
+  example repairs (AST guard found 48 violations, all fixed; both guards
+  failed first).
+
+Regression results after `ddbebdfb` (replacing the 893-passed/1-skipped
+starting record, which was a baseline snapshot, not a deliverable number):
+review group 1 (6 files) 490 passed; review group 2 441 passed / 1 skipped
+(PyMuPDF); generator types test 18 passed; ruff clean on touched src and
+tests; `git diff --check` clean against both `4f2d9196` and `2128ff57`;
+no dependency or lockfile drift; working tree clean before this docs commit.
+
+Real-link receipts (live NCBI, run 2026-10-13; counts are what the API
+returned that day, not fixed expectations):
+
+- stdio MCP via the installed `tooluniverse-smcp-stdio` entry (mcp
+  ClientSession, `--include-tools ClinVar_search_variants
+  ClinVar_get_variant_details ClinVar_get_submitted_records`):
+  - array search `{"gene": "HBB", "variant_name": ["rs334", "Glu6Val"]}`
+    returned exactly `HBB[gene] AND (rs334[All Fields] OR
+    "Glu6Val"[Variant name])`, 10 hits, `details_complete: true`,
+    `missing_variant_ids: []`;
+  - details for variation ID `13961` returned accession `VCV000013961`,
+    339 submitter citations, 205 carrying an ObservedData element in
+    `source_path`, PMID 12068308 present, `citations_complete: false`
+    with the single legitimate BookShelf-source warning;
+  - submitted records for `VCV000013961`: 45 submissions, the same 339
+    citations / 205 ObservedData-path / PMID 12068308 shape;
+  - payloads over 100k chars are truncated by the SMCP layer with the full
+    JSON persisted to a temp file whose path appears in the tail — the
+    receipts above were asserted on those recovered full payloads.
+- VCV002737810 re-checked after the F01 changes: unchanged citations and
+  `citations_complete: true` — no regression.
+
+Boundary observations (pre-existing, outside F01–F11 scope, not changed
+this round): `ClinVar_get_variant_details` passes `variant_id` to esummary
+verbatim, so the VCV-prefixed string form is rejected by NCBI
+("Invalid uid"); the numeric variation ID (e.g. `13961`, string-typed per
+the registered schema) is the working form, matching the tool's documented
+input. `_normalize_variant_id` currently guards only the search tool.
+
+Completion states for this round, reported separately:
+
+1. Repository fixes for F01–F11: complete (five commits above).
+2. Local install targets: the two Batch-B rule files are synced to both
+   `~/Documents/VarsUnderReview/.agents/skills/...` and
+   `~/.zcode/skills/...` targets; the code fixes live only in this
+   worktree's environment (as before — the branch has not shipped).
+3. Independent-host boundary acceptance for new evals 11–15 and re-runs of
+   3/4: NOT performed this session. Per the honesty rules, same-session
+   work above is not an independent acceptance receipt; this tier remains
+   open and any earlier PARTIAL verdicts stand.
+
+No push was performed.

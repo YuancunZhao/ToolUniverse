@@ -316,3 +316,35 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
 - 本轮独立仓库验证：482 passed、380 warnings，退出码 0；修改测试文件的 ruff 与 diff 检查通过。完整日志为 `temp_docs_and_tests/benchmark_tracking/2026-09-24-1610-guardrail-followup/recovery-verify.log`，此前截断的 final-verify.log 不充当通过凭证。
 - Codex 独立补验收：案例 3/4 PASS；案例 7–10 已调用真实计算器，但因额度中断缺最终回答，保持 PARTIAL。ZCode 未独立验收；目标安装文件已同步，但本次宿主实读的是相同哈希的 case-local 副本。
 - **恢复入口**：`docs/acmg_svi_cspec_local_run.md` 末节记录逐例回执、完整哈希、会话 ID 与 native resume 要求；先核对 HEAD/diff，再续接缺失的最终回答，续接材料另存，不给测试宿主预期答案或本实施记录。规则修正已完成，不从旧计划重新执行。默认不 push。
+
+## 14. 审查问题修复轮（2026-10-13，计划 2026-10-13-review-fixes.md）
+
+- 外部代码审查报告 `/private/tmp/ToolUniverse-acmg-code-review-2026-10-13.md`
+  确认的 F01–F11 已按五批“先复现、补反例、修复、验证、独立提交”完成：
+  `3cddec03`（A/F01 ClinVar ObservedData 路径引文）、`8a892c7a`
+  （B/F02,F08,F09 SVI_REFERENCE 措辞 + evals 11–15 + 文档守卫 + 三分发
+  副本与两处安装位同步）、`037241de`（C/F03 ClinGen detail/index 元数据
+  矛盾披露）、`5e659e23`（D/F04–F07 OR 组、重试只替换基因项、
+  details_complete/missing_variant_ids 契约、SDK 九旧位参数序恢复 +
+  variant_name 第十位、注册 return_schema 重写与包装再生）、
+  `ddbebdfb`（E/F10,F11 CHECKLIST 去重改为计算器回执清单 +
+  TOOLS_REFERENCE/CODE_PATTERNS 参数与示例修复，AST 守卫清零 48 处）。
+- 回归实测：审查组一 490 passed；审查组二 441 passed / 1 skipped
+  （PyMuPDF）；生成器类型测试 18 passed；ruff 与对 `4f2d9196`、
+  `2128ff57` 的 `git diff --check` 干净；无依赖或锁文件漂移。
+  起点 893 passed / 1 skipped 是快照记录，不是交付口径。
+- 真链路回执（当日实测，数值为当日 API 返回，非固定预期）：stdio
+  MCP（官方 `tooluniverse-smcp-stdio` 入口）数组 variant_name 检索得到
+  精确 OR 组 `HBB[gene] AND (rs334[All Fields] OR "Glu6Val"[Variant name])`
+  且 details_complete=true；variation 13961 details 含 339 条提交者引文、
+  205 条 ObservedData 路径、PMID 12068308，citations_complete=false 仅因
+  一条合法 BookShelf 来源警示；VCV000013961 submitted 记录同形（45 条
+  submission）；VCV002737810 复查无回归。超 100k 字符载荷由 SMCP 层截断
+  并落盘临时文件，回执断言读取恢复的完整 JSON。
+- 范围外观察（未改动）：details 工具将 variant_id 原样传给 esummary，
+  VCV 前缀串被 NCBI 拒绝（Invalid uid），数字 variation ID（schema 为
+  string）是可用形态；`_normalize_variant_id` 目前只护住 search 工具。
+- 三层完成度分开报告：仓库修复完成（上述五提交）；两处安装位已同步
+  Batch-B 两个规则文件，代码修复仅在本 worktree 环境；新增 evals 11–15
+  与回归 3/4 的独立宿主边界验收本轮未执行——同会话工作不构成独立验收
+  回执，该层保持未完成，既有 PARTIAL 判定不变。未 push。
