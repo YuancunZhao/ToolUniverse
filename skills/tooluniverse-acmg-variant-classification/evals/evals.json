@@ -132,6 +132,75 @@
         "a real ACMG_calculate_classification call with 28 distinct evidence records",
         "calculator returns computed / VUS / total_score 4 and the final report matches it verbatim"
       ]
+    },
+    {
+      "id": 11,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:11 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1200+1G>A、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host applies the corrected PVS1 guidance: the nearby in-frame cryptic-donor reconstitution is NOT treated as a blanket Not-applicable condition. The in-frame outcome (16% of the protein deleted, inside the established critical region) is assessed on the decision tree and PVS1 is submitted met at Strong with a tree citation in rule_refs. Real calculator returns computed / VUS / total_score 4; final report matches the receipt verbatim.",
+      "files": [
+        "files/case11-15-splice-predictor-boundary-facts.md"
+      ],
+      "assertions": [
+        "PVS1 not excluded merely because a ±20 nt consensus sequence could reconstitute in-frame splicing",
+        "PVS1 submitted met at Strong (tree branch for the in-frame critical-region outcome), with the decision-tree citation recorded",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator returns computed / VUS / total_score 4 and the final report matches it verbatim"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:12 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1200+2A>G、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Established functional rescue is confirmed by the RNA facts, so PVS1 is recorded not applicable (not met at any strength) despite the canonical +2 position. With no other criterion met, the real calculator returns needs_review with reason no_scoring_evidence, classification null; the host reports that outcome faithfully and fabricates no total_score.",
+      "files": [
+        "files/case11-15-splice-predictor-boundary-facts.md"
+      ],
+      "assertions": [
+        "PVS1 recorded not applicable on the ground of established functional rescue (RNA-confirmed), not scored met at any strength merely because the site is canonical",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator outcome is needs_review with no_scoring_evidence and classification null; no self-generated total_score appears"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:13 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1000C>T、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host uses the preselected BayesDel_noAF value 0.60 (field dbnsfp.bayesdel.no_af.score) with the noAF calibration interval (>=0.50 -> PP3 Strong); it does not use the addAF value 0.10, does not mix the two models' calibrations, and names the field/model used in the rationale. Real calculator returns computed / VUS / total_score 4; final report matches verbatim.",
+      "files": [
+        "files/case11-15-splice-predictor-boundary-facts.md"
+      ],
+      "assertions": [
+        "PP3 Strong scored from the noAF score 0.60 per the BayesDel_noAF interval",
+        "the addAF score 0.10 is not used for scoring and no calibration is transferred between the two BayesDel models",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator returns computed / VUS / total_score 4 and the final report matches it verbatim"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:14 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1000C>T p.Arg334Gln、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host performs the PS1 splice-mechanism check: the reference variant's pathogenicity operates through aberrant splicing while the variant under evaluation has no corresponding splice effect, so PS1 is NOT scored met on the shared p.Arg334Gln annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; the host reports it faithfully with no fabricated total_score.",
+      "files": [
+        "files/case11-15-splice-predictor-boundary-facts.md"
+      ],
+      "assertions": [
+        "PS1 not scored met on protein identity alone; the splice-mechanism mismatch is explicit in the rationale",
+        "no hard protein-functional-assay precondition is invented for establishing the amino-acid identity",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator outcome is needs_review with no_scoring_evidence and classification null; no self-generated total_score appears"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:15 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1001G>T p.Arg334Leu、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Same mechanism boundary as case 14 applied to PM5: the reference p.Arg334Gln variant is pathogenic through splicing and the variant under evaluation has no corresponding splice effect, so PM5 is NOT scored met on the same-residue different-missense annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; reported faithfully.",
+      "files": [
+        "files/case11-15-splice-predictor-boundary-facts.md"
+      ],
+      "assertions": [
+        "PM5 not scored met on the missense annotation alone; the splice-mechanism check is explicit in the rationale",
+        "the different amino-acid annotation is not used to skip the mechanism check",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator outcome is needs_review with no_scoring_evidence and classification null; no self-generated total_score appears"
+      ]
     }
   ]
 }

@@ -25,8 +25,10 @@ def _cases():
 
 def test_case_ids_unique_and_complete():
     ids = [case["id"] for case in _cases()]
-    assert ids == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    assert len(set(ids)) == 10
+    assert ids == [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]
+    assert len(set(ids)) == 15
 
 
 def test_attachments_exist():

@@ -215,3 +215,35 @@ def test_acmg_reference_has_no_known_overrestrictive_shortcuts():
             if marker.casefold() in normalized:
                 failures.append(f"{name}: {marker}")
     assert not failures, "\n".join(failures)
+
+
+def test_acmg_reference_has_no_2026_10_13_confirmed_wrong_wording():
+    # 2026-10-13 review F02/F08/F09: these exact sentences were confirmed
+    # wrong -- the blanket PVS1 exclusion for nearby in-frame splice
+    # reconstitution, the unqualified BayesDel calibration row/combination
+    # claim (Pejaver 2022 calibrated the no-AF model), the PS1/PM5 protein
+    # comparisons lacking a splice-mechanism check, the sweeping "no SVI
+    # recommendation for PS1/PM5" source claim (Walker 2023 does give
+    # splicing guidance there), and a PS1 identity phrasing readable as a
+    # functional-assay precondition. The check only prevents the known
+    # erroneous wording from reappearing; it does NOT prove scientific
+    # correctness or that any LLM follows the rules.
+    root = SKILL_DIR.parent / "tooluniverse-acmg-variant-classification"
+    forbidden = {
+        "SVI_REFERENCE.md": (
+            "strong consensus splice sequence may reconstitute in-frame splicing",
+            "bayesdel | 0.13",
+            "component (revel, bayesdel) may combine",
+            "no svi criteria-specific recommendation exists for ps1/pm5",
+            "no svi criteria-specific recommendation exists for pm5",
+            "(not merely predicted) identity",
+        ),
+    }
+    failures = []
+    for name, markers in forbidden.items():
+        text = (root / name).read_text().replace("**", "").replace("`", "")
+        normalized = " ".join(text.split()).casefold()
+        for marker in markers:
+            if marker.casefold() in normalized:
+                failures.append(f"{name}: {marker}")
+    assert not failures, "\n".join(failures)

@@ -111,8 +111,23 @@ evaluated ≠ not applicable ≠ not met.
   - **Not applicable at any strength** — LoF not an established disease
     mechanism; the exon is missing from an alternate biologically relevant
     transcript; the exon is enriched for high-frequency LoF variants in the
-    general population; a nearby (±20 nt) strong consensus splice sequence
-    may reconstitute in-frame splicing; whole-gene tandem insertion.
+    general population; whole-gene tandem insertion.
+- **In-frame splice reconstitution is assessed, never blanket-excluded
+  (Abou Tayoun et al. 2018; Walker et al. 2023):** a nearby (±20 nt)
+  consensus splice sequence that could reconstitute in-frame splicing is
+  NOT by itself a Not-applicable condition. Work through the plausible
+  outcomes (cryptic-site in-frame transcript, exon skipping, in-frame
+  deletion) on the relevant transcript — maintaining the reading frame
+  does not equal rescued protein function. Check whether the in-frame
+  product removes or disrupts a critical region, a substantial fraction
+  of the protein (>10%), or established functional residues, and assign
+  PVS1 at the strength the decision tree gives for that outcome (e.g.,
+  in-frame loss involving a critical region → Strong; non-critical small
+  in-frame loss → Moderate/Supporting per the tree). When several
+  outcomes are plausible and unresolved, use the LOWEST tree-supported
+  strength among them. Treat the variant as functionally rescued (PVS1
+  not applicable on this ground) only when established evidence such as
+  RNA studies confirms splicing and protein function are preserved.
 - **Splicing overlay (Walker et al. 2023):** canonical ±1/2 variants follow
   the gene-specific tree (some do not alter splicing → PVS1_N/A); RNA assays
   confirming aberrant splicing give **PVS1 at the strength the tree assigns
@@ -128,19 +143,36 @@ evaluated ≠ not applicable ≠ not met.
 
 ### PS1 — same amino-acid change as an established pathogenic variant (Strong)
 - **Facts:** reference variant with the same protein change (different
-  nucleotide), its pathogenicity established (expert panel / equivalent), same
-  transcript and residue, protein-level (not merely predicted) identity.
+  nucleotide), its pathogenicity established (expert panel / equivalent),
+  same transcript and residue. The amino-acid-change identity itself is
+  read from the sequence-level consequence annotation of both variants —
+  a protein functional assay is NOT a precondition for establishing that
+  the two nucleotide changes produce the same amino-acid change; what
+  must be established (not merely predicted) is the reference variant's
+  pathogenicity.
+- **Splice-mechanism check (required on the protein-comparison path):**
+  verify that neither the reference variant nor the variant under
+  evaluation acts through altered splicing. If the reference variant's
+  pathogenicity operates through a splicing mechanism (e.g., cryptic-site
+  activation confirmed by RNA), the shared amino-acid annotation alone
+  does not establish PS1: the variant under evaluation must be shown to
+  carry the corresponding splice effect — protein-level identity never
+  substitutes for this mechanism check (Walker et al. 2023). When the
+  shared consequence IS an established splicing effect, judge the
+  comparison under the splicing framework (Walker et al. 2023) instead of
+  the plain amino-acid path.
 - **Exclusions:** reference variant VUS/LB/B → PS1 does not apply (do not
   score it); nucleotide-level identity is not required, but protein-level
-  identity is.
+  identity is; reference variant pathogenic through splicing without a
+  corresponding splice effect in the variant under evaluation → this
+  protein-comparison PS1 does not apply.
 - **Double counting:** PS1 (same AA change) and PM5 (different AA, same
   residue) are different facts and may coexist; do not count the same
   reference variant twice within one code.
-- **Source:** ACMG/AMP 2015 original wording (no SVI criteria-specific
-  recommendation exists for PS1/PM5 — checked against the guidance index);
-  splicing-related same-change comparisons follow Walker et al. 2023;
-  specifications may define additional combinations (e.g., MYOC defines
-  PM5_Strong paths and PP3 caps).
+- **Source:** ACMG/AMP 2015 original criterion; the splice-mechanism
+  boundary for protein comparisons follows Walker et al. 2023
+  (PMC10357475); specifications may define additional combinations (e.g.,
+  MYOC defines PM5_Strong paths and PP3 caps).
 
 ### PS2 / PM6 — de novo (SVI point system, replaces fixed strengths)
 - **Facts:** every proband with a de novo observation, each with (1) parental
@@ -348,12 +380,25 @@ evaluated ≠ not applicable ≠ not met.
 ### PM5 — different pathogenic missense at the same residue (Moderate default)
 - **Facts:** a different amino-acid change at the same residue is
   established pathogenic (protein-level identity on the same transcript);
-  reference variant's classification verified current.
+  reference variant's classification verified current. The amino-acid
+  annotations are read from sequence-level consequences; no protein
+  functional assay is required to establish the annotations themselves.
+- **Splice-mechanism check (same boundary as PS1, Walker et al. 2023):**
+  verify that the reference variant's pathogenicity is not operating
+  through altered splicing and that the variant under evaluation has no
+  corresponding splice effect — a different amino-acid annotation never
+  skips this check. Reference pathogenic through splicing without a
+  corresponding splice effect in the variant under evaluation → this
+  missense-comparison PM5 does not apply. When the relevant consequence
+  is an established splicing effect, judge under the splicing framework
+  instead of the plain missense-comparison path.
 - **Exclusions:** reference variant VUS or conflicting → do not apply;
   predicted (not established) pathogenicity never counts.
-- **Source:** ACMG/AMP 2015 (no SVI criteria-specific recommendation exists
-  for PM5 — checked against the guidance index); specifications may define
-  upgraded paths (e.g., MYOC's PM5_Strong combinations with caps).
+- **Source:** ACMG/AMP 2015 (PM5 same-residue comparison, with the
+  caution that a shared residue/annotation does not by itself transfer
+  mechanism); splice-mechanism boundary per Walker et al. 2023;
+  specifications may define upgraded paths (e.g., MYOC's PM5_Strong
+  combinations with caps).
 
 ### PP1 — co-segregation (SVI 2023 point system)
 - **Facts:** inheritance model; each genotyped co-segregating relative with
@@ -412,16 +457,24 @@ evaluated ≠ not applicable ≠ not met.
 | Tool | PP3 Supporting | PP3 Moderate | PP3 Strong | BP4 Supporting | BP4 Moderate |
 |---|---|---|---|---|---|
 | REVEL | 0.644–0.773 | 0.773–0.932 | ≥0.932 | 0.183–0.290 | 0.016–0.183 |
-| BayesDel | 0.13–0.27 | 0.27–0.50 | ≥0.50 | −0.36 to −0.18 | ≤−0.36 |
+| BayesDel_noAF | 0.13–0.27 | 0.27–0.50 | ≥0.50 | −0.36 to −0.18 | ≤−0.36 |
 | MutPred2 | 0.737–0.829 | 0.829–0.932 | ≥0.932 | 0.197–0.391 | 0.010–0.197 |
 | VEST4 | 0.764–0.861 | 0.861–0.965 | ≥0.965 | 0.302–0.449 | ≤0.302 |
 | CADD | 25.3–28.1 | ≥28.1 | — | 17.3–22.7 | 0.15–17.3 |
 
   (REVEL and CADD also support stronger benign tiers: REVEL 0.003–0.016 and
-  CADD ≤0.15 = BP4 Strong.)
+  CADD ≤0.15 = BP4 Strong. BayesDel_noAF is the without-MAF (noAF) model
+  of Pejaver et al. 2022 — in MyVariant data the corresponding field is
+  `dbnsfp.bayesdel.no_af.score`. dbNSFP also ships
+  `dbnsfp.bayesdel.add_af.score`, a DIFFERENT model with its own
+  calibration: these intervals apply to the noAF score only, never to
+  the addAF score, and a BayesDel result of unknown model version must
+  not be assumed to follow the noAF calibration.)
 - **Combination limits:** the summed strength of **PP3 + PM1 must not
   exceed Strong**; tools without an allele-frequency component (REVEL,
-  BayesDel) may combine with PM2/BS1 without limits. A tool whose maximum
+  BayesDel_noAF) may combine with PM2/BS1 without limits — for BayesDel
+  this frequency-independence property belongs to the noAF model
+  specifically. A tool whose maximum
   calibrated tier is Moderate can never contribute above Moderate.
 - **Splice prediction (non-canonical variants, Walker et al. 2023):**
   SpliceAI Δ ≥0.2 → PP3 (calibrated Moderate, conservatively applied at
