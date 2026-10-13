@@ -493,6 +493,13 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # official symbols work.
             if "-" in gene:
                 gene_hyphen_variant = gene.replace("-", "")
+            # F05 (2026-10-13): record WHERE the gene term sits instead of
+            # assuming index 0 -- a raw_term Entrez expression (via `query`)
+            # is appended before it, and the retries below used
+            # query_parts[1:], which dropped the caller's expression and
+            # kept the OLD gene term ({"gene":"GBA","query":"1[chr]"}
+            # retried as "GBA1[gene] AND GBA[gene]").
+            gene_query_index = len(query_parts)
             query_parts.append(f"{gene}[gene]")
 
         condition_dis_index = None
@@ -572,8 +579,6 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             # it -- route it like the rsid param instead of a false-empty.
             rsid_names = [n for n in names if re.fullmatch(r"rs\d+", n, re.IGNORECASE)]
             names = [n for n in names if n not in rsid_names]
-            for _rs in rsid_names:
-                query_parts.append(_rs)
             variant_names_used = names + rsid_names
             # A variant_name that yields no usable term at all (blank string,
             # empty array, nothing but whitespace) used to be silently
@@ -614,9 +619,21 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                     form = form.replace('"', "").strip()
                     if form and form not in spellings:
                         spellings.append(form)
-            if spellings:
-                terms = " OR ".join(f'"{s}"[Variant name]' for s in spellings)
-                query_parts.append(f"({terms})" if len(spellings) > 1 else terms)
+            # F04 (2026-10-13): every variant_name candidate -- bare rsID
+            # terms AND the [Variant name] spellings -- is ONE OR group.
+            # The old code appended each rsID as its own query part, so
+            # " AND " joined them into an intersection: two rsIDs returned
+            # the (usually empty) overlap, and rsID+HGVS searched
+            # rsID AND names instead of any-of, turning the documented
+            # candidate OR into needless false empties.
+            candidate_terms = list(rsid_names) + [
+                f'"{s}"[Variant name]' for s in spellings
+            ]
+            if candidate_terms:
+                terms = " OR ".join(candidate_terms)
+                query_parts.append(
+                    f"({terms})" if len(candidate_terms) > 1 else terms
+                )
 
         if "clinical_significance" in arguments:
             # Feature-82A-002: NCBI silently translates [clnsig] to [All Fields],
@@ -722,7 +739,11 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # BRCA-2/HER-2-style names ClinVar's index doesn't recognize.
         if gene_hyphen_variant and int(data["esearchresult"].get("count", 0)) == 0:
             # "gene" is always the first query part appended when present.
-            fallback_query_parts = [f"{gene_hyphen_variant}[gene]"] + query_parts[1:]
+            fallback_query_parts = (
+                query_parts[:gene_query_index]
+                + [f"{gene_hyphen_variant}[gene]"]
+                + query_parts[gene_query_index + 1:]
+            )
             fallback_params = dict(params, term=" AND ".join(fallback_query_parts))
             retry_data, retry_error, retry_warnings = self._replacement_retry(
                 fallback_params, "hyphen-stripped gene"
@@ -749,7 +770,11 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             if alias_warning:
                 auxiliary_warnings.append(alias_warning)
             if resolved_gene and resolved_gene.upper() != gene.upper():
-                resolved_query_parts = [f"{resolved_gene}[gene]"] + query_parts[1:]
+                resolved_query_parts = (
+                    query_parts[:gene_query_index]
+                    + [f"{resolved_gene}[gene]"]
+                    + query_parts[gene_query_index + 1:]
+                )
                 resolved_params = dict(params, term=" AND ".join(resolved_query_parts))
                 retry_data, retry_error, retry_warnings = self._replacement_retry(
                     resolved_params, f"alias-resolved gene {resolved_gene}"
@@ -811,19 +836,72 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         query_warnings = list(query_warnings) + auxiliary_warnings
 
         variants = []
+        # F06 (2026-10-13): a failing or partially broken details (esummary)
+        # fetch after a successful search used to be silently swallowed --
+        # counts and IDs came back with variants: [] and nothing said the
+        # details were missing. Completeness is measured against the
+        # RETURNED ids only (a total_count above the page size is
+        # pagination, not missing details); reasons go to `warnings`, never
+        # query_warnings; a healthy empty query is complete.
+        missing_variant_ids: List[str] = []
+        detail_warnings: List[str] = []
         if ids:
             summary_result = self._make_request(
                 "/esummary.fcgi",
                 {"db": "clinvar", "id": ",".join(ids[:200]), "retmode": "json"},
             )
-            if summary_result.get("status") == "success":
-                result_map = summary_result.get("data", {}).get("result", {})
+            result_map = None
+            if summary_result.get("status") != "success":
+                detail_warnings.append(
+                    "variant details (esummary) request failed: "
+                    + str(summary_result.get("error") or "request failed")
+                    + "; search counts and IDs are kept but no details "
+                    "could be parsed"
+                )
+            else:
+                summary_data = summary_result.get("data")
+                container = (
+                    summary_data.get("result")
+                    if isinstance(summary_data, dict)
+                    else None
+                )
+                if isinstance(container, dict):
+                    result_map = container
+                else:
+                    detail_warnings.append(
+                        "variant details (esummary) response was missing or "
+                        "malformed at the top level (no result object); "
+                        "search counts and IDs are kept but no details "
+                        "could be parsed"
+                    )
+            if result_map is not None:
                 for vid in ids:
                     vdata = result_map.get(vid)
-                    if vdata and not vdata.get("error"):
-                        variants.append(
-                            {"variant_id": vid, **self._parse_variant_summary(vdata)}
+                    if not isinstance(vdata, dict):
+                        missing_variant_ids.append(vid)
+                        continue
+                    if vdata.get("error"):
+                        missing_variant_ids.append(vid)
+                        detail_warnings.append(
+                            f"esummary record for variant id {vid} returned "
+                            f"an error: {vdata['error']}"
                         )
+                        continue
+                    variants.append(
+                        {"variant_id": vid, **self._parse_variant_summary(vdata)}
+                    )
+            else:
+                missing_variant_ids = list(dict.fromkeys(ids))
+        # Order-preserving dedup of the missing IDs (the idlist is normally
+        # unique already; this guards against pathological payloads).
+        missing_variant_ids = list(dict.fromkeys(missing_variant_ids))
+        if missing_variant_ids and not detail_warnings:
+            detail_warnings.append(
+                "no parseable details for "
+                f"{len(missing_variant_ids)} of {len(ids)} returned "
+                "variant id(s): " + ", ".join(missing_variant_ids)
+            )
+        details_complete = not missing_variant_ids and not detail_warnings
 
         search_params = {
             k: v
@@ -840,6 +918,7 @@ class ClinVarSearchVariants(ClinVarRESTTool):
         # compat-parsed -- the caller should fix the serialization, but the
         # query itself is now correct either way.
         response_warnings = []
+        response_warnings.extend(detail_warnings)
         if variant_names_used is not None:
             search_params["variant_name_received_type"] = (
                 variant_name_compat["received_type"]
@@ -860,6 +939,8 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             "total_count": count,
             "variant_ids": ids,
             "variants": variants,
+            "details_complete": details_complete,
+            "missing_variant_ids": missing_variant_ids,
             "query_translation": query_translation,
             "search_params": search_params,
         }

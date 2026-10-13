@@ -12,13 +12,13 @@ def ClinVar_search_variants(
     gene: Optional[str] = None,
     condition: Optional[str] = None,
     variant_id: Optional[str] = None,
-    variant_name: Optional[str | list[Any]] = None,
     max_results: Optional[int] = 20,
     limit: Optional[int] = None,
     clinical_significance: Optional[str] = None,
     gene_symbol: Optional[str] = None,
     significance: Optional[str] = None,
     query: Optional[str] = None,
+    variant_name: Optional[str | list[Any]] = None,
     *,
     stream_callback: Optional[Callable[[str], None]] = None,
     use_cache: bool = False,
@@ -35,8 +35,6 @@ def ClinVar_search_variants(
         Disease or condition name (e.g., 'breast cancer', 'diabetes') At least one of...
     variant_id : str
         ClinVar variant ID (e.g., '12345') At least one of gene, condition, or varian...
-    variant_name : str | list[Any]
-        Protein change or HGVS notation to search for (e.g., 'Glu6Val', 'V600E', 'c.2...
     max_results : int
         Maximum number of results to return (default: 20). Alias: limit.
     limit : int
@@ -49,6 +47,8 @@ def ClinVar_search_variants(
         Alias for clinical_significance (e.g., "pathogenic", "benign", "uncertain_sig...
     query : str
         Alias for condition. Free-text search mapped to condition/disease field.
+    variant_name : str | list[Any]
+        Protein change or HGVS notation to search for (e.g., 'Glu6Val', 'V600E', 'c.2...
     stream_callback : Callable, optional
         Callback for streaming output
     use_cache : bool, default False
@@ -67,13 +67,13 @@ def ClinVar_search_variants(
         "gene": gene,
                 "condition": condition,
                 "variant_id": variant_id,
-                "variant_name": variant_name,
                 "max_results": max_results,
                 "limit": limit,
                 "clinical_significance": clinical_significance,
                 "gene_symbol": gene_symbol,
                 "significance": significance,
-                "query": query
+                "query": query,
+                "variant_name": variant_name
     }.items() if v is not None}
     return get_shared_client().run_one_function(
         {

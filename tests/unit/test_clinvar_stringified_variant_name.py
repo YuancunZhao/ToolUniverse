@@ -205,7 +205,11 @@ def test_search_params_discloses_real_array_without_warning():
     params = result["data"]["search_params"]
     assert params["variant_name_received_type"] == "list"
     assert params["variant_names_used"] == names
-    assert "warnings" not in result["data"]
+    # F06 (2026-10-13): `warnings` may legitimately carry detail-fetch
+    # notices (this mock has no esummary payload); what a REAL array must
+    # never produce is the stringified-array warning.
+    warnings = result["data"].get("warnings", [])
+    assert not any("stringified JSON array" in w for w in warnings)
 
 
 def test_variant_alias_gets_same_compat_parsing():

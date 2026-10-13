@@ -18,14 +18,6 @@
                     "type": "string",
                     "description": "ClinVar variant ID (e.g., '12345') At least one of gene, condition, or variant_id must be provided."
                 },
-                "variant_name": {
-                    "type": [
-                        "string",
-                        "array",
-                        "null"
-                    ],
-                    "description": "Protein change or HGVS notation to search for (e.g., 'Glu6Val', 'V600E', 'c.20A>T'), matched against ClinVar's own [Variant name] index -- combine with 'gene' for an exact-match lookup of a specific known variant instead of browsing all of a gene's ClinVar entries. A gene-level browse can silently miss well-known but old/low-ID records once a gene has more entries than max_results (e.g. HBB's canonical sickle-cell record, NM_000518.5(HBB):c.20A>T (p.Glu7Val), isn't within the first 100-425 gene-level rows). Accepts a list to try multiple candidate names in one call (e.g. every allele at a multi-allelic site) -- combined with OR."
-                },
                 "max_results": {
                     "type": "integer",
                     "description": "Maximum number of results to return (default: 20). Alias: limit.",
@@ -63,6 +55,14 @@
                         "null"
                     ],
                     "description": "Alias for condition. Free-text search mapped to condition/disease field."
+                },
+                "variant_name": {
+                    "type": [
+                        "string",
+                        "array",
+                        "null"
+                    ],
+                    "description": "Protein change or HGVS notation to search for (e.g., 'Glu6Val', 'V600E', 'c.20A>T'), matched against ClinVar's own [Variant name] index -- combine with 'gene' for an exact-match lookup of a specific known variant instead of browsing all of a gene's ClinVar entries. A gene-level browse can silently miss well-known but old/low-ID records once a gene has more entries than max_results (e.g. HBB's canonical sickle-cell record, NM_000518.5(HBB):c.20A>T (p.Glu7Val), isn't within the first 100-425 gene-level rows). Accepts a list to try multiple candidate names in one call (e.g. every allele at a multi-allelic site) -- combined with OR."
                 }
             },
             "required": []
@@ -81,48 +81,51 @@
                 },
                 "data": {
                     "type": "object",
-                    "description": "Search results from ClinVar",
+                    "description": "Normalized ClinVar search results",
                     "properties": {
-                        "esearchresult": {
+                        "total_count": {
+                            "type": "integer",
+                            "description": "Total matches reported by eSearch"
+                        },
+                        "variant_ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "ClinVar variant IDs returned on this page"
+                        },
+                        "variants": {
+                            "type": "array",
+                            "description": "Parsed esummary details per returned ID; entries absent from this list are named in missing_variant_ids"
+                        },
+                        "details_complete": {
+                            "type": "boolean",
+                            "description": "True iff every returned variant_ids entry has parseable details; a healthy empty query is complete. Measured against the returned IDs only, not total_count."
+                        },
+                        "missing_variant_ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "Returned IDs whose details are missing or failed to parse, in returned order, deduplicated; empty when details_complete is true"
+                        },
+                        "query_translation": {
+                            "type": "string",
+                            "description": "Entrez-translated query actually executed"
+                        },
+                        "search_params": {
                             "type": "object",
-                            "properties": {
-                                "count": {
-                                    "type": "string",
-                                    "description": "Number of results found"
-                                },
-                                "idlist": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "List of ClinVar variant IDs"
-                                },
-                                "querytranslation": {
-                                    "type": "string",
-                                    "description": "Translated query"
-                                }
-                            }
+                            "description": "Echo of the caller's parameters plus normalization disclosures"
+                        },
+                        "warnings": {
+                            "type": "array",
+                            "description": "Response-level warnings, including why details are incomplete; never duplicates query_warnings"
+                        },
+                        "query_warnings": {
+                            "type": "array",
+                            "description": "Warnings about the query/eSearch payload itself (errorlist/warninglist/zero-explanation)"
                         }
                     }
-                },
-                "search_params": {
-                    "type": "object",
-                    "description": "Search parameters used",
-                    "properties": {
-                        "gene": {
-                            "type": "string"
-                        },
-                        "condition": {
-                            "type": "string"
-                        },
-                        "variant_id": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "url": {
-                    "type": "string",
-                    "description": "API URL used"
                 }
             }
         },
