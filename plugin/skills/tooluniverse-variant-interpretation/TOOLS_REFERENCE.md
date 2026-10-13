@@ -6,12 +6,12 @@
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `MyVariant_query_variants` | Query variant annotations | `variant_id`, `fields` |
+| `MyVariant_query_variants` | Query variant annotations | `query`, `fields` |
 
 **Example - Query variant**:
 ```python
 result = tu.tools.MyVariant_query_variants(
-    variant_id="chr17:g.7674220C>T",
+    query="chr17:g.7674220C>T",
     fields="clinvar,gnomad,cadd,dbnsfp"
 )
 # Returns: ClinVar, gnomAD, CADD, dbNSFP predictions
@@ -31,13 +31,13 @@ result = tu.tools.MyVariant_query_variants(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `ClinVar_search_variants` | Search by variant | `variant`, `gene` |
+| `ClinVar_search_variants` | Search by variant | `variant_name`, `gene` |
 | `ClinVar_get_variant_details` | Get by VCV ID | `variation_id` |
 
 **Example - Search ClinVar**:
 ```python
 result = tu.tools.ClinVar_search_variants(
-    variant="NM_007294.4:c.5266dupC"
+    variant_name="NM_007294.4:c.5266dupC"
 )
 # Returns: VCV ID, classification, review status, submitters
 ```
@@ -90,12 +90,12 @@ result = tu.tools.VariantValidator_validate_variant(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `gnomad_search_variants` | Get allele frequencies | `variant`, `dataset` |
+| `gnomad_search_variants` | Get allele frequencies | `query`, `dataset` |
 
 **Example - Query gnomAD**:
 ```python
 result = tu.tools.gnomad_search_variants(
-    variant="17-7674220-C-T"
+    query="17-7674220-C-T"
 )
 # Returns: AF, ancestry-specific AFs, AC, AN, homozygotes
 ```
@@ -525,23 +525,24 @@ unified ACMG skill; no strength mapping is applied here.
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `ChIPAtlas_enrichment_analysis` | TF binding enrichment | `gene`, `cell_type` |
-| `ChIPAtlas_get_peak_data` | ChIP-seq peaks | `gene`, `experiment_type` |
+| `ChIPAtlas_enrichment_analysis` | TF binding enrichment | `operation`, `genome`, `antigen`, `cell_type_class`, `gene_list` |
+| `ChIPAtlas_get_peak_data` | ChIP-seq peaks | `experiment_id` (SRX/DRX/ERX), `format` |
 | `ChIPAtlas_search_datasets` | Find experiments | `antigen`, `cell_type` |
 
 **Example - Check TF binding at variant**:
 ```python
-# Get TF binding near gene
+# Get TF binding enrichment for a gene set
 tf_binding = tu.tools.ChIPAtlas_enrichment_analysis(
-    gene="BRCA1",
-    cell_type="all"
+    operation="gene_list",
+    gene_list=["BRCA1"],
+    cell_type_class="Blood"
 )
-# Returns: TFs with binding peaks near gene
+# Returns: TFs with binding peaks near the genes
 
-# Get specific peaks
+# Get peaks for a specific ChIP experiment (SRX accession)
 peaks = tu.tools.ChIPAtlas_get_peak_data(
-    gene="BRCA1",
-    experiment_type="TF"
+    experiment_id="SRX080331",
+    format="bed"
 )
 ```
 
@@ -551,7 +552,7 @@ peaks = tu.tools.ChIPAtlas_get_peak_data(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `ENCODE_search_experiments` | Find regulatory data | `assay_title`, `biosample` |
+| `ENCODE_search_experiments` | Find regulatory data | `assay_title`, `target`, `organism` |
 | `ENCODE_get_experiment` | Experiment details | `accession` |
 | `ENCODE_get_biosample` | Sample annotations | `accession` |
 
@@ -583,7 +584,7 @@ pathogenicity is assessed in the unified ACMG skill.
 # Search for regulatory data near variant
 experiments = tu.tools.ENCODE_search_experiments(
     assay_title="ATAC-seq",
-    biosample="heart"
+    target="FBN1"
 )
 # Returns: Open chromatin experiments
 ```
@@ -604,15 +605,16 @@ experiments = tu.tools.ENCODE_search_experiments(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `CELLxGENE_get_expression_data` | Cell-type expression | `gene`, `tissue` |
+| `CELLxGENE_get_expression_data` | Cell-type expression | `operation`, `organism`, `var_value_filter` |
 | `CELLxGENE_get_cell_metadata` | Cell annotations | `gene` |
 
 **Example - Validate tissue expression**:
 ```python
 # Get expression in disease-relevant tissue
 expression = tu.tools.CELLxGENE_get_expression_data(
-    gene="FBN1",
-    tissue="heart"
+    operation="get_expression_data",
+    organism="homo_sapiens",
+    var_value_filter={"gene_name": "FBN1"}
 )
 # Returns: Expression per cell type (cardiomyocytes, fibroblasts, etc.)
 ```
@@ -627,7 +629,7 @@ expression = tu.tools.CELLxGENE_get_expression_data(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `EuropePMC_search_articles` | Search preprints (bioRxiv/medRxiv) | `query`, `source='PPR'`, `pageSize` |
+| `EuropePMC_search_articles` | Search articles and preprints | `query`, `limit` |
 | `BioRxiv_get_preprint` | Get preprint by DOI | `doi` |
 
 **Example - Search preprints** (bioRxiv/medRxiv don't have search APIs, use EuropePMC):
@@ -635,8 +637,7 @@ expression = tu.tools.CELLxGENE_get_expression_data(
 # Search for recent findings
 preprints = tu.tools.EuropePMC_search_articles(
     query="BRCA1 variant functional",
-    source="PPR",  # PPR = Preprints only
-    pageSize=10
+    limit=10
 )
 ```
 
@@ -733,15 +734,17 @@ result = tu.tools.OMIM_search(query="BRCA1")
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `PDBe_get_uniprot_mappings` | Find structures | `uniprot_id` |
-| `RCSBData_get_entry` | Download PDB | `pdb_id` |
+| `PDBeSIFTS_get_best_structures` | List structures for a UniProt | `uniprot_accession` |
+| `RCSBData_get_entry` | Entry metadata | `pdb_id` |
 
 **Example - Get structure**:
 ```python
-# Find PDB structures for TP53
-hits = tu.tools.PDBe_get_uniprot_mappings(uniprot_id="P04637")
-if hits:
-    structure = tu.tools.PDB_get_structure(pdb_id=hits[0]['pdb_id'])
+# List experimental structures for TP53 (ranked by coverage/resolution)
+hits = tu.tools.PDBeSIFTS_get_best_structures(
+    uniprot_accession="P04637"
+)
+# Returns: PDB ids + chains + resolution; RCSBData_get_entry(pdb_id=...)
+# retrieves entry-level metadata when needed
 ```
 
 ### AlphaFold - Predicted Structures
@@ -777,12 +780,12 @@ structure = tu.tools.NvidiaNIM_alphafold2(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `InterPro_get_protein_domains` | Domain annotations | `accession` |
+| `InterPro_get_protein_domains` | Domain annotations | `protein_id` |
 | `UniProt_get_function_by_accession` | Functional sites | `accession` |
 
 **Example - Get domains**:
 ```python
-domains = tu.tools.InterPro_get_protein_domains(accession="P04637")
+domains = tu.tools.InterPro_get_protein_domains(protein_id="P04637")
 # Returns: Domain boundaries, types, functions
 ```
 
@@ -832,15 +835,15 @@ def annotate_variant(tu, variant_hgvs, gene):
     
     # Phase 1: Get aggregated annotations
     annotations = tu.tools.MyVariant_query_variants(
-        variant_id=variant_hgvs,
+        query=variant_hgvs,
         fields="clinvar,gnomad,cadd,dbnsfp"
     )
     
     # Phase 2: ClinVar detail
-    clinvar = tu.tools.ClinVar_search_variants(variant=variant_hgvs)
+    clinvar = tu.tools.ClinVar_search_variants(variant_name=variant_hgvs)
     
     # Phase 3: Population frequency
-    gnomad = tu.tools.gnomad_search_variants(variant=variant_hgvs)
+    gnomad = tu.tools.gnomad_search_variants(query=variant_hgvs)
     
     # Phase 4: Gene context
     omim = tu.tools.OMIM_search(query=gene)
@@ -860,39 +863,33 @@ def annotate_variant(tu, variant_hgvs, gene):
     }
 ```
 
-### Example 2: Structural Analysis for VUS
+### Example 2: Structural Context for VUS
 
 ```python
-def structural_analysis_for_vus(tu, gene, uniprot_id, residue_position):
-    """Structural analysis for VUS missense variants."""
-    
-    # Try PDB first
-    pdb_structures = tu.tools.PDBe_get_uniprot_mappings(uniprot_id=uniprot_id)
-    
-    if pdb_structures:
-        # Use best resolution experimental structure
-        best_pdb = sorted(pdb_structures, key=lambda x: x.get('resolution', 10))[0]
-        structure = tu.tools.PDB_get_structure(pdb_id=best_pdb['pdb_id'])
-        structure_source = f"PDB {best_pdb['pdb_id']}"
-    else:
-        # Fallback to AlphaFold
-        structure = tu.tools.alphafold_get_prediction(accession=uniprot_id)
-        structure_source = "AlphaFold DB"
-    
-    # Get domain information
-    domains = tu.tools.InterPro_get_protein_domains(accession=uniprot_id)
-    
-    # Get functional sites
-    functions = tu.tools.UniProt_get_function_by_accession(accession=uniprot_id)
-    
-    # Analyze residue context
-    analysis = {
-        'structure_source': structure_source,
-        'domains': identify_domain(domains, residue_position),
-        'functional_sites': find_nearby_sites(functions, residue_position)
+def structural_context_for_vus(tu, uniprot_id):
+    """Collect structural context for a VUS missense variant.
+
+    Raw material collection only -- the unified ACMG skill decides how the
+    material feeds PP3/BP4 and other criteria.
+    """
+    # Experimental structures covering the protein (ranked, with resolution)
+    structures = tu.tools.PDBeSIFTS_get_best_structures(
+        uniprot_accession=uniprot_id
+    )
+
+    # AlphaFold DB prediction (per-residue pLDDT for position confidence)
+    prediction = tu.tools.alphafold_get_prediction(accession=uniprot_id)
+
+    # Domain architecture and annotated functional sites
+    domains = tu.tools.InterPro_get_protein_domains(protein_id=uniprot_id)
+    function = tu.tools.UniProt_get_function_by_accession(accession=uniprot_id)
+
+    return {
+        'structures': structures,
+        'alphafold': prediction,
+        'domains': domains,
+        'function': function,
     }
-    
-    return analysis
 ```
 
 ### Example 3: ACMG Classification
@@ -915,7 +912,7 @@ lives in its `SVI_REFERENCE.md`.
 ### Structure
 | Primary | Fallback 1 | Fallback 2 |
 |---------|------------|------------|
-| `PDBe_get_uniprot_mappings` | `alphafold_get_prediction` | `NvidiaNIM_alphafold2` |
+| `PDBeSIFTS_get_best_structures` | `alphafold_get_prediction` | `NvidiaNIM_alphafold2` |
 
 ### Gene Information
 | Primary | Fallback 1 | Fallback 2 |
@@ -933,9 +930,9 @@ lives in its `SVI_REFERENCE.md`.
 
 | Tool | Wrong | Correct |
 |------|-------|---------|
-| `MyVariant_query_variants` | `id="rs123"` | `variant_id="rs123"` |
-| `ClinVar_search_variants` | `gene="BRCA1:c.123"` | `variant="NM_007294.4:c.123A>G"` |
-| `gnomad_search_variants` | `variant="c.123A>G"` | `variant="17-41245466-A-G"` |
+| `MyVariant_query_variants` | `variant_id="rs123"` | `query="rs123"` |
+| `ClinVar_search_variants` | `variant="NM_007294.4:c.123A>G"` | `variant_name="NM_007294.4:c.123A>G"` |
+| `gnomad_search_variants` | `variant="c.123A>G"` | `query="17-41245466-A-G"` |
 | `alphafold_get_prediction` | `uniprot="P04637"` | `accession="P04637"` |
 
 ---

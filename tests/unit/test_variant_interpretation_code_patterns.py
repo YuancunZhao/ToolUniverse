@@ -247,3 +247,94 @@ def test_acmg_reference_has_no_2026_10_13_confirmed_wrong_wording():
             if marker.casefold() in normalized:
                 failures.append(f"{name}: {marker}")
     assert not failures, "\n".join(failures)
+
+
+# --------------------------------------------------------------------------- #
+# F10/F11 (2026-10-13 review): the old entry kept a second, superseded
+# classification-combination table, and its collection/structure examples
+# called tools by names/parameters the registered configs reject. The
+# guards below parse documented python blocks and check every static
+# ``tu.tools.<name>(...)`` call against the registered tool configs.
+# They catch interface drift in the documentation only; they cannot
+# prove that any LLM follows the examples.
+# --------------------------------------------------------------------------- #
+def _registered_tool_index():
+    from pathlib import Path
+
+    from tooluniverse.default_config import default_tool_files
+    from tooluniverse.utils import read_json_list
+
+    index = {}
+    for path in default_tool_files.values():
+        for config in read_json_list(Path(path)):
+            name = config.get("name")
+            if name:
+                parameter = config.get("parameter", {})
+                index[name] = (
+                    set(parameter.get("properties", {})),
+                    set(parameter.get("required", []) or []),
+                )
+    return index
+
+
+def _static_tool_calls(markdown_text):
+    import ast
+
+    for block in re.findall(r"```python\n(.*?)```", markdown_text, re.DOTALL):
+        try:
+            tree = ast.parse(block)
+        except SyntaxError:
+            continue  # non-executable prose snippets are not the subject
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            # tu.tools.<name>(...) or self.tools.<name>(...)
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Attribute)
+                and func.value.attr == "tools"
+            ):
+                keywords = [kw.arg for kw in node.keywords if kw.arg]
+                yield func.attr, keywords, node.lineno
+
+
+def test_documented_tool_calls_match_registered_configs():
+    import sys
+
+    index = _registered_tool_index()
+    problems = []
+    for doc_name in ("TOOLS_REFERENCE.md", "CODE_PATTERNS.md"):
+        text = (SKILL_DIR / doc_name).read_text()
+        for tool_name, keywords, lineno in _static_tool_calls(text):
+            if tool_name not in index:
+                problems.append(f"{doc_name}:{lineno}: unknown tool {tool_name}")
+                continue
+            legal, required = index[tool_name]
+            for keyword in keywords:
+                if keyword not in legal:
+                    problems.append(
+                        f"{doc_name}:{lineno}: {tool_name} has no parameter "
+                        f"{keyword!r} (legal: {sorted(legal)})"
+                    )
+            missing = required - set(keywords)
+            if missing:
+                problems.append(
+                    f"{doc_name}:{lineno}: {tool_name} missing required "
+                    f"{sorted(missing)}"
+                )
+    assert not problems, "\n".join(problems)
+
+
+def test_checklist_has_no_second_classification_table():
+    # The calculator's Tavtigian point system is the ONLY combining rule;
+    # the old "Minimum Evidence" rows contradicted it (e.g. Likely Benign
+    # ">=1 Strong + >=1 Supporting" vs the calculator's score thresholds).
+    text = (SKILL_DIR / "CHECKLIST.md").read_text()
+    for marker in (
+        "| Classification | Minimum Evidence |",
+        "| Likely Pathogenic | ≥1 Strong + ≥2 Moderate |",
+        "| Likely Benign | ≥1 Strong + ≥1 Supporting (benign) |",
+        "| Benign | ≥1 StandAlone OR ≥2 Strong (benign) |",
+    ):
+        assert marker not in text, marker

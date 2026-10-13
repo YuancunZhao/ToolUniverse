@@ -120,19 +120,22 @@ verifies that flow was followed, never replaces it.
 
 ## Classification Calculation
 
-### Verify Math
-| Classification | Minimum Evidence |
-|----------------|-----------------|
-| Pathogenic | ≥1 VeryStrong + ≥1 Strong/Moderate |
-| Likely Pathogenic | ≥1 Strong + ≥2 Moderate |
-| VUS | Insufficient evidence |
-| Likely Benign | ≥1 Strong + ≥1 Supporting (benign) |
-| Benign | ≥1 StandAlone OR ≥2 Strong (benign) |
+Classification is computed ONLY by `ACMG_calculate_classification`
+(Tavtigian 2020 point system) through the unified ACMG skill. There is no
+second combining table to check against; verify the calculator receipt
+instead:
 
-### Classification Cross-Check
-- [ ] Evidence codes align with final classification
-- [ ] No conflicting codes ignored
-- [ ] Classification matches standard algorithms
+### Verify Calculator Receipt
+- [ ] Receipt is `computed` (or the pause status is reported verbatim with
+      classification null and no self-generated total_score)
+- [ ] Final report's classification and total_score match the receipt exactly
+- [ ] Every `met` criterion in the receipt was actually supported by
+      collected facts (no scored criterion missing its fact)
+- [ ] The same fact is not double-counted under two codes unless the
+      calculator's duplicate-fact rules allow it
+- [ ] ALL pause/review reasons (e.g. BA1 conflict, locus caps, duplicate
+      scoring facts) are carried into the final answer, not silently dropped
+- [ ] BA1, when present, follows the stand-alone path the receipt describes
 
 ---
 
