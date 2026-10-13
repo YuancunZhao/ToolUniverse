@@ -231,3 +231,86 @@ def test_output_matches_declared_schema():
         for key in citation:
             assert key in citation_item_props, f"undeclared citation key {key!r}"
     assert schema_props["citations_complete"]["type"] == "boolean"
+
+
+# ---------- Fix-F01-20261013: observed/direct citations via details entry ----------
+
+
+def test_observed_and_direct_citations_match_submitted_records_entry():
+    """F01 consistency: the same VCV XML must yield the SAME citation set
+    (pmid, source_path, attribution) whether read through
+    ClinVar_get_submitted_records or ClinVar_get_variant_details."""
+    xml = (
+        "<ClinVarVariationArchive>"
+        '<VariationArchive VariationName="NM_1:c.1A>G" VariationID="2737810" '
+        'Accession="VCV002737810">'
+        "<ClassifiedRecord><Classifications><GermlineClassification>"
+        "<Description>Pathogenic</Description>"
+        "</GermlineClassification></Classifications>"
+        "<ClinicalAssertionList>"
+        "<ClinicalAssertion>"
+        '<ClinVarAccession Accession="SCV000035247" Version="13" '
+        'SubmitterName="Labcorp"/>'
+        "<Classification><GermlineClassification>Pathogenic"
+        "</GermlineClassification></Classification>"
+        "<ObservedInList><ObservedIn><ObservedData>"
+        '<Citation><ID Source="PubMed">12068308</ID></Citation>'
+        "</ObservedData></ObservedIn></ObservedInList>"
+        "<Citation><ID Source=\"PubMed\">31573083</ID></Citation>"
+        "</ClinicalAssertion>"
+        "</ClinicalAssertionList>"
+        "</ClassifiedRecord></VariationArchive></ClinVarVariationArchive>"
+    )
+    titles = {
+        "result": {
+            "12068308": {"title": "Observed"},
+            "31573083": {"title": "Direct"},
+        }
+    }
+
+    class _Resp:
+        def __init__(self, payload):
+            self.payload = payload
+            self.status_code = 200
+
+        @property
+        def content(self):
+            return self.payload.encode()
+
+        def json(self):
+            return self.payload
+
+    def fake_get(url, params=None, timeout=None, headers=None):
+        if "efetch" in url:
+            return _Resp(xml)
+        assert "esummary" in url and params.get("db") == "pubmed"
+        return _Resp(titles)
+
+    submitted = ClinVarSubmittedRecordsTool(
+        {"name": "ClinVar_get_submitted_records"}
+    )
+    with patch(
+        "tooluniverse.clinvar_submitted_tool.requests.get", side_effect=fake_get
+    ):
+        sub_result = submitted.run({"variant_id": "VCV000013961"})
+
+    tool = _tool()
+    with patch.object(
+        ClinVarGetVariantDetails, "_fetch_variant", return_value=_fetch_ok()
+    ), patch(
+        "tooluniverse.clinvar_submitted_tool.requests.get", side_effect=fake_get
+    ):
+        details_result = tool.run({"variant_id": _DETAILS_ID})
+
+    sub_cits = [
+        (c["pmid"], c["source_path"])
+        for s in sub_result["data"]["submissions"]
+        for c in s["citations"]
+    ]
+    detail_cits = [(c["pmid"], c["source_path"]) for c in details_result["data"]["citations"]]
+    assert sub_cits == detail_cits == [
+        ("12068308", "ObservedInList/ObservedIn/ObservedData/Citation"),
+        ("31573083", "Citation"),
+    ]
+    assert details_result["data"]["citations_complete"] is True
+    assert sub_result["data"]["citations_complete"] is True

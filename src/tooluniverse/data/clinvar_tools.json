@@ -250,7 +250,7 @@
                                     },
                                     "source_path": {
                                         "type": "string",
-                                        "description": "XML path the citation was read from: 'Classification/Citation' or 'AttributeSet/Citation'."
+                                        "description": "XML path the citation was read from: 'Citation', 'Classification/Citation', 'AttributeSet/Citation', or 'ObservedInList/ObservedIn/ObservedData/Citation'. A Citation at any other location is disclosed as a citation warning instead."
                                     },
                                     "scv_accession": {
                                         "type": [

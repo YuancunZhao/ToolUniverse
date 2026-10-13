@@ -116,7 +116,7 @@
                   },
                   "citations": {
                     "type": "array",
-                    "description": "Citations this submitter attached to the assertion, from both XML locations (Classification/Citation and AttributeSet/Citation). Deduplicated within this submission and source path only; the same PMID under different submitters or paths stays separate.",
+                    "description": "Citations this submitter attached to the assertion, from all supported XML locations (direct Citation, Classification/Citation, AttributeSet/Citation, and ObservedInList/ObservedIn/ObservedData/Citation). Deduplicated within this submission and source path only; the same PMID under different submitters or paths stays separate.",
                     "items": {
                       "type": "object",
                       "properties": {
@@ -133,7 +133,7 @@
                         },
                         "source_path": {
                           "type": "string",
-                          "description": "XML path the citation was read from: 'Classification/Citation' or 'AttributeSet/Citation'."
+                          "description": "XML path the citation was read from: 'Citation', 'Classification/Citation', 'AttributeSet/Citation', or 'ObservedInList/ObservedIn/ObservedData/Citation'. A Citation at any other location is disclosed as a citation warning instead."
                         }
                       }
                     }

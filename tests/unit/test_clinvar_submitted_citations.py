@@ -350,3 +350,184 @@ def test_helper_direct_on_real_shape():
         ("28492532", "AttributeSet/Citation"),
     ]
     assert warnings == []
+
+
+# ---------- Fix-F01-20261013: observed-evidence and direct citations ----------
+# The 2026-10-13 review confirmed (live VCV000013961) that current VCV XML
+# also places PubMed IDs under ObservedInList/ObservedIn/ObservedData/Citation
+# and directly under ClinicalAssertion/Citation. These fixtures construct the
+# REAL XML paths verbatim -- never the AttributeSet fallback above.
+
+
+def _assertion_body(scv, *bodies):
+    return (
+        f"<ClinicalAssertion>"
+        f'<ClinVarAccession Accession="{scv}" Version="1" '
+        f'SubmitterName="Lab {scv}"/>'
+        f"<Classification><GermlineClassification>Pathogenic"
+        f"</GermlineClassification></Classification>"
+        f"{''.join(bodies)}"
+        f"</ClinicalAssertion>"
+    )
+
+
+def _vcv_xml_bodies(*assertion_bodies):
+    return (
+        "<ClinVarVariationArchive>"
+        '<VariationArchive VariationName="NM_1:c.1A>G" VariationID="2737810" '
+        'Accession="VCV002737810" NumberOfSubmissions="{}">'
+        "<ClassifiedRecord>"
+        "<Classifications><GermlineClassification>"
+        "<Description>Pathogenic</Description>"
+        "</GermlineClassification></Classifications>"
+        "<ClinicalAssertionList>{}</ClinicalAssertionList>"
+        "</ClassifiedRecord></VariationArchive></ClinVarVariationArchive>"
+    ).format(len(assertion_bodies), "".join(assertion_bodies))
+
+
+def _observed_citation(pmid, source="PubMed"):
+    return (
+        "<ObservedInList><ObservedIn><ObservedData>"
+        f'<Citation><ID Source="{source}">{pmid}</ID></Citation>'
+        "</ObservedData></ObservedIn></ObservedInList>"
+    )
+
+
+def _direct_citation(pmid, source="PubMed"):
+    return f'<Citation><ID Source="{source}">{pmid}</ID></Citation>'
+
+
+def _unknown_path_citation(pmid):
+    return (
+        f"<StudyList><Study>"
+        f'<Citation><ID Source="PubMed">{pmid}</ID></Citation>'
+        f"</Study></StudyList>"
+    )
+
+
+def test_observed_data_citation_captured_with_exact_source_path():
+    """F01 counterexample: a PMID under ObservedInList/ObservedIn/
+    ObservedData/Citation must surface with that exact source_path (the
+    pre-fix extractor returned [] and still claimed complete)."""
+    xml = _vcv_xml_bodies(
+        _assertion_body("SCV000035247", _observed_citation("12068308"))
+    )
+    result = _run_with(
+        xml, titles_payload=_titles({"12068308": "BRAF observed-evidence title"})
+    )
+    assert result["status"] == "success"
+    sub = result["data"]["submissions"][0]
+    assert sub["citations"] == [
+        {
+            "pmid": "12068308",
+            "title": "BRAF observed-evidence title",
+            "source_path": "ObservedInList/ObservedIn/ObservedData/Citation",
+        }
+    ]
+    assert result["data"]["citations_complete"] is True
+    assert "citation_warnings" not in result["data"]
+
+
+def test_direct_citation_under_assertion_extracted():
+    """F01 counterexample: a Citation placed directly under
+    ClinicalAssertion (no Classification/AttributeSet wrapper) must be
+    extracted with source_path 'Citation'."""
+    xml = _vcv_xml_bodies(_assertion_body("SCV1", _direct_citation("31573083")))
+    result = _run_with(xml, titles_payload=_titles({"31573083": "Direct cite"}))
+    assert result["status"] == "success"
+    sub = result["data"]["submissions"][0]
+    assert [(c["pmid"], c["source_path"], c["title"]) for c in sub["citations"]] == [
+        ("31573083", "Citation", "Direct cite")
+    ]
+    assert result["data"]["citations_complete"] is True
+
+
+def test_new_paths_attribution_and_dedup():
+    """F01 attribution semantics on the new paths: the same PMID under
+    two different paths survives both; the same (pmid, path) pair twice
+    collapses; the same PMID on the same new path across two SCVs is
+    attributed to each submitter separately."""
+    xml = _vcv_xml_bodies(
+        _assertion_body(
+            "SCV1",
+            _observed_citation("42"),
+            _direct_citation("42"),  # same PMID, different path -> both kept
+            _observed_citation("42"),  # exact duplicate -> collapses
+        ),
+        _assertion_body("SCV2", _observed_citation("42")),  # other submitter
+    )
+    result = _run_with(xml, titles_payload=_titles({"42": "Shared"}))
+    assert result["status"] == "success"
+    subs = result["data"]["submissions"]
+    assert {c["source_path"] for c in subs[0]["citations"]} == {
+        "ObservedInList/ObservedIn/ObservedData/Citation",
+        "Citation",
+    }
+    assert len(subs[0]["citations"]) == 2
+    assert [(s["scv_accession"], s["citations"][0]["pmid"]) for s in subs] == [
+        ("SCV1.1", "42"),
+        ("SCV2.1", "42"),
+    ]
+
+
+def test_unsupported_citation_location_warns_and_marks_incomplete():
+    """F01 disclosure: a Citation at a location outside the known paths
+    must NOT be silently dropped -- a parse warning names the path and
+    citations_complete flips to False (no fake completeness)."""
+    xml = _vcv_xml_bodies(_assertion_body("SCV1", _unknown_path_citation("777")))
+    result = _run_with(xml)
+    assert result["status"] == "success"
+    sub = result["data"]["submissions"][0]
+    assert sub["citations"] == []
+    warnings = result["data"].get("citation_warnings", [])
+    assert any(
+        "unsupported location" in w and "StudyList/Study/Citation" in w
+        for w in warnings
+    ), warnings
+    assert result["data"]["citations_complete"] is False
+
+
+def test_observed_data_non_pubmed_source_warned_not_exposed():
+    """F01: a non-PubMed ID on the observed path is disclosed, not
+    exposed as a pmid, and marks the citations incomplete."""
+    xml = _vcv_xml_bodies(
+        _assertion_body("SCV1", _observed_citation("10.1000/x", source="DOI"))
+    )
+    result = _run_with(xml)
+    assert result["status"] == "success"
+    sub = result["data"]["submissions"][0]
+    assert sub["citations"] == []
+    assert any(
+        "not PubMed" in w
+        and "ObservedInList/ObservedIn/ObservedData/Citation" in w
+        for w in result["data"].get("citation_warnings", [])
+    )
+    assert result["data"]["citations_complete"] is False
+
+
+def test_helper_direct_on_braf_observed_shape():
+    """Direct helper check on the shape observed in live VCV000013961:
+    SCV000035247 carries its observed-evidence PMID 12068308 under
+    ObservedData, alongside the two legacy locations."""
+    assertion = ET.fromstring(
+        "<ClinicalAssertion>"
+        '<ClinVarAccession Accession="SCV000035247" Version="13"/>'
+        "<Classification><Citation>"
+        '<ID Source="PubMed">1</ID>'
+        "</Citation></Classification>"
+        "<AttributeSet><Citation>"
+        '<ID Source="PubMed">2</ID>'
+        "</Citation></AttributeSet>"
+        "<ObservedInList><ObservedIn><ObservedData>"
+        '<Citation><ID Source="PubMed">12068308</ID></Citation>'
+        "</ObservedData></ObservedIn></ObservedInList>"
+        "</ClinicalAssertion>"
+    )
+    warnings = []
+    cits = _citations_from_assertion(assertion, warnings)
+    assert [(c["pmid"], c["source_path"]) for c in cits] == [
+        ("1", "Classification/Citation"),
+        ("2", "AttributeSet/Citation"),
+        ("12068308", "ObservedInList/ObservedIn/ObservedData/Citation"),
+    ]
+    assert warnings == []

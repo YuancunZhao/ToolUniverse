@@ -140,13 +140,21 @@ def _aggregate_classification(
     return {"description": None, "review_status": None}
 
 
-# The two locations a ClinicalAssertion cites literature: a citation attached
-# to the classification itself (e.g. the functional-study basis of a
-# Pathogenic call) and a citation attached to an AttributeSet (e.g. the
-# methodology reference of the asserting lab). Both are reported, each with
-# its provenance, because the same PMID can legitimately appear in both
-# places for different reasons.
-_CITATION_SOURCE_PATHS = ("Classification/Citation", "AttributeSet/Citation")
+# The locations a ClinicalAssertion cites literature (Fix-F01-20261013:
+# confirmed against live VCV000013961 XML): a citation attached to the
+# classification itself (e.g. the functional-study basis of a Pathogenic
+# call), a citation attached to an AttributeSet (e.g. the methodology
+# reference of the asserting lab), a citation on observed evidence under
+# ObservedInList/ObservedIn/ObservedData, and a Citation placed directly
+# under the ClinicalAssertion. All are reported, each with its provenance,
+# because the same PMID can legitimately appear in several places for
+# different reasons.
+_CITATION_SOURCE_PATHS = (
+    "Citation",
+    "Classification/Citation",
+    "AttributeSet/Citation",
+    "ObservedInList/ObservedIn/ObservedData/Citation",
+)
 
 
 def _citations_from_assertion(
@@ -159,8 +167,14 @@ def _citations_from_assertion(
     IDs are exposed as ``pmid``; any other citation source is recorded as a
     warning instead of being silently dropped. Duplicate (pmid, source_path)
     pairs within the same submission are collapsed; the same PMID under a
-    DIFFERENT source_path is kept so the classification-vs-methodology
-    provenance survives.
+    DIFFERENT source_path is kept so the classification-vs-methodology-vs-
+    observed-evidence provenance survives.
+
+    Fix-F01-20261013: every ``Citation`` element in the assertion is
+    located by its relative path; a Citation found at a path OUTSIDE
+    ``_CITATION_SOURCE_PATHS`` is disclosed as a parse warning (so
+    ``citations_complete`` flips to False) rather than silently dropped --
+    no unfounded recursive collection of IDs from unknown locations.
     """
     citations: List[Dict[str, Any]] = []
     seen = set()
@@ -168,26 +182,47 @@ def _citations_from_assertion(
     accession = assertion.find("ClinVarAccession")
     if accession is not None:
         scv_hint = accession.get("Accession")
-    for source_path in _CITATION_SOURCE_PATHS:
-        for citation in assertion.findall(source_path):
-            for id_element in citation.findall("ID"):
-                source = id_element.get("Source")
-                pmid = (id_element.text or "").strip()
-                if not pmid:
-                    continue
-                if source != "PubMed":
-                    warnings.append(
-                        f"{scv_hint or 'submission'} {source_path}: citation "
-                        f"ID source {source!r} is not PubMed; not exposed as pmid"
-                    )
-                    continue
-                key = (pmid, source_path)
-                if key in seen:
-                    continue
-                seen.add(key)
-                citations.append(
-                    {"pmid": pmid, "title": None, "source_path": source_path}
+    known_paths = frozenset(_CITATION_SOURCE_PATHS)
+    warned_paths = set()
+    # ElementTree elements carry no parent pointer: map descendants to
+    # parents once so each Citation's path relative to the assertion can
+    # be reconstructed cheaply.
+    parent_of = {
+        child: parent for parent in assertion.iter() for child in parent
+    }
+    for citation in assertion.iter("Citation"):
+        parts: List[str] = []
+        node: Optional[ET.Element] = citation
+        while node is not assertion:
+            parts.append(node.tag)
+            node = parent_of.get(node)
+        source_path = "/".join(reversed(parts))
+        if source_path not in known_paths:
+            if source_path not in warned_paths:
+                warned_paths.add(source_path)
+                warnings.append(
+                    f"{scv_hint or 'submission'}: citation present at "
+                    f"unsupported location {source_path!r}; not captured"
                 )
+            continue
+        for id_element in citation.findall("ID"):
+            source = id_element.get("Source")
+            pmid = (id_element.text or "").strip()
+            if not pmid:
+                continue
+            if source != "PubMed":
+                warnings.append(
+                    f"{scv_hint or 'submission'} {source_path}: citation "
+                    f"ID source {source!r} is not PubMed; not exposed as pmid"
+                )
+                continue
+            key = (pmid, source_path)
+            if key in seen:
+                continue
+            seen.add(key)
+            citations.append(
+                {"pmid": pmid, "title": None, "source_path": source_path}
+            )
     return citations
 
 
