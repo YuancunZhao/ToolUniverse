@@ -195,7 +195,6 @@ def assess_regulatory_impact(tu, variant_position, gene_symbol):
     """Assess regulatory impact of non-coding variant."""
 
     tf_binding = tu.tools.ChIPAtlas_enrichment_analysis(
-        operation="gene_list",
         gene_list=[gene_symbol],
         cell_type_class="Blood"
     )
@@ -337,25 +336,29 @@ def comprehensive_pathogenicity_assessment(tu, variant_info):
 ## Phase 4: Structural Analysis (AlphaFold2)
 
 ```python
-# 1. Get protein sequence
-protein_seq = tu.tools.UniProt_get_sequence_by_accession(accession=uniprot_id)
+def collect_structural_context(tu, uniprot_id):
+    """Collect raw experimental-structure context for one UniProt entry.
 
-# 2. Get/predict structure
-# List experimental structures for the UniProt (ranked, with resolution)
-pdb_hits = tu.tools.PDBeSIFTS_get_best_structures(
-    uniprot_accession=uniprot_id
-)
-if not pdb_hits:
-    # No experimental coverage -> predict de novo
-    structure = tu.tools.NvidiaNIM_alphafold2(
-        sequence=protein_seq['sequence'],
-        algorithm="mmseqs2"
+    This is COLLECTION ONLY: the full PDBeSIFTS receipt is preserved
+    verbatim -- status included -- so that downstream analysis (and the
+    report) can distinguish three real shapes: structures found, a
+    healthy empty list, and a request error. A failed or empty request
+    must never be reinterpreted as "no experimental structures exist";
+    prediction (e.g. AlphaFold DB or a modelling service) is a separate,
+    explicitly-decided step, never an automatic fallback buried here.
+    """
+    experimental_structures = tu.tools.PDBeSIFTS_get_best_structures(
+        uniprot_accession=uniprot_id
     )
+    return {
+        "uniprot_id": uniprot_id,
+        "experimental_structures": experimental_structures,
+    }
 
-# 3. Analyze variant position
-# - Extract pLDDT at residue position
-# - Calculate solvent accessibility
-# - Check for nearby functional sites
+# Downstream analysis of the receipt (manual or scripted) reads:
+# - PDB entries/chains, coverage and resolution when present
+# - Secondary structure (helix/sheet/coil) per structure when present
+# - Variant-position mapping via SIFTS when present
 ```
 
 **Structural Features to Report**:
@@ -373,10 +376,10 @@ if not pdb_hits:
 def validate_expression_context(tu, gene_symbol, phenotype_tissues):
     """Validate gene is expressed in phenotype-relevant tissues."""
 
+    # operation/organism keep their tool defaults (get_anndata /
+    # Homo sapiens); var_value_filter is a Census expression STRING.
     sc_expression = tu.tools.CELLxGENE_get_expression_data(
-        operation="get_expression_data",
-        organism="homo_sapiens",
-        var_value_filter={"gene_name": gene_symbol}
+        var_value_filter=f"feature_name == '{gene_symbol}'"
     )
 
     gtex = tu.tools.GTEx_get_median_gene_expression(gene_symbol=gene_symbol)

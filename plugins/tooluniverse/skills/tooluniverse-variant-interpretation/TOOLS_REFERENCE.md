@@ -525,7 +525,7 @@ unified ACMG skill; no strength mapping is applied here.
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `ChIPAtlas_enrichment_analysis` | TF binding enrichment | `operation`, `genome`, `antigen`, `cell_type_class`, `gene_list` |
+| `ChIPAtlas_enrichment_analysis` | TF binding enrichment | `genome`, `antigen`, `cell_type_class`, `gene_list` |
 | `ChIPAtlas_get_peak_data` | ChIP-seq peaks | `experiment_id` (SRX/DRX/ERX), `format` |
 | `ChIPAtlas_search_datasets` | Find experiments | `antigen`, `cell_type` |
 
@@ -533,7 +533,6 @@ unified ACMG skill; no strength mapping is applied here.
 ```python
 # Get TF binding enrichment for a gene set
 tf_binding = tu.tools.ChIPAtlas_enrichment_analysis(
-    operation="gene_list",
     gene_list=["BRCA1"],
     cell_type_class="Blood"
 )
@@ -605,16 +604,14 @@ experiments = tu.tools.ENCODE_search_experiments(
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `CELLxGENE_get_expression_data` | Cell-type expression | `operation`, `organism`, `var_value_filter` |
+| `CELLxGENE_get_expression_data` | Cell-type expression | `var_value_filter` (expression string) |
 | `CELLxGENE_get_cell_metadata` | Cell annotations | `gene` |
 
 **Example - Validate tissue expression**:
 ```python
 # Get expression in disease-relevant tissue
 expression = tu.tools.CELLxGENE_get_expression_data(
-    operation="get_expression_data",
-    organism="homo_sapiens",
-    var_value_filter={"gene_name": "FBN1"}
+    var_value_filter="feature_name == 'FBN1'"
 )
 # Returns: Expression per cell type (cardiomyocytes, fibroblasts, etc.)
 ```
