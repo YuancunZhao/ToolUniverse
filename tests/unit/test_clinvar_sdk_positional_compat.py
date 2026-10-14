@@ -100,10 +100,12 @@ def test_variant_name_keyword_list_passes_through():
 
 
 # --------------------------------------------------------------------------- #
-# Default MCP registration path: the registered config must accept an array
-# variant_name through validate_parameters and its return schema must expose
-# the F06 completeness fields. This checks the PUBLIC registered entry, not
-# a direct handler call.
+# Follow-up 2026-10-14 naming correction: these two tests DIRECTLY
+# instantiate the handler against the REGISTERED config (schema validation
+# via validate_parameters; return_schema field presence). They do NOT go
+# through any MCP transport -- the exercised-through-a-real-SMCP-
+# registration check lives in test_clinvar_malformed_summary_records.py
+# (fastmcp in-memory client, all HTTP mocked).
 # --------------------------------------------------------------------------- #
 def _registered_config():
     from pathlib import Path
@@ -124,7 +126,7 @@ def _registered_config():
     )
 
 
-def test_registered_schema_accepts_array_variant_name():
+def test_direct_handler_with_registered_config_accepts_array_variant_name():
     tool = ClinVarSearchVariants(_registered_config())
     error = tool.validate_parameters(
         {"gene": "CYP2C19", "variant_name": ["rs4244285", "c.681G>A"]}
@@ -133,6 +135,8 @@ def test_registered_schema_accepts_array_variant_name():
 
 
 def test_registered_return_schema_exposes_completeness_fields():
+    """Static schema inspection of the registered config (no handler call,
+    no MCP transport)."""
     schema = _registered_config()["return_schema"]
     data_properties = schema["properties"]["data"]["properties"]
     assert "details_complete" in data_properties

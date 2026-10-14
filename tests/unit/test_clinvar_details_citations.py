@@ -44,6 +44,15 @@ def _fetch_ok(**extra):
     }
     return {
         "variant_data": variant_data,
+        # Follow-up 2026-10-14: _fetch_variant now returns the strictly
+        # parsed summary alongside the raw record; the mock keeps the same
+        # internal contract.
+        "variant_summary": {
+            "title": variant_data["title"],
+            "genes": [],
+            "clinical_significance": "Pathogenic",
+            "review_status": "",
+        },
         "result": {"status": "success", "data": {}},
     }
 

@@ -308,11 +308,56 @@ class ClinVarRESTTool(BaseTool):
         return {"status": "error", "error": "Maximum retries exceeded", "url": url}
 
     def _parse_variant_summary(self, vdata: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract common fields from a single esummary variant record."""
-        gc = vdata.get("germline_classification", {})
+        """Strictly validate and extract fields from ONE esummary record.
+
+        Follow-up 2026-10-14: this parser is shared by the search tool's
+        per-record loop and the details tool. Structural damage used to
+        escape as a raw TypeError/AttributeError (``genes=None``,
+        ``genes={}``, a non-object list entry, ``germline_classification``
+        of non-object type) or pass silently as an all-blank "valid"
+        detail (an empty object). Now the record's SHAPE is validated
+        first and damage raises ``ValueError`` naming the offending
+        field; callers isolate or surface it explicitly.
+
+        No biological applicability condition is added: a record may
+        legitimately lack ``genes``, ``germline_classification`` (no
+        classification yet) or any other optional field -- omitted keys
+        yield blank values and the record stays valid.
+        """
+        if not isinstance(vdata, dict) or not vdata:
+            raise ValueError("record is empty or not a JSON object")
+        if "genes" in vdata:
+            genes = vdata["genes"]
+            if genes is None:
+                raise ValueError("'genes' is null; omit the key or use a list")
+            if not isinstance(genes, list):
+                raise ValueError(
+                    f"'genes' must be a list of objects, got "
+                    f"{type(genes).__name__}"
+                )
+            for gene in genes:
+                if not isinstance(gene, dict):
+                    raise ValueError(
+                        f"'genes' entries must be objects, got "
+                        f"{type(gene).__name__} ({gene!r})"
+                    )
+        if "germline_classification" in vdata:
+            gc_value = vdata["germline_classification"]
+            if gc_value is None:
+                raise ValueError(
+                    "'germline_classification' is null; omit the key or "
+                    "use an object"
+                )
+            if not isinstance(gc_value, dict):
+                raise ValueError(
+                    f"'germline_classification' must be an object, got "
+                    f"{type(gc_value).__name__}"
+                )
+        gc = vdata.get("germline_classification") or {}
+        genes = vdata.get("genes") or []
         return {
             "title": vdata.get("title", ""),
-            "genes": [g.get("symbol", "") for g in vdata.get("genes", [])],
+            "genes": [g.get("symbol", "") for g in genes],
             "clinical_significance": gc.get("description", ""),
             "review_status": gc.get("review_status", ""),
         }
@@ -364,7 +409,30 @@ class ClinVarRESTTool(BaseTool):
                 }
             }
 
-        return {"variant_data": variant_data, "result": result}
+        # Follow-up 2026-10-14: validate the record's SHAPE with the shared
+        # strict parser BEFORE the caller assembles details or fetches
+        # submitter citations -- a malformed record surfaces as an explicit
+        # error here instead of a raw AttributeError or an empty-details
+        # "success" downstream. Only the parser's ValueError is caught.
+        try:
+            variant_summary = self._parse_variant_summary(variant_data)
+        except ValueError as exc:
+            return {
+                "error_result": {
+                    "status": "error",
+                    "error": (
+                        f"Variant {variant_id} esummary record is "
+                        f"malformed: {exc}"
+                    ),
+                    "url": result.get("url"),
+                }
+            }
+
+        return {
+            "variant_data": variant_data,
+            "variant_summary": variant_summary,
+            "result": result,
+        }
 
     def run(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the tool with given arguments."""
@@ -887,9 +955,24 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                             f"an error: {vdata['error']}"
                         )
                         continue
-                    variants.append(
-                        {"variant_id": vid, **self._parse_variant_summary(vdata)}
-                    )
+                    # Follow-up 2026-10-14: the shared parser validates the
+                    # record's SHAPE (genes list-of-objects,
+                    # germline_classification object, non-empty record). One
+                    # damaged record is isolated -- counts, IDs and the
+                    # other healthy details are kept, the failed UID is
+                    # disclosed as missing with its field-level reason.
+                    # Only ValueError from the parser is caught; other
+                    # programming errors still propagate.
+                    try:
+                        summary = self._parse_variant_summary(vdata)
+                    except ValueError as exc:
+                        missing_variant_ids.append(vid)
+                        detail_warnings.append(
+                            f"esummary record for variant id {vid} is "
+                            f"malformed: {exc}"
+                        )
+                        continue
+                    variants.append({"variant_id": vid, **summary})
             else:
                 missing_variant_ids = list(dict.fromkeys(ids))
         # Order-preserving dedup of the missing IDs (the idlist is normally
@@ -1331,6 +1414,7 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
             return fetch["error_result"]
 
         variant_data = fetch["variant_data"]
+        variant_summary = fetch["variant_summary"]
         result = fetch["result"]
         result["variant_id"] = variant_id
         # Fix-R8E-1/R6C-2: assign the formatted payload *over* `result["data"]`
@@ -1342,6 +1426,8 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
         # de-duplication -- raw access remains at data["raw_data"] -- while
         # delivering the payload under the `data` key the return_schema
         # declares and every other tool in the registry uses.
+        # Follow-up 2026-10-14: the summary fields come from the strict
+        # parse already performed (and validated) in _fetch_variant.
         result["data"] = {
             "variant_id": variant_id,
             "accession": variant_data.get("accession", ""),
@@ -1353,7 +1439,7 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
             "variation_name": variant_data.get("variation_set", [{}])[0].get(
                 "variation_name", ""
             ),
-            **self._parse_variant_summary(variant_data),
+            **variant_summary,
             "raw_data": variant_data,
         }
 

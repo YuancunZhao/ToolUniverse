@@ -83,7 +83,18 @@ def _esummary_result(records):
 
 
 def _variant_record(uid, name="NM_1:c.1A>G"):
-    return {"uid": uid, "name": name, "clinical_significance": "Pathogenic"}
+    """Follow-up 2026-10-14: shaped like a REAL esummary record. The old
+    fixture used ``name``/``clinical_significance`` keys the parser never
+    reads, so "healthy" records parsed to all-blank fields."""
+    return {
+        "uid": uid,
+        "title": name,
+        "genes": [{"symbol": "NF1"}],
+        "germline_classification": {
+            "description": "Pathogenic",
+            "review_status": "criteria provided, single submitter",
+        },
+    }
 
 
 def _terms_of(mock_request):
@@ -327,6 +338,11 @@ def test_missing_uid_named_others_kept():
     assert data["details_complete"] is False
     assert data["missing_variant_ids"] == ["2"]
     assert any("2" in w for w in data["warnings"])
+    # Follow-up 2026-10-14: the kept healthy records carry real content.
+    for kept in data["variants"]:
+        assert kept["title"] == "NM_1:c.1A>G"
+        assert kept["genes"] == ["NF1"]
+        assert kept["clinical_significance"] == "Pathogenic"
 
 
 def test_inline_record_error_named_uid_disclosed():
@@ -373,6 +389,14 @@ def test_healthy_hit_is_complete():
     assert data["details_complete"] is True
     assert data["missing_variant_ids"] == []
     assert "warnings" not in data or data["warnings"] == []
+    # Follow-up 2026-10-14: healthy details must carry real CONTENT, not
+    # just IDs and a completeness flag.
+    assert [v["variant_id"] for v in data["variants"]] == ["1", "2"]
+    for kept in data["variants"]:
+        assert kept["title"] == "NM_1:c.1A>G"
+        assert kept["genes"] == ["NF1"]
+        assert kept["clinical_significance"] == "Pathogenic"
+        assert kept["review_status"] == "criteria provided, single submitter"
 
 
 def test_healthy_empty_query_is_complete():

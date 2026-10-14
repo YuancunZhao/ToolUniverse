@@ -66,7 +66,18 @@ def _fetch_variant_patch(tool_cls):
     return patch.object(
         tool_cls.__bases__[0],
         "_fetch_variant",
-        return_value={"variant_data": _VARIANT_DATA, "result": dict(_FETCH_RESULT)},
+        return_value={
+            "variant_data": _VARIANT_DATA,
+            # Follow-up 2026-10-14: matches _fetch_variant's extended
+            # internal contract (strictly parsed summary).
+            "variant_summary": {
+                "title": _VARIANT_DATA["title"],
+                "genes": ["BRCA1"],
+                "clinical_significance": "Pathogenic",
+                "review_status": "reviewed",
+            },
+            "result": dict(_FETCH_RESULT),
+        },
     )
 
 
