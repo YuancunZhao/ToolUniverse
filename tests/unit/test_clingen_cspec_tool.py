@@ -1238,3 +1238,121 @@ def test_detail_status_case_insensitive_match_is_consistent(monkeypatch):
     entry = result["data"][0]
     assert entry.get("detail_structure_failed") is not True
     assert entry["missing_materials"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up 2026-10-14 (Batch C): distinguish metadata ABSENT (optional,
+# compatible) from metadata DAMAGED (wrong type / unnormalizable) on the
+# detail's @id / version / cspecStatus. Damage must surface through the
+# existing three channels naming the field and actual value; absence,
+# null and blank stay compatible.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("bad_id", [123, {}, [], "///"])
+def test_detail_non_string_or_unnormalizable_id_is_damage(monkeypatch, bad_id):
+    detail = _detail_payload()
+    detail["@id"] = bad_id
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "@id" in m and ("123" in m or "{}" in m or "[]" in m or "///" in m)
+        for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "@id" in result["partial_failures"]["GN019"]
+
+
+@pytest.mark.parametrize("bad_status", [123, {}, []])
+def test_detail_non_string_cspec_status_is_damage(monkeypatch, bad_status):
+    detail = _detail_payload()
+    detail["cspecStatus"] = bad_status
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "cspecStatus" in m for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "cspecStatus" in result["partial_failures"]["GN019"]
+
+
+@pytest.mark.parametrize("bad_version", [123, 2.1, ["2.1"], {"v": "2.1"}])
+def test_detail_non_string_version_is_damage_not_hidden(monkeypatch, bad_version):
+    # The float 2.1 is the sharpest case: stringifying it yields "2.1",
+    # which EQUALS the index version, so the old coercion reported a
+    # consistent specification and hid the damage entirely.
+    detail = _detail_payload()
+    detail["version"] = bad_version
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry["detail_structure_failed"] is True
+    assert any(
+        "version" in m and "malformed" in m.lower()
+        for m in entry["missing_materials"]
+    ), entry["missing_materials"]
+    assert "version" in result["partial_failures"]["GN019"]
+
+
+@pytest.mark.parametrize("shape", ["null", "blank"])
+def test_detail_metadata_null_or_blank_stays_compatible(monkeypatch, shape):
+    detail = _detail_payload()
+    detail["@id"] = None if shape == "null" else "   "
+    detail["version"] = None if shape == "null" else ""
+    detail["cspecStatus"] = None if shape == "null" else "  "
+    _patch(
+        monkeypatch,
+        _index(_index_record()),
+        detail_payloads={"GN019": detail},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    entry = result["data"][0]
+    assert entry.get("detail_structure_failed") is not True
+    assert "GN019" not in result.get("partial_failures", {})
+    assert entry["criterion_modifications"][0]["criterion"] == "PM2"
+
+
+def test_damaged_metadata_does_not_sink_other_specification(monkeypatch):
+    damaged = _detail_payload(spec_id="GN019")
+    damaged["version"] = 123
+    healthy = _detail_payload(spec_id="GN020", rule_set_id="777")
+    healthy["version"] = "3.0"
+    healthy["label"] = healthy["label"].replace("Version 2.1", "Version 3.0")
+    index = _index(
+        _index_record(spec_id="GN019"),
+        _index_record(spec_id="GN020", rule_set_id="777", version="3.0"),
+    )
+    _patch(
+        monkeypatch,
+        index,
+        detail_payloads={"GN019": damaged, "GN020": healthy},
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    by_id = {e["specification_id"]: e for e in result["data"]}
+    assert by_id["GN019"]["detail_structure_failed"] is True
+    assert by_id["GN020"].get("detail_structure_failed") is not True
+    assert "GN019" in result["partial_failures"]
+    assert "GN020" not in result["partial_failures"]

@@ -1159,6 +1159,60 @@ class ClinGenTool(BaseTool):
                     # kept. Version comparison is exact after whitespace
                     # stripping (no equivalence inference); status
                     # comparison ignores case.
+                    #
+                    # Follow-up 2026-10-14: TYPE is checked before any
+                    # comparison. A missing key, null or blank value is
+                    # optional information absent (compatible, exactly as
+                    # before); a present non-string value, or a non-empty
+                    # @id that cannot be normalized (e.g. "///"), is DAMAGE
+                    # disclosed with the field name and actual value. The
+                    # damage strings join the same detail_structures
+                    # channel, so partial_failures / missing_materials /
+                    # detail_structure_failed all pick them up. Crucially, a
+                    # non-string version is NOT stringified and NOT rescued
+                    # by the label/title fallback: a float 2.1 used to
+                    # coerce to "2.1", match the index and hide the damage
+                    # completely.
+                    if "@id" in detail:
+                        raw_detail_id = detail["@id"]
+                        if raw_detail_id is not None:
+                            if not isinstance(raw_detail_id, str):
+                                detail_structures.append(
+                                    "detail @id is malformed: expected a "
+                                    "string, got "
+                                    f"{type(raw_detail_id).__name__} "
+                                    f"({raw_detail_id!r})"
+                                )
+                            elif raw_detail_id.strip() and (
+                                not self._cspec_id(raw_detail_id)
+                            ):
+                                detail_structures.append(
+                                    "detail @id is malformed: "
+                                    f"{raw_detail_id!r} cannot be normalized "
+                                    "to a CSpec id"
+                                )
+                    if "version" in detail:
+                        raw_detail_version = detail["version"]
+                        if raw_detail_version is not None and (
+                            not isinstance(raw_detail_version, str)
+                        ):
+                            detail_structures.append(
+                                "detail version is malformed: expected a "
+                                "string, got "
+                                f"{type(raw_detail_version).__name__} "
+                                f"({raw_detail_version!r})"
+                            )
+                    if "cspecStatus" in detail:
+                        raw_detail_status = detail["cspecStatus"]
+                        if raw_detail_status is not None and (
+                            not isinstance(raw_detail_status, str)
+                        ):
+                            detail_structures.append(
+                                "detail cspecStatus is malformed: expected "
+                                "a string, got "
+                                f"{type(raw_detail_status).__name__} "
+                                f"({raw_detail_status!r})"
+                            )
                     detail_id = self._cspec_id(detail.get("@id"))
                     if detail_id and detail_id != specification_id:
                         detail_structures.append(
