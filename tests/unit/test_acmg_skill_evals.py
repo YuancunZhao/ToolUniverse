@@ -26,9 +26,9 @@ def _cases():
 def test_case_ids_unique_and_complete():
     ids = [case["id"] for case in _cases()]
     assert ids == [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     ]
-    assert len(set(ids)) == 15
+    assert len(set(ids)) == 16
 
 
 def test_attachments_exist():
@@ -55,3 +55,95 @@ def test_synthetic_case3_payload_computes_expected_result():
     assert data["classification_status"] == "computed"
     assert data["classification"] == "Likely Pathogenic"
     assert data["total_score"] == 9
+
+
+def test_case_14_15_codon_consistency():
+    """Cases 14/15 must be codon-coherent on transcript NM_999997.1.
+
+    2026-10-14 review follow-up: the previous fixtures asserted two
+    different single-nucleotide changes of one Arg codon both yielding
+    p.Arg334Gln, which no standard codon supports. The corrected blocks
+    use reference codon GGA (Gly) at residue 334 so that the three
+    substitutions below are all codon-consistent. The check uses the four
+    literal standard codons directly -- no HGVS parsing dependency.
+    """
+    text = (
+        SKILL_DIR
+        / "evals"
+        / "files"
+        / "case11-15-splice-predictor-boundary-facts.md"
+    ).read_text()
+    codons = {"GGA": "Gly", "AGA": "Arg", "CGA": "Arg", "GTA": "Val"}
+    expectations = [
+        ("NM_999997.1", "GGA", 1000, "G", "A", "Gly334Arg"),
+        ("NM_999997.1", "GGA", 1000, "G", "C", "Gly334Arg"),
+        ("NM_999997.1", "GGA", 1001, "G", "T", "Gly334Val"),
+    ]
+    for transcript, ref, pos, ref_base, alt_base, protein in expectations:
+        nt = f"{transcript}:c.{pos}{ref_base}>{alt_base}"
+        assert nt in text, nt
+        mutated = list(ref)
+        offset = pos - ((334 - 1) * 3 + 1)
+        assert 0 <= offset <= 2
+        assert mutated[offset] == ref_base, (ref, pos, ref_base)
+        mutated[offset] = alt_base
+        alt = "".join(mutated)
+        assert alt in codons, alt
+        aa_ref, aa_alt = codons[ref], codons[alt]
+        assert protein == f"{aa_ref}334{aa_alt}", (protein, aa_ref, aa_alt)
+        assert f"p.{protein}" in text, protein
+
+
+def test_fact_attachments_carry_no_expected_outputs():
+    """Neutral-facts rule: the fixture files must not embed expected
+    scoring, classification or calculator outcomes (those live in
+    evals.json). Case 16's facts are additionally criterion-neutral: they
+    describe the predicted splice outcome without naming PVS1, so a host
+    cannot read the expected criterion status off the attachment.
+    """
+    shared_ban = ("total_score", "no_scoring_evidence", "needs_review")
+    files = {
+        "case11-15-splice-predictor-boundary-facts.md": shared_ban,
+        "case16-donor-rescue-na-facts.md": shared_ban
+        + ("pvs1", "not applicable", "classification"),
+    }
+    for name, banned in files.items():
+        normalized = " ".join(
+            (SKILL_DIR / "evals" / "files" / name)
+            .read_text()
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        ).casefold()
+        for marker in banned:
+            assert marker.casefold() not in normalized, (name, marker)
+
+
+def test_case16_requires_predicted_functional_donor_without_experiments():
+    """Case 16 pins the rescue N/A boundary the reference must support.
+
+    The facts must state a sourced, framework-supported prediction of a
+    functional GC donor (no variant-specific RNA/protein experiments)
+    while explicitly NOT demanding such experiments for the N/A path;
+    the eval's expected output must be the faithful needs_review pause
+    (no met criteria -> no score), never a fabricated total.
+    """
+    facts = (
+        SKILL_DIR / "evals" / "files" / "case16-donor-rescue-na-facts.md"
+    ).read_text()
+    normalized = " ".join(facts.replace("**", "").replace("`", "").split()).casefold()
+    for marker in (
+        "nm_999996.1:c.1200+2t>c",
+        "gc",
+        "predicted",
+        "no variant-specific",
+    ):
+        assert marker in normalized, marker
+    case16 = next(c for c in _cases() if c["id"] == 16)
+    joined = " ".join(
+        [case16["expected_output"]] + case16["assertions"]
+    ).casefold()
+    assert "needs_review" in joined
+    assert "no_scoring_evidence" in joined
+    assert "not applicable" in joined
+    assert "experiment" in joined

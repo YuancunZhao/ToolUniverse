@@ -176,8 +176,8 @@
     },
     {
       "id": 14,
-      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:14 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1000C>T p.Arg334Gln、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
-      "expected_output": "Host performs the PS1 splice-mechanism check: the reference variant's pathogenicity operates through aberrant splicing while the variant under evaluation has no corresponding splice effect, so PS1 is NOT scored met on the shared p.Arg334Gln annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; the host reports it faithfully with no fabricated total_score.",
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:14 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（独立合成转录本 NM_999997.1、第 334 位参考密码子 GGA；待评变异 NM_999997.1:c.1000G>A p.Gly334Arg、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host performs the PS1 splice-mechanism check: the reference variant (NM_999997.1:c.1000G>C, p.Gly334Arg on reference codon GGA) is pathogenic through aberrant splicing while the variant under evaluation (c.1000G>A, same p.Gly334Arg) has no corresponding splice effect, so PS1 is NOT scored met on the shared amino-acid annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; the host reports it faithfully with no fabricated total_score.",
       "files": [
         "files/case11-15-splice-predictor-boundary-facts.md"
       ],
@@ -190,14 +190,29 @@
     },
     {
       "id": 15,
-      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:15 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999998.1:c.1001G>T p.Arg334Leu、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
-      "expected_output": "Same mechanism boundary as case 14 applied to PM5: the reference p.Arg334Gln variant is pathogenic through splicing and the variant under evaluation has no corresponding splice effect, so PM5 is NOT scored met on the same-residue different-missense annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; reported faithfully.",
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case11-15-splice-predictor-boundary-facts.md 中标记为 fixture:15 的独立事实块完成一次合成评估。该附件已声明：所有场景均为合成（独立合成转录本 NM_999997.1、第 334 位参考密码子 GGA；待评变异 NM_999997.1:c.1001G>T p.Gly334Val、gene TESTGENE2、疾病 Synthetic splice-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Same mechanism boundary as case 14 applied to PM5: the reference p.Gly334Arg variant (c.1000G>C on reference codon GGA) is pathogenic through splicing and the variant under evaluation (c.1001G>T, p.Gly334Val) has no corresponding splice effect, so PM5 is NOT scored met on the same-residue different-missense annotation alone. With no other criterion met, the real calculator returns needs_review with no_scoring_evidence, classification null; reported faithfully.",
       "files": [
         "files/case11-15-splice-predictor-boundary-facts.md"
       ],
       "assertions": [
         "PM5 not scored met on the missense annotation alone; the splice-mechanism check is explicit in the rationale",
         "the different amino-acid annotation is not used to skip the mechanism check",
+        "a real ACMG_calculate_classification call with 28 distinct evidence records",
+        "calculator outcome is needs_review with no_scoring_evidence and classification null; no self-generated total_score appears"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case16-donor-rescue-na-facts.md 的独立事实块（fixture:16）完成一次合成评估。该附件已声明：所有场景均为合成（variant NM_999996.1:c.1200+2T>C、gene TESTGENE3、疾病 Synthetic donor-fixture disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
+      "expected_output": "Host records the null-variant criterion as not applicable on the sourced, framework-supported prediction that the GC dinucleotide serves as a functional donor preserving the gene product — WITHOUT demanding a variant-specific RNA or protein experiment as an extra gate for that not-applicable record, and without scoring the criterion as met. No other criterion is met, so the real calculator returns needs_review with no_scoring_evidence and classification null; the host reports that pause faithfully with no fabricated total_score.",
+      "files": [
+        "files/case16-donor-rescue-na-facts.md"
+      ],
+      "assertions": [
+        "null-variant criterion recorded not applicable from the sourced predicted-functional GC donor, not scored met",
+        "no variant-specific RNA/protein experiment is demanded as a precondition for the not-applicable record",
+        "an unsupported rescue conjecture alone would not have justified not applicable; the framework-sourced prediction is cited",
         "a real ACMG_calculate_classification call with 28 distinct evidence records",
         "calculator outcome is needs_review with no_scoring_evidence and classification null; no self-generated total_score appears"
       ]

@@ -59,11 +59,17 @@ block; never merge facts across blocks.
 
 ## Fact block 14 (fixture:14)
 
-- Variant under evaluation: `NM_999998.1:c.1000C>T`, predicted
-  consequence p.Arg334Gln.
-- A reference variant `NM_999998.1:c.1001G>A` (different nucleotide
-  change, same transcript and residue), also predicted p.Arg334Gln, is
-  classified Pathogenic by an expert panel (verified current).
+- Blocks 14 and 15 use their own synthetic transcript, `NM_999997.1`
+  (distinct from the NM_999998.1 setting of blocks 11–13; the two
+  settings are unrelated). On `NM_999997.1` the reference codon at
+  residue 334 is `GGA` (Gly), spanning c.1000–c.1002.
+- Variant under evaluation: `NM_999997.1:c.1000G>A`. With reference
+  codon GGA, substituting the first base G→A gives `AGA`, so the
+  predicted consequence is p.Gly334Arg.
+- A reference variant `NM_999997.1:c.1000G>C` (different nucleotide
+  change at the same position, same transcript and residue; GGA→`CGA`)
+  is also predicted p.Gly334Arg and is classified Pathogenic by an
+  expert panel (verified current).
 - Verified mechanism annotation for the REFERENCE variant: its
   pathogenicity operates through aberrant SPLICING — it activates a
   cryptic acceptor site confirmed by RNA studies; the amino-acid
@@ -75,14 +81,16 @@ block; never merge facts across blocks.
 
 ## Fact block 15 (fixture:15)
 
-- Variant under evaluation: `NM_999998.1:c.1001G>T`, predicted
-  consequence p.Arg334Leu (same residue as block 14, different
-  amino-acid change).
-- A reference variant at the same residue predicted p.Arg334Gln is
-  classified Pathogenic by an expert panel (verified current).
-- Verified mechanism annotation for the REFERENCE variant:
-  pathogenic through aberrant splicing (cryptic acceptor site,
-  RNA-confirmed), as in block 14.
+- Same synthetic transcript as block 14 (`NM_999997.1`, reference
+  codon GGA at residue 334).
+- Variant under evaluation: `NM_999997.1:c.1001G>T`. Substituting the
+  second base of GGA, G→T, gives `GTA`, so the predicted consequence is
+  p.Gly334Val (same residue as block 14, different amino-acid change).
+- The reference variant of block 14 (`NM_999997.1:c.1000G>C`,
+  predicted p.Gly334Arg) is classified Pathogenic by an expert panel
+  (verified current); its verified mechanism annotation is pathogenic
+  through aberrant splicing (cryptic acceptor site, RNA-confirmed), the
+  amino-acid annotation alone not being the established mechanism.
 - The variant under evaluation has no corresponding splice effect
   (verified input); its consequence is the plain missense change.
 - No other evidence is provided.

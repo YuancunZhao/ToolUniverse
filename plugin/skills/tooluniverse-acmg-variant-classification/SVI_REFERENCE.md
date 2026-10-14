@@ -122,12 +122,21 @@ evaluated ≠ not applicable ≠ not met.
   product removes or disrupts a critical region, a substantial fraction
   of the protein (>10%), or established functional residues, and assign
   PVS1 at the strength the decision tree gives for that outcome (e.g.,
-  in-frame loss involving a critical region → Strong; non-critical small
-  in-frame loss → Moderate/Supporting per the tree). When several
-  outcomes are plausible and unresolved, use the LOWEST tree-supported
-  strength among them. Treat the variant as functionally rescued (PVS1
-  not applicable on this ground) only when established evidence such as
-  RNA studies confirms splicing and protein function are preserved.
+  in-frame loss involving a critical region → Strong). In the GENERIC
+  decision tree, an in-frame loss removing ≤10% of the protein from a
+  non-critical region is **Moderate**; a Supporting assignment for such
+  a loss requires its own applicable SVI/gene-rule basis, not the
+  generic tree alone. Rescue-based Not-applicable DOES NOT require a
+  variant-specific RNA or protein experiment as a universal gate: a
+  naturally occurring rescue transcript documented with sourced
+  evidence, or a splice site predicted to preserve function under the
+  applicable SVI/gene rules (for example a functional GC-AG donor
+  predicted by the framework's criteria), can take the N/A path on that
+  sourced basis — but an UNSUPPORTED rescue conjecture alone never
+  justifies N/A. When several outcomes are plausible and unresolved, use
+  the LOWEST applicable outcome among them — the lowest tree-supported
+  strength, or N/A when the rescue conditions above are actually met by
+  the sourced evidence.
 - **Splicing overlay (Walker et al. 2023):** canonical ±1/2 variants follow
   the gene-specific tree (some do not alter splicing → PVS1_N/A); RNA assays
   confirming aberrant splicing give **PVS1 at the strength the tree assigns

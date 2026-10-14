@@ -338,3 +338,35 @@ def test_checklist_has_no_second_classification_table():
         "| Benign | ≥1 StandAlone OR ≥2 Strong (benign) |",
     ):
         assert marker not in text, marker
+
+
+def test_acmg_reference_has_no_2026_10_14_confirmed_wrong_wording():
+    # 2026-10-14 follow-up: the review confirmed two PVS1 wording defects
+    # that survived the 2026-10-13 round. (1) The blanket rescue
+    # confirmation gate -- "only when established evidence such as RNA
+    # studies confirms splicing and protein function are preserved" --
+    # demanded variant-specific RNA/protein experiments for EVERY rescue
+    # N/A, contradicting Walker 2023/Abou Tayoun 2018, under which a
+    # sourced, framework-supported prediction of a functional rescue
+    # splice site (e.g. a GC donor) can enter the N/A path. (2) The
+    # generic-tree phrase offering "Moderate/Supporting" for a
+    # non-critical small in-frame loss -- in the generic decision tree a
+    # <=10% non-critical in-frame loss is Moderate, and Supporting needs
+    # its own applicable rule basis. The check only prevents the known
+    # erroneous wording from reappearing; it does NOT prove scientific
+    # correctness or that any LLM follows the rules.
+    root = SKILL_DIR.parent / "tooluniverse-acmg-variant-classification"
+    forbidden = {
+        "SVI_REFERENCE.md": (
+            "rna studies confirms splicing and protein function are preserved",
+            "moderate/supporting per the tree",
+        ),
+    }
+    failures = []
+    for name, markers in forbidden.items():
+        text = (root / name).read_text().replace("**", "").replace("`", "")
+        normalized = " ".join(text.split()).casefold()
+        for marker in markers:
+            if marker.casefold() in normalized:
+                failures.append(f"{name}: {marker}")
+    assert not failures, "\n".join(failures)
