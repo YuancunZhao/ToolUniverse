@@ -525,7 +525,20 @@ Scope: the 11 confirmed findings (F01–F11) in
 `/private/tmp/ToolUniverse-acmg-code-review-2026-10-13.md`, executed per
 `docs/superpowers/plans/2026-10-13-review-fixes.md` in five
 reproduce-then-fix batches. Plan boundary held: single branch, no
-dependency/lockfile/global-config/skill changes, no push.
+dependency/lockfile/global-config changes, no push.
+
+ERRATUM (2026-10-14): the original boundary statement here also claimed
+"no ... skill changes", which was WRONG for the two INSTALLED copies —
+Batch B updated the installed SKILL.md and SVI_REFERENCE.md at both
+`~/Documents/VarsUnderReview/.agents/skills/tooluniverse-acmg-variant-classification/`
+and `~/.zcode/skills/tooluniverse-acmg-variant-classification/` (pre-sync
+backup retained; receipts below). The 2026-10-13 plan text said installed
+skills would not be modified, so those updates were a PLAN-SCOPE
+DEVIATION, honestly disclosed here instead of being papered over by the
+contradictory claim. The 2026-10-14 round does NOT touch installed
+copies again; they still carry the 2026-10-13 wording until deliberately
+re-synced, and any acceptance must use a clearly-labeled temporary
+copy.
 
 Commits (each preceded by failing counterexamples, then verified):
 
@@ -588,7 +601,18 @@ input. `_normalize_variant_id` currently guards only the search tool.
 
 Completion states for this round, reported separately:
 
-1. Repository fixes for F01–F11: complete (five commits above).
+1. Repository fixes for F01–F11: the five commits above landed and the
+   recorded regression numbers are factual, but the 2026-10-14 re-review
+   found items that were NOT closed by them and are fixed by the
+   2026-10-14 round instead: the PVS1 rescue confirmation gate and the
+   unsupported "Moderate/Supporting" tree phrase survived in
+   SVI_REFERENCE (closed by `3b0dba65`), evals 14/15 were
+   codon-incoherent and case 16 was missing (`3b0dba65`), a single
+   malformed esummary record could crash the search/details tools
+   (`0ef14f54`), non-string CSpec metadata hid behind string coercion
+   (`03f0018c`), and documented example values violated registered
+   types/enums (`cf511bcb`). "Complete" below therefore means the
+   2026-10-13 commits themselves, not full closure of the findings.
 2. Local install targets: the two Batch-B rule files are synced to both
    `~/Documents/VarsUnderReview/.agents/skills/...` and
    `~/.zcode/skills/...` targets; the code fixes live only in this
@@ -597,5 +621,85 @@ Completion states for this round, reported separately:
    3/4: NOT performed this session. Per the honesty rules, same-session
    work above is not an independent acceptance receipt; this tier remains
    open and any earlier PARTIAL verdicts stand.
+
+No push was performed.
+
+
+## Review follow-up round (2026-10-14)
+
+Scope: the remaining items found by re-review, executed per
+`docs/superpowers/plans/2026-10-14-review-followup.md` in five batches
+from `5df7d9a5`. Boundary held: no dependency/lockfile/tool-JSON/SDK
+wrapper/metadata changes (verified zero drift below); repository
+distribution copies synced only — INSTALLED skills were NOT touched this
+round; no push.
+
+Commits (counterexamples ran and failed first in every batch):
+
+- `3b0dba65` — A: PVS1 rescue guidance rewritten (no universal
+  RNA/protein confirmation gate; sourced framework-supported predictions
+  may take the N/A path; unsupported conjecture never justifies N/A;
+  generic-tree ≤10% non-critical in-frame loss pinned to Moderate with
+  Supporting requiring its own rule basis); evals 14/15 rebuilt on
+  synthetic transcript `NM_999997.1` with reference codon GGA so the
+  three nucleotide substitutions are codon-consistent; new eval 16
+  (`NM_999996.1:c.1200+2T>C`, predicted-functional GC donor, no
+  variant-specific experiments, calculator must return needs_review /
+  no_scoring_evidence / null); doc-guard catches both removed wordings;
+  codon-consistency check uses four literal codons (no HGVS parsing);
+  fact attachments verified free of expected outputs.
+- `0ef14f54` — B: shared strict esummary record parser (empty object,
+  `genes` null/dict/non-object entries, `germline_classification`
+  null/non-object → ValueError naming the field); search isolates the
+  damaged record (counts/IDs/healthy details kept, UID added to
+  `missing_variant_ids`, reason in `warnings`, completeness false);
+  details entry errors explicitly BEFORE citation fetch; healthy
+  fixtures reshaped to real esummary fields with content assertions;
+  the mislabeled "Default MCP registration path" tests renamed to
+  direct-instantiation; new in-repo check through a REAL SMCP
+  registration (fastmcp in-memory client) with all HTTP mocked.
+- `03f0018c` — C: CSpec detail `@id`/`version`/`cspecStatus` TYPE
+  checked before comparison — missing/null/blank stay compatible,
+  present non-strings (incl. a float 2.1 that used to coerce, match the
+  index and hide the damage) and unnormalizable non-empty `@id` ("///")
+  are damage disclosed through the existing three channels with field
+  and value; one damaged spec does not sink another.
+- `cf511bcb` — D: CELLxGENE examples drop `operation`/`organism` (tool
+  defaults) and use the string filter `feature_name == '…'`;
+  ChIPAtlas examples drop the invalid `operation="gene_list"`; the
+  CODE_PATTERNS structure block is now SIFTS-only raw-receipt collection
+  (no sequence fetch, no `if not pdb_hits`, no NvidiaNIM fallback — a
+  request error is never reinterpreted as "no experimental structures");
+  AST guard upgraded to validate statically evaluable argument VALUES
+  against registered types/enums (caught 8 literal errors across the two
+  docs before the fix), executed-example stubs validate dynamic
+  f-string filters against the real schemas, and the SIFTS example is
+  exercised across has-structures / healthy-empty / request-error
+  shapes asserting the raw receipt is preserved verbatim and no
+  prediction tool is auto-called.
+
+Final regression (this round's directed set; the 949/1 starting record
+was a snapshot, not a prediction): 986 passed + 56 passed / 1 skipped
+(PyMuPDF not installed) = 1042 passed / 1 skipped, exit 0; log at
+`temp_docs_and_tests/benchmark_tracking/2026-10-14-review-followup/final-regression.log`.
+ruff clean on all touched files; `git diff --check` clean against both
+`5df7d9a5` and `2128ff57`; zero drift in uv.lock / pyproject.toml /
+tool JSON configs / generated SDK wrappers / .tool_metadata.json;
+canonical=Claude=Codex byte-identical for every touched skill file;
+Codex frontmatter intact.
+
+Completion states (reported separately):
+
+1. Repository fixes for the re-review items: complete (four commits
+   above plus this records commit).
+2. Automation: the directed regression set above is green; no serial
+   full-suite run (known local segfault) and no global install.
+3. Independent-host acceptance for evals 11–16 and re-runs of 3/4: NOT
+   performed this round. Same-session rehearsal is not an acceptance
+   receipt; use the revised temporary skill copies, fresh sessions and
+   the case facts only; keep the native resume entry on quota
+   interruption; missing final answers stay PARTIAL. Synthetic-case
+   passes are not acceptance of real-variant or full online-collection
+   workflows.
 
 No push was performed.

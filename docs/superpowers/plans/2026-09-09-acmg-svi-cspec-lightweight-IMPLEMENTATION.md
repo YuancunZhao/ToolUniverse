@@ -348,3 +348,39 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
   Batch-B 两个规则文件，代码修复仅在本 worktree 环境；新增 evals 11–15
   与回归 3/4 的独立宿主边界验收本轮未执行——同会话工作不构成独立验收
   回执，该层保持未完成，既有 PARTIAL 判定不变。未 push。
+
+
+## 15. 复查增量修复轮（2026-10-14，计划 2026-10-14-review-followup.md）
+
+- 两处就地勘误（历史回执、历史测试数字与旧 PARTIAL 均不覆盖）：
+  ① 上一轮"Plan boundary held: … no … skill changes"与事实矛盾——
+  Batch B 曾更新两处已安装 Skill 副本（VarsUnderReview 与 ~/.zcode，
+  备份留存），相对 2026-10-13 计划文本属于范围偏差，现明确披露；
+  ② "Repository fixes for F01–F11: complete"保留提交与实测事实，但
+  注明复查发现的未闭环项及本轮解决提交。
+- 本轮四提交（每批反例先失败）：`3b0dba65`（PVS1 救援门槛删除、
+  预测保持功能可入 N/A 路径、未经支持猜想不得 N/A、通用树 ≤10%
+  非关键框内损失定为 Moderate、Supporting 须另有规则依据；evals
+  14/15 改用 NM_999997.1 + 参考密码子 GGA 自洽；新增案例 16 预测
+  功能性 GC donor、无变异特异实验、计算器应回 needs_review/
+  no_scoring_evidence/null）；`0ef14f54`（共享严格 esummary 记录
+  解析器 + 搜索逐记录隔离 + 详情入口在引文前显式报错 + 健康夹具
+  改真实结构并断言内容 + 误称"默认 MCP 注册路径"测试更名 + 真实
+  SMCP 注册内存客户端复验部分结果契约）；`03f0018c`（CSpec
+  @id/version/cspecStatus 先类型后比较：缺省/null/空白兼容，非字符串
+  与不可归一化非空 @id 视为损坏，float 2.1 不再被字符串化隐藏）；
+  `cf511bcb`（CELLxGENE/ChIPAtlas 示例参数修正、结构段仅 SIFTS
+  原始回执、AST 守卫升级为类型/枚举校验并抓到 8 处字面量错误、
+  执行示例 stub 校验动态过滤器、SIFTS 三形态保真测试）。
+- 定向回归实测：986 passed + 56 passed / 1 skipped（PyMuPDF 未装）
+  = 1042 passed / 1 skipped，exit 0；日志
+  `temp_docs_and_tests/benchmark_tracking/2026-10-14-review-followup/final-regression.log`。
+  949/1 为起点快照而非预测。ruff 通过；对 `5df7d9a5` 与 `2128ff57`
+  的 `git diff --check` 干净；锁文件/依赖/工具 JSON/SDK 包装/metadata
+  零漂移；canonical=Claude=Codex 三副本一致；Codex frontmatter 完好。
+- 三层状态分开报告：仓库修复完成；自动化为上述定向集合（不含会段错
+  的串行全量、不做全局安装）；本轮未触碰已安装 Skill——真实使用仍可能
+  加载 2026-10-13 旧文案，验收必须用明确标注的临时副本。独立宿主
+  验收（案例 11–16、回归 3/4，新会话仅 prompt+facts）本轮未执行，
+  额度中断保留原生续接入口，缺最终答复仍标 PARTIAL；合成案例通过
+  不等于真实变异或完整在线收集流程验收通过。未 push。
