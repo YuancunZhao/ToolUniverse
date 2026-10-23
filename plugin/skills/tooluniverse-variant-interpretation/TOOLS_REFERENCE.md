@@ -32,24 +32,26 @@ result = tu.tools.MyVariant_query_variants(
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
 | `ClinVar_search_variants` | Search by variant | `variant_name`, `gene` |
-| `ClinVar_get_variant_details` | Get by VCV ID | `variation_id` |
+| `ClinVar_get_variant_details` | Get by numeric Variation ID (digits only, e.g. `'13961'`; VCV-prefixed strings are rejected) | `variant_id` |
 
 **Example - Search ClinVar**:
 ```python
 result = tu.tools.ClinVar_search_variants(
     variant_name="NM_007294.4:c.5266dupC"
 )
-# Returns: VCV ID, classification, review status, submitters
+# Returns: variant IDs, title, genes, classification, review status
 ```
 
-**Classification Interpretation**:
+**Classification Interpretation** (per NCBI's official review-status
+definitions — <https://www.ncbi.nlm.nih.gov/clinvar/docs/review_status/>):
 | ClinVar Status | Stars | Meaning |
 |----------------|-------|---------|
-| Expert panel | ★★★★ | Highest confidence |
 | Practice guideline | ★★★★ | Clinical standard |
-| Multiple submitters, criteria | ★★★ | Well-supported |
-| Single submitter, criteria | ★★ | Limited evidence |
-| Single submitter, no criteria | ★ | Minimal support |
+| Reviewed by expert panel | ★★★ | Expert-panel reviewed |
+| Multiple submitters, criteria provided, no conflicts | ★★ | Well-supported |
+| Single submitter, criteria provided | ★ | Limited evidence |
+| Conflicting classifications, criteria provided | ★ | Conflicting |
+| No assertion criteria provided | No stars (0) | Assertion without provided criteria |
 
 ---
 

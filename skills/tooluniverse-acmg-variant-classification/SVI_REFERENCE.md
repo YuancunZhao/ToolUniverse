@@ -175,9 +175,17 @@ evaluated ≠ not applicable ≠ not met.
   identity is; reference variant pathogenic through splicing without a
   corresponding splice effect in the variant under evaluation → this
   protein-comparison PS1 does not apply.
-- **Double counting:** PS1 (same AA change) and PM5 (different AA, same
-  residue) are different facts and may coexist; do not count the same
-  reference variant twice within one code.
+- **Same reference, one comparison:** a single reference variant can
+  establish at most one of PS1 (same amino-acid change) and PM5
+  (different amino-acid change at the same residue) — the same observed
+  change cannot be both "identical to" and "different from" the change
+  under evaluation, so score only the code the fact supports. Two
+  different reference variants (different `reference` values or
+  `evidence_ids`) do not by themselves prove the two codes are
+  independent evidence: check the applicable specification's combination
+  guidance before letting both stand. This is not a claim that SVI
+  forbids PS1+PM5 in general — where a specification addresses the
+  combination, follow it.
 - **Source:** ACMG/AMP 2015 original criterion; the splice-mechanism
   boundary for protein comparisons follows Walker et al. 2023
   (PMC10357475); specifications may define additional combinations (e.g.,
@@ -693,5 +701,5 @@ Strength modifiers shift a code along ±1/±2/±4/±8; BA1 never converts.
 | One domain/hotspot claim | PM1 xor PP2 contribution |
 | One AF dataset | BA1 / BS1 / PM2 pick the code the fact supports; conflicting codes → resolve before scoring |
 | One segregation dataset | PP1 xor BS4 |
-| One reference pathogenic variant | PS1 (same AA) and PM5 (same residue, different AA) are distinct facts and may both stand |
+| One reference pathogenic variant | Establishes at most one of PS1 (same AA) and PM5 (same residue, different AA) — the same reference cannot prove both |
 | Protein-length-affecting variant | PVS1 xor PM4 — never both, at any PVS1 strength; LoF types go to PVS1, in-frame/stop-loss to PM4, and "PVS1 not applicable" alone never makes PM4 met |

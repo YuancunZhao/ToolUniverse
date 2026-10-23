@@ -639,3 +639,110 @@ def test_sifts_example_preserves_raw_receipt_across_return_shapes():
         assert result["experimental_structures"]["status"] == shape["status"]
         # Collection stops at SIFTS: no auto-prediction or sequence fetch.
         assert stub.tool_names_called() == ["PDBeSIFTS_get_best_structures"]
+
+
+
+# --------------------------------------------------------------------------- #
+# 2026-10-23 review (Batch B): SVI_REFERENCE granted an unconditional
+# "PS1 and PM5 may both stand" permission for one reference variant, the
+# ClinVar review-status table inflated expert panels to four stars and
+# mis-leveled the other tiers, the details tool's key parameter was
+# documented as variation_id (the registered schema says variant_id), and
+# the search example promised a submitters field the response never
+# carries. The guards below catch exactly those old wordings; they do
+# NOT prove scientific correctness or that any LLM follows the rules.
+#
+# Star-bearing markers use a normalization that strips backticks and
+# table pipes only: the usual ``.replace("**", "")`` guard normalization
+# would eat runs of literal ★ characters and silently blind the check,
+# and unstripped pipes would keep markers from matching table rows at
+# all (a vacuous pass).
+# --------------------------------------------------------------------------- #
+def _plain_doc_text(text):
+    return " ".join(
+        text.replace("`", "").replace("|", " ").split()
+    ).casefold()
+
+
+def test_acmg_reference_has_no_2026_10_23_double_counting_permission():
+    root = SKILL_DIR.parent / "tooluniverse-acmg-variant-classification"
+    normalized = _plain_doc_text((root / "SVI_REFERENCE.md").read_text())
+    forbidden = (
+        # PS1 bullet: "PS1 (same AA change) and PM5 (different AA, same
+        # residue) are different facts and may coexist"
+        "ps1 (same aa change) and pm5 (different aa, same",
+        # end-of-file facts-table row
+        "are distinct facts and may both stand",
+    )
+    failures = [marker for marker in forbidden if marker in normalized]
+    assert not failures, failures
+
+
+def test_svi_reference_pins_one_reference_one_comparison_code():
+    root = SKILL_DIR.parent / "tooluniverse-acmg-variant-classification"
+    normalized = _plain_doc_text((root / "SVI_REFERENCE.md").read_text())
+    # The corrected statement must appear in BOTH the PS1 section body and
+    # the end-of-file facts table -- fixing only one spot is the exact
+    # regression these two markers guard.
+    assert "at most one of ps1" in normalized
+    assert "the same reference cannot prove both" in normalized
+
+
+def test_clinvar_review_levels_match_ncbi_definitions():
+    normalized = _plain_doc_text((SKILL_DIR / "TOOLS_REFERENCE.md").read_text())
+    forbidden = (
+        "expert panel ★★★★",
+        "multiple submitters, criteria ★★★",
+        "single submitter, criteria ★★",
+        "single submitter, no criteria ★",
+    )
+    failures = [marker for marker in forbidden if marker in normalized]
+    assert not failures, failures
+    required = (
+        "practice guideline ★★★★",
+        "reviewed by expert panel ★★★",
+        "multiple submitters, criteria provided, no conflicts ★★",
+        "single submitter, criteria provided ★",
+        "conflicting classifications, criteria provided ★",
+        "no assertion criteria provided no stars",
+    )
+    missing = [marker for marker in required if marker not in normalized]
+    assert not missing, missing
+
+
+def test_tool_reference_details_parameter_and_search_promise():
+    text = (SKILL_DIR / "TOOLS_REFERENCE.md").read_text()
+    normalized = _plain_doc_text(text)
+    # Old row documented variation_id for ClinVar_get_variant_details; the
+    # registered schema's only parameter is variant_id. Check the actual
+    # table row so the marker cannot pass vacuously elsewhere in the file.
+    details_rows = [
+        line
+        for line in text.splitlines()
+        if "ClinVar_get_variant_details" in line
+        and line.lstrip().startswith("|")
+    ]
+    assert details_rows, "details tool row missing from TOOLS_REFERENCE.md"
+    row = details_rows[0]
+    assert "variation_id" not in row
+    assert "variant_id" in row
+    assert "get by numeric variation id" in _plain_doc_text(row)
+    # The search example promised a submitters field the response carries
+    # nowhere; the corrected comment lists real response fields only.
+    assert "review status, submitters" not in normalized
+
+
+def test_examples_clinvar_stars_match_official_levels():
+    normalized = _plain_doc_text((SKILL_DIR / "EXAMPLES.md").read_text())
+    forbidden = (
+        # expert panel was drawn with four stars
+        "★★★★ (expert panel reviewed)",
+        # a bare star with no review-status basis (do not guess the level)
+        "p.r175h pathogenic (★★★★)",
+        # relabeled: two stars belong to the multiple-submitters tier
+        "★★ (criteria provided)",
+    )
+    failures = [marker for marker in forbidden if marker in normalized]
+    assert not failures, failures
+    assert "★★★ (expert panel reviewed)" in normalized
+    assert "★★ (multiple submitters, no conflicts)" in normalized

@@ -26,9 +26,9 @@ def _cases():
 def test_case_ids_unique_and_complete():
     ids = [case["id"] for case in _cases()]
     assert ids == [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
     ]
-    assert len(set(ids)) == 16
+    assert len(set(ids)) == 17
 
 
 def test_attachments_exist():
@@ -106,6 +106,8 @@ def test_fact_attachments_carry_no_expected_outputs():
         "case11-15-splice-predictor-boundary-facts.md": shared_ban,
         "case16-donor-rescue-na-facts.md": shared_ban
         + ("pvs1", "not applicable", "classification"),
+        "case17-single-reference-facts.md": shared_ban
+        + ("ps1", "pm5", "classification", "strong", "vus"),
     }
     for name, banned in files.items():
         normalized = " ".join(
@@ -147,3 +149,68 @@ def test_case16_requires_predicted_functional_donor_without_experiments():
     assert "no_scoring_evidence" in joined
     assert "not applicable" in joined
     assert "experiment" in joined
+
+
+def test_case_17_single_reference_codon_consistency():
+    """Case 17 must be codon-coherent on transcript NM_999995.1.
+
+    2026-10-23 review follow-up: one reference variant (c.1000G>C) must not
+    be allowed to support BOTH the same-amino-acid comparison and the
+    different-amino-acid comparison. Reference codon GGA (Gly) at residue
+    334 spans c.1000_1002, so both c.1000 substitutions below are
+    codon-consistent. The check uses the four literal standard codons
+    directly -- no HGVS parsing dependency.
+    """
+    text = (
+        SKILL_DIR / "evals" / "files" / "case17-single-reference-facts.md"
+    ).read_text()
+    codons = {"GGA": "Gly", "AGA": "Arg", "CGA": "Arg", "GTA": "Val"}
+    expectations = [
+        ("NM_999995.1", "GGA", 1000, "G", "A", "Gly334Arg"),
+        ("NM_999995.1", "GGA", 1000, "G", "C", "Gly334Arg"),
+    ]
+    for transcript, ref, pos, ref_base, alt_base, protein in expectations:
+        nt = f"{transcript}:c.{pos}{ref_base}>{alt_base}"
+        assert nt in text, nt
+        mutated = list(ref)
+        offset = pos - ((334 - 1) * 3 + 1)
+        assert 0 <= offset <= 2
+        assert mutated[offset] == ref_base, (ref, pos, ref_base)
+        mutated[offset] = alt_base
+        alt = "".join(mutated)
+        assert alt in codons, alt
+        aa_ref, aa_alt = codons[ref], codons[alt]
+        assert protein == f"{aa_ref}334{aa_alt}", (protein, aa_ref, aa_alt)
+        assert f"p.{protein}" in text, protein
+
+
+def test_case_17_expected_outcome_lives_only_in_assertions():
+    """Case 17 pins the one-reference-one-comparison boundary.
+
+    The single reference variant establishes the same amino-acid change,
+    so only the same-change comparison is supported; the different-change
+    comparison has no reference at all. Expected codes live in evals.json
+    (PS1 Strong, PM5 unsatisfied, calculator VUS at 4 points), never in
+    the fact attachment.
+    """
+    facts = (
+        SKILL_DIR / "evals" / "files" / "case17-single-reference-facts.md"
+    ).read_text()
+    normalized = " ".join(facts.replace("**", "").replace("`", "").split()).casefold()
+    for marker in (
+        "nm_999995.1",
+        "gga",
+        "c.1000g>a",
+        "c.1000g>c",
+        "no other pathogenic",
+    ):
+        assert marker in normalized, marker
+    case17 = next(c for c in _cases() if c["id"] == 17)
+    joined = " ".join(
+        [case17["expected_output"]] + case17["assertions"]
+    ).casefold()
+    assert "ps1" in joined
+    assert "strong" in joined
+    assert "pm5" in joined
+    assert "uncertain significance" in joined
+    assert "total_score" in joined or "4" in joined

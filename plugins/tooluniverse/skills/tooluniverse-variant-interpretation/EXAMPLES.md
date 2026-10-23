@@ -85,7 +85,7 @@ skill and its calculator.
 |----------|-------|
 | VCV ID | VCV000017661 |
 | Classification | Pathogenic |
-| Review Status | ★★★★ (Expert panel reviewed) |
+| Review Status | ★★★ (Expert panel reviewed) |
 | Submitters | 47 |
 | Last Evaluated | 2024-12-15 |
 | Conditions | Hereditary breast/ovarian cancer syndrome |
@@ -257,7 +257,7 @@ codes, strengths, exclusions) happens in the unified
 |----------|-------|
 | VCV ID | VCV000376642 |
 | Classification | VUS (outdated) |
-| Review Status | ★★ (criteria provided) |
+| Review Status | ★★ (multiple submitters, no conflicts) |
 | Submitters | 3 |
 | Conditions | Li-Fraumeni syndrome |
 
@@ -267,7 +267,7 @@ codes, strengths, exclusions) happens in the unified
 
 | Variant at R175 | ClinVar Classification |
 |-----------------|------------------------|
-| p.R175H | Pathogenic (★★★★) |
+| p.R175H | Pathogenic |
 | p.R175G | Pathogenic |
 | p.R175L | Pathogenic |
 | p.R175S | Pathogenic |
