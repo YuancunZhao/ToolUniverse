@@ -1880,6 +1880,49 @@ def _truncation_disclosure(total, inspected, how_to_get_more):
     }
 
 
+def _require_http_ok(response, stage: str) -> None:
+    """Raise unless the Entrez response reports a healthy HTTP status.
+
+    Follow-up 2026-10-23 (Batch A): the region scan used to call .json()
+    directly, so an HTTP error page either raised somewhere deep inside
+    parsing or -- worse -- parsed into something the loose readers treated
+    as "zero matches", producing a success envelope with n_overlapping=0.
+    """
+    raise_for_status = getattr(response, "raise_for_status", None)
+    if raise_for_status is None:
+        return  # test doubles predating this contract
+    try:
+        raise_for_status()
+    except Exception as exc:  # requests.HTTPError and lookalikes
+        raise ValueError(f"{stage} request failed: {exc}") from exc
+
+
+def _parse_span_int(value, uid: str, field: str) -> int:
+    """Parse one variation_loc coordinate; accept only parseable integers.
+
+    Follow-up 2026-10-23 (Batch A): the old bare ``int(...)`` accepted
+    booleans (bool is an int subclass -> True became start=1) and silently
+    truncated floats; both are now explicit errors. Integral strings are
+    accepted -- esummary legitimately serializes coordinates as strings --
+    but non-numeric strings, None, bools and floats are rejected.
+    """
+    if isinstance(value, bool):
+        raise ValueError(
+            f"eSummary stage: uid {uid} has a boolean {field} coordinate "
+            f"({value!r})"
+        )
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if re.fullmatch(r"[+-]?\d+", text):
+            return int(text)
+    raise ValueError(
+        f"eSummary stage: uid {uid} has a non-integer {field} "
+        f"coordinate ({value!r})"
+    )
+
+
 def clinvar_variants_overlapping(
     session,
     chrom,
@@ -1927,7 +1970,19 @@ def clinvar_variants_overlapping(
         if clause:
             term = f"({term}) AND {clause}"
 
-    es = session.get(
+    # Follow-up 2026-10-23 (Batch A): an incomplete scan is a WHOLE-CALL
+    # error, never a healthy-looking negative. Every request checks its
+    # HTTP status; the eSearch JSON is validated by the shared
+    # _validate_esearch_payload; and because the region query pins a
+    # POSITIVE retmax, `count` is additionally checked against the idlist
+    # (count>0 with no ids, or count<len(idlist), are broken payloads
+    # here -- count>len(idlist) is legitimate truncation). Every returned
+    # UID must yield a usable detail record, and that record must carry at
+    # least one parseable current-assembly coordinate pair; a record
+    # visibly on another assembly is skipped WITHOUT its coordinates being
+    # touched. Damage raises ValueError with the stage/UID/field path,
+    # which ClinVarSearchByRegion.run turns into status:"error".
+    es_response = session.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
         params={
             "db": "clinvar",
@@ -1936,41 +1991,96 @@ def clinvar_variants_overlapping(
             "retmode": "json",
         },
         timeout=timeout,
-    ).json()
-    esearchresult = es.get("esearchresult") or {}
-    ids = esearchresult.get("idlist") or []
+    )
+    _require_http_ok(es_response, "eSearch")
+    es = es_response.json()
+    esearch_error, _query_warnings = _validate_esearch_payload(es)
+    if esearch_error:
+        raise ValueError(f"eSearch stage: {esearch_error}")
+    esearchresult = es["esearchresult"]
+    ids = esearchresult["idlist"]
     # esearch reports the size of the whole match set in `count` whatever retmax
     # is, so the honest denominator costs no extra request.
     try:
         total_available = int(esearchresult.get("count"))
     except (TypeError, ValueError):
         total_available = None
+    # Region queries pin a positive retmax, so the count/idlist pairing
+    # can be checked here (the shared validator cannot: a retmax=0
+    # count-only query legitimately pairs count>0 with an empty idlist).
+    if total_available is not None:
+        if total_available > 0 and not ids:
+            raise ValueError(
+                "eSearch stage: esearchresult reports count="
+                f"{total_available} but an empty idlist under a positive "
+                "retmax -- a broken response, not an empty result"
+            )
+        if 0 < total_available < len(ids):
+            raise ValueError(
+                "eSearch stage: esearchresult reports count="
+                f"{total_available}, smaller than the {len(ids)} ids "
+                "returned -- a broken payload, not a truncated page"
+            )
 
     out = []
     for chunk_start in range(0, len(ids), 200):
         chunk = ids[chunk_start : chunk_start + 200]
-        summ = (
-            session.get(
-                "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
-                params={"db": "clinvar", "id": ",".join(chunk), "retmode": "json"},
-                timeout=timeout,
-            )
-            .json()
-            .get("result", {})
+        summ_response = session.get(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi",
+            params={"db": "clinvar", "id": ",".join(chunk), "retmode": "json"},
+            timeout=timeout,
         )
+        _require_http_ok(
+            summ_response, f"eSummary (uids {chunk[0]}..{chunk[-1]})"
+        )
+        summ = summ_response.json().get("result")
+        if not isinstance(summ, dict):
+            raise ValueError(
+                "eSummary stage: response is missing the 'result' object "
+                f"(got {type(summ).__name__}) for uids {chunk[0]}.."
+                f"{chunk[-1]} -- a broken response, not an empty overlap set"
+            )
         for vid in chunk:
-            rec = summ.get(vid) or {}
+            rec = summ.get(vid)
+            if not isinstance(rec, dict) or not rec:
+                raise ValueError(
+                    f"eSummary stage: uid {vid} has no detail record in "
+                    "the esummary response -- the scan cannot decide "
+                    "overlap for it, so no complete-negative claim is made"
+                )
+            if rec.get("error"):
+                raise ValueError(
+                    f"eSummary stage: uid {vid} returned an API error: "
+                    f"{rec['error']}"
+                )
+            matched = False
+            current_assembly_loc = False
             for vset in rec.get("variation_set") or []:
+                if not isinstance(vset, dict):
+                    raise ValueError(
+                        f"eSummary stage: uid {vid} has a non-object "
+                        "variation_set entry"
+                    )
                 for loc in vset.get("variation_loc") or []:
+                    if not isinstance(loc, dict):
+                        raise ValueError(
+                            f"eSummary stage: uid {vid} has a non-object "
+                            "variation_loc entry"
+                        )
                     if (
                         str(loc.get("assembly_name", "")).upper()
                         != str(assembly).upper()
                     ):
                         continue
-                    try:
-                        v_start, v_stop = int(loc.get("start")), int(loc.get("stop"))
-                    except (TypeError, ValueError):
-                        continue
+                    current_assembly_loc = True
+                    v_start = _parse_span_int(loc.get("start"), vid, "start")
+                    v_stop = _parse_span_int(loc.get("stop"), vid, "stop")
+                    if v_stop < v_start:
+                        raise ValueError(
+                            f"eSummary stage: uid {vid} has an inverted "
+                            f"interval start={v_start} > stop={v_stop}"
+                        )
+                    matched = True
                     if v_start <= int(end) and v_stop >= int(start):
                         out.append(
                             {
@@ -1987,6 +2097,15 @@ def clinvar_variants_overlapping(
                             }
                         )
                     break
+                if matched:
+                    break
+            if not current_assembly_loc:
+                raise ValueError(
+                    f"eSummary stage: uid {vid} exposes no "
+                    f"{assembly} variation_loc, so its overlap with the "
+                    "region cannot be decided -- no complete-negative "
+                    "claim is made"
+                )
     # Smallest span first: the most specific variant covering the region.
     out.sort(key=lambda v: v["span"])
     return {

@@ -20,6 +20,7 @@ Pins:
 """
 
 import re
+from unittest.mock import patch
 
 import pytest
 
@@ -31,11 +32,17 @@ REGION = {"region": "chr11:47332696-47332696", "assembly": "GRCh38"}
 
 
 class _Resp:
+    """Follow-up 2026-10-23: healthy responses now also carry a working
+    raise_for_status(), which the production scan asserts."""
+
     def __init__(self, payload):
         self._payload = payload
 
     def json(self):
         return self._payload
+
+    def raise_for_status(self):
+        return None
 
 
 class _FakeEntrez:
@@ -63,6 +70,9 @@ class _FakeEntrez:
                     "esearchresult": {
                         "count": str(self.count),
                         "idlist": self.ids[: params.get("retmax", 20)],
+                        # Follow-up 2026-10-23: a real esearch always returns
+                        # one; the scan now validates the payload.
+                        "querytranslation": "17[chr] AND window[chrpos38]",
                     }
                 }
             )
@@ -225,3 +235,374 @@ def test_significance_filter_applies_to_the_whole_or_group():
     assert " OR " in window and window.endswith(")")
     assert window.count("(") == window.count(")")
     assert clinsig.startswith('"clinsig pathogenic"[Filter]')
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up 2026-10-23 (Batch A): an incomplete scan is an ERROR, never a
+# healthy-looking negative. HTTP failures, API errors, malformed eSearch
+# payloads, count/idlist contradictions, missing or damaged esummary
+# records, unusable current-assembly coordinates and unparseable or
+# inverted intervals all raise, and ClinVarSearchByRegion.run converts
+# that into status:"error" -- no "success / n_overlapping=0" envelope
+# may survive an incomplete request chain.
+# --------------------------------------------------------------------------- #
+class _HttpError(Exception):
+    pass
+
+
+class _Resp23:
+    """Realistic response object: json() plus raise_for_status()."""
+
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
+        return self._payload
+
+    def raise_for_status(self):
+        if isinstance(self._payload, _HttpError):
+            raise self._payload
+
+
+class _ScriptedEntrez:
+    """Serves a fixed esearch payload and a per-chunk esummary result."""
+
+    def __init__(self, esearch_payload, summary_by_chunk=None):
+        self.esearch_payload = esearch_payload
+        self.summary_by_chunk = summary_by_chunk or []
+        self._summary_calls = 0
+        self.terms = []
+
+    def get(self, url, params=None, timeout=None):
+        params = params or {}
+        if "esearch" in url:
+            self.terms.append(params["term"])
+            return _Resp23(self.esearch_payload)
+        chunk_index = self._summary_calls
+        self._summary_calls += 1
+        return _Resp23(self.summary_by_chunk[chunk_index])
+
+
+def _healthy_esearch(count, ids):
+    return {
+        "esearchresult": {
+            "count": str(count),
+            "idlist": list(ids),
+            "querytranslation": "17[chr] AND window[chrpos38]",
+        }
+    }
+
+
+def _loc_record(vid, start, stop, assembly="GRCh38"):
+    return {
+        vid: {
+            "title": f"variant {vid}",
+            "obj_type": "copy number loss",
+            "germline_classification": {"description": "Pathogenic"},
+            "variation_set": [
+                {
+                    "variation_loc": [
+                        {
+                            "assembly_name": assembly,
+                            "chr": "11",
+                            "start": str(start),
+                            "stop": str(stop),
+                        }
+                    ]
+                }
+            ],
+        }
+    }
+
+
+def _run_expect_error(session, **overrides):
+    tool = ClinVarSearchByRegion({"name": "ClinVar_search_by_region"})
+    tool.session = session
+    result = tool.run({**REGION, **overrides})
+    assert result["status"] == "error", result
+    return result["error"]
+
+
+@pytest.mark.parametrize(
+    "esearch_payload",
+    [
+        pytest.param(_HttpError("HTTP 503"), id="esearch-http-error"),
+        pytest.param({"error": "service unavailable"}, id="esearch-api-error"),
+        pytest.param({"unexpected": True}, id="esearch-missing-envelope"),
+        pytest.param(
+            {
+                "esearchresult": {
+                    "count": "3",
+                    "idlist": [],
+                    "querytranslation": "17[chr]",
+                }
+            },
+            id="positive-count-empty-idlist",
+        ),
+        pytest.param(
+            {
+                "esearchresult": {
+                    "count": "1",
+                    "idlist": ["1", "2"],
+                    "querytranslation": "17[chr]",
+                }
+            },
+            id="count-below-idlist-length",
+        ),
+        pytest.param(
+            {"esearchresult": {"count": "2", "idlist": ["1"]}},
+            id="missing-querytranslation",
+        ),
+    ],
+)
+def test_broken_esearch_is_whole_call_error(esearch_payload):
+    error = _run_expect_error(_ScriptedEntrez(esearch_payload))
+    assert "region search failed" in error.lower() or "esearch" in error.lower()
+
+
+def test_healthy_zero_result_never_requests_details():
+    session = _ScriptedEntrez(_healthy_esearch(0, []))
+    data = _run(session)
+    assert data["n_candidates"] == 0
+    assert data["n_overlapping"] == 0
+    assert data["truncated"] is False
+    assert session._summary_calls == 0
+
+
+@pytest.mark.parametrize(
+    "summaries",
+    [
+        pytest.param([_HttpError("HTTP 503")], id="esummary-http-error"),
+        pytest.param(
+            [{"result": {"1": {"error": "cannot find uid"}}}],
+            id="record-api-error",
+        ),
+        pytest.param([{"result": {}}], id="missing-uid-record"),
+        pytest.param([{"result": {"1": {}}}], id="empty-record"),
+        pytest.param([{"unrelated": True}], id="broken-container"),
+        pytest.param(
+            [
+                {"result": _loc_record("1", 46000000, 46000100)},
+                _HttpError("HTTP 503 on second chunk"),
+            ],
+            id="later-chunk-failure",
+        ),
+        pytest.param(
+            [
+                {
+                    "result": {
+                        "1": {
+                            "title": "variant 1",
+                            "variation_set": [
+                                {
+                                    "variation_loc": [
+                                        {
+                                            "assembly_name": "GRCh37",
+                                            "chr": "11",
+                                            "start": "46000000",
+                                            "stop": "46000100",
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    }
+                }
+            ],
+            id="no-current-assembly-coordinates",
+        ),
+        pytest.param(
+            [
+                {
+                    "result": {
+                        "1": {
+                            "title": "variant 1",
+                            "variation_set": [
+                                {
+                                    "variation_loc": [
+                                        {
+                                            "assembly_name": "GRCh38",
+                                            "chr": "11",
+                                            "start": True,
+                                            "stop": "46000100",
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    }
+                }
+            ],
+            id="boolean-start-coordinate",
+        ),
+        pytest.param(
+            [
+                {
+                    "result": {
+                        "1": {
+                            "title": "variant 1",
+                            "variation_set": [
+                                {
+                                    "variation_loc": [
+                                        {
+                                            "assembly_name": "GRCh38",
+                                            "chr": "11",
+                                            "start": "not-a-number",
+                                            "stop": "46000100",
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    }
+                }
+            ],
+            id="unparseable-start-coordinate",
+        ),
+        pytest.param(
+            [
+                {
+                    "result": {
+                        "1": {
+                            "title": "variant 1",
+                            "variation_set": [
+                                {
+                                    "variation_loc": [
+                                        {
+                                            "assembly_name": "GRCh38",
+                                            "chr": "11",
+                                            "start": "46000100",
+                                            "stop": "46000000",
+                                        }
+                                    ]
+                                }
+                            ],
+                        }
+                    }
+                }
+            ],
+            id="inverted-interval",
+        ),
+    ],
+)
+def test_broken_esummary_is_whole_call_error(summaries):
+    session = _ScriptedEntrez(_healthy_esearch(2, ["1", "2"]), summaries)
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "region search failed" in lowered
+    # The message names the stage and (where applicable) the UID or field.
+    assert any(
+        marker in lowered
+        for marker in ("esummary", "uid 1", "coordinates", "interval", "http")
+    )
+
+
+def test_other_assembly_position_does_not_require_usable_coordinates():
+    # A loc clearly on another assembly is skipped WITHOUT its coordinates
+    # ever being parsed; a sibling current-assembly loc decides overlap.
+    record = {
+        "1": {
+            "title": "variant 1",
+            "variation_set": [
+                {
+                    "variation_loc": [
+                        {
+                            "assembly_name": "GRCh37",
+                            "chr": "11",
+                            "start": "not-even-a-number",
+                            "stop": "???",
+                        },
+                        {
+                            "assembly_name": "GRCh38",
+                            "chr": "11",
+                            "start": "47332000",
+                            "stop": "47333000",
+                        },
+                    ]
+                }
+            ],
+        }
+    }
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]), [{"result": record}]
+    )
+    data = _run(session)
+    assert data["n_overlapping"] == 1
+    assert data["variants"][0]["variation_id"] == "1"
+
+
+def test_candidate_cap_truncation_disclosure_unchanged():
+    # Healthy oversized match set: the existing truncation contract stays.
+    ids = [str(1000 + i) for i in range(_CANDIDATE_CAP)]
+    all_records = {
+        vid: _loc_record(vid, 46000000, 46000100)[vid] for vid in ids
+    }
+    session = _ScriptedEntrez(
+        _healthy_esearch(15327, ids),
+        # The scan fetches details in 200-id chunks; serve every chunk.
+        [{"result": all_records}] * 5,
+    )
+    data = _run(session)
+    assert data["truncated"] is True
+    assert data["n_candidates"] == _CANDIDATE_CAP
+    assert data["total_available"] == 15327
+
+
+# --------------------------------------------------------------------------- #
+# The same whole-call error must survive a REAL SMCP registration (the
+# HTTP-layer contract reaches the MCP caller). All HTTP is mocked.
+# --------------------------------------------------------------------------- #
+class _FakeSession:
+    """Minimal requests.Session stand-in: only .get is used by the scan."""
+
+    def __init__(self, get_impl):
+        self._get = get_impl
+
+    def get(self, url, params=None, timeout=None):
+        return self._get(url, params=params, timeout=timeout)
+
+
+def test_smcp_registered_region_error_reaches_caller():
+    import asyncio
+    import json as _json
+
+    from fastmcp import Client
+
+    from tooluniverse.clinvar_tool import clinvar_variants_overlapping
+    from tooluniverse.smcp import SMCP
+
+    def fake_get(url, params=None, timeout=None):
+        if "esearch" in url:
+            return _Resp23(_healthy_esearch(1, ["13961"]))
+        return _Resp23(
+            {"result": {"13961": {"error": "service unavailable"}}}
+        )
+
+    async def drive():
+        from tooluniverse.clinvar_tool import ClinVarRESTTool
+
+        server = SMCP(name="region-error-test")
+        # The region tool builds its own requests.Session in __init__; swap
+        # the constructor so every instance the SMCP dispatch creates gets
+        # the fake (HTTP fully mocked, the REAL handler logic runs).
+        original_init = ClinVarRESTTool.__init__
+
+        def patched_init(self, tool_config):
+            original_init(self, tool_config)
+            self.session = _FakeSession(fake_get)
+
+        with patch.object(ClinVarRESTTool, "__init__", patched_init):
+            async with Client(server) as client:
+                call = await client.call_tool(
+                    "ClinVar_search_by_region",
+                    {"region": "chr11:47332696-47332696", "assembly": "GRCh38"},
+                )
+        return _json.loads(call.content[0].text)
+
+    payload = asyncio.run(drive())
+    assert payload["status"] == "error"
+    lowered = payload["error"].lower()
+    assert "region search failed" in lowered
+    assert "13961" in lowered or "service unavailable" in lowered
