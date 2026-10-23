@@ -221,6 +221,66 @@ def _condition_filter_disclosure(
     return {}
 
 
+def _optional_record_list(record: Dict[str, Any], field: str) -> list:
+    """Return an optional record-list field, validating its shape.
+
+    Follow-up 2026-10-23 (Batch C): absence, null and empty list mean
+    "optional information not provided" and yield ``[]`` (the detail
+    assemblies keep their existing empty output fields). A PRESENT,
+    non-empty value of any other shape -- or holding non-object
+    elements -- is corrupted input and raises ``ValueError`` naming the
+    field, instead of the IndexError/AttributeError the ``[0]``/``.get``
+    indexing used to throw deep inside the detail assembly.
+    """
+    value = record.get(field)
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(
+            f"'{field}' must be a list of objects when present, got "
+            f"{type(value).__name__}"
+        )
+    for element in value:
+        if not isinstance(element, dict):
+            raise ValueError(
+                f"'{field}' entries must be objects, got "
+                f"{type(element).__name__} ({element!r})"
+            )
+    return value
+
+
+def _validate_optional_detail_containers(variant_data: Dict[str, Any]) -> None:
+    """Validate the optional containers the single-DETAIL tools index into.
+
+    Pairs with ``_parse_variant_summary`` (which has already validated the
+    record object itself plus ``genes`` and ``germline_classification``):
+    the fields below are only read by the details / clinical-significance
+    assemblies, so their shape contract lives here. Null-or-absent means
+    optional-not-provided; a present value of the wrong shape is an
+    explicit error. First-record selection semantics and every public
+    output field are unchanged; no position inference or assembly
+    auto-selection is added.
+    """
+    variation_set = _optional_record_list(variant_data, "variation_set")
+    if variation_set:
+        # Only the FIRST record is ever read by the details assembly, so
+        # only its nested loc container needs the shape contract here.
+        _optional_record_list(variation_set[0], "variation_loc")
+    germline = variant_data.get("germline_classification")
+    if germline:
+        _optional_record_list(germline, "trait_set")
+    for field in (
+        "clinical_impact_classification",
+        "oncogenicity_classification",
+    ):
+        value = variant_data.get(field)
+        if value is not None and not isinstance(value, dict):
+            raise ValueError(
+                f"'{field}' must be an object when present, got "
+                f"{type(value).__name__}"
+            )
+
+
 class ClinVarRESTTool(BaseTool):
     """Base class for ClinVar REST API tools."""
 
@@ -374,15 +434,57 @@ class ClinVarRESTTool(BaseTool):
         if result.get("status") != "success":
             return {"error_result": result}
 
-        data = result.get("data", {})
-        variant_data = data.get("result", {}).get(variant_id)
+        # Follow-up 2026-10-23 (Batch C): type-check the envelope BEFORE
+        # any nested ``.get``. A present-but-wrong-type ``data``/``result``
+        # (e.g. ``data: []`` or ``result: null``) used to crash with a raw
+        # AttributeError; a UID key mapped to a list crashed on the record's
+        # own ``.get``. Each now surfaces as an explicit malformed-envelope
+        # error -- present-null follows the parser's house rule that a
+        # declared-but-null container is damaged, not "absent". A MISSING
+        # key keeps the pre-existing not-found path.
+        envelope_problems = []
+        if "data" in result and not isinstance(result["data"], dict):
+            envelope_problems.append(
+                f"'data' must be a JSON object, got {type(result['data']).__name__}"
+            )
+        data = result.get("data")
+        if data is None:
+            data = {}
+        if isinstance(data, dict) and "result" in data and not isinstance(
+            data["result"], dict
+        ):
+            envelope_problems.append(
+                f"'result' must be a JSON object, got {type(data['result']).__name__}"
+            )
+        if envelope_problems:
+            return {
+                "error_result": {
+                    "status": "error",
+                    "error": "ClinVar esummary response is malformed: "
+                    + "; ".join(envelope_problems),
+                    "url": result.get("url"),
+                }
+            }
+        inner = data.get("result") or {}
+        variant_data = inner.get(variant_id)
+        if variant_data is not None and not isinstance(variant_data, dict):
+            return {
+                "error_result": {
+                    "status": "error",
+                    "error": (
+                        f"ClinVar esummary record for uid '{variant_id}' "
+                        f"must be a JSON object, got {type(variant_data).__name__}"
+                    ),
+                    "url": result.get("url"),
+                }
+            }
 
         if not variant_data:
             # NCBI returns HTTP 200 with an empty uids list and an inline
             # "Invalid uid ..." message when the id is not a numeric ClinVar
             # Variation ID (e.g. a dbSNP rsID was passed). Surface this as a
             # real error instead of forwarding the raw success envelope.
-            ncbi_err = data.get("error") or data.get("result", {}).get("error")
+            ncbi_err = data.get("error") or inner.get("error")
             msg = f"No ClinVar record found for variant_id '{variant_id}'."
             if isinstance(variant_id, str) and variant_id.lower().startswith("rs"):
                 msg += (
@@ -414,8 +516,15 @@ class ClinVarRESTTool(BaseTool):
         # submitter citations -- a malformed record surfaces as an explicit
         # error here instead of a raw AttributeError or an empty-details
         # "success" downstream. Only the parser's ValueError is caught.
+        # Follow-up 2026-10-23 (Batch C): the optional detail containers
+        # (variation_set/variation_loc, trait_set, clinical_impact and
+        # oncogenicity classifications) are validated in the same step so a
+        # corrupt detail errors out BEFORE any citation fetch; a citation
+        # fetch that merely fails still degrades to a healthy detail with
+        # citations_complete=false downstream.
         try:
             variant_summary = self._parse_variant_summary(variant_data)
+            _validate_optional_detail_containers(variant_data)
         except ValueError as exc:
             return {
                 "error_result": {
@@ -1417,6 +1526,15 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
         variant_summary = fetch["variant_summary"]
         result = fetch["result"]
         result["variant_id"] = variant_id
+        # Follow-up 2026-10-23 (Batch C): the optional location containers
+        # were already shape-validated in _fetch_variant (absent/null/empty
+        # list = optional info not provided), so this first-record selection
+        # is safe without a [0] on a possibly-empty list. Selection
+        # semantics are unchanged: FIRST variation_set entry, FIRST loc.
+        variation_set = variant_data.get("variation_set") or []
+        first_variation = variation_set[0] if variation_set else {}
+        variation_loc = first_variation.get("variation_loc") or []
+        first_loc = variation_loc[0] if variation_loc else {}
         # Fix-R8E-1/R6C-2: assign the formatted payload *over* `result["data"]`
         # (the full, unprocessed esummary envelope from _make_request) instead
         # of publishing it alongside under a second key. Keeping both roughly
@@ -1433,12 +1551,8 @@ class ClinVarGetVariantDetails(ClinVarRESTTool):
             "accession": variant_data.get("accession", ""),
             "obj_type": variant_data.get("obj_type", ""),
             "chromosome": variant_data.get("chr_sort", ""),
-            "location": variant_data.get("variation_set", [{}])[0]
-            .get("variation_loc", [{}])[0]
-            .get("band", ""),
-            "variation_name": variant_data.get("variation_set", [{}])[0].get(
-                "variation_name", ""
-            ),
+            "location": first_loc.get("band", ""),
+            "variation_name": first_variation.get("variation_name", ""),
             **variant_summary,
             "raw_data": variant_data,
         }
@@ -1522,10 +1636,14 @@ class ClinVarGetClinicalSignificance(ClinVarRESTTool):
         result = fetch["result"]
         result["variant_id"] = variant_id
 
-        # Extract clinical significance information
-        germline_class = variant_data.get("germline_classification", {})
-        clinical_impact = variant_data.get("clinical_impact_classification", {})
-        oncogenicity = variant_data.get("oncogenicity_classification", {})
+        # Extract clinical significance information. Follow-up 2026-10-23
+        # (Batch C): every container below was shape-validated in
+        # _fetch_variant, so null-or-absent degrades to empty output via
+        # ``or`` -- a present-but-corrupt value already errored there.
+        germline_class = variant_data.get("germline_classification") or {}
+        clinical_impact = variant_data.get("clinical_impact_classification") or {}
+        oncogenicity = variant_data.get("oncogenicity_classification") or {}
+        trait_set = germline_class.get("trait_set") or []
 
         # Fix-R8E-1/R6C-2: see the matching fix in ClinVarGetVariantDetails --
         # assigning over `result["data"]` (the raw esummary envelope) both
@@ -1539,8 +1657,7 @@ class ClinVarGetClinicalSignificance(ClinVarRESTTool):
                 "last_evaluated": germline_class.get("last_evaluated", ""),
                 "fda_recognized": germline_class.get("fda_recognized_database", ""),
                 "traits": [
-                    trait.get("trait_name", "")
-                    for trait in germline_class.get("trait_set", [])
+                    trait.get("trait_name", "") for trait in trait_set
                 ],
             },
             "clinical_impact": {
