@@ -85,19 +85,38 @@ connector there resolves `ClinGen_search_cspec` and
 
 ## MCP (stdio)
 
-Point an MCP client at this worktree's entry (not `uvx tooluniverse`):
+Point an MCP client at this worktree's entry (not `uvx tooluniverse`).
+The recommended local setup runs **compact mode**, which exposes only the
+five discovery/execution tools instead of injecting the full tool catalog
+into the context window:
 
 ```json
 {
   "mcpServers": {
     "tooluniverse-local": {
-      "command": "/Users/zhaoyuancun/Documents/ToolUniverse-acmg-svi-cspec-lightweight/.venv/bin/tooluniverse-smcp-stdio"
+      "command": "/Users/zhaoyuancun/Documents/ToolUniverse-acmg-svi-cspec-lightweight/.venv/bin/tooluniverse-smcp-stdio",
+      "args": ["--compact-mode"]
     }
   }
 }
 ```
 
-Minimal session exposing only the two new tools:
+Compact mode's five tools are `find_tools`, `list_tools`, `grep_tools`,
+`get_tool_info`, and `execute_tool`. Every ToolUniverse tool — including
+`ClinGen_search_cspec` and `ACMG_calculate_classification` — stays loaded
+in the background and reachable in two steps: look the tool up with
+`get_tool_info` (`{"tool_names": "ACMG_calculate_classification"}` — one
+name per call) to read its parameters, then run it through `execute_tool`
+(`{"tool_name": "ACMG_calculate_classification", "arguments": {...}}`),
+which returns the wrapped tool's own result envelope.
+
+Switching an existing host to this configuration requires restarting the
+MCP server and opening a NEW session: compressing or summarizing the chat
+does not remove static tool definitions the host has already injected.
+
+For targeted two-tool sessions (the shape the stdio integration test
+uses), keep the explicit restriction as-is — do not blindly append
+`--compact-mode` on top of it:
 
 ```bash
 .venv/bin/tooluniverse-smcp-stdio \

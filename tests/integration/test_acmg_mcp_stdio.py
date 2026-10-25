@@ -213,3 +213,112 @@ def test_mcp_discovers_and_executes_both_new_tools():
     assert "incomplete_specification_material" in [
         r["reason"] for r in incomplete["data"]["review_reasons"]
     ]
+
+
+# --------------------------------------------------------------------------- #
+# 2026-10-23 review (Batch F): compact-mode session over the same real
+# stdio entry. Compact exposes ONLY the five discovery/execution tools
+# (the full catalog stays loaded in the background for execute_tool);
+# the ACMG/CSpec tools are reached via get_tool_info -> execute_tool
+# instead of direct registration. Assertions avoid fixed token/byte
+# counts (they drift with serialization and version); this is a real
+# stdio protocol check, NOT an LLM acceptance.
+# --------------------------------------------------------------------------- #
+_COMPACT_TOOLS = {
+    "find_tools",
+    "list_tools",
+    "grep_tools",
+    "get_tool_info",
+    "execute_tool",
+}
+
+
+def _run_compact_session():
+    """Drive one --compact-mode stdio session end to end."""
+
+    async def session():
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        params = StdioServerParameters(
+            command=SERVER,
+            args=["--compact-mode"],
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "PYTHONUNBUFFERED": "1",
+                "TOOLUNIVERSE_LIGHT_IMPORT": "1",
+            },
+        )
+
+        def parse(call):
+            try:
+                return json.loads(call.content[0].text)
+            except (ValueError, AttributeError, IndexError):
+                return {"isError": True, "raw": str(call)}
+
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as client:
+                await client.initialize()
+                listed = await client.list_tools()
+                names = sorted(t.name for t in listed.tools)
+
+                # get_tool_info resolves each target by its single name.
+                infos = {}
+                for tool in (
+                    "ClinGen_search_cspec",
+                    "ACMG_calculate_classification",
+                ):
+                    call = await client.call_tool(
+                        "get_tool_info", {"tool_names": tool}
+                    )
+                    infos[tool] = parse(call)
+
+                legal = await client.call_tool(
+                    "execute_tool",
+                    arguments={
+                        "tool_name": "ACMG_calculate_classification",
+                        "arguments": _golden_arguments(),
+                    },
+                )
+
+                incomplete_args = _golden_arguments()
+                incomplete_args["rule_context"][
+                    "applicable_rules_complete"
+                ] = False
+                incomplete = await client.call_tool(
+                    "execute_tool",
+                    arguments={
+                        "tool_name": "ACMG_calculate_classification",
+                        "arguments": incomplete_args,
+                    },
+                )
+                return names, infos, parse(legal), parse(incomplete)
+
+    return asyncio.run(session())
+
+
+def test_compact_mode_discovers_executes_and_pauses():
+    names, infos, legal, incomplete = _run_compact_session()
+
+    # Exactly the five discovery/execution tools -- no full catalog.
+    assert set(names) == _COMPACT_TOOLS, names
+
+    for tool, info in infos.items():
+        assert info.get("name") == tool, (tool, info)
+        assert info.get("description"), tool
+
+    legal_data = legal["data"]
+    assert legal["status"] == "success"
+    assert legal_data["classification_status"] == "computed"
+    assert legal_data["classification"] == "Likely Pathogenic"
+    assert legal_data["total_score"] == 9
+
+    incomplete_data = incomplete["data"]
+    assert incomplete_data["classification_status"] == "needs_review"
+    assert incomplete_data["classification"] is None
+    # The pause is faithful: no fabricated score field at all.
+    assert "total_score" not in incomplete_data
+    assert "incomplete_specification_material" in [
+        reason["reason"]
+        for reason in incomplete_data["review_reasons"]
+    ]
