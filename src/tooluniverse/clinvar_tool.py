@@ -868,6 +868,12 @@ class ClinVarSearchVariants(ClinVarRESTTool):
             "significance",
             "max_results",
             "limit",
+            # 2026-10-23 review (Batch D): `query` values carrying Entrez
+            # field tags are rewritten to raw_term above and DO join the
+            # query term -- listing them as ignored accused the one input
+            # that was applied. Internal name only; no public schema param
+            # is added, and genuinely misspelled parameters stay disclosed.
+            "raw_term",
         }
         unrecognized = sorted(set(arguments) - recognized)
 
@@ -1338,12 +1344,19 @@ class ClinVarSearchVariants(ClinVarRESTTool):
                 "satisfies. Relax or correct them (or drop them to see the "
                 "gene's full record set) rather than re-checking the symbol."
             )
+            # 2026-10-23 review (Batch D): the old continuation derived "this
+            # gene and this condition simply have no record in common" from
+            # two SINGLE-input counts. Neither count combined the two inputs
+            # (and the actual query often carried a third filter), so the
+            # intersection conclusion was unsupported. Report the verified
+            # single-input fact only; the zero itself is already attributed
+            # to the combined filter list above. No extra attribution query
+            # is issued.
             if condition_only_count:
                 hint += (
                     f" The condition '{condition}' is itself a recognized ClinVar "
                     f"disease term ({condition_only_count} record(s) across all "
-                    "genes), so this gene and this condition simply have no record "
-                    "in common."
+                    "genes)."
                 )
             extras["zero_result_hint"] = hint
         elif has_gene:

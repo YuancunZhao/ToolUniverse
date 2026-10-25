@@ -231,8 +231,15 @@ def test_zero_results_with_a_condition_absent_from_the_disease_index():
     assert "1183" in hint
 
 
-def test_zero_results_with_a_real_condition_says_gene_and_condition_dont_meet():
-    """Both inputs are individually fine -- 'no data' rather than 'bad query'."""
+def test_zero_results_with_a_real_condition_and_a_third_filter():
+    """2026-10-23 review (Batch D): this query carries a THIRD filter
+    (clinical_significance), so the two individually-verified counts
+    (gene fine, condition recognized) cannot establish that the gene and
+    the condition have no record in common -- the zero may come from the
+    third filter. The old hint derived exactly that sentence from the
+    two single counts; it must stay out. What survives: both verified
+    counts, and the fact that the current combined query returned zero.
+    """
 
     def responder(params):
         term = params.get("term", "")
@@ -243,7 +250,7 @@ def test_zero_results_with_a_real_condition_says_gene_and_condition_dont_meet():
         return _esearch(
             0,
             'RPE65[gene] AND "breast cancer"[dis] AND '
-            '("clinsig pathogenic"[Filter] OR clinsig_pathogenic[prop])',
+            '("clinsig pathogenic"[Filter] OR clnsig_pathogenic[prop])',
         )
 
     result, _ = _run(
@@ -257,12 +264,40 @@ def test_zero_results_with_a_real_condition_says_gene_and_condition_dont_meet():
 
     data = result["data"]
     assert data["condition_filter_applied"] is True
+    assert data["gene_only_match_count"] == 1183
     assert data["condition_only_match_count"] == 240000
     hint = data["zero_result_hint"]
     assert "'RPE65' is fine" in hint
+    # The verified single-input facts stay reportable...
     assert "recognized ClinVar disease term" in hint
-    assert "no record in common" in hint
+    assert "240000" in hint
+    # ...but the cross-filter "no record in common" conclusion -- derived
+    # from counts that never combined these two inputs alone -- must not.
+    assert "no record in common" not in hint
     assert "HGNC" not in hint
+
+
+def test_zero_results_gene_condition_fine_plus_variant_id_no_intersection_claim():
+    """Same boundary with variant_id as the third filter: individually
+    verified gene and condition counts may be reported, the intersection
+    conclusion may not."""
+
+    def responder(params):
+        term = params.get("term", "")
+        if params.get("retmax") == 0 and term == "RPE65[gene]":
+            return _esearch(1183, term)
+        if params.get("retmax") == 0 and term == '"breast cancer"[dis]':
+            return _esearch(240000, term)
+        return _esearch(0, 'RPE65[gene] AND "breast cancer"[dis] AND 12345[uid]')
+
+    result, _ = _run(
+        {"gene": "RPE65", "condition": "breast cancer", "variant_id": "12345"},
+        responder,
+    )
+
+    hint = result["data"]["zero_result_hint"]
+    assert "'RPE65' is fine" in hint
+    assert "no record in common" not in hint
 
 
 def test_condition_only_search_with_no_gene_still_gets_a_hint():

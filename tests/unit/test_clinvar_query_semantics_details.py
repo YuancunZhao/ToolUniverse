@@ -454,3 +454,44 @@ def test_detail_warnings_do_not_leak_into_query_warnings():
     data = result["data"]
     assert data["warnings"]
     assert not data.get("query_warnings")
+
+
+# --------------------------------------------------------------------------- #
+# 2026-10-23 review (Batch D): raw_term -- the internal name `query` is
+# rewritten to when it carries Entrez field tags -- actually JOINS the
+# query, yet it was missing from the recognized-parameter set, so a
+# caller using {"query": "17[chr]"} got ``ignored_parameters:
+# ["raw_term"]`` accusing the one input that WAS applied. Truly unknown
+# parameters (typos) must stay disclosed.
+# --------------------------------------------------------------------------- #
+def test_query_expression_is_applied_and_not_reported_ignored():
+    """{"query": "17[chr]"} -- the expression rides as raw_term into the
+    actual term and must NOT appear in ignored_parameters."""
+    tool = _tool()
+    with patch.object(
+        ClinVarSearchVariants,
+        "_make_request",
+        side_effect=[_esearch_result(7)],
+    ) as mock_request:
+        result = tool.run({"query": "17[chr]"})
+
+    terms = _terms_of(mock_request)
+    assert terms == ["17[chr]"]
+    assert result["status"] == "success", result
+    assert result["data"]["total_count"] == 7
+    assert "ignored_parameters" not in result["data"]
+
+
+def test_unknown_parameter_still_disclosed_alongside_raw_term():
+    """A real typo next to a raw_term expression stays disclosed -- fixing
+    the internal-name leak must not silently accept misspelled params."""
+    tool = _tool()
+    with patch.object(
+        ClinVarSearchVariants,
+        "_make_request",
+        side_effect=[_esearch_result(7)],
+    ):
+        result = tool.run({"query": "17[chr]", "genee": "BRCA2"})
+
+    assert result["status"] == "success", result
+    assert result["data"]["ignored_parameters"] == ["genee"]
