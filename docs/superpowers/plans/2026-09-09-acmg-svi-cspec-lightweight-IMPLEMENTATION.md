@@ -384,3 +384,30 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
   验收（案例 11–16、回归 3/4，新会话仅 prompt+facts）本轮未执行，
   额度中断保留原生续接入口，缺最终答复仍标 PARTIAL；合成案例通过
   不等于真实变异或完整在线收集流程验收通过。未 push。
+
+## 16. 审查问题修复轮（2026-10-23 计划，2026-10-25 实施）
+
+计划全文：`docs/superpowers/plans/2026-10-23-review-remediation.md`。
+起点 `e121726d`（基线实测 986 passed / 1 skipped），官方基线 `2128ff57`，
+分支 `codex/acmg-svi-cspec-lightweight`，不 push。本轮六个实施批次：
+
+| 批 | 提交 | 内容 |
+|---|---|---|
+| A | `490bebb9` | 区域扫描：eSearch/eSummary 损坏、记录缺失、坐标倒置、跨 assembly 定位缺失等 13+ 类损坏输入从“健康阴性”改为整次 `status:error`；健康返回结构不变（term/total_available/n_candidates/truncated/n_overlapping/variants/note）；工具 JSON 仅追加区域工具一句描述。31 项区域测试 + SMCP 注册复验。 |
+| B | `b658c1f0` | SVI_REFERENCE：同一参考变异至多支撑 PS1 或 PM5 之一（正文 bullet 与末尾表格两处同步改）；不同参考/不同 evidence_ids 不自动证明独立，需查适用规范的组合指导；不宣称 SVI 全面禁令。ClinVar 星级按 NCBI 定义修正（expert panel ★★★ 等 6 档）；无依据星号删除；详情参数表 `variation_id`→`variant_id`（数字 Variation ID）；删除搜索响应含 submitters 的错误承诺。新增中性合成案例 17（NM_999995.1、GGA、唯一同变化参考 c.1000G>C）；预期（PS1 Strong / PM5 不满足 / VUS 4 分）只写在 eval 断言。守卫先写并用 HEAD 内容证明能抓到旧文案。两分发同步，evals 不进分发。 |
+| C | `c1166eed` | `_fetch_variant` 前置类型校验（顶层 `data`/`result` 非 dict、UID 记录为 list → 明确错误）；`_validate_optional_detail_containers`：variation_set/variation_loc/trait_set 缺省/null/空=未提供、损坏报错；clinical_impact/oncogenicity null=空信息、非对象报错；详情结构错误在引文请求**之前**失败；公开字段、`variant_summary` 契约、单份 raw_data、引文归属不变。新反例真实运行 `_fetch_variant`（仅 mock HTTP）+ details/clinical-significance 各一个 SMCP 注册测试。 |
+| D | `cdc00622` | 删除 `_explain_empty_result` 由两个单独计数推导“gene 与 condition 无交集”的句子（第三筛选存在时该结论无依据）；保留已验证单独计数与组合查询零的事实；不加组合归因查询。`raw_term` 纳入内部识别集合（不再 `ignored_parameters=["raw_term"]`）；拼错参数仍披露。旧三筛选测试按新边界重写，补 variant_id 形态。 |
+| E | `5b34fbc1` | CODE_PATTERNS：`collect_expression_context(tu, gene_symbol)`（删组织名读取/默认零/TPM 阈值/`expressed_in_phenotype_tissue`）；`collect_literature_context(tu, gene, variant)`（一次 PubMed + 一次 OpenAlex `query=f"{gene} {variant}", limit=5`；删逐篇引用查询/`citations[0]`/`citation_count`/`key_papers_with_citations`）。测试以 GTEx/OpenAlex/PubMed 真实返回形状（健康/健康空/失败）验证原始回执逐字保留。GTEx/CELLxGENE 生产工具未改；同名的结构变异 Skill 辅助函数是独立函数、未动。分发同步。 |
+| F | `cf585439` | 运行文档推荐 MCP 配置加 `"args": ["--compact-mode"]`；说明五个发现/执行工具与 `get_tool_info → execute_tool` 用法；说明需重启 MCP 并新会话；保留 `--include-tools` 定向会话原样。新增真实 stdio compact 会话测试：恰好五工具、get_tool_info 找到两目标工具、execute_tool golden payload → LP/9、`applicable_rules_complete=false` → needs_review/null/无 total_score。无固定 token/字节数断言。服务器默认行为、hooks、全局配置未改。 |
+
+**完成度分层（如实报告）：**
+
+- 代码与文档完成：A–F 全部提交，工作区干净。
+- 自动化回归：计划指定的 19 个测试文件全量跑通——**1045 passed, 1 skipped**（skip 为 PyMuPDF 未安装的既有项），exit 0；ruff（仅检查）全部通过；对起点 `e121726d` 与官方基线 `2128ff57` 的 `git diff --check` 均干净。
+- 冻结文件核对：相对起点，`uv.lock`、`pyproject.toml`、计算器、CSpec 实现、SDK 包装与 registry **零改动**；src/ 仅 `clinvar_tool.py` 与 `data/clinvar_submitted_tools.json`，后者仅 Batch A 允许的区域工具描述一行。
+- 在线工具验证（时点观察，2026-10-25）：`ClinVar_get_variant_details("2737810")` 健康（VCV002737810、Pathogenic、4 条引文 complete、raw_data 在）；区域 `chr7:155593770-155593780` GRCh37 健康扫描（total_available=98=n_candidates，19 个重叠，最小 span 优先，含跨越 CNV，truncated=False）。网络记录数未写入任何断言。
+- 独立 LLM 宿主验收（案例 17/3/4）：**未验收**——执行环境无独立宿主；按计划不安装新宿主、不用同会话演练替代，整体交付不标记“验收完成”。
+
+证据与哈希：`temp_docs_and_tests/benchmark_tracking/2026-10-23-review-remediation/EVIDENCE.txt`（gitignored）。
+
+区域失败语义：整次 `status:error`，不带部分结果；健康返回结构与上一轮完全一致。PS1/PM5 修正只发生在判断文档，计算器算法未改。收集示例已删除派生判断，宿主全局配置未改。

@@ -722,3 +722,57 @@ Completion states (reported separately):
    workflows.
 
 No push was performed.
+
+## Review remediation round (2026-10-23 plan, executed 2026-10-25)
+
+Plan: `docs/superpowers/plans/2026-10-23-review-remediation.md`. Start
+`e121726d` (measured baseline 986 passed / 1 skipped), official baseline
+`2128ff57`, six batches, one commit each, no push:
+
+- `490bebb9` fix(clinvar): reject incomplete region scans — 13+ classes
+  of damaged eSearch/eSummary input in the region tool now return a
+  whole-call `status:error` instead of a healthy-looking negative;
+  healthy output shape unchanged.
+- `b658c1f0` docs(acmg): correct reference evidence and ClinVar review
+  levels — one reference variant supports at most one of PS1/PM5; star
+  table realigned with NCBI (expert panel ★★★ etc.); details parameter
+  corrected to `variant_id`; neutral synthetic eval case 17 added
+  (expectations only in eval assertions).
+- `c1166eed` fix(clinvar): validate detail responses before field
+  access — envelope type checks before any nested `.get()`; optional
+  containers (variation_set/variation_loc/trait_set/classifications)
+  treat absent-null-empty as not-provided and corrupt shapes as explicit
+  errors before any citation fetch.
+- `cdc00622` fix(clinvar): keep search diagnostics evidence based — the
+  two-single-counts "gene and condition have no record in common"
+  derivation removed; `raw_term` no longer reported as an ignored
+  parameter; misspelled parameters still disclosed.
+- `5b34fbc1` docs(variants): preserve raw collection receipts —
+  `collect_expression_context` / `collect_literature_context` with fixed
+  two-key outputs, all derived judgments deleted; tests exercise real
+  GTEx/OpenAlex/PubMed return shapes (healthy / healthy-empty / failure).
+- `cf585439` docs(mcp): use compact mode for local agent setup — the
+  recommended MCP config above now includes `--compact-mode`, with a real
+  stdio compact-session integration test.
+
+**Completion layers (reported separately):**
+
+- Code + docs: all six batches committed, worktree clean.
+- Automation: the plan's 19-file directed regression — **1045 passed,
+  1 skipped** (pre-existing PyMuPDF skip), exit 0. Ruff check-only clean
+  on all changed Python files. `git diff --check` clean against BOTH the
+  round start and the official baseline. Frozen files (uv.lock,
+  pyproject.toml, calculator, CSpec implementation, SDK wrappers,
+  registry) unchanged; the only tool-JSON delta is the Batch A region
+  tool's description line.
+- Online tool checks (point-in-time, 2026-10-25, not asserted in
+  tests): `ClinVar_get_variant_details("2737810")` healthy (4 citations,
+  complete); region `chr7:155593770-155593780` GRCh37 healthy
+  (98 candidates fully checked, 19 overlaps, smallest-span-first).
+- Independent LLM host acceptance (cases 17/3/4): **NOT PERFORMED** —
+  no independent host in the executing environment; per plan this stays
+  unaccepted and the round is not marked overall-accepted.
+
+Evidence and hashes:
+`temp_docs_and_tests/benchmark_tracking/2026-10-23-review-remediation/EVIDENCE.txt`
+(gitignored). No push was performed.
