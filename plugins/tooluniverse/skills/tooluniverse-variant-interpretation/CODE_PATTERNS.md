@@ -373,8 +373,8 @@ def collect_structural_context(tu, uniprot_id):
 ## Phase 4.5: Expression Context
 
 ```python
-def validate_expression_context(tu, gene_symbol, phenotype_tissues):
-    """Validate gene is expressed in phenotype-relevant tissues."""
+def collect_expression_context(tu, gene_symbol):
+    """Collect RAW single-cell and bulk-tissue expression receipts."""
 
     # operation/organism keep their tool defaults (get_anndata /
     # Homo sapiens); var_value_filter is a Census expression STRING.
@@ -384,15 +384,13 @@ def validate_expression_context(tu, gene_symbol, phenotype_tissues):
 
     gtex = tu.tools.GTEx_get_median_gene_expression(gene_symbol=gene_symbol)
 
-    relevant_expression = {
-        tissue: gtex.get(tissue, 0)
-        for tissue in phenotype_tissues
-    }
-
+    # Raw receipts only: GTEx success data is a LIST of per-tissue
+    # records (median/unit fields), not a tissue->TPM dict, so any
+    # tissue-relevance judgment belongs where the records are actually
+    # read -- a request error here is NOT zero expression.
     return {
         'single_cell': sc_expression,
-        'gtex': relevant_expression,
-        'expressed_in_phenotype_tissue': any(v > 1 for v in relevant_expression.values())
+        'gtex': gtex
     }
 ```
 
@@ -401,8 +399,8 @@ def validate_expression_context(tu, gene_symbol, phenotype_tissues):
 ## Phase 5: Literature Search
 
 ```python
-def comprehensive_literature_search(tu, gene, variant, phenotype):
-    """Search across all literature sources."""
+def collect_literature_context(tu, gene, variant):
+    """Collect RAW literature receipts from PubMed and OpenAlex."""
 
     pubmed = tu.tools.PubMed_search_articles(
         query=f'"{gene}" AND ("{variant}" OR functional)',
@@ -414,17 +412,17 @@ def comprehensive_literature_search(tu, gene, variant, phenotype):
     # DOI (MedRxiv_get_preprint) -- neither keyword-searches. Find
     # preprints through EuropePMC instead when needed.
 
-    key_papers = pubmed[:5]
-    for paper in key_papers:
-        citations = tu.tools.openalex_search_works(
-            query=paper['title'],
-            limit=1
-        )
-        paper['citation_count'] = citations[0].get('cited_by_count', 0) if citations else 0
+    # One combined OpenAlex query: results ride at data.results in the
+    # success envelope (never the top level). Kept raw -- no per-paper
+    # citation lookups, no ranking, no key-paper selection.
+    openalex = tu.tools.openalex_search_works(
+        query=f'{gene} {variant}',
+        limit=5
+    )
 
     return {
         'pubmed': pubmed,
-        'key_papers_with_citations': key_papers
+        'openalex': openalex
     }
 ```
 

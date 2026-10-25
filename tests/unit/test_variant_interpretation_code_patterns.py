@@ -584,10 +584,14 @@ def _exec_python_block(markdown_text, heading):
 def test_cellxgene_dynamic_filter_example_validates_in_stub():
     text = (SKILL_DIR / "CODE_PATTERNS.md").read_text()
     namespace = _exec_python_block(text, "## Phase 4.5")
+    # 2026-10-23 review (Batch E): the block now defines the renamed raw
+    # collector; the old validate_expression_context (which derived an
+    # expressed_in_phenotype_tissue judgment with a default-zero read)
+    # must be gone.
+    assert "collect_expression_context" in namespace
+    assert "validate_expression_context" not in namespace
     stub = _SchemaValidatingStub()
-    result = namespace["validate_expression_context"](
-        stub, "FBN1", ["Heart - Left Ventricle"]
-    )
+    result = namespace["collect_expression_context"](stub, "FBN1")
     calls = {name: kwargs for name, kwargs in stub.calls}
     assert "CELLxGENE_get_expression_data" in calls
     cellxgene = calls["CELLxGENE_get_expression_data"]
@@ -600,6 +604,8 @@ def test_cellxgene_dynamic_filter_example_validates_in_stub():
     assert "operation" not in cellxgene
     assert "organism" not in cellxgene
     assert result["single_cell"] == {"status": "success", "data": {}}
+    # Fixed output contract: the two raw receipts and nothing else.
+    assert set(result) == {"single_cell", "gtex"}
 
 
 def test_sifts_example_preserves_raw_receipt_across_return_shapes():
@@ -746,3 +752,161 @@ def test_examples_clinvar_stars_match_official_levels():
     assert not failures, failures
     assert "★★★ (expert panel reviewed)" in normalized
     assert "★★ (multiple submitters, no conflicts)" in normalized
+
+
+# --------------------------------------------------------------------------- #
+# 2026-10-23 review (Batch E): the expression example misread GTEx
+# (status/data envelope) as a plain tissue->TPM dict, so every real
+# response collapsed to a default-zero read; the literature example
+# crashed on healthy OpenAlex responses (results live at
+# data.results, not the top level) and graded papers by per-title
+# citation lookups. Both blocks are now RAW COLLECTORS with a fixed
+# two-key receipt output and no derived judgment. The tests below run
+# the documented code against REAL return shapes -- healthy, healthy
+# empty, and request failure -- and assert the receipts pass through
+# verbatim (an error is never reinterpreted as "zero expression" or
+# "no papers"), plus a static check that the removed derivations stay
+# out of the blocks.
+# --------------------------------------------------------------------------- #
+def test_expression_example_preserves_gtex_receipt_across_return_shapes():
+    text = (SKILL_DIR / "CODE_PATTERNS.md").read_text()
+    namespace = _exec_python_block(text, "## Phase 4.5")
+    assert "collect_expression_context" in namespace
+
+    # Real GTEx_get_median_gene_expression shapes: success data is a LIST
+    # of per-tissue records (median/unit fields), empty list, or error.
+    gtex_shapes = (
+        {
+            "status": "success",
+            "data": [
+                {
+                    "tissueSiteDetailId": "Heart_Left_Ventricle",
+                    "median": 25.0,
+                    "unit": "TPM",
+                    "geneSymbol": "FBN1",
+                    "ontologyId": "UBERON:0000948",
+                    "datasetId": "gtex_v8",
+                    "gencodeId": "ENSG00000166147.10",
+                }
+            ],
+        },
+        {"status": "success", "data": []},
+        {"status": "error", "error": "GTEx request failed: HTTP 503"},
+    )
+    for shape in gtex_shapes:
+        stub = _SchemaValidatingStub()
+
+        def gtex(**kwargs):
+            stub._make_validator("GTEx_get_median_gene_expression")(**kwargs)
+            return shape
+
+        stub.tools.GTEx_get_median_gene_expression = gtex
+        result = namespace["collect_expression_context"](stub, "FBN1")
+        # Raw status AND content preserved verbatim -- a request error is
+        # never reinterpreted as zero expression, an empty list stays
+        # distinguishable from a failure.
+        assert result["gtex"] == shape
+        assert result["gtex"]["status"] == shape["status"]
+        assert set(result) == {"single_cell", "gtex"}
+        # Exactly the two collection calls, CELLxGENE first.
+        assert stub.tool_names_called() == [
+            "CELLxGENE_get_expression_data",
+            "GTEx_get_median_gene_expression",
+        ]
+
+
+def test_literature_example_preserves_receipts_across_return_shapes():
+    text = (SKILL_DIR / "CODE_PATTERNS.md").read_text()
+    namespace = _exec_python_block(text, "## Phase 5")
+    assert "collect_literature_context" in namespace
+    assert "comprehensive_literature_search" not in namespace
+
+    # Real PubMed_search_articles shapes: success data is an ARRAY of
+    # articles, empty array, or an error receipt.
+    pubmed_shapes = (
+        {
+            "status": "success",
+            "data": [{"pmid": "37052601", "title": "FBN1 variant review"}],
+        },
+        {"status": "success", "data": []},
+        {"status": "error", "error": "PubMed request failed: HTTP 500"},
+    )
+    # Real openalex_search_works shapes: success data carries meta plus a
+    # results array, results can be empty, or an error receipt.
+    openalex_shapes = (
+        {
+            "status": "success",
+            "data": {
+                "meta": {"count": 1},
+                "results": [
+                    {
+                        "id": "https://openalex.org/W1",
+                        "title": "FBN1 pathogenesis",
+                        "doi": "https://doi.org/10.1/x",
+                        "publication_year": 2023,
+                    }
+                ],
+            },
+        },
+        {"status": "success", "data": {"meta": {"count": 0}, "results": []}},
+        {"status": "error", "error": "OpenAlex request failed: HTTP 429"},
+    )
+    for pubmed, openalex in zip(pubmed_shapes, openalex_shapes):
+        stub = _SchemaValidatingStub()
+
+        def pm(**kwargs):
+            stub._make_validator("PubMed_search_articles")(**kwargs)
+            return pubmed
+
+        def oa(**kwargs):
+            stub._make_validator("openalex_search_works")(**kwargs)
+            return openalex
+
+        stub.tools.PubMed_search_articles = pm
+        stub.tools.openalex_search_works = oa
+        result = namespace["collect_literature_context"](
+            stub, "FBN1", "c.5788C>T"
+        )
+        assert result["pubmed"] == pubmed
+        assert result["openalex"] == openalex
+        assert set(result) == {"pubmed", "openalex"}
+        # ONE OpenAlex call with the combined query at limit=5 -- no
+        # per-title citation loops regardless of the receipt shapes.
+        openalex_calls = [
+            kwargs
+            for name, kwargs in stub.calls
+            if name == "openalex_search_works"
+        ]
+        assert openalex_calls == [{"query": "FBN1 c.5788C>T", "limit": 5}]
+
+
+def test_collection_blocks_carry_no_derived_judgments():
+    text = (SKILL_DIR / "CODE_PATTERNS.md").read_text()
+    expression_block = _exec_python_block(text, "## Phase 4.5")
+    literature_block = _exec_python_block(text, "## Phase 5")
+    # Static guards: the removed derivations must not creep back into the
+    # blocks (functions absent AND source text free of the patterns).
+    for name in ("validate_expression_context",):
+        assert name not in expression_block
+    for name in ("comprehensive_literature_search",):
+        assert name not in literature_block
+    expression_source = re.search(
+        r"## Phase 4\.5.*?```python\n(.*?)```", text, re.DOTALL
+    ).group(1)
+    for banned in (
+        "expressed_in_phenotype_tissue",
+        "phenotype_tissues",
+        ".get(tissue, 0)",
+        "> 1",
+    ):
+        assert banned not in expression_source, banned
+    literature_source = re.search(
+        r"## Phase 5.*?```python\n(.*?)```", text, re.DOTALL
+    ).group(1)
+    for banned in (
+        "citation_count",
+        "key_papers",
+        "citations[0]",
+        "cited_by_count",
+    ):
+        assert banned not in literature_source, banned
