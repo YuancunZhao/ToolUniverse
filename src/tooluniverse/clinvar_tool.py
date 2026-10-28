@@ -2106,12 +2106,20 @@ def clinvar_variants_overlapping(
     # _validate_esearch_payload; and because the region query pins a
     # POSITIVE retmax, `count` is additionally checked against the idlist
     # (count>0 with no ids, or count<len(idlist), are broken payloads
-    # here -- count>len(idlist) is legitimate truncation). Every returned
-    # UID must yield a usable detail record, and that record must carry at
-    # least one parseable current-assembly coordinate pair; a record
-    # visibly on another assembly is skipped WITHOUT its coordinates being
-    # touched. Damage raises ValueError with the stage/UID/field path,
-    # which ClinVarSearchByRegion.run turns into status:"error".
+    # here -- count>len(idlist) is legitimate truncation). Damage raises
+    # ValueError with the stage/UID/field path, which
+    # ClinVarSearchByRegion.run turns into status:"error".
+    #
+    # Follow-up 2026-10-28 (Batch A): every returned UID is scanned across
+    # ALL of its variation_sets and locations -- validation never stops at
+    # the first usable coordinate. Each variation_set contributes at most
+    # one row: its first VALID OVERLAPPING location, so one UID can yield
+    # several rows (one per set) and results are not deduplicated by UID.
+    # A location clearly on another assembly, or another chromosome under
+    # the requested assembly, is not this query's to judge and its
+    # coordinates are never parsed; a location whose attribution cannot be
+    # recognized (missing/non-string assembly_name) is a corrupt element
+    # and raises.
     es_response = session.get(
         "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
         params={
@@ -2130,27 +2138,28 @@ def clinvar_variants_overlapping(
     esearchresult = es["esearchresult"]
     ids = esearchresult["idlist"]
     # esearch reports the size of the whole match set in `count` whatever retmax
-    # is, so the honest denominator costs no extra request.
-    try:
-        total_available = int(esearchresult.get("count"))
-    except (TypeError, ValueError):
-        total_available = None
+    # is, so the honest denominator costs no extra request. The shared
+    # validator already guarantees count is a non-negative integer or a
+    # decimal-digit string, so a direct int() read cannot fail here.
+    total_available = int(esearchresult["count"])
     # Region queries pin a positive retmax, so the count/idlist pairing
     # can be checked here (the shared validator cannot: a retmax=0
     # count-only query legitimately pairs count>0 with an empty idlist).
-    if total_available is not None:
-        if total_available > 0 and not ids:
-            raise ValueError(
-                "eSearch stage: esearchresult reports count="
-                f"{total_available} but an empty idlist under a positive "
-                "retmax -- a broken response, not an empty result"
-            )
-        if 0 < total_available < len(ids):
-            raise ValueError(
-                "eSearch stage: esearchresult reports count="
-                f"{total_available}, smaller than the {len(ids)} ids "
-                "returned -- a broken payload, not a truncated page"
-            )
+    # 2026-10-28 (Batch A): count < len(idlist) is broken at ANY count --
+    # the earlier `0 <` prefix let count=0 with a non-empty idlist through
+    # as a healthy success with candidates the search says do not exist.
+    if total_available > 0 and not ids:
+        raise ValueError(
+            "eSearch stage: esearchresult reports count="
+            f"{total_available} but an empty idlist under a positive "
+            "retmax -- a broken response, not an empty result"
+        )
+    if total_available < len(ids):
+        raise ValueError(
+            "eSearch stage: esearchresult reports count="
+            f"{total_available}, smaller than the {len(ids)} ids "
+            "returned -- a broken payload, not a truncated page"
+        )
 
     out = []
     for chunk_start in range(0, len(ids), 200):
@@ -2183,26 +2192,56 @@ def clinvar_variants_overlapping(
                     f"eSummary stage: uid {vid} returned an API error: "
                     f"{rec['error']}"
                 )
-            matched = False
-            current_assembly_loc = False
-            for vset in rec.get("variation_set") or []:
-                if not isinstance(vset, dict):
-                    raise ValueError(
-                        f"eSummary stage: uid {vid} has a non-object "
-                        "variation_set entry"
-                    )
-                for loc in vset.get("variation_loc") or []:
-                    if not isinstance(loc, dict):
-                        raise ValueError(
-                            f"eSummary stage: uid {vid} has a non-object "
-                            "variation_loc entry"
-                        )
+            # Follow-up 2026-10-28 (Batch A): scan EVERY variation_set and
+            # EVERY location -- the 2026-10-23 rewrite stopped at the first
+            # usable current-assembly coordinate, which let a
+            # non-overlapping first location hide an overlapping second
+            # variation_set and skipped validation of everything after it.
+            # Now each variation_set contributes at most one row -- its
+            # first VALID OVERLAPPING location -- while remaining entries
+            # are still validated; damage found anywhere is a whole-call
+            # error and no partial result is returned. Locations clearly
+            # on another assembly, or another chromosome under the
+            # requested assembly, are not this query's to judge: their
+            # coordinates are never parsed. A location whose attribution
+            # cannot be recognized (missing/non-string assembly_name) is a
+            # corrupt element and raises.
+            try:
+                variation_sets = _optional_record_list(rec, "variation_set")
+            except ValueError as exc:
+                raise ValueError(f"eSummary stage: uid {vid}: {exc}") from exc
+            attributable_loc = False
+            for vset in variation_sets:
+                try:
+                    locations = _optional_record_list(vset, "variation_loc")
+                except ValueError as exc:
+                    raise ValueError(f"eSummary stage: uid {vid}: {exc}") from exc
+                first_overlap = None
+                for loc in locations:
+                    assembly_name = loc.get("assembly_name")
                     if (
-                        str(loc.get("assembly_name", "")).upper()
-                        != str(assembly).upper()
+                        not isinstance(assembly_name, str)
+                        or not assembly_name.strip()
                     ):
+                        raise ValueError(
+                            f"eSummary stage: uid {vid} has a "
+                            "variation_loc entry whose assembly_name is "
+                            "missing or not a string -- its attribution "
+                            "cannot be recognized"
+                        )
+                    if assembly_name.strip().upper() != str(assembly).upper():
                         continue
-                    current_assembly_loc = True
+                    chr_name = loc.get("chr")
+                    if isinstance(chr_name, str) and chr_name.strip():
+                        normalized_chr = re.sub(
+                            r"^chr",
+                            "",
+                            chr_name.strip(),
+                            flags=re.IGNORECASE,
+                        ).upper()
+                        if normalized_chr != str(chrom).strip().upper():
+                            continue
+                    attributable_loc = True
                     v_start = _parse_span_int(loc.get("start"), vid, "start")
                     v_stop = _parse_span_int(loc.get("stop"), vid, "stop")
                     if v_stop < v_start:
@@ -2210,31 +2249,31 @@ def clinvar_variants_overlapping(
                             f"eSummary stage: uid {vid} has an inverted "
                             f"interval start={v_start} > stop={v_stop}"
                         )
-                    matched = True
-                    if v_start <= int(end) and v_stop >= int(start):
-                        out.append(
-                            {
-                                "variation_id": vid,
-                                "title": rec.get("title"),
-                                "obj_type": rec.get("obj_type"),
-                                "chr": loc.get("chr"),
-                                "start": v_start,
-                                "stop": v_stop,
-                                "span": v_stop - v_start + 1,
-                                "classification": (
-                                    rec.get("germline_classification") or {}
-                                ).get("description"),
-                            }
-                        )
-                    break
-                if matched:
-                    break
-            if not current_assembly_loc:
+                    if (
+                        first_overlap is None
+                        and v_start <= int(end)
+                        and v_stop >= int(start)
+                    ):
+                        first_overlap = {
+                            "variation_id": vid,
+                            "title": rec.get("title"),
+                            "obj_type": rec.get("obj_type"),
+                            "chr": loc.get("chr"),
+                            "start": v_start,
+                            "stop": v_stop,
+                            "span": v_stop - v_start + 1,
+                            "classification": (
+                                rec.get("germline_classification") or {}
+                            ).get("description"),
+                        }
+                if first_overlap is not None:
+                    out.append(first_overlap)
+            if not attributable_loc:
                 raise ValueError(
                     f"eSummary stage: uid {vid} exposes no "
-                    f"{assembly} variation_loc, so its overlap with the "
-                    "region cannot be decided -- no complete-negative "
-                    "claim is made"
+                    f"{assembly} variation_loc on chromosome {chrom}, so "
+                    "its overlap with the region cannot be decided -- no "
+                    "complete-negative claim is made"
                 )
     # Smallest span first: the most specific variant covering the region.
     out.sort(key=lambda v: v["span"])

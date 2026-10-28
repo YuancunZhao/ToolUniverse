@@ -384,13 +384,6 @@ def test_healthy_zero_result_never_requests_details():
         pytest.param([{"unrelated": True}], id="broken-container"),
         pytest.param(
             [
-                {"result": _loc_record("1", 46000000, 46000100)},
-                _HttpError("HTTP 503 on second chunk"),
-            ],
-            id="later-chunk-failure",
-        ),
-        pytest.param(
-            [
                 {
                     "result": {
                         "1": {
@@ -606,3 +599,276 @@ def test_smcp_registered_region_error_reaches_caller():
     lowered = payload["error"].lower()
     assert "region search failed" in lowered
     assert "13961" in lowered or "service unavailable" in lowered
+
+
+# --------------------------------------------------------------------------- #
+# Follow-up 2026-10-28 (Batch A): the 2026-10-23 rewrite introduced an
+# early exit -- the first USABLE current-assembly location set `matched`,
+# broke the location loop, and the first variation_set with any usable
+# location broke the set loop. Consequences (reproduced by the probes in
+# /private/tmp/ToolUniverse-recheck-20261028-probes.json): a
+# non-overlapping first location hid an overlapping second variation_set
+# (healthy zero), damage in later sets/locations was never validated
+# (healthy success over damaged data), and `count=0` with a non-empty
+# idlist slipped past `0 < total_available < len(ids)` as a success.
+#
+# Contract after the fix: EVERY variation_set and EVERY location is
+# scanned; each set contributes at most one row (its first VALID
+# OVERLAPPING location); validation never stops early, so damage found
+# after an overlap is still a whole-call error. Locations clearly on
+# another assembly -- or another chromosome under the requested
+# assembly -- are exempt and their coordinates are never parsed; a
+# location whose attribution cannot be recognized (missing/non-string
+# assembly_name) raises. count < len(idlist) is a broken payload at ANY
+# count, including zero.
+# --------------------------------------------------------------------------- #
+def _vset(*locs):
+    return {"variation_loc": list(locs)}
+
+
+def _loc(assembly_name="GRCh38", chr="11", start=47332000, stop=47333000):
+    return {
+        "assembly_name": assembly_name,
+        "chr": chr,
+        "start": str(start),
+        "stop": str(stop),
+    }
+
+
+def _record(vid, *vsets):
+    return {
+        vid: {
+            "title": f"variant {vid}",
+            "obj_type": "copy number loss",
+            "germline_classification": {"description": "Pathogenic"},
+            "variation_set": list(vsets),
+        }
+    }
+
+
+def test_second_variation_set_overlap_is_not_hidden_by_first_miss():
+    """First set's current-assembly location misses the region; the second
+    set's overlaps. The old first-usable-coordinate break returned a
+    healthy COMPLETE ZERO here."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(_loc(start=46000000, stop=46000100)),
+                    _vset(_loc()),
+                )
+            }
+        ],
+    )
+    data = _run(session)
+    assert data["n_overlapping"] == 1
+    assert data["variants"][0]["variation_id"] == "1"
+
+
+def test_two_overlapping_variation_sets_same_uid_keep_both_rows():
+    """Result granularity is per variation_set, not per UID: two sets of
+    one UID each contribute their own row, no dedup is added."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(_loc(start=47332000, stop=47333000)),
+                    _vset(_loc(start=47332690, stop=47332699)),
+                )
+            }
+        ],
+    )
+    data = _run(session)
+    assert data["n_overlapping"] == 2
+    assert [v["variation_id"] for v in data["variants"]] == ["1", "1"]
+    # Span-ascending order across rows of the same UID.
+    assert data["variants"][0]["span"] <= data["variants"][1]["span"]
+
+
+def test_first_valid_overlap_within_one_variation_set():
+    """Within one set, a non-overlapping current location is scanned past;
+    the FIRST valid OVERLAPPING location becomes the set's single row."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(
+                        _loc(start=46000000, stop=46000100),
+                        _loc(start=47332690, stop=47332699),
+                        _loc(start=47332000, stop=47333000),
+                    ),
+                )
+            }
+        ],
+    )
+    data = _run(session)
+    assert data["n_overlapping"] == 1
+    # The FIRST overlap (10 bp) wins; the later, wider one is validated
+    # but does not add a second row for the same set.
+    assert data["variants"][0]["span"] == 10
+
+
+def test_damage_in_later_variation_set_after_healthy_first_is_error():
+    """A healthy first set must not stop validation: a non-object loc in
+    the second set is still a whole-call error."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(_loc()),
+                    _vset(_loc(), "not-an-object-loc"),
+                )
+            }
+        ],
+    )
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "uid 1" in lowered and "variation_loc" in lowered
+
+
+def test_damage_after_found_overlap_is_still_whole_error():
+    """An overlap already found must not stop validation either: a boolean
+    coordinate in a later set's current-assembly location errors the
+    whole call -- no partial result is returned."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(_loc()),
+                    _vset(
+                        {
+                            "assembly_name": "GRCh38",
+                            "chr": "11",
+                            "start": True,
+                            "stop": "47333000",
+                        }
+                    ),
+                )
+            }
+        ],
+    )
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "uid 1" in lowered and "start" in lowered
+
+
+def test_clearly_other_chromosome_location_is_exempt():
+    """Under the requested assembly, a location clearly on ANOTHER
+    chromosome is not this query's to judge: its garbage coordinates are
+    never parsed, and a sibling chromosome-11 location decides overlap."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset(
+                        {
+                            "assembly_name": "GRCh38",
+                            "chr": "17",
+                            "start": "not-even-a-number",
+                            "stop": "???",
+                        },
+                        _loc(),
+                    ),
+                )
+            }
+        ],
+    )
+    data = _run(session)
+    assert data["n_overlapping"] == 1
+    assert data["variants"][0]["variation_id"] == "1"
+
+
+def test_unrecognizable_assembly_attribution_is_error():
+    """A location whose assembly_name is missing cannot be exempted as
+    'clearly another assembly' -- its attribution is unrecognized, which
+    is a corrupt element even when a sibling location is healthy."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(1, ["1"]),
+        [
+            {
+                "result": _record(
+                    "1",
+                    _vset({"chr": "11", "start": "47332000", "stop": "47333000"}),
+                )
+            }
+        ],
+    )
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "uid 1" in lowered and "assembly_name" in lowered
+
+
+def test_zero_count_with_ids_is_esearch_error_before_details():
+    """count=0 with a non-empty idlist is a broken payload at ANY count.
+    The error fires in the eSearch stage: zero detail requests, even
+    though a healthy detail response is scripted and available (so the
+    old code cannot false-pass for lack of a response)."""
+    session = _ScriptedEntrez(
+        _healthy_esearch(0, ["1"]),
+        [{"result": _loc_record("1", 47332000, 47333000)}],
+    )
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "esearch" in lowered and "count=0" in lowered
+    assert session._summary_calls == 0
+
+
+# --------------------------------------------------------------------------- #
+# Cross-chunk failure (Batch A, 2026-10-28): the old "later-chunk-failure"
+# param used TWO ids -- one 200-id chunk -- so the second scripted payload
+# was never consumed and the param never exercised a chunk boundary. The
+# tests below use 201 ids: two real chunks. The whole-call error contract
+# itself already held on the starting code; these are coverage
+# reinforcement, honestly labeled -- not first-failing regressions.
+# --------------------------------------------------------------------------- #
+def _ids_201():
+    return [str(1 + i) for i in range(201)]
+
+
+def test_cross_chunk_http_failure_is_whole_error_with_two_detail_requests():
+    ids = _ids_201()
+    first_chunk = {}
+    for vid in ids[:200]:
+        if vid == "1":
+            first_chunk.update(_loc_record(vid, 47332000, 47333000))
+        else:
+            first_chunk.update(_loc_record(vid, 46000000, 46000100))
+    session = _ScriptedEntrez(
+        _healthy_esearch(201, ids),
+        [{"result": first_chunk}, _HttpError("HTTP 503")],
+    )
+    error = _run_expect_error(session)
+    lowered = error.lower()
+    assert "esummary" in lowered and "503" in lowered
+    assert session._summary_calls == 2
+
+
+def test_second_chunk_processed_when_both_chunks_healthy():
+    ids = _ids_201()
+    records = {}
+    for vid in ids:
+        if vid in ("1", "201"):
+            records.update(_loc_record(vid, 47332000, 47333000))
+        else:
+            records.update(_loc_record(vid, 46000000, 46000100))
+    session = _ScriptedEntrez(
+        _healthy_esearch(201, ids),
+        [{"result": records}, {"result": records}],
+    )
+    data = _run(session)
+    assert session._summary_calls == 2
+    assert data["n_candidates"] == 201
+    assert data["n_overlapping"] == 2
+    assert {v["variation_id"] for v in data["variants"]} == {"1", "201"}
