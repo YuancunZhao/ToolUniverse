@@ -220,7 +220,7 @@
     {
       "id": 17,
       "prompt": "请使用 $tooluniverse-acmg-variant-classification，依据附件 case17-single-reference-facts.md 的独立事实块（fixture:17）完成一次合成评估。该附件已声明：所有场景均为合成（gene TESTGENE4、转录本 NM_999995.1、第 334 位参考密码子 GGA；待评变异 NM_999995.1:c.1000G>A p.Gly334Arg、疾病 Synthetic single-reference disease、遗传方式常染色体显性），合成规则检索已完成且确认无适用 Released CSpec、无待裁决候选、通用规则材料完整，这些检索结论与事实均作为已核实输入，不要查询虚构基因。请逐项提交 28 条评审记录给真实计算器并如实汇报其返回；除所依据事实块提供的内容外，未提供其他证据的准则记为未评估，退休准则（PP5/BP6）按 Skill 约定处理；不修改软件或配置。",
-      "expected_output": "The single reference variant c.1000G>C (p.Gly334Arg, expert-panel established) supports the same-amino-acid comparison only: PS1 is met at Strong after the splice-mechanism check confirms neither variant acts through splicing, while PM5 is NOT satisfied — the sole reference carries the same amino-acid change, so it cannot serve as the different-change reference, and no other residue-334 pathogenic reference exists. With only PS1 Strong met (4 points) and every other criterion not met or not assessed, the real calculator returns Uncertain significance with total_score 4; reported faithfully.",
+      "expected_output": "The single reference variant c.1000G>C (p.Gly334Arg, expert-panel established) supports the same-amino-acid comparison only: PS1 is met at Strong after the splice-mechanism check confirms neither variant acts through splicing, while PM5 is NOT satisfied — the sole reference carries the same amino-acid change, so it cannot serve as the different-change reference, and no other residue-334 pathogenic reference exists. With only PS1 Strong met (4 points) and every other criterion not met or not assessed, the real calculator returns classification_status \"computed\", classification \"VUS\", total_score 4; reported faithfully.",
       "files": [
         "files/case17-single-reference-facts.md"
       ],
@@ -229,7 +229,7 @@
         "PM5 is NOT satisfied: the sole reference carries the same amino-acid change, so it cannot double as the different-change reference, and no other pathogenic residue-334 reference exists",
         "the same reference variant is not counted under PS1 and PM5 at once",
         "a real ACMG_calculate_classification call with 28 distinct evidence records",
-        "calculator outcome is Uncertain significance with total_score 4; no criterion beyond PS1 Strong contributes points"
+        "calculator outcome is classification_status \"computed\", classification \"VUS\", total_score 4; no criterion beyond PS1 Strong contributes points"
       ]
     }
   ]

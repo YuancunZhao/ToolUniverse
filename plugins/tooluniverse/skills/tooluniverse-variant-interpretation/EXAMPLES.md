@@ -257,7 +257,7 @@ codes, strengths, exclusions) happens in the unified
 |----------|-------|
 | VCV ID | VCV000376642 |
 | Classification | VUS (outdated) |
-| Review Status | ★★ (multiple submitters, no conflicts) |
+| Review Status | Not specified in this illustrative example |
 | Submitters | 3 |
 | Conditions | Li-Fraumeni syndrome |
 

@@ -751,7 +751,26 @@ def test_examples_clinvar_stars_match_official_levels():
     failures = [marker for marker in forbidden if marker in normalized]
     assert not failures, failures
     assert "★★★ (expert panel reviewed)" in normalized
-    assert "★★ (multiple submitters, no conflicts)" in normalized
+    # 2026-10-28 follow-up (Batch B): the TP53 ClinVar example row once
+    # read "Review Status | ★★ (multiple submitters, no conflicts)" -- a
+    # star level plus a no-conflicts claim its own receipt ("Submitters
+    # 3") never establishes; NCBI assigns that two-star tier only when
+    # the review status itself says so. Re-interpreting a submitter
+    # count into that tier is exactly the regression guarded here: the
+    # row must stay neutral and the two-star no-conflicts phrasing must
+    # stay out of EXAMPLES.md entirely.
+    failures = [
+        marker
+        for marker in (
+            "★★ (multiple submitters, no conflicts)",
+            "review status ★★ ",
+        )
+        if marker in normalized
+    ]
+    assert not failures, failures
+    assert (
+        "review status not specified in this illustrative example" in normalized
+    )
 
 
 # --------------------------------------------------------------------------- #

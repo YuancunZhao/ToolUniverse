@@ -190,8 +190,8 @@ def test_case_17_expected_outcome_lives_only_in_assertions():
     The single reference variant establishes the same amino-acid change,
     so only the same-change comparison is supported; the different-change
     comparison has no reference at all. Expected codes live in evals.json
-    (PS1 Strong, PM5 unsatisfied, calculator VUS at 4 points), never in
-    the fact attachment.
+    (PS1 Strong, PM5 unsatisfied, calculator receipt computed/VUS at 4
+    points), never in the fact attachment.
     """
     facts = (
         SKILL_DIR / "evals" / "files" / "case17-single-reference-facts.md"
@@ -212,5 +212,115 @@ def test_case_17_expected_outcome_lives_only_in_assertions():
     assert "ps1" in joined
     assert "strong" in joined
     assert "pm5" in joined
-    assert "uncertain significance" in joined
-    assert "total_score" in joined or "4" in joined
+    assert "computed" in joined
+    assert "vus" in joined
+    assert "total_score" in joined and "4" in joined
+
+
+def test_case_17_receipt_matches_real_calculator():
+    """2026-10-28 follow-up (Batch B): the case-17 expected receipt must
+    match what the REAL calculator returns for the case-17 evidence
+    pattern -- 28 records, PS1 met at Strong as the only scorer, PM5
+    not_met, PP5/BP6 deprecated, everything else not_assessed. The old
+    wording claimed "Uncertain significance", a label the calculator
+    never emits (it returns classification "VUS"). This is an offline
+    calculator-contract test, NOT an LLM acceptance.
+    """
+
+    def ev(criterion, status="not_assessed", **kw):
+        record = {
+            "criterion": criterion,
+            "status": status,
+            "strength": None,
+            "rationale": "",
+            "source_refs": [],
+            "rule_refs": [],
+            "evidence_ids": [],
+        }
+        record.update(kw)
+        return record
+
+    pathogenic = [
+        "PVS1", "PS1", "PS2", "PS3", "PS4",
+        "PM1", "PM2", "PM3", "PM4", "PM5", "PM6",
+        "PP1", "PP2", "PP3", "PP4", "PP5",
+    ]
+    benign = [
+        "BA1", "BS1", "BS2", "BS3", "BS4",
+        "BP1", "BP2", "BP3", "BP4", "BP5", "BP6", "BP7",
+    ]
+    special = {
+        "PS1": ev(
+            "PS1",
+            "met",
+            strength="Strong",
+            rationale=(
+                "Reference variant NM_999995.1:c.1000G>C (p.Gly334Arg, "
+                "expert-panel established) carries the same amino-acid "
+                "change; neither variant acts through splicing"
+            ),
+            source_refs=["SCV000000000 (fixture)"],
+            rule_refs=["ACMG/AMP 2015 PS1"],
+            evidence_ids=["fixture:17-ps1-reference"],
+        ),
+        "PM5": ev(
+            "PM5",
+            "not_met",
+            rationale=(
+                "The sole reference carries the same amino-acid change, so "
+                "no different-change reference exists at residue 334"
+            ),
+        ),
+        "PP5": ev(
+            "PP5",
+            "deprecated",
+            rationale=(
+                "Retired criterion (ClinGen SVI PP5/BP6 discontinuation); "
+                "recorded, never scored"
+            ),
+        ),
+        "BP6": ev(
+            "BP6",
+            "deprecated",
+            rationale=(
+                "Retired criterion (ClinGen SVI PP5/BP6 discontinuation); "
+                "recorded, never scored"
+            ),
+        ),
+    }
+    evidence = [special.get(c, ev(c)) for c in pathogenic + benign]
+    assert len(evidence) == 28
+    payload = {
+        "variant_context": {
+            "variant": "NM_999995.1:c.1000G>A",
+            "gene": "TESTGENE4",
+            "disease": "Synthetic single-reference disease",
+            "inheritance_mode": "Autosomal dominant inheritance",
+        },
+        "rule_context": {
+            "cspec_lookup_status": "no_released_spec",
+            "combination_method": "tavtigian2020",
+            "specification": None,
+            "applicable_rules_complete": True,
+        },
+        "evidence": evidence,
+        "blocking_issues": [],
+    }
+    result = _acmg_classification(payload)
+    assert result["status"] == "success"
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == 4
+    # The canonical receipt phrase built from the ACTUAL return must be
+    # present verbatim (casefolded) in the case-17 eval text.
+    receipt = (
+        f'classification_status "{data["classification_status"]}", '
+        f'classification "{data["classification"]}", '
+        f'total_score {data["total_score"]}'
+    ).casefold()
+    case17 = next(c for c in _cases() if c["id"] == 17)
+    joined = " ".join(
+        [case17["expected_output"]] + case17["assertions"]
+    ).casefold()
+    assert receipt in joined, receipt
