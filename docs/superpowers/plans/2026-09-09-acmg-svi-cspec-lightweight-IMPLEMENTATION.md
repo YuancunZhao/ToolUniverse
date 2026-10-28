@@ -402,12 +402,14 @@ license 机器级失败；六案例真实 LLM 复跑"尚未执行"，标为未�
 
 **完成度分层（如实报告）：**
 
-- 代码与文档完成：A–F 全部提交，工作区干净。
-- 自动化回归：计划指定的 19 个测试文件全量跑通——**1045 passed, 1 skipped**（skip 为 PyMuPDF 未安装的既有项），exit 0；ruff（仅检查）全部通过；对起点 `e121726d` 与官方基线 `2128ff57` 的 `git diff --check` 均干净。
+- 代码与文档完成：A–F 全部提交，工作区干净（口径更正 2026-10-28：“全部提交”仅指当时交付；随后一轮复查发现并修复了 Batch A 区域扫描重写自身的回归，见文末补记）。
+- 自动化回归：计划指定命令全量跑通——**1045 passed, 1 skipped**（skip 为 PyMuPDF 未安装的既有项），exit 0；ruff（仅检查）全部通过；对起点 `e121726d` 与官方基线 `2128ff57` 的 `git diff --check` 均干净。口径更正（2026-10-28）：该命令为 **18 个入口参数（17 个显式路径 + 1 个 `test_clinvar_*` 通配），shell 展开为 40 个测试文件**——此前“19 个测试文件”是把入口参数数误当文件数。
 - 冻结文件核对：相对起点，`uv.lock`、`pyproject.toml`、计算器、CSpec 实现、SDK 包装与 registry **零改动**；src/ 仅 `clinvar_tool.py` 与 `data/clinvar_submitted_tools.json`，后者仅 Batch A 允许的区域工具描述一行。
-- 在线工具验证（时点观察，2026-10-25）：`ClinVar_get_variant_details("2737810")` 健康（VCV002737810、Pathogenic、4 条引文 complete、raw_data 在）；区域 `chr7:155593770-155593780` GRCh37 健康扫描（total_available=98=n_candidates，19 个重叠，最小 span 优先，含跨越 CNV，truncated=False）。网络记录数未写入任何断言。
+- 在线工具验证（时点观察，2026-10-25）：`ClinVar_get_variant_details("2737810")` 健康（VCV002737810、Pathogenic、4 条引文 complete、raw_data 在）；区域 `chr7:155593770-155593780` GRCh37 健康扫描（total_available=98=n_candidates，19 个重叠，最小 span 优先，含跨越 CNV，truncated=False）。网络记录数未写入任何断言。证据更正（2026-10-28）：本轮归档**仅有摘要**，未保存原始回执，上述数字无法从回执复核；2026-10-28 复查轮已在 `temp_docs_and_tests/benchmark_tracking/2026-10-28-review-followup/` 保存完整原始回执并重跑了同样两项在线检查。
 - 独立 LLM 宿主验收（案例 17/3/4）：**未验收**——执行环境无独立宿主；按计划不安装新宿主、不用同会话演练替代，整体交付不标记“验收完成”。
 
 证据与哈希：`temp_docs_and_tests/benchmark_tracking/2026-10-23-review-remediation/EVIDENCE.txt`（gitignored）。
+
+**2026-10-28 复查补记：** `docs/superpowers/plans/2026-10-28-review-followup.md`（提交 `67fa683d`、`6133ff01`）发现 2026-10-23 Batch A 的区域扫描重写自身引入回归——首条可用坐标即提前退出（首个不重叠定位会掩盖第二个 variation_set 的重叠、跳过其后所有损坏校验）、`count=0` 配非空 idlist 误报成功，另有一条双 ID 的“跨批失败”参数化从未跨过批边界（假覆盖）。均已先构造失败反例再修复；HEAD `6133ff01` 上完整定向回归 **1055 passed, 1 skipped**（较 1045 净增 10：新增 11 个测试、移除 1 个假覆盖参数），两项在线检查重跑成功且回执完整。独立宿主验收仍未执行。
 
 区域失败语义：整次 `status:error`，不带部分结果；健康返回结构与上一轮完全一致。PS1/PM5 修正只发生在判断文档，计算器算法未改。收集示例已删除派生判断，宿主全局配置未改。

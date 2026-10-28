@@ -758,9 +758,12 @@ Plan: `docs/superpowers/plans/2026-10-23-review-remediation.md`. Start
 **Completion layers (reported separately):**
 
 - Code + docs: all six batches committed, worktree clean.
-- Automation: the plan's 19-file directed regression — **1045 passed,
-  1 skipped** (pre-existing PyMuPDF skip), exit 0. Ruff check-only clean
-  on all changed Python files. `git diff --check` clean against BOTH the
+- Automation: the plan's directed regression — **1045 passed, 1 skipped**
+  (pre-existing PyMuPDF skip), exit 0. Scope correction (2026-10-28):
+  this was **18 entry arguments (17 explicit paths + 1 `test_clinvar_*`
+  glob), expanding to 40 test files** — the earlier "19 files" gloss was
+  the argument count misread as a file count. Ruff check-only clean on
+  all changed Python files. `git diff --check` clean against BOTH the
   round start and the official baseline. Frozen files (uv.lock,
   pyproject.toml, calculator, CSpec implementation, SDK wrappers,
   registry) unchanged; the only tool-JSON delta is the Batch A region
@@ -769,6 +772,9 @@ Plan: `docs/superpowers/plans/2026-10-23-review-remediation.md`. Start
   tests): `ClinVar_get_variant_details("2737810")` healthy (4 citations,
   complete); region `chr7:155593770-155593780` GRCh37 healthy
   (98 candidates fully checked, 19 overlaps, smallest-span-first).
+  Evidence caveat (2026-10-28): that round's archive holds a SUMMARY
+  ONLY — no raw command output was preserved, so the numbers above
+  cannot be re-audited from receipts.
 - Independent LLM host acceptance (cases 17/3/4): **NOT PERFORMED** —
   no independent host in the executing environment; per plan this stays
   unaccepted and the round is not marked overall-accepted.
@@ -776,3 +782,19 @@ Plan: `docs/superpowers/plans/2026-10-23-review-remediation.md`. Start
 Evidence and hashes:
 `temp_docs_and_tests/benchmark_tracking/2026-10-23-review-remediation/EVIDENCE.txt`
 (gitignored). No push was performed.
+
+**Scope qualification (2026-10-28):** "all six batches committed" above
+describes THAT round's deliverables only. The follow-up round
+(`docs/superpowers/plans/2026-10-28-review-followup.md`, commits
+`67fa683d` + `6133ff01`) found that the 2026-10-23 Batch A region-scan
+rewrite introduced regressions of its own — an early exit that hid an
+overlapping second variation_set behind a non-overlapping first
+location, skipped validation of later damage after a usable coordinate,
+and let `count=0` with a non-empty idlist pass as success — plus a
+false-coverage cross-chunk test parameter. Those are fixed and covered
+by first-failing tests; see the follow-up evidence directory
+`temp_docs_and_tests/benchmark_tracking/2026-10-28-review-followup/`
+(gitignored), which stores FULL raw receipts (commands, timestamps,
+HEAD, interpreter, stdout/stderr, exit codes), including a re-run of
+both online checks (1055 passed / 1 skipped full regression at HEAD
+`6133ff01`). The independent host acceptance remains NOT PERFORMED.
