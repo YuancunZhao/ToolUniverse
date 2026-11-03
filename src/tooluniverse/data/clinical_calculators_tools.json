@@ -550,7 +550,7 @@
   },
   {
     "name": "ACMG_calculate_classification",
-    "description": "Deterministic ACMG/AMP germline variant classification using the Tavtigian 2020 point system (Supporting/Moderate/Strong/VeryStrong = +/-1/2/4/8; >=10 Pathogenic, 6-9 Likely Pathogenic, 0-5 VUS, -6 to -1 Likely Benign, <=-7 Benign). Input is a complete 28-criterion review record plus variant and rule context; the calculator validates the contract and derives the score itself -- caller-supplied totals, classifications, point overrides, or thresholds are rejected. BA1 runs a stand-alone benign path; PP5/BP6 are retired and cannot score. Returns classification_status computed (classification, total score, per-criterion contributions, uncounted records) or needs_review (classification null with reasons: blocking issues, incomplete variant context (null/blank disease or inheritance mode), missing specification identity, unresolved CSpec applicability, incomplete specification material, unsupported combination method, duplicate scoring facts, SVI combination-cap violations (PP1+PP4 locus evidence above +5; PP3+PM1 summed strength above Strong), BA1 conflict, or no scoring evidence). Every rationale and reference entry must be a non-blank string. Does not output posterior probabilities; structured validity and arithmetic correctness are guaranteed, not independent verification of the evidence interpretation.",
+    "description": "Deterministic ACMG/AMP germline variant classification using the Tavtigian 2020 point system (Supporting/Moderate/Strong/VeryStrong = +/-1/2/4/8; >=10 Pathogenic, 6-9 Likely Pathogenic, 0-5 VUS, -6 to -1 Likely Benign, <=-7 Benign). Input is a complete 28-criterion review record plus variant and rule context; the calculator validates the contract and derives the score itself -- caller-supplied totals, classifications, or thresholds are rejected. The one sanctioned numeric input is the optional svi_points field on met PP1/PP4 records (raw Biesecker 2024 Table 2/3 values), which carries the exact arithmetic -- including fractional values the strength ladder cannot encode -- while the PP1+PP4 locus sum is clamped at +5.0 with disclosure. BA1 runs a stand-alone benign path; PP5/BP6 are retired and cannot score. Returns classification_status computed (classification, total score, per-criterion contributions, uncounted records) or needs_review (classification null with reasons: blocking issues, incomplete variant context (null/blank disease or inheritance mode), missing specification identity, unresolved CSpec applicability, incomplete specification material, unsupported combination method, duplicate scoring facts, SVI combination-cap violations (integer-only PP1+PP4 locus evidence above +5; PP3+PM1 summed strength above Strong), PP4+PS4 proban-exclusivity confirmation, BA1 conflict, or no scoring evidence). Every rationale and reference entry must be a non-blank string. Does not output posterior probabilities; structured validity and arithmetic correctness are guaranteed, not independent verification of the evidence interpretation.",
     "type": "ClinicalCalculatorTool",
     "parameter": {
       "type": "object",
@@ -756,10 +756,15 @@
                   "type": "string",
                   "minLength": 1
                 }
+              },
+              "svi_points": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Optional, PP1/PP4 'met' records only: the raw SVI point-table value (Biesecker et al., AJHG 2024;111:24-38 -- PP4 diagnostic-yield Table 2, PP1 co-segregation Table 3; fractional values such as 3.0, 3.5, 5.5, 0.4). When present it takes over that record's arithmetic; the required strength stays as a descriptive label. The PP1+PP4 sum is clamped at +5.0 per the paper, with the clamp disclosed. Rejected on any other criterion, on non-'met' records, or when not a positive finite number."
               }
             }
           },
-          "description": "The complete 28-criterion review: exactly one record per ACMG/AMP code, each with criterion, status, strength, rationale (string), and source_refs / rule_refs / evidence_ids lists of non-blank strings. Only 'met' records score; 'met' requires a legal strength, non-empty rationale, and non-empty reference lists."
+          "description": "The complete 28-criterion review: exactly one record per ACMG/AMP code, each with criterion, status, strength, rationale (string), source_refs / rule_refs / evidence_ids lists of non-blank strings, and an optional svi_points number on met PP1/PP4 records (raw Biesecker 2024 Table 2/3 value). Only 'met' records score; 'met' requires a legal strength, non-empty rationale, and non-empty reference lists."
         },
         "blocking_issues": {
           "type": "array",

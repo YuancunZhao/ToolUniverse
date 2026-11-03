@@ -1003,3 +1003,225 @@ def test_repeated_fact_within_one_code_and_cross_code_sharing():
     # The raw evidence record is preserved untouched, duplicates included.
     pvs1 = next(e for e in data["evidence"] if e["criterion"] == "PVS1")
     assert pvs1["evidence_ids"] == ["assay-1", "assay-1", "assay-1"]
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-03 (Batch A): raw SVI points for PP1/PP4 via optional svi_points.
+#
+# Biesecker et al., AJHG 2024;111:24-38 (online 2023-12,
+# doi:10.1016/j.ajhg.2023.11.009): PP4 diagnostic-yield points (Table 2)
+# and PP1 co-segregation points (Table 3) are fractional and NOT one-to-one
+# with the Supporting/Moderate/Strong/VeryStrong ladder -- Table 4's 3-3.9
+# and >=5 tiers have NO single-code label. Encoding e.g. yield 58.9%
+# (rounds down to the 50.6% row -> 3.0 points) as Moderate(2) vs Strong(4)
+# flipped a real TYR case between VUS and LP: the contract, not the caller,
+# was defective. Optional svi_points (PP1/PP4, status met, finite, > 0)
+# now carries the exact arithmetic; the cap CLAMPS to +5.0 per the paper
+# ("evidence is capped at +5.0 points for all locus evidence"), while the
+# integer-only path keeps its fail-closed pause.
+# --------------------------------------------------------------------------- #
+def met_sv(criterion, strength, svi_points, *, fact=None, paper="PMID:1"):
+    rec = met(criterion, strength, fact=fact, paper=paper)
+    rec["svi_points"] = svi_points
+    return rec
+
+
+def test_svi_points_pp4_raw_table_value_scores_exactly():
+    # TYR NM_000372.5:c.1247C>A receipt shape: PM2 Sup(1) + PP3 Mod(2)
+    # + PP4 3.0 (yield 58.9% rounds down to the 50.6% Table 2 row).
+    result = run(
+        args(
+            build_evidence(
+                met("PM2", "Supporting"),
+                met("PP3", "Moderate"),
+                met_sv("PP4", "Moderate", 3.0),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert data["total_score"] == 6
+    pp4 = next(c for c in data["point_contributions"] if c["criterion"] == "PP4")
+    assert pp4["svi_points"] == 3.0
+    assert pp4["points"] == 3.0
+    locus = data["locus_evidence"]
+    assert locus["raw_total"] == 3.0
+    assert locus["applied_total"] == 3.0
+    assert locus["capped"] is False
+
+
+def test_svi_points_pp4_3_5_keeps_fractional_total():
+    result = run(
+        args(
+            build_evidence(
+                met("PM2", "Supporting"),
+                met("PP3", "Moderate"),
+                met_sv("PP4", "Strong", 3.5),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert data["total_score"] == 6.5
+
+
+def test_svi_points_score_is_independent_of_strength_label():
+    # The original defect: same evidence, two strength labels, two
+    # classifications. With svi_points the arithmetic no longer depends
+    # on the label at all.
+    totals = []
+    for label in ("Supporting", "Moderate", "Strong", "VeryStrong"):
+        result = run(
+            args(
+                build_evidence(
+                    met("PM2", "Supporting"),
+                    met("PP3", "Moderate"),
+                    met_sv("PP4", label, 3.5),
+                )
+            )
+        )
+        totals.append((result["data"]["total_score"], result["data"]["classification"]))
+    assert all(t == totals[0] for t in totals)
+
+
+def test_svi_points_above_cap_clamps_to_five_with_disclosure():
+    # Yield 86.4% -> Table 2 row 5.5; the paper CLAMPS locus evidence at
+    # +5.0 ("capped at +5.0 points for all locus evidence"), it does not
+    # pause. No review reason fires.
+    result = run(args(build_evidence(met_sv("PP4", "VeryStrong", 5.5))))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == 5
+    assert "review_reasons" not in data
+    locus = data["locus_evidence"]
+    assert locus["raw_total"] == 5.5
+    assert locus["applied_total"] == 5.0
+    assert locus["capped"] is True
+    pp4 = next(c for c in data["point_contributions"] if c["criterion"] == "PP4")
+    assert pp4["svi_points"] == 5.5
+    assert pp4["points"] == 5.0
+
+
+def test_svi_points_mixed_with_integer_counterpart_clamps_sum():
+    # PP1 fractional 1.2 (Table 3, three AR unaffected) + integer PP4
+    # Strong(4): raw 5.2 clamps to 5.0.
+    result = run(
+        args(
+            build_evidence(
+                met_sv("PP1", "Moderate", 1.2),
+                met("PP4", "Strong"),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["total_score"] == 5
+    locus = data["locus_evidence"]
+    assert locus["pp1_points"] == 1.2
+    assert locus["pp4_points"] == 4
+    assert locus["raw_total"] == 5.2
+    assert locus["applied_total"] == 5.0
+    assert locus["capped"] is True
+
+
+def test_svi_points_pp1_unaffected_fractional_below_supporting():
+    # Table 3 AR unaffected: 0.4 per relative -- below Supporting(1) and
+    # unencodable before. One unaffected relative alone stays VUS at 0.4.
+    result = run(args(build_evidence(met_sv("PP1", "Supporting", 0.4))))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == 0.4
+
+
+def test_svi_points_rejected_outside_pp1_pp4():
+    result = run(
+        args(build_evidence(met_sv("PS4", "Strong", 3.0)))
+    )
+    assert result["status"] == "error"
+    assert "PP1" in result["error"] and "PP4" in result["error"]
+
+
+def test_svi_points_requires_met_status():
+    result = run(
+        args(build_evidence(ev("PP4", "not_met", svi_points=2.0)))
+    )
+    assert result["status"] == "error"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [0, -1, True, float("nan"), float("inf"), float("-inf"), "3.5", None],
+    ids=["zero", "negative", "bool", "nan", "inf", "-inf", "string", "null"],
+)
+def test_svi_points_must_be_positive_finite_number(bad):
+    result = run(
+        args(build_evidence(met_sv("PP4", "Moderate", bad)))
+    )
+    assert result["status"] == "error"
+
+
+def test_pp4_ps4_both_met_pauses_for_proban_disjointness():
+    # Biesecker 2024: a proband counts for PP4 or PS4, never both. The
+    # calculator cannot see probands, so both-met pauses for the reviewer
+    # to confirm the proband sets are disjoint.
+    result = run(
+        args(
+            build_evidence(
+                met("PP4", "Moderate", fact="cohort-yield"),
+                met("PS4", "Strong", fact="case-count"),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "needs_review"
+    assert "pp4_ps4_proban_exclusivity" in [
+        r["reason"] for r in data["review_reasons"]
+    ]
+
+
+def test_pp4_ps4_shared_fact_flags_duplicate_and_exclusivity():
+    # Shared evidence_ids keep the existing duplicate-fact flag; the
+    # exclusivity pause fires independently -- both reasons are honest.
+    result = run(
+        args(
+            build_evidence(
+                met("PP4", "Moderate", fact="same-cohort"),
+                met("PS4", "Strong", fact="same-cohort"),
+            )
+        )
+    )
+    reasons = [r["reason"] for r in result["data"]["review_reasons"]]
+    assert "duplicate_scoring_facts" in reasons
+    assert "pp4_ps4_proban_exclusivity" in reasons
+
+
+def test_integer_locus_cap_pause_unchanged_when_no_svi_points():
+    # Integer-only path keeps the fail-closed pause (existing pinned
+    # behavior; Table 4's legal integer combos never exceed +5).
+    result = run(
+        args(build_evidence(met("PP1", "Strong"), met("PP4", "Moderate")))
+    )
+    assert result["data"]["classification_status"] == "needs_review"
+    assert "locus_evidence_cap_exceeded" in [
+        r["reason"] for r in result["data"]["review_reasons"]
+    ]
+    # No locus_evidence disclosure block on the integer path: existing
+    # receipt shapes stay byte-stable.
+    assert "locus_evidence" not in result["data"]
+
+
+def test_svi_points_absent_keeps_receipt_shape_unchanged():
+    # Control: without svi_points no locus_evidence block, no method
+    # extension -- the pre-existing receipt shape is preserved exactly.
+    result = run(args(build_evidence(met("PP4", "Moderate"))))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["total_score"] == 2
+    assert "locus_evidence" not in data
+    assert "svi_points" not in data["method"]
+    pp4 = next(c for c in data["point_contributions"] if c["criterion"] == "PP4")
+    assert "svi_points" not in pp4

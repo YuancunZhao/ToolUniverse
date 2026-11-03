@@ -839,6 +839,9 @@ _ACMG_EVIDENCE_KEYS = (
     "rule_refs",
     "evidence_ids",
 )
+# 2026-11-03: the one sanctioned optional evidence field -- the raw SVI
+# point-table value for a met PP1/PP4 record (see the scoring loop).
+_ACMG_EVIDENCE_OPTIONAL_KEYS = ("svi_points",)
 _ACMG_CSPEC_STATUSES = frozenset(
     {"released_spec_found", "no_released_spec", "unresolved", "failed"}
 )
@@ -849,8 +852,23 @@ def _acmg_error(message: str) -> ValueError:
     return ValueError(f"ACMG_calculate_classification: {message}")
 
 
-def _acmg_classify(total: int) -> str:
-    """Map a Tavtigian 2020 point total to its five-tier classification."""
+def _acmg_num(value: float):
+    """Normalize a point sum for output: integral sums stay int, fractional
+    sums keep one decimal (Biesecker 2024 Tables 2/3 use 0.5/0.4 steps);
+    rounds away float noise before deciding."""
+    rounded = round(value, 6)
+    if float(rounded).is_integer():
+        return int(rounded)
+    return round(rounded, 1)
+
+
+def _acmg_classify(total: float) -> str:
+    """Map a Tavtigian 2020 point total to its five-tier classification.
+
+    Boundary comparisons are continuous (>= 10 / >= 6 / >= 0 / >= -6), so
+    fractional totals from svi_points classify on the same calibrated
+    cut points the integer ladder uses.
+    """
     if total >= 10:
         return "Pathogenic"
     if total >= 6:
@@ -1036,14 +1054,20 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
     for item in evidence:
         if not isinstance(item, dict):
             raise _acmg_error("each evidence record must be an object")
-        extra_keys = set(item) - set(_ACMG_EVIDENCE_KEYS)
+        extra_keys = (
+            set(item)
+            - set(_ACMG_EVIDENCE_KEYS)
+            - set(_ACMG_EVIDENCE_OPTIONAL_KEYS)
+        )
         absent = [k for k in _ACMG_EVIDENCE_KEYS if k not in item]
         if absent:
             raise _acmg_error(
                 f"evidence record missing key(s): {', '.join(absent)}"
             )
         if extra_keys:
-            # Includes point overrides smuggled into a record.
+            # Still catches point overrides smuggled into a record: the
+            # only sanctioned numeric field is svi_points, validated below
+            # to PP1/PP4 'met' records carrying raw SVI table values.
             raise _acmg_error(
                 f"evidence record for {item.get('criterion')!r} has "
                 f"unexpected key(s): {', '.join(sorted(extra_keys))}"
@@ -1114,6 +1138,35 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                     raise _acmg_error(
                         f"{criterion}: 'met' requires non-empty {ref_key}"
                     )
+        # 2026-11-03: met PP1/PP4 records may carry their raw SVI
+        # point-table value (Biesecker et al., AJHG 2024;111:24-38,
+        # Tables 2/3) in svi_points -- fractional values the strength
+        # ladder cannot encode (Table 4's 3-3.9 and >=5 tiers have no
+        # single-code label). Validated to a positive finite number here;
+        # the scoring loop lets it take over that record's arithmetic.
+        if "svi_points" in item:
+            svi_value = item["svi_points"]
+            if criterion not in ("PP1", "PP4"):
+                raise _acmg_error(
+                    f"{criterion}: svi_points is accepted only on PP1/PP4 "
+                    "(raw Biesecker 2024 Table 2/3 values); every other "
+                    "criterion scores through the strength ladder"
+                )
+            if status != "met":
+                raise _acmg_error(
+                    f"{criterion}: svi_points is only meaningful on a 'met' "
+                    "record; drop the field or set the status to 'met'"
+                )
+            if (
+                isinstance(svi_value, bool)
+                or not isinstance(svi_value, (int, float))
+                or not math.isfinite(svi_value)
+                or svi_value <= 0
+            ):
+                raise _acmg_error(
+                    f"{criterion}: svi_points must be a positive finite "
+                    f"number (raw SVI table value), got {svi_value!r}"
+                )
         seen[criterion] = item
     absent_codes = sorted(_ACMG_CRITERIA - set(seen))
     if absent_codes:
@@ -1126,20 +1179,78 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
         m for m in met_records if m["criterion"] != "BA1"
     ]  # BA1 never converts to points
 
+    def _raw_points(record: Dict[str, Any]) -> float:
+        # A met PP1/PP4 record may carry svi_points (validated above);
+        # when present it takes over that record's arithmetic and the
+        # strength label stays descriptive.
+        if "svi_points" in record:
+            return float(record["svi_points"])
+        return float(_ACMG_STRENGTH_POINTS[record["strength"]])
+
+    uses_svi_points = any("svi_points" in m for m in scored)
+
     contributions = []
     for record in scored:
         direction = (
             "pathogenic" if record["criterion"] in _ACMG_PATHOGENIC else "benign"
         )
-        points = _ACMG_STRENGTH_POINTS[record["strength"]]
-        contributions.append(
-            {
-                "criterion": record["criterion"],
-                "strength": record["strength"],
-                "points": points if direction == "pathogenic" else -points,
-                "direction": direction,
-            }
-        )
+        points = _raw_points(record)
+        entry = {
+            "criterion": record["criterion"],
+            "strength": record["strength"],
+            "points": points if direction == "pathogenic" else -points,
+            "direction": direction,
+        }
+        if "svi_points" in record:
+            entry["svi_points"] = record["svi_points"]
+        contributions.append(entry)
+
+    # 2026-11-03: with svi_points present the PP1+PP4 locus cap follows the
+    # source semantics -- Biesecker 2024 CLAMPS locus evidence at +5.0
+    # ("evidence is capped at +5.0 points for all locus evidence"), it does
+    # not pause. The integer-only path keeps its fail-closed pause below
+    # (Table 4's legal integer combinations never exceed +5, so an integer
+    # breach signals a mis-encoded strength). When the raw sum exceeds the
+    # cap, the excess is removed from PP4 first, then PP1 -- a documented,
+    # deterministic allocation the paper itself does not prescribe; the
+    # raw values stay visible in svi_points and in the disclosure block.
+    locus_evidence = None
+    if uses_svi_points:
+        locus_records = {
+            m["criterion"]: m
+            for m in scored
+            if m["criterion"] in ("PP1", "PP4")
+        }
+        raw_total = sum(_raw_points(m) for m in locus_records.values())
+        applied_total = min(raw_total, 5.0)
+        capped = raw_total > 5.0
+        if capped:
+            remaining = round(raw_total - 5.0, 6)
+            for code in ("PP4", "PP1"):
+                if remaining <= 0:
+                    break
+                entry = next(
+                    (c for c in contributions if c["criterion"] == code),
+                    None,
+                )
+                if entry is None:
+                    continue
+                take = min(entry["points"], remaining)
+                entry["points"] = round(entry["points"] - take, 6)
+                remaining = round(remaining - take, 6)
+        locus_evidence = {
+            "pp1_points": _acmg_num(_raw_points(locus_records["PP1"]))
+            if "PP1" in locus_records
+            else 0,
+            "pp4_points": _acmg_num(_raw_points(locus_records["PP4"]))
+            if "PP4" in locus_records
+            else 0,
+            "raw_total": _acmg_num(raw_total),
+            "cap": 5.0,
+            "applied_total": _acmg_num(applied_total),
+            "capped": capped,
+        }
+
     pathogenic_points = sum(
         c["points"] for c in contributions if c["direction"] == "pathogenic"
     )
@@ -1186,10 +1297,26 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
             },
         },
         "point_contributions": contributions,
-        "pathogenic_points": pathogenic_points,
-        "benign_points": benign_points,
+        "pathogenic_points": _acmg_num(pathogenic_points),
+        "benign_points": _acmg_num(benign_points),
         "uncounted_records": uncounted,
     }
+    # Conditional additions only: receipts without svi_points keep their
+    # exact pre-existing shape.
+    if uses_svi_points:
+        base["method"]["svi_points"] = {
+            "accepted_on": ["PP1", "PP4"],
+            "semantics": (
+                "raw Biesecker 2024 Table 2/3 value; overrides the "
+                "strength ladder for that record's arithmetic (Table 4's "
+                "3-3.9 and >=5 tiers have no single-code label)"
+            ),
+            "locus_cap": (
+                "+5.0 on the PP1+PP4 sum, clamped with disclosure; the "
+                "integer-only path keeps its fail-closed pause"
+            ),
+        }
+        base["locus_evidence"] = locus_evidence
 
     review_reasons: List[Dict[str, Any]] = []
     if blocking_issues:
@@ -1306,18 +1433,42 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
     # SVI combination caps the fixed integrator can enforce by code identity.
-    # Biesecker et al. 2023: locus evidence (PP1 + PP4) is capped at +5.0.
+    # Biesecker et al. 2024: locus evidence (PP1 + PP4) is capped at +5.0.
+    # Integer-only encoding: a breach pauses (Table 4's legal integer
+    # combinations never exceed +5, so this signals a mis-encoded
+    # strength). With svi_points the cap was already CLAMPED above per the
+    # paper's own wording, and the disclosure block carries the math.
     locus_points = sum(
         c["points"] for c in contributions if c["criterion"] in ("PP1", "PP4")
     )
-    if locus_points > 5:
+    if not uses_svi_points and locus_points > 5:
         review_reasons.append(
             {
                 "reason": "locus_evidence_cap_exceeded",
                 "detail": (
                     f"PP1 + PP4 contribute {locus_points} points, but ClinGen "
                     "SVI caps combined locus evidence at +5 (Biesecker et al. "
-                    "2023); reduce the applied strengths accordingly"
+                    "2024); supply the raw table values via svi_points -- the "
+                    "paper clamps locus evidence at +5.0 -- or reduce the "
+                    "applied strengths accordingly"
+                ),
+            }
+        )
+    # Biesecker et al. 2024: a proband counts for PP4 or PS4, never both.
+    # The calculator cannot see probands, so both-met pauses for the
+    # reviewer to confirm the two proband sets are disjoint (shared
+    # evidence_ids additionally flag through duplicate_scoring_facts).
+    if seen["PP4"]["status"] == "met" and seen["PS4"]["status"] == "met":
+        review_reasons.append(
+            {
+                "reason": "pp4_ps4_proban_exclusivity",
+                "detail": (
+                    "PP4 (phenotype specificity) and PS4 (case frequency) "
+                    "are both met; a proband counts for one or the other, "
+                    "never both (Biesecker et al., AJHG 2024). Confirm the "
+                    "two proband sets are disjoint before accepting these "
+                    "points; if they overlap, keep one code and set the "
+                    "other to not_met"
                 ),
             }
         )
@@ -1374,7 +1525,7 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
     base.update(
         classification_status="computed",
         classification=_acmg_classify(total),
-        total_score=total,
+        total_score=_acmg_num(total),
         ba1_standalone=False,
     )
     return _acmg_envelope(base)

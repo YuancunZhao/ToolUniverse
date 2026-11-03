@@ -157,11 +157,95 @@ def _run_mcp_session():
                     "ACMG_calculate_classification",
                     arguments=incomplete_rules_args,
                 )
+
+                # 2026-11-03 (Batch A): raw SVI point-table values through
+                # the real stdio server. svi_payload mirrors the TYR
+                # c.1247C>A receipt shape: PM2 Supporting + PP3 Moderate +
+                # PP4 3.0 (diagnostic yield 58.9% rounds down to the
+                # 50.6% Table 2 row) -> LP at exactly 6, and a clamp case
+                # where PP4's raw 5.5 (86.4% row) applies at the +5.0
+                # locus cap. Both start from a clean all-not-assessed base
+                # (the golden fixture's PVS1 would otherwise dominate the
+                # total). svips_bad puts svi_points on PS4, which the
+                # handler must reject.
+                svi_payload = _golden_arguments()
+                svi_payload["evidence"] = [_ev(c) for c in PATHOGENIC + BENIGN]
+                for record in svi_payload["evidence"]:
+                    if record["criterion"] == "PM2":
+                        record.update(
+                            status="met", strength="Supporting",
+                            rationale="Absent from population databases",
+                            source_refs=["gnomAD v4.1"],
+                            rule_refs=["SVI PM2 v1.0"],
+                            evidence_ids=["gnomad-absent"],
+                        )
+                    elif record["criterion"] == "PP3":
+                        record.update(
+                            status="met", strength="Moderate",
+                            rationale="Calibrated splicing/missense predictors",
+                            source_refs=["PMID:34770040"],
+                            rule_refs=["Pejaver 2022 PP3"],
+                            evidence_ids=["predictors-pp3"],
+                        )
+                    elif record["criterion"] == "PP4":
+                        record.update(
+                            status="met", strength="Moderate",
+                            svi_points=3.0,
+                            rationale=(
+                                "Diagnostic yield 58.9% in the phenotype-"
+                                "matched cohort; rounds down to the 50.6% "
+                                "Table 2 row"
+                            ),
+                            source_refs=["PMID:30097210"],
+                            rule_refs=["Biesecker 2024 Table 2"],
+                            evidence_ids=["cohort-yield-58.9"],
+                        )
+                svi_ok = await client.call_tool(
+                    "ACMG_calculate_classification", arguments=svi_payload,
+                )
+
+                clamp_payload = _golden_arguments()
+                clamp_payload["evidence"] = [_ev(c) for c in PATHOGENIC + BENIGN]
+                for record in clamp_payload["evidence"]:
+                    if record["criterion"] == "PP4":
+                        record.update(
+                            status="met", strength="VeryStrong",
+                            svi_points=5.5,
+                            rationale=(
+                                "Diagnostic yield 86.4%; Table 2 row 5.5, "
+                                "applied at the +5.0 locus cap"
+                            ),
+                            source_refs=["PMID:30097210"],
+                            rule_refs=["Biesecker 2024 Table 2"],
+                            evidence_ids=["cohort-yield-86.4"],
+                        )
+                clamp_ok = await client.call_tool(
+                    "ACMG_calculate_classification", arguments=clamp_payload,
+                )
+
+                svips_bad = _golden_arguments()
+                for record in svips_bad["evidence"]:
+                    if record["criterion"] == "PS4":
+                        record.update(
+                            status="met", strength="Strong",
+                            svi_points=3.0,
+                            rationale="case frequency",
+                            source_refs=["PMID:1"],
+                            rule_refs=["SVI"],
+                            evidence_ids=["ps4-cases"],
+                        )
+                svips_rejected = await client.call_tool(
+                    "ACMG_calculate_classification", arguments=svips_bad,
+                )
+
                 return names, {
                     "legal": parse(legal),
                     "rejected": parse(rejected),
                     "paused": parse(paused),
                     "incomplete_rules": parse(incomplete_rules),
+                    "svi_ok": parse(svi_ok),
+                    "clamp_ok": parse(clamp_ok),
+                    "svips_rejected": parse(svips_rejected),
                 }
 
     return asyncio.run(session())
@@ -213,6 +297,39 @@ def test_mcp_discovers_and_executes_both_new_tools():
     assert "incomplete_specification_material" in [
         r["reason"] for r in incomplete["data"]["review_reasons"]
     ]
+
+    # 2026-11-03: svi_points through the real server.
+    svi = results["svi_ok"]
+    assert svi["status"] == "success", svi
+    svi_data = svi["data"]
+    assert svi_data["classification_status"] == "computed"
+    assert svi_data["classification"] == "Likely Pathogenic"
+    assert svi_data["total_score"] == 6
+    pp4 = next(
+        c for c in svi_data["point_contributions"] if c["criterion"] == "PP4"
+    )
+    assert pp4["svi_points"] == 3.0
+    assert pp4["points"] == 3.0
+    assert svi_data["locus_evidence"]["raw_total"] == 3.0
+    assert svi_data["locus_evidence"]["capped"] is False
+
+    clamp = results["clamp_ok"]
+    assert clamp["status"] == "success", clamp
+    clamp_data = clamp["data"]
+    assert clamp_data["classification_status"] == "computed"
+    assert clamp_data["classification"] == "VUS"
+    assert clamp_data["total_score"] == 5
+    assert clamp_data["locus_evidence"]["raw_total"] == 5.5
+    assert clamp_data["locus_evidence"]["applied_total"] == 5.0
+    assert clamp_data["locus_evidence"]["capped"] is True
+    assert "review_reasons" not in clamp_data
+
+    svips = results["svips_rejected"]
+    assert isinstance(svips, dict), svips
+    assert svips.get("status") == "error", (
+        f"svi_points outside PP1/PP4 must be rejected, got: {svips}"
+    )
+    assert "PP1" in svips.get("error", "") and "PP4" in svips.get("error", "")
 
 
 # --------------------------------------------------------------------------- #
