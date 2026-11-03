@@ -184,9 +184,12 @@ not performing this workflow's classification.
 5. **PM2 defaults to Supporting** (ClinGen SVI) unless the applicable
    specification states otherwise.
 6. **SVI combination caps are enforced by the calculator:** PP1+PP4 locus
-   evidence is capped at +5 points (Biesecker 2023) and PP3+PM1 summed
-   strength at Strong (Pejaver 2022) — assign strengths accordingly; a
-   breach pauses the classification.
+   evidence is capped at +5 points (Biesecker 2024) and PP3+PM1 summed
+   strength at Strong (Pejaver 2022). When PP1/PP4 points come from the
+   SVI tables (fractional), submit the raw value in the record's
+   `svi_points` — the calculator clamps the locus sum at +5 and
+   discloses it. Integer-only breaches pause the classification.
+   PP4 and PS4 both met pauses for proband-disjointness confirmation.
 7. **PP5/BP6 are retired.** ClinVar labels are attributed separately.
 8. **English-first queries**; respond in the user's language.
 

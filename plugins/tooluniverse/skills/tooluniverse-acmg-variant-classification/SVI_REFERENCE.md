@@ -39,9 +39,12 @@ against source text on 2026-09-09 — none from memory):
   (phase-unknown splits P 0.5 / LP 0.25); combined 0.5/1/2/4 →
   Supporting/Moderate/Strong/VeryStrong; affected proband, PM2 rarity of
   both variants, and anti-circular classification required.
-- **PP1/BS4/PP4** — Biesecker et al., AJHG 2023 (PMC10806742): co-segregation
-  points per individual by inheritance model; PP4 diagnostic-yield points;
-  locus evidence (PP1+PP4) capped at +5.0 (enforced by the calculator);
+- **PP1/BS4/PP4** — Biesecker et al., AJHG 2024;111:24–38 (online
+  2023-12, PMC10806742, doi:10.1016/j.ajhg.2023.11.009): co-segregation
+  points per individual by inheritance model; PP4 diagnostic-yield points
+  (fractional; submit raw table values via the calculator's svi_points);
+  locus evidence (PP1+PP4) capped at +5.0 (clamped with disclosure when
+  svi_points is used, integer breaches pause; enforced by the calculator);
   BS4 non-segregation = −4.0 (AD / AR-homozygous / X-linked).
 - **PP3/BP4** — Pejaver et al., AJHG 2022 (PMC9748256): one pre-specified
   calibrated tool; exact intervals in the PP3 entry; PP3+PM1 summed
@@ -275,8 +278,10 @@ evaluated ≠ not applicable ≠ not met.
   - VCEP specifications frequently define proband-count tables — the
     specification's numbers replace any default.
 - **Not to be double counted with PP4:** the same proband counts for PP4 or
-  PS4, never both (Biesecker et al. 2023) — reuse the same `evidence_ids`
-  fact so the calculator's duplicate-fact check enforces this.
+  PS4, never both (Biesecker et al. 2024) — when both codes are `met` the
+  calculator pauses (`pp4_ps4_proban_exclusivity`) for you to confirm the
+  two proband sets are disjoint; sharing an `evidence_ids` fact
+  additionally flags `duplicate_scoring_facts`.
 - **Exclusions:** population stratification, ascertainment bias; conflicting
   studies → `needs_review`.
 - **Source:** ClinGen variant curation SOP; Rowlands et al. 2024
@@ -422,23 +427,40 @@ evaluated ≠ not applicable ≠ not met.
   affection status; penetrance assumption; phase (established by the first
   meiosis — two for autosomal recessive; unaffected parents establish phase
   and are not themselves counted).
-- **SVI points per co-segregating individual (Biesecker et al. 2023, Table 3):**
+- **SVI points per co-segregating individual (Biesecker et al. 2024, Table 3):**
   - autosomal dominant (affected or unaffected): **1.0** each
   - autosomal recessive, affected: **2.0** each; unaffected: **0.4** each
-    (+0.4 per additional beyond five)
+    (+0.4 per additional meiosis beyond five)
   - X-linked recessive male (affected or unaffected): **1.0** each; obligate
     heterozygous females may add
-  - unaffected relatives count only under a full-penetrance assumption
-- **Points → strength:** 1 **Supporting**; 2 **Moderate**; 4 **Strong**; 8
-  **VeryStrong** (the standard Bayesian point ladder; the paper's Table 4
-  gives classical-label equivalents, e.g., ≥5 = Strong + Supporting).
-- **PP1 and PP4 are coupled locus evidence:** their points sum and are capped
-  at **+5.0** per variant; a proband counts for PP4 or PS4, never both; with a
-  single-potent-locus phenotype (diagnostic yield >90%) PP4 applies at the
-  cap and co-segregation adds nothing.
+  - unaffected relatives count only under a full-penetrance assumption;
+    points attach to the allele — split them if more than one variant
+    shares the segregating haplotype
+- **Fractional sums are native, not ladder steps:** Table 3 yields 0.4/0.8/
+  1.2/1.6 (AR unaffected) and Table 4 tiers 3–3.9 and ≥5 have **no
+  single-code strength label**. Submit the raw sum in the record's optional
+  `svi_points` (calculator contract: PP1/PP4, status `met`, positive finite
+  number); the strength label stays descriptive and the arithmetic comes
+  from `svi_points`.
+- **Combined tiers (the paper's Table 4):** 0–0.9 not applicable; 1–1.9
+  PP1_Supporting or PP4_Supporting; 2–2.9 single Moderate or
+  Supporting+Supporting; 3–3.9 Supporting+Moderate combinations only;
+  4–4.9 single Strong or Moderate+Moderate; ≥5 Strong+Supporting
+  combinations only.
+- **PP1 and PP4 are coupled locus evidence:** their points sum and are
+  capped at **+5.0** per variant — with `svi_points` the calculator
+  CLAMPS the sum at +5.0 and discloses the raw/applied math, per the
+  paper's own wording; integer-only encodings that breach +5 pause
+  fail-closed (Table 4's legal integer combinations never exceed +5, so
+  an integer breach signals a mis-encoded strength). A proband counts
+  for PP4 or PS4, never both (the calculator pauses when both are met
+  for disjointness confirmation); with a single-potent-locus phenotype
+  (diagnostic yield >90%) PP4 applies at the cap and co-segregation
+  adds nothing.
 - Insufficient segregation data → `not_assessed`/`needs_review`, never a
   hand-waved PP1.
-- **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
+- **Source:** Biesecker et al., AJHG 2024;111:24–38 (online 2023-12),
+  doi:10.1016/j.ajhg.2023.11.009 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP2 — missense-enrichment gene (Supporting default)
 - **Facts:** missense variants are a common disease mechanism AND the gene
@@ -509,15 +531,40 @@ evaluated ≠ not applicable ≠ not met.
 ### PP4 — phenotype specificity (SVI 2023 point system)
 - **Facts:** the gene's diagnostic yield for the proband's specific phenotype
   (and exclusion of other candidate loci, which raises the effective yield).
-- **Points follow the diagnostic-yield table (Biesecker et al. 2023, Table 2):**
-  floor **+1.0 at ~20% yield**, rising with yield (≈+6.0 at 90%); round down
-  between rows; yield <20% → PP4 does not apply.
+- **Diagnostic yield (the paper's own definition):** "the historical
+  demonstrated yield of pathogenic variants from molecular testing that is
+  similar to the methodology used for the case under current analysis. It
+  is wholly dependent upon the phenotype criteria matching as well." A
+  yield from a different testing methodology, or from loosely matching
+  phenotype criteria, is NOT this case's yield.
+- **Points follow the diagnostic-yield table verbatim (Biesecker et al.
+  2024, Table 2; round DOWN between rows):**
+  19.1%→1.0; 25.4%→1.5; 33.0%→2.0; 41.5%→2.5; 50.6%→3.0; 59.6%→3.5;
+  68.0%→4.0; 75.4%→4.5; 81.6%→5.0; 86.4%→5.5; 90.2%→6.0; 93.0%→6.5;
+  95.0%→7.0; 96.5%→7.5; 97.5%→8.0; 98.3%→8.5; 98.8%→9.0; 99.2%→9.5;
+  99.4%→10.0; 99.6%→10.5; 99.7%→11.0; 99.8%→11.5; 99.9%→12.0.
+  Boundary: yield **<19.1% → PP4 does not apply** (the table's lowest
+  row IS 19.1%→1.0; 19.1%–25.3% scores 1.0). The earlier "<20% does not
+  apply" gloss contradicted the table's own floor row and is corrected
+  here.
+- **Encoding fractional points:** Table 4's combined tiers give 3–3.9 and
+  ≥5 **no single-code strength label**, so a Table 2 row such as 3.0,
+  3.5, or 5.5 cannot be encoded as any one strength. Submit the row
+  value in the record's optional `svi_points` (calculator contract:
+  PP1/PP4, status `met`, positive finite number); the required strength
+  label stays descriptive and the arithmetic — and the +5.0 locus cap —
+  follow the raw points.
 - **Coupling:** PP4 points sum with PP1 co-segregation points as locus
-  evidence, capped at +5.0 per variant; a proband counts for PP4 or PS4,
-  never both. With yield >90%, PP4 applies at the cap and PP1 adds nothing.
-- **Do not apply** for nonspecific phenotypes (isolated seizures, intellectual
-  disability, arrhythmia and similar).
-- **Source:** Biesecker et al., AJHG 2023 — ClinGen PP1/BS4/PP4 guidance.
+  evidence, capped at +5.0 per variant — with `svi_points` the
+  calculator clamps the sum at +5.0 and discloses the raw/applied
+  math; integer-only breaches pause fail-closed. A proband counts for
+  PP4 or PS4, never both (the calculator pauses when both are met for
+  disjointness confirmation). With yield >90%, PP4 applies at the cap
+  and PP1 adds nothing.
+- **Do not apply** for nonspecific phenotypes (isolated seizures,
+  intellectual disability, arrhythmia and similar).
+- **Source:** Biesecker et al., AJHG 2024;111:24–38 (online 2023-12),
+  doi:10.1016/j.ajhg.2023.11.009 — ClinGen PP1/BS4/PP4 guidance.
 
 ### PP5 — RETIRED, do not apply
 - The SVI recommendation is unambiguous: "laboratories [should] discontinue
@@ -601,7 +648,8 @@ BP7/PVS1 instead.
   autosomal dominant, autosomal-recessive homozygous, and X-linked contexts;
   for autosomal-recessive compound heterozygotes non-segregation provides
   little to no benign evidence.
-- **Source:** Biesecker et al., AJHG 2023 (same point system as PP1/PP4).
+- **Source:** Biesecker et al., AJHG 2024;111:24–38 (same point system as
+  PP1/PP4).
 
 ### BP1 — missense in a LoF-only gene (Supporting)
 - Mirror of PP2; mutually exclusive with it. Facts: gene where only

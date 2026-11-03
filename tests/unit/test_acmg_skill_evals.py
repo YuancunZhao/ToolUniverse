@@ -324,3 +324,77 @@ def test_case_17_receipt_matches_real_calculator():
         [case17["expected_output"]] + case17["assertions"]
     ).casefold()
     assert receipt in joined, receipt
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-03 follow-up (Batch B): the PP4 entry documented only a gloss of
+# Biesecker Table 2 ("floor +1.0 at ~20%"), which contradicted the table's
+# own lowest row (19.1% -> 1.0), omitted Table 4's combined tiers, and
+# never defined how fractional points encode. These guards pin the
+# corrected documentation: verbatim Table 2 rows, the <19.1% boundary, the
+# paper's diagnostic-yield definition, the no-single-label tiers, and the
+# svi_points calculator contract.
+# --------------------------------------------------------------------------- #
+def _reference_text():
+    # Whitespace-normalized: documented phrases wrap across lines.
+    return " ".join(
+        (SKILL_DIR / "SVI_REFERENCE.md").read_text().replace("`", "").split()
+    ).casefold()
+
+
+def test_svi_reference_pp4_table2_rows_are_verbatim():
+    text = _reference_text()
+    for row in (
+        "19.1%→1.0",
+        "25.4%→1.5",
+        "50.6%→3.0",
+        "59.6%→3.5",
+        "68.0%→4.0",
+        "81.6%→5.0",
+        "86.4%→5.5",
+        "90.2%→6.0",
+        "99.9%→12.0",
+    ):
+        assert row in text, row
+    # The corrected boundary replaces the old governing sentence (the
+    # correction note itself may quote the old "<20%" gloss).
+    assert "<19.1%" in text
+    assert "yield <20%" not in text
+
+
+def test_svi_reference_pp4_carries_paper_yield_definition():
+    text = _reference_text()
+    for phrase in (
+        "historical demonstrated yield",
+        "similar to the methodology",
+        "phenotype criteria matching",
+    ):
+        assert phrase in text, phrase
+
+
+def test_svi_reference_documents_table4_and_no_single_label_tiers():
+    text = _reference_text()
+    assert "3–3.9" in text or "3-3.9" in text
+    assert "no single-code strength label" in text
+    assert "supporting+moderate" in text
+
+
+def test_svi_reference_documents_svi_points_contract():
+    text = _reference_text()
+    for phrase in (
+        "svi_points",
+        "positive finite",
+        "clamps the sum at +5.0",
+        "proban_exclusivity",
+    ):
+        assert phrase in text, phrase
+
+
+def test_skill_documents_svi_points_and_exclusivity_pause():
+    text = " ".join(
+        (SKILL_DIR / "SKILL.md").read_text().replace("`", "").split()
+    ).casefold()
+    assert "svi_points" in text
+    assert "clamps the locus sum at +5" in text
+    assert "proband-disjointness" in text
+    assert "biesecker 2024" in text
