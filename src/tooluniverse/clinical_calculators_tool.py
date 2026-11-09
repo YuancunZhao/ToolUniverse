@@ -1491,24 +1491,18 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 ),
             }
         )
-    # Biesecker et al. 2024: a proband counts for PP4 or PS4, never both.
-    # The calculator cannot see probands, so both-met pauses for the
-    # reviewer to confirm the two proband sets are disjoint (shared
-    # evidence_ids additionally flag through duplicate_scoring_facts).
-    if seen["PP4"]["status"] == "met" and seen["PS4"]["status"] == "met":
-        review_reasons.append(
-            {
-                "reason": "pp4_ps4_proban_exclusivity",
-                "detail": (
-                    "PP4 (phenotype specificity) and PS4 (case frequency) "
-                    "are both met; a proband counts for one or the other, "
-                    "never both (Biesecker et al., AJHG 2024). Confirm the "
-                    "two proband sets are disjoint before accepting these "
-                    "points; if they overlap, keep one code and set the "
-                    "other to not_met"
-                ),
-            }
-        )
+    # 2026-11-09 (Batch B): the unconditional PP4+PS4 both-met pause is
+    # REMOVED. Biesecker et al. 2024 still say a proband counts for PP4
+    # or PS4, never both -- but whether the two proband sets are
+    # independent is a case-level fact only the Skill workflow can
+    # verify, not something the calculator can see. The workflow now
+    # owns it: confirmed independent -> both met score normally;
+    # independence unknown -> carry it in blocking_issues (which pauses
+    # via blocking_issues_present); confirmed overlap -> assign the
+    # shared cases to one code and re-evaluate the other from its
+    # remaining independent support (no independent support -> not_met
+    # with a rationale). Shared evidence_ids still flag here through
+    # duplicate_scoring_facts -- that dedup behavior is unchanged.
     # Pejaver et al. 2022: the summed strength of PP3 and PM1 must not
     # exceed Strong (= 4 points in the Tavtigian 2020 system).
     pp3_pm1_points = _acmg_fsum(

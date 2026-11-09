@@ -385,16 +385,33 @@ def test_svi_reference_documents_svi_points_contract():
         "svi_points",
         "positive finite",
         "clamps the sum at +5.0",
-        "proban_exclusivity",
+    ):
+        assert phrase in text, phrase
+    # 2026-11-09 (Batch B): the unconditional PP4+PS4 pause is gone; the
+    # reference must describe the workflow-owned three-state check instead.
+    assert "proban_exclusivity" not in text
+    for phrase in (
+        "confirmed independent",
+        "independence unknown",
+        "confirmed overlap",
+        "blocking_issues",
+        "duplicate_scoring_facts",
     ):
         assert phrase in text, phrase
 
 
-def test_skill_documents_svi_points_and_exclusivity_pause():
+def test_skill_documents_svi_points_and_independence_workflow():
     text = " ".join(
         (SKILL_DIR / "SKILL.md").read_text().replace("`", "").split()
     ).casefold()
     assert "svi_points" in text
     assert "clamps the locus sum at +5" in text
-    assert "proband-disjointness" in text
+    assert "the only sanctioned numeric field" in text
     assert "biesecker 2024" in text
+    # 2026-11-09 (Batch B): independence is decided in step 5 -- three
+    # states, no calculator pause, no dedicated confirmation machinery.
+    assert "proband-set independence" in text
+    assert "confirmed independent" in text
+    assert "independence unknown" in text
+    assert "confirmed overlap" in text
+    assert "no longer pauses on a bare pp4+ps4 both-met" in text

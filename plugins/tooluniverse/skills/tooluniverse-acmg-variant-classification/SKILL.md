@@ -99,7 +99,16 @@ what each code requires. Statuses mean different things — do not merge them:
 Each scoring fact gets a stable `evidence_ids` entry. The same fact under two
 codes (e.g., one functional assay driving both PS3 and PM1) must be sent to
 review — the calculator enforces this. Different facts from the same paper are
-NOT duplicates. Unresolved phase does not automatically pause everything:
+NOT duplicates. PP4/PS4 proband-set independence is decided here, before the
+calculator call: a proband counts for PP4 or PS4, never both (Biesecker et
+al. 2024). Confirmed independent (distinct probands, families, or fact
+identities — different papers or different `evidence_ids` alone do not prove
+independence) → both codes may stay `met`; independence unknown → carry the
+question in `blocking_issues`; confirmed overlap → assign the shared cases to
+one code, re-evaluate the other from its remaining independent support, and
+record `not_met` with a rationale when none remains. The calculator no longer
+pauses on a bare PP4+PS4 both-met — this check is yours.
+Unresolved phase does not automatically pause everything:
 PM3 has an official phase-unknown branch (downweighted per-proband points —
 see `SVI_REFERENCE.md`) that you should use whenever the co-occurrence facts
 are complete; keep the gap only when the facts themselves are missing (no
@@ -187,9 +196,12 @@ not performing this workflow's classification.
    evidence is capped at +5 points (Biesecker 2024) and PP3+PM1 summed
    strength at Strong (Pejaver 2022). When PP1/PP4 points come from the
    SVI tables (fractional), submit the raw value in the record's
-   `svi_points` — the calculator clamps the locus sum at +5 and
+   `svi_points` — the only sanctioned numeric field; all other supplied
+   totals or threshold overrides are rejected — the calculator clamps the
+   locus sum at +5 (budget allocated to PP1 first, then PP4) and
    discloses it. Integer-only breaches pause the classification.
-   PP4 and PS4 both met pauses for proband-disjointness confirmation.
+   PP4/PS4 proband-set independence is verified in the workflow
+   (step 5), not by a calculator pause.
 7. **PP5/BP6 are retired.** ClinVar labels are attributed separately.
 8. **English-first queries**; respond in the user's language.
 

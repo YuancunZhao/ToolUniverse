@@ -1164,10 +1164,13 @@ def test_svi_points_must_be_positive_finite_number(bad):
     assert result["status"] == "error"
 
 
-def test_pp4_ps4_both_met_pauses_for_proban_disjointness():
-    # Biesecker 2024: a proband counts for PP4 or PS4, never both. The
-    # calculator cannot see probands, so both-met pauses for the reviewer
-    # to confirm the proband sets are disjoint.
+def test_pp4_ps4_both_met_independent_facts_compute():
+    # 2026-11-09 (Batch B): the unconditional PP4+PS4 both-met pause is
+    # removed. Biesecker 2024 still holds that a proband counts for one
+    # code or the other -- but whether the two proband sets are
+    # independent is a case-level fact the Skill workflow verifies, not
+    # something the calculator can see. Distinct facts, no blocking
+    # issue -> the calculator scores normally (2 + 4 = 6 -> LP).
     result = run(
         args(
             build_evidence(
@@ -1177,15 +1180,40 @@ def test_pp4_ps4_both_met_pauses_for_proban_disjointness():
         )
     )
     data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert data["total_score"] == 6
+    assert "review_reasons" not in data
+
+
+def test_pp4_ps4_both_met_unknown_independence_pauses_via_blocking_issues():
+    # Independence unconfirmed -> the workflow carries it in
+    # blocking_issues; the calculator pauses through the existing
+    # blocking_issues_present reason and emits NO total_score. No
+    # dedicated exclusivity machinery is added.
+    result = run(
+        args(
+            build_evidence(
+                met("PP4", "Moderate", fact="cohort-yield"),
+                met("PS4", "Strong", fact="case-count"),
+            ),
+            blocking_issues=[
+                "PP4/PS4 proband-set independence not yet confirmed"
+            ],
+        )
+    )
+    data = result["data"]
     assert data["classification_status"] == "needs_review"
-    assert "pp4_ps4_proban_exclusivity" in [
-        r["reason"] for r in data["review_reasons"]
-    ]
+    assert data["classification"] is None
+    assert "total_score" not in data
+    reasons = [r["reason"] for r in data["review_reasons"]]
+    assert "blocking_issues_present" in reasons
+    assert "pp4_ps4_proban_exclusivity" not in reasons
 
 
-def test_pp4_ps4_shared_fact_flags_duplicate_and_exclusivity():
-    # Shared evidence_ids keep the existing duplicate-fact flag; the
-    # exclusivity pause fires independently -- both reasons are honest.
+def test_pp4_ps4_shared_fact_flags_duplicate_only():
+    # Shared evidence_ids keep the existing duplicate-fact pause; the
+    # removed exclusivity reason must NOT reappear.
     result = run(
         args(
             build_evidence(
@@ -1196,7 +1224,24 @@ def test_pp4_ps4_shared_fact_flags_duplicate_and_exclusivity():
     )
     reasons = [r["reason"] for r in result["data"]["review_reasons"]]
     assert "duplicate_scoring_facts" in reasons
-    assert "pp4_ps4_proban_exclusivity" in reasons
+    assert "pp4_ps4_proban_exclusivity" not in reasons
+
+
+def test_pp4_ps4_same_paper_distinct_facts_are_not_duplicates():
+    # Different facts from the same paper are NOT double counting --
+    # existing dedup semantics, now guarding the PP4/PS4 pair directly.
+    result = run(
+        args(
+            build_evidence(
+                met("PP4", "Moderate", fact="pmid-9-yield", paper="PMID:9"),
+                met("PS4", "Strong", fact="pmid-9-count", paper="PMID:9"),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert "review_reasons" not in data
 
 
 def test_integer_locus_cap_pause_unchanged_when_no_svi_points():

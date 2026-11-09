@@ -1356,3 +1356,130 @@ def test_damaged_metadata_does_not_sink_other_specification(monkeypatch):
     assert by_id["GN020"].get("detail_structure_failed") is not True
     assert "GN019" in result["partial_failures"]
     assert "GN020" not in result["partial_failures"]
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-09 (Batch B): the gene-centric mainline, generalized beyond the
+# MYOC/GN015 fixtures. ClinGen_search_cspec serves ANY given HGNC symbol;
+# applicability is adjudicated per gene + disease + inheritance mode from
+# the official materials (SKILL step 2). The fixtures below are SYNTHETIC
+# (spec ids GNTST0xx are test-only and do not exist in the real CSpec
+# registry; diseases/inheritance are the canonical associations, used here
+# only to exercise binding preservation); a synthetic TSC2 hit asserts
+# interface behavior, never that a real TSC2 specification exists.
+# --------------------------------------------------------------------------- #
+_SYNTHETIC_GENE_CASES = [
+    # (gene, disease_mondo, disease_label, inheritance, spec_id)
+    ("MYOC", "MONDO:0005338", "MONDO:0005338",
+     "Autosomal dominant inheritance", "GNTST001"),
+    ("LDLR", "MONDO:0007750", "MONDO:0007750",
+     "Autosomal dominant and autosomal recessive inheritance", "GNTST002"),
+    ("BRCA1", "MONDO:0006573", "MONDO:0006573",
+     "Autosomal dominant inheritance", "GNTST003"),
+    ("MYH7", "MONDO:0004959", "MONDO:0004959",
+     "Autosomal dominant inheritance", "GNTST004"),
+    ("TSC2", "MONDO:0001734", "MONDO:0001734",
+     "Autosomal dominant inheritance", "GNTST005"),
+]
+
+
+@pytest.mark.parametrize(
+    "gene, disease_mondo, disease_label, inheritance, spec_id",
+    _SYNTHETIC_GENE_CASES,
+    ids=[case[0] for case in _SYNTHETIC_GENE_CASES],
+)
+def test_cspec_gene_centric_mainline_exact_match_and_binding(
+    monkeypatch, gene, disease_mondo, disease_label, inheritance, spec_id
+):
+    # Any given HGNC symbol: case-insensitive exact match, and the
+    # gene-disease-inheritance binding survives into the receipt so the
+    # workflow can adjudicate applicability against the queried disease.
+    record = _index_record(
+        spec_id=spec_id,
+        gene=gene,
+        disease_label=disease_label,
+        inheritance=inheritance,
+        rule_set_id="9" + spec_id[-2:],
+    )
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": gene.lower()})
+
+    assert result["status"] == "success"
+    assert result["gene"] == gene
+    assert result["total"] == 1
+    entry = result["data"][0]
+    assert entry["specification_id"] == spec_id
+    assert entry["status"] == "Released"
+    binding = entry["rule_sets"][0]["genes"][0]["diseases"][0]
+    assert binding["mondo_id"] == disease_mondo
+    assert binding["inheritance"] == [inheritance]
+    # No candidates: a clean match plus no unbound specs must not invent
+    # unresolved-scope entries.
+    assert result["unresolved_scope_specs"] == []
+
+
+@pytest.mark.parametrize(
+    "gene, disease_mondo, disease_label, inheritance, spec_id",
+    _SYNTHETIC_GENE_CASES,
+    ids=[case[0] for case in _SYNTHETIC_GENE_CASES],
+)
+def test_cspec_gene_centric_mainline_no_match_is_generic_guidance(
+    monkeypatch, gene, disease_mondo, disease_label, inheritance, spec_id
+):
+    # Query a gene the synthetic index does not carry: a valid empty match
+    # is success with generic-rules guidance -- never an error, and never
+    # reported as "no specification" when scope candidates exist.
+    record = _index_record(
+        spec_id=spec_id,
+        gene=gene,
+        disease_label=disease_label,
+        inheritance=inheritance,
+    )
+    _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": gene + "X"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    assert result["total"] == 0
+    assert result["unresolved_scope_specs"] == []
+    assert "No Released" in result["note"]
+    assert "generic" in result["note"]
+
+
+def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
+    monkeypatch,
+):
+    # General (non-mitochondrial) form of the unbound-index-entry case: a
+    # synthetic TSC2 spec whose index record lists no genes is an
+    # unresolved-scope candidate -- kept alongside the explicit match,
+    # neither dropped as a duplicate nor counted as a match. The API not
+    # listing genes says nothing about applicability.
+    unbound = _index_record(
+        spec_id="GNTST099",
+        gene="TSC2",
+        rule_set_id="991",
+    )
+    del unbound["ruleSets"][0]["genes"]
+    bound = _index_record(
+        spec_id="GNTST005",
+        gene="TSC2",
+        disease_label="MONDO:0001734",
+        rule_set_id="992",
+    )
+    _patch(monkeypatch, _index(bound, unbound))
+
+    result = _tool().run({"gene": "TSC2"})
+
+    assert result["status"] == "success"
+    assert [e["specification_id"] for e in result["data"]] == ["GNTST005"]
+    assert result["total"] == 1  # candidates never count as matches
+    candidates = result["unresolved_scope_specs"]
+    assert [c["specification_id"] for c in candidates] == ["GNTST099"]
+    assert candidates[0]["scope_reason"] == "gene_binding_unavailable"
+    assert candidates[0]["rule_set_ids"] == ["991"]
+    # The note must keep the response honest: unresolved, no premature
+    # "classify under generic" directive.
+    assert "unresolved" in result["note"]
+    assert "classify under" not in result["note"]

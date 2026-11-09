@@ -278,10 +278,19 @@ evaluated ≠ not applicable ≠ not met.
   - VCEP specifications frequently define proband-count tables — the
     specification's numbers replace any default.
 - **Not to be double counted with PP4:** the same proband counts for PP4 or
-  PS4, never both (Biesecker et al. 2024) — when both codes are `met` the
-  calculator pauses (`pp4_ps4_proban_exclusivity`) for you to confirm the
-  two proband sets are disjoint; sharing an `evidence_ids` fact
-  additionally flags `duplicate_scoring_facts`.
+  PS4, never both (Biesecker et al. 2024). Whether the two proband sets
+  are independent is a case-level fact YOU verify in the workflow — the
+  calculator no longer pauses on a bare PP4+PS4 both-met. Three states:
+  **confirmed independent** (distinct probands, families, or fact
+  identities — different papers or different `evidence_ids` alone do not
+  prove independence) → both codes may stay `met` and score normally;
+  **independence unknown** → carry the question in `blocking_issues`
+  (the calculator then pauses via `blocking_issues_present`); **confirmed
+  overlap** (the same probands drive both codes) → assign the shared
+  cases to ONE code, re-evaluate the other from its remaining
+  independent support, and record `not_met` with a rationale when no
+  independent support remains. Sharing an `evidence_ids` fact between
+  the two codes still flags `duplicate_scoring_facts`.
 - **Exclusions:** population stratification, ascertainment bias; conflicting
   studies → `needs_review`.
 - **Source:** ClinGen variant curation SOP; Rowlands et al. 2024
@@ -453,10 +462,10 @@ evaluated ≠ not applicable ≠ not met.
   paper's own wording; integer-only encodings that breach +5 pause
   fail-closed (Table 4's legal integer combinations never exceed +5, so
   an integer breach signals a mis-encoded strength). A proband counts
-  for PP4 or PS4, never both (the calculator pauses when both are met
-  for disjointness confirmation); with a single-potent-locus phenotype
-  (diagnostic yield >90%) PP4 applies at the cap and co-segregation
-  adds nothing.
+  for PP4 or PS4, never both — the workflow, not the calculator,
+  verifies PP4/PS4 proband-set independence (see PS4); with a
+  single-potent-locus phenotype (diagnostic yield >90%) PP4 applies at
+  the cap and co-segregation adds nothing.
 - Insufficient segregation data → `not_assessed`/`needs_review`, never a
   hand-waved PP1.
 - **Source:** Biesecker et al., AJHG 2024;111:24–38 (online 2023-12),
@@ -558,9 +567,9 @@ evaluated ≠ not applicable ≠ not met.
   evidence, capped at +5.0 per variant — with `svi_points` the
   calculator clamps the sum at +5.0 and discloses the raw/applied
   math; integer-only breaches pause fail-closed. A proband counts for
-  PP4 or PS4, never both (the calculator pauses when both are met for
-  disjointness confirmation). With yield >90%, PP4 applies at the cap
-  and PP1 adds nothing.
+  PP4 or PS4, never both — the workflow, not the calculator, verifies
+  PP4/PS4 proband-set independence (see PS4). With yield >90%, PP4
+  applies at the cap and PP1 adds nothing.
 - **Do not apply** for nonspecific phenotypes (isolated seizures,
   intellectual disability, arrhythmia and similar).
 - **Source:** Biesecker et al., AJHG 2024;111:24–38 (online 2023-12),
