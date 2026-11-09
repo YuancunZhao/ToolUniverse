@@ -400,6 +400,29 @@ def test_svi_reference_documents_svi_points_contract():
         assert phrase in text, phrase
 
 
+def _skill_step(number):
+    """Extract one 'Fixed Pipeline' step body from SKILL.md.
+
+    Steps are marked '**N.'; the body runs to the next step marker or the
+    next '## ' heading, whichever comes first. Backticks are stripped and
+    whitespace joined to match the whole-document normalization below.
+    """
+    text = (SKILL_DIR / "SKILL.md").read_text().replace("`", "")
+    start = text.index(f"**{number}.")
+    ends = [
+        i
+        for i in (
+            text.find(f"**{n}.", start + 1) for n in range(number + 1, 9)
+        )
+        if i != -1
+    ]
+    heading = text.find("\n## ", start + 1)
+    if heading != -1:
+        ends.append(heading)
+    end = min(ends) if ends else len(text)
+    return " ".join(text[start:end].split()).casefold()
+
+
 def test_skill_documents_svi_points_and_independence_workflow():
     text = " ".join(
         (SKILL_DIR / "SKILL.md").read_text().replace("`", "").split()
@@ -415,3 +438,10 @@ def test_skill_documents_svi_points_and_independence_workflow():
     assert "independence unknown" in text
     assert "confirmed overlap" in text
     assert "no longer pauses on a bare pp4+ps4 both-met" in text
+    # 2026-11-09 closeout (Batch C): steps 4 and 6 must each name PP1, PP4,
+    # and the optional svi_points in their own text -- a mention that lives
+    # only in Standing Rules does not satisfy the fixed pipeline.
+    for number in (4, 6):
+        step = _skill_step(number)
+        for phrase in ("pp1", "pp4", "the optional svi_points"):
+            assert phrase in step, (number, phrase)

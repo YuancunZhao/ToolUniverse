@@ -83,9 +83,14 @@ you could not obtain are recorded as gaps, not as evidence.
 
 **4. Evaluate all 28 criteria, one record each.**
 For every code (PVS1, PS1–PS4, PM1–PM6, PP1–PP5, BA1, BS1–BS4, BP1–BP7) record
-exactly: `criterion`, `status`, `strength`, `rationale`, `source_refs`,
-`rule_refs`, `evidence_ids`. Consult `SVI_REFERENCE.md` (same directory) for
-what each code requires. Statuses mean different things — do not merge them:
+seven required fields: `criterion`, `status`, `strength`, `rationale`,
+`source_refs`, `rule_refs`, `evidence_ids`. Only a `met` PP1 or PP4 record may
+additionally include the optional `svi_points` field: a positive finite number
+representing the sourced raw SVI points. The seven required fields remain
+required; `strength` stays a descriptive label when `svi_points` supplies the
+arithmetic. No other evidence-record keys are accepted. Consult
+`SVI_REFERENCE.md` (same directory) for what each code requires. Statuses mean
+different things — do not merge them:
 - `met` — evidence affirmatively satisfies the criterion (requires legal
   strength, non-empty rationale, source refs, rule refs, fact ids)
 - `not_met` — evidence was examined and does not satisfy it
@@ -128,8 +133,10 @@ rather than automatically requiring review.
 - `evidence`: the 28 records
 - `blocking_issues`: explicit list (empty `[]` only when nothing is blocking)
 
-The calculator derives the score itself. Supplied totals, expected
-classifications, point overrides, or thresholds are rejected as illegal input.
+The calculator derives the combined score. The sole permitted point-valued
+input is the optional `svi_points` on a `met` PP1/PP4 record, as described in
+step 4. Caller-supplied totals, expected classifications, arbitrary point
+overrides, and thresholds are rejected.
 
 **7. Present the result.**
 Report strictly according to what actually happened, in one of three
