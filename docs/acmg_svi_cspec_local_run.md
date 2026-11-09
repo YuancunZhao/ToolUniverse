@@ -798,3 +798,84 @@ by first-failing tests; see the follow-up evidence directory
 HEAD, interpreter, stdout/stderr, exit codes), including a re-run of
 both online checks (1055 passed / 1 skipped full regression at HEAD
 `6133ff01`). The independent host acceptance remains NOT PERFORMED.
+
+## 2026-11-09 acceptance remediation: fractional scores, PP4/PS4 independence, CSpec general-gene mainline
+
+Round start `ec350710` (clean); commits this round: `53f11837`
+(calculator numeric contract) → `adb9ca34` (evidence independence in the
+skill workflow) → this record. Plan:
+`docs/superpowers/plans/2026-11-09-acceptance-remediation.md`.
+
+**Batch A `53f11837` — numeric contract:** removed `_acmg_num`'s
+one-decimal display rounding (1+2+2.99 = 5.99 was reported as 6 and
+classified LP); all sums now `math.fsum` behind `_acmg_fsum`, which
+turns overflow/non-finite aggregates (PP1 1e308 + PP4 1e308) into an
+explicit `status:"error"` instead of a silently-zeroed score; the locus
+cap switched from subtract-the-excess (float-absorbed at 1e20, zeroing
+the entry) to positive budget allocation (budget 5.0, PP1 first then
+PP4 — same keep-PP1 bookkeeping); Likely Benign extended for fractional
+input to −7 < total < 0 (Benign keeps ≤ −7; every integer class
+unchanged), stated as continuous intervals in `method.thresholds` on
+svi_points receipts only; non-svi contributions keep native int ladder
+points. 11 acceptance counterexamples reproduced failing on the old
+code, then fixed (20 new unit tests; full-session stdio + compact-mode
+precision/overflow/negative-band cases).
+
+**Batch B `adb9ca34` — evidence independence:** removed the
+unconditional PP4+PS4 both-met pause and `pp4_ps4_proban_exclusivity`;
+the workflow (SKILL step 5, Standing Rule 6, SVI_REFERENCE PS4/PP1/PP4,
+tool description) now owns proband-set independence as a three-state
+check: confirmed independent → both met score; unknown →
+blocking_issues (pauses via `blocking_issues_present`, no total_score);
+confirmed overlap → assign shared cases to one code, re-evaluate the
+other. No rationale parsing, no new fields/case state machines.
+`duplicate_scoring_facts` unchanged; svi_points restated as the only
+sanctioned numeric field. CSpec gene-centric mainline generalized with
+synthetic parameterized tests (MYOC/LDLR/BRCA1/MYH7/TSC2, GNTST0xx ids
+are test-only) plus a general (non-mitochondrial) unbound-spec
+coexistence case; query algorithm/structure/candidate retention
+untouched. Skill docs synced to both distribution copies (Codex via the
+official sync script into a temp DEST, then targeted backfill); the
+generated ACMG wrapper was re-synced from the official generator in a
+temp dir after each description change (this was the pre-existing
+"ACMG metadata hash" drift the plan called out — the wrapper had not
+been regenerated since `559002a1d`).
+
+**Regression (receipts in
+`temp_docs_and_tests/benchmark_tracking/2026-11-09-acceptance-remediation/`,
+gitignored):** the plan's 18-argument command names 10 paths that do not
+exist in this worktree (sibling-worktree naming); the executed scope is
+the same 40-file expansion archived by the 2026-11-03 round (count-line
+stripped). Result at HEAD `adb9ca34`: **1108 collected, 1107 passed,
+1 skipped (pre-existing PyMuPDF skip), 0 failed, exit 0** — +27 over
+2026-11-03's 1080/1. Ruff check-only clean on all 6 changed Python
+files; `git diff --check` clean vs `ec350710` and `2128ff57`; frozen
+files (uv.lock, pyproject.toml, clinvar_tool.py, clingen_tool.py,
+tools.py, tools_registry.py) unchanged; the only config-tree deltas are
+this tool's JSON description, its regenerated wrapper, and the three
+ACMG skill copies.
+
+**Online checks (point-in-time 2026-11-09, full JSON receipts archived,
+not asserted in tests):** `ClinGen_search_cspec` healthy for MYOC
+(GN019 v2.1, Glaucoma VCEP, MONDO:0005338 / AD), LDLR (GN013 v1.2, FH
+VCEP, MONDO:0007750, inheritance list empty as returned), BRCA1 (GN092
+v1.2, ENIGMA, MONDO:0700268 / AD); each with the GN015 unbound
+candidate coexisting — explicit match plus unresolved candidate, as
+designed. TSC2 and a no-match gene (ZQTF99XYZ): 0 explicit matches
+with the GN015 candidate retained and the note withholding a "no
+specification" judgment — an empty match is success-with-candidates,
+never an error and never "no spec". No query failed this round; a
+failure would have been recorded as an explicit error.
+
+**Independent LLM host acceptance (cases P/LP/VUS): NOT PERFORMED** —
+no independent host credentials in the executing environment; per plan
+this stays unaccepted and the round is not marked overall-accepted.
+Tool-path tests above are pipeline checks, not LLM behavior acceptance.
+
+**Record corrections this round:** the 2026-11-03 plan's "receipts
+without svi_points stay byte-identical" is reworded to "preserve old
+interface semantics and integer type compatibility" (byte-level
+serialization is no longer promised after the rounding removal), and
+its "keep one decimal for fractional totals" clause is marked as the
+defect this round removed — corrections are appended inline in that
+plan document, this is the only record system.

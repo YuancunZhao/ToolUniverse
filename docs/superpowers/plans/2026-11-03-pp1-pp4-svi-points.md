@@ -67,12 +67,17 @@ evidence (PP1 and PP4)"——**钳制**，不是 pause。理由：变异可能�
      applied_total、capped。不为钳制发明单码分摊规则；恒等式
      total = 非位点分之和 + locus_evidence.applied_total。
 4. `point_contributions` 条目在带 svi_points 的记录上增加
-   `"svi_points": <raw>` 键（`points` 为生效贡献）；既有回执形状
-   （case3 LP/9、case17 VUS/4、MCP golden）逐字节不变。
+   `"svi_points": <raw>` 键（`points` 为生效贡献）；不含 svi_points 的
+   回执保持旧接口语义与整数类型兼容。
+   （2026-11-09 勘误：原文写"逐字节不变"，但 2026-11-09 A 批移除了
+   一位小数展示舍入并恢复贡献分整数类型后，"逐字节"措辞超出可兑现
+   范围——旧整数回执的语义与类型不变，字节级序列化不再承诺。）
 5. 总分可为小数：`_acmg_classify` 边界比较本就连续（≥10/≥6/≥0/≥-6）
    ；`total_score`/`pathogenic_points`/`benign_points` 整数值时输出
    int、否则保留一位小数。`method` 块仅在出现 svi_points 时附加说明
    子块（既有回执不动）。
+   （2026-11-09 勘误：本条"否则保留一位小数"已被 A 批移除——
+   5.99 被舍成 6 跨越阈值是本轮修复的验收缺陷，非目标行为。）
 6. P1-4：PP4 与 PS4 同时 met → `needs_review`，reason
    `pp4_ps4_proban_exclusivity`（同一 proband 只计 PP4 或 PS4 之一，
    Biesecker 2024；确认两 proband 集合不相交，重叠则其一改 not_met；
