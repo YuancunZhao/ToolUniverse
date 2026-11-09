@@ -1225,3 +1225,231 @@ def test_svi_points_absent_keeps_receipt_shape_unchanged():
     assert "svi_points" not in data["method"]
     pp4 = next(c for c in data["point_contributions"] if c["criterion"] == "PP4")
     assert "svi_points" not in pp4
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-09 (Batch A): fractional arithmetic, extreme values, and the
+# continuous Likely-Benign interval.
+#
+# Acceptance findings being remediated here:
+#   A1. _acmg_num rounded totals to one decimal -- 1 + 2 + 2.99 = 5.99 was
+#       reported as 6 and classified Likely Pathogenic: display rounding
+#       moved a case across the calibrated threshold.
+#   A2. The locus clamp subtracted its way back from the raw total
+#       (raw - 5.0, then drain entries). At 1e20 the subtraction is
+#       absorbed by the float and the entry is zeroed instead of capped:
+#       a single 1e20 svi_points scored 0, not 5.
+#   A3. PP1 0.4 + benign -7 = -6.6 fell to Benign: only integer interval
+#       boundaries (-6/-7) existed for the Likely Benign band.
+#   A4. PP1 1e308 + PP4 1e308 overflowed to inf and silently scored 0
+#       -- no explicit error.
+#   A5. Non-svi contributions were float-coerced (4.0 instead of 4).
+# Sums use math.fsum; totals are emitted at full computed precision
+# (integral sums stay int) and classified on the same unrounded value.
+# --------------------------------------------------------------------------- #
+import json  # noqa: E402  (local to the 2026-11-09 acceptance block)
+
+
+def test_fractional_2_99_is_not_rounded_up_to_six():
+    # 1 + 2 + 2.99 = 5.99 -> VUS. Display rounding must never move a
+    # total across a threshold (the acceptance defect: 5.99 -> "6" -> LP).
+    result = run(
+        args(
+            build_evidence(
+                met("PM2", "Supporting"),
+                met("PP3", "Moderate"),
+                met_sv("PP4", "Moderate", 2.99),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == pytest.approx(5.99)
+    assert data["total_score"] < 6
+
+
+@pytest.mark.parametrize(
+    "pp4_points, expected_class, expected_total",
+    [
+        (2.99, "Likely Pathogenic", pytest.approx(9.99)),
+        (3.0, "Pathogenic", 10),
+    ],
+    ids=["9.99-stays-lp", "10.0-is-p"],
+)
+def test_lp_pathogenic_boundary_is_not_moved_by_rounding(
+    pp4_points, expected_class, expected_total
+):
+    # 7 integer points (PS1 Strong 4 + PM1 Moderate 2 + PM2 Supporting 1)
+    # plus PP4: 9.99 must stay Likely Pathogenic; 10 is Pathogenic.
+    result = run(
+        args(
+            build_evidence(
+                met("PS1", "Strong"),
+                met("PM1", "Moderate"),
+                met("PM2", "Supporting"),
+                met_sv("PP4", "Moderate", pp4_points),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == expected_class
+    assert data["total_score"] == expected_total
+
+
+_BENIGN_MINUS_7 = (
+    met("BS1", "Strong"),
+    met("BS3", "Moderate"),
+    met("BP4", "Supporting"),
+)
+
+
+def test_pp1_0_4_with_benign_minus_7_is_likely_benign():
+    # -7 + 0.4 = -6.6: inside the continuous Likely Benign band
+    # (-7 < total < 0), not Benign.
+    result = run(
+        args(build_evidence(met_sv("PP1", "Supporting", 0.4), *_BENIGN_MINUS_7))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Benign"
+    assert data["total_score"] == pytest.approx(-6.6)
+    assert -7 < data["total_score"] < 0
+
+
+@pytest.mark.parametrize(
+    "pp1_points, benign_items, expected_class",
+    [
+        (0.001, _BENIGN_MINUS_7, "Likely Benign"),  # -6.999, just above -7
+        (0.6, (met("BS1", "Supporting"),), "Likely Benign"),  # -0.4, just below 0
+    ],
+    ids=["minus-6.999-lb", "minus-0.4-lb"],
+)
+def test_fractional_benign_band_intervals(pp1_points, benign_items, expected_class):
+    result = run(
+        args(build_evidence(met_sv("PP1", "Supporting", pp1_points), *benign_items))
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == expected_class
+    assert -7 < data["total_score"] < 0
+
+
+def test_integer_minus_seven_boundary_stays_benign():
+    # Integer control: -7 exactly remains Benign (<= -7 boundary kept).
+    result = run(args(build_evidence(*_BENIGN_MINUS_7)))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Benign"
+    assert data["total_score"] == -7
+
+
+@pytest.mark.parametrize("code", ["PP1", "PP4"])
+def test_single_1e20_caps_to_five(code):
+    # A single huge svi_points must cap at the +5.0 locus budget, not be
+    # zeroed by raw-minus-cap float absorption (defect A2).
+    result = run(args(build_evidence(met_sv(code, "Strong", 1e20))))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "VUS"
+    assert data["total_score"] == 5
+    locus = data["locus_evidence"]
+    assert locus["raw_total"] == 1e20
+    assert locus["applied_total"] == 5.0
+    assert locus["capped"] is True
+    entry = next(c for c in data["point_contributions"] if c["criterion"] == code)
+    assert entry["points"] == 5.0
+
+
+def test_single_1e308_still_caps_cleanly():
+    # One 1e308 alone does not overflow anything: locus raw sum is finite,
+    # applied is 5.
+    result = run(args(build_evidence(met_sv("PP4", "Strong", 1e308))))
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["total_score"] == 5
+    locus = data["locus_evidence"]
+    assert locus["raw_total"] == 1e308
+    assert locus["applied_total"] == 5.0
+
+
+def test_pp1_pp4_1e308_pair_errors_explicitly():
+    # 1e308 + 1e308 overflows the float range: the calculator must return
+    # an explicit status:"error" receipt (never inf/NaN in the payload,
+    # never a silently-zeroed score) and the receipt must remain strictly
+    # JSON-serializable.
+    result = run(
+        args(
+            build_evidence(
+                met_sv("PP1", "Strong", 1e308),
+                met_sv("PP4", "Strong", 1e308),
+            )
+        )
+    )
+    assert result["status"] == "error"
+    lowered = result["error"].lower()
+    assert "overflow" in lowered or "float" in lowered or "finite" in lowered
+    json.dumps(result, allow_nan=False)  # raises on Infinity/NaN tokens
+
+
+def test_integer_receipts_keep_native_int_types():
+    # Integer-only receipts (LP 9 here) keep native int point types:
+    # contributions, pathogenic_points, and total_score (defect A5).
+    result = run(
+        args(
+            build_evidence(
+                met("PM2", "Supporting"),
+                met("PS1", "Strong"),
+                met("PS4", "Strong"),
+            )
+        )
+    )
+    data = result["data"]
+    assert data["classification_status"] == "computed"
+    assert data["classification"] == "Likely Pathogenic"
+    assert type(data["total_score"]) is int
+    assert type(data["pathogenic_points"]) is int
+    assert all(type(c["points"]) is int for c in data["point_contributions"])
+
+
+def test_contribution_sums_reconcile_with_reported_totals():
+    # Consistency invariant: contributions sum to pathogenic+benign and to
+    # total_score; locus applied_total == min(raw_total, cap).
+    cases = (
+        [met("PM2", "Supporting"), met("PP3", "Moderate"),
+         met_sv("PP4", "Moderate", 2.99)],
+        [met_sv("PP1", "Moderate", 1.2), met("PP4", "Strong")],
+        [met_sv("PP1", "Supporting", 0.4), *_BENIGN_MINUS_7],
+    )
+    for met_items in cases:
+        data = run(args(build_evidence(*met_items)))["data"]
+        p = sum(
+            c["points"] for c in data["point_contributions"]
+            if c["direction"] == "pathogenic"
+        )
+        b = sum(
+            c["points"] for c in data["point_contributions"]
+            if c["direction"] == "benign"
+        )
+        assert p == pytest.approx(data["pathogenic_points"])
+        assert b == pytest.approx(data["benign_points"])
+        assert p + b == pytest.approx(data["total_score"])
+        locus = data["locus_evidence"]
+        assert locus["applied_total"] == pytest.approx(
+            min(locus["raw_total"], locus["cap"])
+        )
+
+
+def test_threshold_strings_track_the_scoring_path():
+    # Integer receipts keep the classic integer table; svi_points receipts
+    # carry the continuous fractional intervals in method.thresholds.
+    integer_data = run(args(build_evidence(met("PP4", "Moderate"))))["data"]
+    assert integer_data["method"]["thresholds"]["likely_pathogenic"] == "6 to 9"
+    svi_data = run(args(build_evidence(met_sv("PP4", "Moderate", 3.5))))["data"]
+    thresholds = svi_data["method"]["thresholds"]
+    assert thresholds["pathogenic"] == "total >= 10"
+    assert thresholds["likely_pathogenic"] == "6 <= total < 10"
+    assert thresholds["vus"] == "0 <= total < 6"
+    assert thresholds["likely_benign"] == "-7 < total < 0"
+    assert thresholds["benign"] == "total <= -7"

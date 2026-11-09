@@ -238,6 +238,102 @@ def _run_mcp_session():
                     "ACMG_calculate_classification", arguments=svips_bad,
                 )
 
+                # 2026-11-09 (Batch A): precision, extreme, and negative-
+                # boundary matrix through the real server. precision:
+                # PM2 Supporting + PP3 Moderate + PP4 2.99 = 5.99 must
+                # stay VUS (display rounding may not cross a threshold).
+                # overflow: PP1 1e308 + PP4 1e308 exceeds the float range
+                # and must return an explicit error, never a zeroed score.
+                # negative: PP1 0.4 + benign -7 = -6.6 lands inside the
+                # continuous Likely Benign band (-7 < total < 0).
+                precision_payload = _golden_arguments()
+                precision_payload["evidence"] = [
+                    _ev(c) for c in PATHOGENIC + BENIGN
+                ]
+                for record in precision_payload["evidence"]:
+                    if record["criterion"] == "PM2":
+                        record.update(
+                            status="met", strength="Supporting",
+                            rationale="Absent from population databases",
+                            source_refs=["gnomAD v4.1"],
+                            rule_refs=["SVI PM2 v1.0"],
+                            evidence_ids=["gnomad-absent"],
+                        )
+                    elif record["criterion"] == "PP3":
+                        record.update(
+                            status="met", strength="Moderate",
+                            rationale="Calibrated splicing/missense predictors",
+                            source_refs=["PMID:34770040"],
+                            rule_refs=["Pejaver 2022 PP3"],
+                            evidence_ids=["predictors-pp3"],
+                        )
+                    elif record["criterion"] == "PP4":
+                        record.update(
+                            status="met", strength="Moderate",
+                            svi_points=2.99,
+                            rationale=(
+                                "Table 2 tier points carried at full "
+                                "precision (2.99); 1 + 2 + 2.99 = 5.99"
+                            ),
+                            source_refs=["PMID:30097210"],
+                            rule_refs=["Biesecker 2024 Table 2"],
+                            evidence_ids=["cohort-tier-2.99"],
+                        )
+                precision_ok = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=precision_payload,
+                )
+
+                overflow_payload = _golden_arguments()
+                overflow_payload["evidence"] = [
+                    _ev(c) for c in PATHOGENIC + BENIGN
+                ]
+                for record in overflow_payload["evidence"]:
+                    if record["criterion"] in ("PP1", "PP4"):
+                        record.update(
+                            status="met", strength="Strong",
+                            svi_points=1e308,
+                            rationale="Synthetic overflow probe",
+                            source_refs=["PMID:1"],
+                            rule_refs=["Biesecker 2024 Tables 2/3"],
+                            evidence_ids=[f"overflow-{record['criterion']}"],
+                        )
+                overflow_result = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=overflow_payload,
+                )
+
+                negative_payload = _golden_arguments()
+                negative_payload["evidence"] = [
+                    _ev(c) for c in PATHOGENIC + BENIGN
+                ]
+                for record in negative_payload["evidence"]:
+                    if record["criterion"] == "PP1":
+                        record.update(
+                            status="met", strength="Supporting",
+                            svi_points=0.4,
+                            rationale="Table 3 AR unaffected relative: 0.4",
+                            source_refs=["PMID:30097210"],
+                            rule_refs=["Biesecker 2024 Table 3"],
+                            evidence_ids=["segregation-0.4"],
+                        )
+                    elif record["criterion"] in ("BS1", "BS3", "BP4"):
+                        strength = {
+                            "BS1": "Strong", "BS3": "Moderate",
+                            "BP4": "Supporting",
+                        }[record["criterion"]]
+                        record.update(
+                            status="met", strength=strength,
+                            rationale=f"Synthetic {record['criterion']} met",
+                            source_refs=["PMID:1"],
+                            rule_refs=["Richards 2015"],
+                            evidence_ids=[f"synthetic-{record['criterion']}"],
+                        )
+                negative_ok = await client.call_tool(
+                    "ACMG_calculate_classification",
+                    arguments=negative_payload,
+                )
+
                 return names, {
                     "legal": parse(legal),
                     "rejected": parse(rejected),
@@ -246,6 +342,9 @@ def _run_mcp_session():
                     "svi_ok": parse(svi_ok),
                     "clamp_ok": parse(clamp_ok),
                     "svips_rejected": parse(svips_rejected),
+                    "precision_ok": parse(precision_ok),
+                    "overflow": parse(overflow_result),
+                    "negative_ok": parse(negative_ok),
                 }
 
     return asyncio.run(session())
@@ -331,6 +430,34 @@ def test_mcp_discovers_and_executes_both_new_tools():
     )
     assert "PP1" in svips.get("error", "") and "PP4" in svips.get("error", "")
 
+    # 2026-11-09: precision, overflow, and negative-band boundary.
+    precision = results["precision_ok"]
+    assert precision["status"] == "success", precision
+    precision_data = precision["data"]
+    assert precision_data["classification_status"] == "computed"
+    assert precision_data["classification"] == "VUS"
+    assert precision_data["total_score"] < 6
+    assert abs(precision_data["total_score"] - 5.99) < 1e-9
+
+    overflow = results["overflow"]
+    assert isinstance(overflow, dict), overflow
+    assert overflow.get("status") == "error", (
+        f"1e308 + 1e308 must error explicitly, got: {overflow}"
+    )
+    lowered = overflow.get("error", "").lower()
+    assert "overflow" in lowered or "float" in lowered or "finite" in lowered
+    # The error receipt itself must stay strictly JSON-serializable (no
+    # Infinity/NaN tokens ever reach the wire).
+    json.dumps(overflow, allow_nan=False)
+
+    negative = results["negative_ok"]
+    assert negative["status"] == "success", negative
+    negative_data = negative["data"]
+    assert negative_data["classification_status"] == "computed"
+    assert negative_data["classification"] == "Likely Benign"
+    assert abs(negative_data["total_score"] - (-6.6)) < 1e-9
+    assert -7 < negative_data["total_score"] < 0
+
 
 # --------------------------------------------------------------------------- #
 # 2026-10-23 review (Batch F): compact-mode session over the same real
@@ -409,13 +536,55 @@ def _run_compact_session():
                         "arguments": incomplete_args,
                     },
                 )
-                return names, infos, parse(legal), parse(incomplete)
+
+                # 2026-11-09: fractional precision survives the compact
+                # execute_tool path too (1 + 2 + 2.99 = 5.99 stays VUS).
+                precision_args = _golden_arguments()
+                precision_args["evidence"] = [
+                    _ev(c) for c in PATHOGENIC + BENIGN
+                ]
+                for record in precision_args["evidence"]:
+                    if record["criterion"] == "PM2":
+                        record.update(
+                            status="met", strength="Supporting",
+                            rationale="Absent from population databases",
+                            source_refs=["gnomAD v4.1"],
+                            rule_refs=["SVI PM2 v1.0"],
+                            evidence_ids=["gnomad-absent"],
+                        )
+                    elif record["criterion"] == "PP3":
+                        record.update(
+                            status="met", strength="Moderate",
+                            rationale="Calibrated splicing/missense predictors",
+                            source_refs=["PMID:34770040"],
+                            rule_refs=["Pejaver 2022 PP3"],
+                            evidence_ids=["predictors-pp3"],
+                        )
+                    elif record["criterion"] == "PP4":
+                        record.update(
+                            status="met", strength="Moderate",
+                            svi_points=2.99,
+                            rationale="Table 2 tier at full precision",
+                            source_refs=["PMID:30097210"],
+                            rule_refs=["Biesecker 2024 Table 2"],
+                            evidence_ids=["cohort-tier-2.99"],
+                        )
+                precision = await client.call_tool(
+                    "execute_tool",
+                    arguments={
+                        "tool_name": "ACMG_calculate_classification",
+                        "arguments": precision_args,
+                    },
+                )
+                return names, infos, parse(legal), parse(incomplete), parse(
+                    precision
+                )
 
     return asyncio.run(session())
 
 
 def test_compact_mode_discovers_executes_and_pauses():
-    names, infos, legal, incomplete = _run_compact_session()
+    names, infos, legal, incomplete, precision = _run_compact_session()
 
     # Exactly the five discovery/execution tools -- no full catalog.
     assert set(names) == _COMPACT_TOOLS, names
@@ -439,3 +608,11 @@ def test_compact_mode_discovers_executes_and_pauses():
         reason["reason"]
         for reason in incomplete_data["review_reasons"]
     ]
+
+    # 2026-11-09: fractional precision through compact execute_tool.
+    assert precision["status"] == "success", precision
+    precision_data = precision["data"]
+    assert precision_data["classification_status"] == "computed"
+    assert precision_data["classification"] == "VUS"
+    assert precision_data["total_score"] < 6
+    assert abs(precision_data["total_score"] - 5.99) < 1e-9

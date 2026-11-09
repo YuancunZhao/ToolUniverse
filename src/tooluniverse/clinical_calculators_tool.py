@@ -853,21 +853,38 @@ def _acmg_error(message: str) -> ValueError:
 
 
 def _acmg_num(value: float):
-    """Normalize a point sum for output: integral sums stay int, fractional
-    sums keep one decimal (Biesecker 2024 Tables 2/3 use 0.5/0.4 steps);
-    rounds away float noise before deciding."""
-    rounded = round(value, 6)
-    if float(rounded).is_integer():
-        return int(rounded)
-    return round(rounded, 1)
+    """Normalize a point sum for output: integral sums stay int, every
+    other value keeps its full computed precision. Display rounding is
+    deliberately absent -- rounding 5.99 to "6" moved a real case across
+    the Likely Pathogenic threshold (2026-11-09 acceptance finding), and
+    classification uses this same unrounded value."""
+    if float(value).is_integer():
+        return int(value)
+    return value
+
+
+def _acmg_fsum(values, what: str) -> float:
+    """math.fsum with explicit failure: a sum that overflows the float
+    range (or collapses to inf/nan) must surface as status:"error", never
+    as a zeroed score or a non-JSON-serializable receipt."""
+    try:
+        total = math.fsum(values)
+    except OverflowError as exc:
+        raise _acmg_error(f"{what} overflows the float range") from exc
+    if not math.isfinite(total):
+        raise _acmg_error(f"{what} is not a finite number")
+    return total
 
 
 def _acmg_classify(total: float) -> str:
     """Map a Tavtigian 2020 point total to its five-tier classification.
 
-    Boundary comparisons are continuous (>= 10 / >= 6 / >= 0 / >= -6), so
-    fractional totals from svi_points classify on the same calibrated
-    cut points the integer ladder uses.
+    Boundary comparisons are continuous: Pathogenic >= 10, Likely
+    Pathogenic >= 6, VUS >= 0, Likely Benign > -7, Benign <= -7. Integer
+    totals keep their classic classes (-6 -> Likely Benign, -7 -> Benign);
+    the -7 < total < 0 band extends Likely Benign to fractional totals
+    (e.g. PP1 0.4 + benign -7 = -6.6), a project decision for svi_points
+    input, not a new SVI recommendation.
     """
     if total >= 10:
         return "Pathogenic"
@@ -875,7 +892,7 @@ def _acmg_classify(total: float) -> str:
         return "Likely Pathogenic"
     if total >= 0:
         return "VUS"
-    if total >= -6:
+    if total > -7:
         return "Likely Benign"
     return "Benign"
 
@@ -1179,13 +1196,15 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
         m for m in met_records if m["criterion"] != "BA1"
     ]  # BA1 never converts to points
 
-    def _raw_points(record: Dict[str, Any]) -> float:
+    def _raw_points(record: Dict[str, Any]):
         # A met PP1/PP4 record may carry svi_points (validated above);
         # when present it takes over that record's arithmetic and the
-        # strength label stays descriptive.
+        # strength label stays descriptive. Values are returned as-is:
+        # integer ladder points keep their int type (old receipts never
+        # carried floats), svi_points keep their computed precision.
         if "svi_points" in record:
-            return float(record["svi_points"])
-        return float(_ACMG_STRENGTH_POINTS[record["strength"]])
+            return record["svi_points"]
+        return _ACMG_STRENGTH_POINTS[record["strength"]]
 
     uses_svi_points = any("svi_points" in m for m in scored)
 
@@ -1210,10 +1229,14 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
     # ("evidence is capped at +5.0 points for all locus evidence"), it does
     # not pause. The integer-only path keeps its fail-closed pause below
     # (Table 4's legal integer combinations never exceed +5, so an integer
-    # breach signals a mis-encoded strength). When the raw sum exceeds the
-    # cap, the excess is removed from PP4 first, then PP1 -- a documented,
-    # deterministic allocation the paper itself does not prescribe; the
-    # raw values stay visible in svi_points and in the disclosure block.
+    # breach signals a mis-encoded strength).
+    # 2026-11-09: the cap is now applied as a POSITIVE budget allocation
+    # (budget 5.0; per code, PP1 first then PP4: applied = min(raw,
+    # budget); budget -= applied) instead of subtracting the excess back
+    # out of the raw total -- at 1e20 the subtraction was absorbed by the
+    # float and the entry was zeroed rather than capped. The allocation
+    # order (keep PP1, then PP4) matches the previous accounting; the raw
+    # values stay visible in svi_points and in the disclosure block.
     locus_evidence = None
     if uses_svi_points:
         locus_records = {
@@ -1221,23 +1244,24 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
             for m in scored
             if m["criterion"] in ("PP1", "PP4")
         }
-        raw_total = sum(_raw_points(m) for m in locus_records.values())
+        raw_total = _acmg_fsum(
+            (_raw_points(m) for m in locus_records.values()),
+            "the PP1+PP4 raw svi_points sum",
+        )
         applied_total = min(raw_total, 5.0)
         capped = raw_total > 5.0
         if capped:
-            remaining = round(raw_total - 5.0, 6)
-            for code in ("PP4", "PP1"):
-                if remaining <= 0:
-                    break
+            budget = 5.0
+            for code in ("PP1", "PP4"):
                 entry = next(
                     (c for c in contributions if c["criterion"] == code),
                     None,
                 )
                 if entry is None:
                     continue
-                take = min(entry["points"], remaining)
-                entry["points"] = round(entry["points"] - take, 6)
-                remaining = round(remaining - take, 6)
+                applied = min(_raw_points(locus_records[code]), budget)
+                budget -= applied
+                entry["points"] = applied
         locus_evidence = {
             "pp1_points": _acmg_num(_raw_points(locus_records["PP1"]))
             if "PP1" in locus_records
@@ -1251,13 +1275,15 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
             "capped": capped,
         }
 
-    pathogenic_points = sum(
-        c["points"] for c in contributions if c["direction"] == "pathogenic"
+    pathogenic_points = _acmg_fsum(
+        (c["points"] for c in contributions if c["direction"] == "pathogenic"),
+        "the pathogenic point sum",
     )
-    benign_points = sum(
-        c["points"] for c in contributions if c["direction"] == "benign"
+    benign_points = _acmg_fsum(
+        (c["points"] for c in contributions if c["direction"] == "benign"),
+        "the benign point sum",
     )
-    total = pathogenic_points + benign_points
+    total = _acmg_fsum([pathogenic_points, benign_points], "the total point score")
 
     uncounted = [
         {
@@ -1312,9 +1338,19 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
                 "3-3.9 and >=5 tiers have no single-code label)"
             ),
             "locus_cap": (
-                "+5.0 on the PP1+PP4 sum, clamped with disclosure; the "
+                "+5.0 on the PP1+PP4 sum, clamped with disclosure (the "
+                "budget is allocated to PP1 first, then PP4); the "
                 "integer-only path keeps its fail-closed pause"
             ),
+        }
+        # Fractional totals classify on the continuous extension of the
+        # calibrated cut points (integer receipts keep the classic table).
+        base["method"]["thresholds"] = {
+            "pathogenic": "total >= 10",
+            "likely_pathogenic": "6 <= total < 10",
+            "vus": "0 <= total < 6",
+            "likely_benign": "-7 < total < 0",
+            "benign": "total <= -7",
         }
         base["locus_evidence"] = locus_evidence
 
@@ -1438,8 +1474,9 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
     # combinations never exceed +5, so this signals a mis-encoded
     # strength). With svi_points the cap was already CLAMPED above per the
     # paper's own wording, and the disclosure block carries the math.
-    locus_points = sum(
-        c["points"] for c in contributions if c["criterion"] in ("PP1", "PP4")
+    locus_points = _acmg_fsum(
+        (c["points"] for c in contributions if c["criterion"] in ("PP1", "PP4")),
+        "the PP1+PP4 point sum",
     )
     if not uses_svi_points and locus_points > 5:
         review_reasons.append(
@@ -1474,8 +1511,9 @@ def _acmg_classification(a: Dict[str, Any]) -> Dict[str, Any]:
         )
     # Pejaver et al. 2022: the summed strength of PP3 and PM1 must not
     # exceed Strong (= 4 points in the Tavtigian 2020 system).
-    pp3_pm1_points = sum(
-        c["points"] for c in contributions if c["criterion"] in ("PP3", "PM1")
+    pp3_pm1_points = _acmg_fsum(
+        (c["points"] for c in contributions if c["criterion"] in ("PP3", "PM1")),
+        "the PP3+PM1 point sum",
     )
     if pp3_pm1_points > 4:
         review_reasons.append(
