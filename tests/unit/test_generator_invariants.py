@@ -187,3 +187,66 @@ def test_static_registry_main_writes_the_discovered_mapping():
     assert namespace["STATIC_LAZY_REGISTRY"] == registry
     assert content.index('"AlphaTool"') < content.index('"ZetaTool"')
     assert write_text.call_args.kwargs == {"encoding": "utf-8"}
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-09 closeout (Batch A): the ACTIVE build entry (`tu build` ->
+# tooluniverse.generate_tools) must be the source of the ACMG wrapper and
+# of the metadata hash in tools/.tool_metadata.json. A previous round
+# synced the wrapper from the OTHER generator (generate_coding_api) and
+# left the metadata hash stale -- `tu build` would see ACMG as
+# hash_mismatch and rewrite it.
+# --------------------------------------------------------------------------- #
+_TOOL_NAME = "ACMG_calculate_classification"
+_TOOLS_JSON = PACKAGE_DIR.parent / "tooluniverse" / "data" / "clinical_calculators_tools.json"
+_REPO_WRAPPER = PACKAGE_DIR / "tools" / f"{_TOOL_NAME}.py"
+_REPO_METADATA = PACKAGE_DIR / "tools" / ".tool_metadata.json"
+
+
+def _acmg_config():
+    import json
+
+    configs = json.loads(_TOOLS_JSON.read_text(encoding="utf-8"))
+    return next(c for c in configs if c.get("name") == _TOOL_NAME)
+
+
+def test_active_build_wrapper_matches_repository_wrapper(tmp_path):
+    # AST comparison ignores position/format/comments but keeps signatures,
+    # docstrings, and call bodies: the repository wrapper must be exactly
+    # what `tu build`'s generator (generate_tools.generate_tool_file)
+    # emits for the current calculator JSON config.
+    import json as _json
+
+    gen = _load("generator_invariants_generate_tools", "generate_tools.py")
+    generated = gen.generate_tool_file(_TOOL_NAME, _acmg_config(), tmp_path)
+    ok, issues = gen.validate_generated_code(
+        _TOOL_NAME, _acmg_config(), generated
+    )
+    assert ok, issues
+    repo_tree = ast.parse(_REPO_WRAPPER.read_text(encoding="utf-8"))
+    gen_tree = ast.parse(
+        Path(generated).read_text(encoding="utf-8")
+    )
+    assert ast.dump(repo_tree, include_attributes=False) == ast.dump(
+        gen_tree, include_attributes=False
+    ), (
+        "repository ACMG wrapper differs from the active build entry's "
+        "output (tu build uses generate_tools, not generate_coding_api)"
+    )
+    del _json  # imported for clarity of the fixture's source only
+
+
+def test_active_build_metadata_hash_matches_repository_metadata():
+    # The hash in tools/.tool_metadata.json must equal the official
+    # build_optimizer.calculate_tool_hash of the current config; otherwise
+    # `tu build` reports the tool as hash_mismatch and regenerates it.
+    import json
+
+    from tooluniverse.build_optimizer import calculate_tool_hash
+
+    metadata = json.loads(_REPO_METADATA.read_text(encoding="utf-8"))
+    expected = calculate_tool_hash(_acmg_config())
+    assert metadata.get(_TOOL_NAME) == expected, (
+        f"metadata hash for {_TOOL_NAME} is {metadata.get(_TOOL_NAME)!r} "
+        f"but the current config hashes to {expected!r}"
+    )
