@@ -1394,14 +1394,29 @@ def test_cspec_gene_centric_mainline_exact_match_and_binding(
     # Any given HGNC symbol: case-insensitive exact match, and the
     # gene-disease-inheritance binding survives into the receipt so the
     # workflow can adjudicate applicability against the queried disease.
+    # The detail payload is constructed to MATCH the index record (same
+    # spec id, rule-set id, gene, version, Released status, VCEP label)
+    # so the success path is genuinely complete: criteria parsed, no
+    # material gaps, no fetch/structure failure flags. All bindings here
+    # are synthetic -- the test verifies they are preserved verbatim, it
+    # does not assert that any synthetic gene-disease-inheritance
+    # combination is a clinical fact.
+    rule_set_id = "9" + spec_id[-2:]
     record = _index_record(
         spec_id=spec_id,
         gene=gene,
         disease_label=disease_label,
         inheritance=inheritance,
-        rule_set_id="9" + spec_id[-2:],
+        rule_set_id=rule_set_id,
     )
-    _patch(monkeypatch, _index(record))
+    detail = _detail_payload(spec_id=spec_id, rule_set_id=rule_set_id)
+    detail["label"] = f"Synthetic {gene} specification Version 2.1"
+    detail["ruleSets"][0]["genes"] = [{"@type": "Gene", "label": gene}]
+    detail["affiliation"]["label"] = "Synthetic VCEP"
+    record["affiliation"]["label"] = "Synthetic VCEP"
+    requested = _patch(
+        monkeypatch, _index(record), detail_payloads={spec_id: detail}
+    )
 
     result = _tool().run({"gene": gene.lower()})
 
@@ -1410,13 +1425,34 @@ def test_cspec_gene_centric_mainline_exact_match_and_binding(
     assert result["total"] == 1
     entry = result["data"][0]
     assert entry["specification_id"] == spec_id
+    assert entry["gene"] == gene
     assert entry["status"] == "Released"
+    assert entry["version"] == "2.1"
+    assert entry["vcep"] == "Synthetic VCEP"
     binding = entry["rule_sets"][0]["genes"][0]["diseases"][0]
+    assert entry["rule_sets"][0]["genes"][0]["symbol"] == gene
     assert binding["mondo_id"] == disease_mondo
     assert binding["inheritance"] == [inheritance]
+    # A matched success case must carry fully parsed detail material:
+    # non-empty criteria, no gaps, no failure flags, no partial failures,
+    # and the assertion-method URL present. (Not a fixed count: the
+    # helper's valid criteria set is enough -- no 28-entry hard constraint.)
+    assert entry["criterion_modifications"], "criteria must not be empty"
+    assert entry["missing_materials"] == []
+    assert entry.get("detail_fetch_failed") is not True
+    assert entry.get("detail_structure_failed") is not True
+    assert not result.get("partial_failures")
+    assert entry["assertion_method_url"]
     # No candidates: a clean match plus no unbound specs must not invent
     # unresolved-scope entries.
     assert result["unresolved_scope_specs"] == []
+    # Request discipline: the index plus exactly the matched detail URL --
+    # synthetic bindings go out, nothing else is fetched.
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        f"https://cspec.genome.network/cspec/api/"
+        f"SequenceVariantInterpretation/id/{spec_id}",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1436,7 +1472,7 @@ def test_cspec_gene_centric_mainline_no_match_is_generic_guidance(
         disease_label=disease_label,
         inheritance=inheritance,
     )
-    _patch(monkeypatch, _index(record))
+    requested = _patch(monkeypatch, _index(record))
 
     result = _tool().run({"gene": gene + "X"})
 
@@ -1446,6 +1482,10 @@ def test_cspec_gene_centric_mainline_no_match_is_generic_guidance(
     assert result["unresolved_scope_specs"] == []
     assert "No Released" in result["note"]
     assert "generic" in result["note"]
+    # No match -> no detail request: only the index URL was fetched.
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+    ]
 
 
 def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
@@ -1455,7 +1495,9 @@ def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
     # synthetic TSC2 spec whose index record lists no genes is an
     # unresolved-scope candidate -- kept alongside the explicit match,
     # neither dropped as a duplicate nor counted as a match. The API not
-    # listing genes says nothing about applicability.
+    # listing genes says nothing about applicability. The BOUND spec gets
+    # a matching detail (GNTST005 / rule-set 992 / TSC2) so its entry is
+    # a complete success; the candidate must NOT have its detail pulled.
     unbound = _index_record(
         spec_id="GNTST099",
         gene="TSC2",
@@ -1468,17 +1510,41 @@ def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
         disease_label="MONDO:0001734",
         rule_set_id="992",
     )
-    _patch(monkeypatch, _index(bound, unbound))
+    bound_detail = _detail_payload(spec_id="GNTST005", rule_set_id="992")
+    bound_detail["label"] = "Synthetic TSC2 specification Version 2.1"
+    bound_detail["ruleSets"][0]["genes"] = [
+        {"@type": "Gene", "label": "TSC2"}
+    ]
+    requested = _patch(
+        monkeypatch,
+        _index(bound, unbound),
+        detail_payloads={"GNTST005": bound_detail},
+    )
 
     result = _tool().run({"gene": "TSC2"})
 
     assert result["status"] == "success"
     assert [e["specification_id"] for e in result["data"]] == ["GNTST005"]
     assert result["total"] == 1  # candidates never count as matches
+    # The explicit match is complete: criteria parsed, no gaps, no flags.
+    entry = result["data"][0]
+    assert entry["criterion_modifications"], "criteria must not be empty"
+    assert entry["missing_materials"] == []
+    assert entry.get("detail_fetch_failed") is not True
+    assert entry.get("detail_structure_failed") is not True
+    assert not result.get("partial_failures")
+    assert entry["assertion_method_url"]
     candidates = result["unresolved_scope_specs"]
     assert [c["specification_id"] for c in candidates] == ["GNTST099"]
     assert candidates[0]["scope_reason"] == "gene_binding_unavailable"
     assert candidates[0]["rule_set_ids"] == ["991"]
+    # Request discipline: index + the BOUND spec's detail only -- the
+    # candidate's detail URL is never fetched.
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        "https://cspec.genome.network/cspec/api/"
+        "SequenceVariantInterpretation/id/GNTST005",
+    ]
     # The note must keep the response honest: unresolved, no premature
     # "classify under generic" directive.
     assert "unresolved" in result["note"]
