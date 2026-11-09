@@ -32,6 +32,14 @@
    - 不含 svi_points 的 LP/9、VUS/4 回执贡献分保持整数类型
    - 布尔、NaN、无穷、字符串、null、非 PP1/PP4 携带 svi_points 仍被拒绝
 10. 当前 ACMG metadata hash 已与配置不一致。使用官方生成逻辑在临时目录核对，只回填 ACMG 包装器的实际变化及 metadata 对应项。
+    > **2026-11-09 closeout 勘误（D 批）：** 本条混淆了两项不同的检查——
+    > `.tool_metadata.json` 里的配置 hash（`build_optimizer.calculate_tool_hash`
+    > 对归一化配置的 MD5）与包装器 Python 文件内容是各自独立的比对。
+    > 本轮执行时只在临时目录用**另一生成器**（`generate_coding_api`）核
+    > 对并回填了包装器，实际构建入口（`cli.cmd_build` →
+    > `generate_tools.generate_tool_file`）生成的包装器与仓库 metadata
+    > hash **均未对齐**，不能视为已修复。真正的对齐由 closeout A 批
+    > （`6d8318c3`）完成并另有记录。
 11. SDK/compact MCP stdio 测试补充精度、极值与负值边界用例。
 
 提交信息：`fix(acmg): preserve fractional scores and stabilize locus caps`
@@ -62,6 +70,17 @@
 
 1. 完整定向回归（先跑改动面测试，再跑全量命令），命令：
 
+> **2026-11-09 closeout 勘误（D 批）：** 下方原命令块为本计划落盘时的
+> **错误转录**——原批准命令的 18 个入口在本 worktree 全部存在（17 个
+> 显式路径 + 1 个 `tests/unit/test_clinvar_*.py` 通配，shell 展开为
+> 40 个测试文件），与当轮实际执行的 2026-11-03 归档同口径展开清单
+> 完全一致。错误出在把命令抄写进本文件时写错了 10 个入口，**不是**
+> "姊妹 worktree 命名"；当时据此作出的归因（见运行文档与实施记录）
+> 已由 closeout D 批行内勘误更正。当时真实执行结果（1108 collected /
+> 1107 passed / 1 skipped / exit 0）保持原样，不重写。正确命令见
+> `docs/superpowers/plans/2026-11-09-acceptance-closeout.md` 第 5 节，
+> 本处保留错误转录仅作勘误锚点，**不要执行**下方命令块。
+
 ```bash
 env -u PYTHONPATH PATH=/usr/bin:/bin:/usr/sbin:/sbin PYTHONDONTWRITEBYTECODE=1 \
   .venv/bin/python -B -m pytest --no-cov --maxfail=0 -p no:cacheprovider \
@@ -86,10 +105,15 @@ env -u PYTHONPATH PATH=/usr/bin:/bin:/usr/sbin:/sbin PYTHONDONTWRITEBYTECODE=1 \
 ```
 
 2. 记录实际执行的展开文件清单、collected 数、passed/failed/skipped 数字。不得预填通过数；回归前必须记录命令实际展开的文件数。
-3. Ruff 只查本批改动文件；对 `ec350710` 与 `212ff57` 分别执行 `git diff --check`。
+3. Ruff 只查本批改动文件；对 `ec350710` 与 `2128ff57`（本行原误写为
+   `212ff57`，closeout D 批勘误）分别执行 `git diff --check`。
 4. 冻结面核验：依赖与锁文件、ClinVar/CSpec 生产逻辑、MCP 默认配置、其他工具配置不变。将“不含 svi_points 回执逐字节不变”的说明改成“保持旧接口语义与整数类型兼容”。
 5. 在线查询 MYOC、LDLR、BRCA1（使用本 worktree venv 的 `ClinGen_search_cspec`）：记录实际 spec id、版本、绑定疾病与遗传方式、criteria 修改点；不把当前 ID、版本、数量写成长期固定断言。再查 TSC2 与一个无匹配基因：记录空匹配与候选行为；查询失败必须明确报错，不能归为无规范。
-6. 独立宿主可用则跑三个固定场景（P/LP/VUS）；宿主不可用则明确写“未验收”，不安装宿主、不改全局配置。工具链路测试不冒充 LLM 行为验收。
+6. 独立宿主可用则跑三个固定场景（**确认独立／身份未知／共享病例**，即
+   PP4/PS4 病例独立性的三态场景；本行原误写为"P/LP/VUS"，closeout D 批
+   勘误——场景维度是病例独立性三态，不是分类结果三档）；宿主不可用则
+   明确写“未验收”，不安装宿主、不改全局配置。工具链路测试不冒充 LLM
+   行为验收。
 7. 证据归档目录：`temp_docs_and_tests/benchmark_tracking/2026-11-09-acceptance-remediation/`，保存完整工具回执（JSON 归一化，日期戳）。
 8. 追加至现有运行文档和实施记录（`docs/acmg_svi_cspec_local_run.md`、`docs/superpowers/plans/2026-09-09-acmg-svi-cspec-lightweight-IMPLEMENTATION.md`），不新建平行记录体系。
 

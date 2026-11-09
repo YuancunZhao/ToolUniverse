@@ -855,9 +855,14 @@ def _acmg_error(message: str) -> ValueError:
 def _acmg_num(value: float):
     """Normalize a point sum for output: integral sums stay int, every
     other value keeps its full computed precision. Display rounding is
-    deliberately absent -- rounding 5.99 to "6" moved a real case across
-    the Likely Pathogenic threshold (2026-11-09 acceptance finding), and
-    classification uses this same unrounded value."""
+    deliberately absent -- at ec350710 the one-decimal rounding of a
+    1+2+2.99=5.99 total produced a self-contradictory receipt
+    (classification "VUS" computed on the unrounded value beside a
+    total_score of 6.0, inside the Likely Pathogenic band; a synthetic
+    contract counterexample, not a real clinical case, and not an
+    actual Likely Pathogenic return). Classification and total_score
+    now both use this same unrounded value (2026-11-09 acceptance
+    finding; provenance corrected in the 2026-11-09 closeout)."""
     if float(value).is_integer():
         return int(value)
     return value

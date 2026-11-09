@@ -1278,8 +1278,12 @@ def test_svi_points_absent_keeps_receipt_shape_unchanged():
 #
 # Acceptance findings being remediated here:
 #   A1. _acmg_num rounded totals to one decimal -- 1 + 2 + 2.99 = 5.99 was
-#       reported as 6 and classified Likely Pathogenic: display rounding
-#       moved a case across the calibrated threshold.
+#       reported as 6. (Provenance corrected 2026-11-09 closeout: ec350710
+#       actually returned VUS with total_score 6.0 -- a self-contradictory
+#       receipt, since classification used the unrounded 5.99 while the
+#       reported score sat in the LP band. A synthetic contract
+#       counterexample, not a real clinical case, and not an actual
+#       Likely Pathogenic return.)
 #   A2. The locus clamp subtracted its way back from the raw total
 #       (raw - 5.0, then drain entries). At 1e20 the subtraction is
 #       absorbed by the float and the entry is zeroed instead of capped:
@@ -1296,8 +1300,10 @@ import json  # noqa: E402  (local to the 2026-11-09 acceptance block)
 
 
 def test_fractional_2_99_is_not_rounded_up_to_six():
-    # 1 + 2 + 2.99 = 5.99 -> VUS. Display rounding must never move a
-    # total across a threshold (the acceptance defect: 5.99 -> "6" -> LP).
+    # 1 + 2 + 2.99 = 5.99 -> VUS. The old defect (ec350710): the receipt
+    # said total_score 6.0 while classification stayed VUS -- score and
+    # classification contradicted each other. Never round the reported
+    # total away from the value the classification used.
     result = run(
         args(
             build_evidence(

@@ -808,7 +808,14 @@ skill workflow) → this record. Plan:
 
 **Batch A `53f11837` — numeric contract:** removed `_acmg_num`'s
 one-decimal display rounding (1+2+2.99 = 5.99 was reported as 6 and
-classified LP); all sums now `math.fsum` behind `_acmg_fsum`, which
+classified LP; **erratum, 2026-11-09 closeout D:** the ec350710 re-run
+receipt — archived under this round's `closeout/` evidence — shows the
+old calculator actually returned **VUS with total_score 6.0**: a
+self-contradictory receipt, because classification used the unrounded
+5.99 while the reported score sat inside the LP band. It never
+returned Likely Pathogenic, and the case is a synthetic contract
+counterexample, not a real clinical case); all sums now `math.fsum`
+behind `_acmg_fsum`, which
 turns overflow/non-finite aggregates (PP1 1e308 + PP4 1e308) into an
 explicit `status:"error"` instead of a silently-zeroed score; the locus
 cap switched from subtract-the-excess (float-absorbed at 1e20, zeroing
@@ -839,12 +846,26 @@ official sync script into a temp DEST, then targeted backfill); the
 generated ACMG wrapper was re-synced from the official generator in a
 temp dir after each description change (this was the pre-existing
 "ACMG metadata hash" drift the plan called out — the wrapper had not
-been regenerated since `559002a1d`).
+been regenerated since `559002a1d`; **erratum, 2026-11-09 closeout D:**
+this explanation conflated two distinct checks — the
+`.tool_metadata.json` config hash (`build_optimizer.calculate_tool_hash`
+over the normalized config) and the wrapper Python content. The temp-dir
+regeneration this round used a *different* generator
+(`generate_coding_api`), not the active build entry
+(`cli.cmd_build` → `generate_tools.generate_tool_file`); the repository
+wrapper and the metadata hash both remained misaligned, and the real
+alignment landed in the closeout Batch A commit `6d8318c3`).
 
 **Regression (receipts in
 `temp_docs_and_tests/benchmark_tracking/2026-11-09-acceptance-remediation/`,
 gitignored):** the plan's 18-argument command names 10 paths that do not
-exist in this worktree (sibling-worktree naming); the executed scope is
+exist in this worktree (sibling-worktree naming; **erratum, 2026-11-09
+closeout D:** that attribution was wrong — the *originally approved*
+command's 18 entries (17 explicit paths + the `test_clinvar_*.py` glob)
+all exist in this worktree and expand to the same 40-file scope that
+was actually executed; the 10 bad paths were an on-disk transcription
+error in the remediation plan document, not files borrowed from a
+sister worktree); the executed scope is
 the same 40-file expansion archived by the 2026-11-03 round (count-line
 stripped). Result at HEAD `adb9ca34`: **1108 collected, 1107 passed,
 1 skipped (pre-existing PyMuPDF skip), 0 failed, exit 0** — +27 over
@@ -867,7 +888,10 @@ specification" judgment — an empty match is success-with-candidates,
 never an error and never "no spec". No query failed this round; a
 failure would have been recorded as an explicit error.
 
-**Independent LLM host acceptance (cases P/LP/VUS): NOT PERFORMED** —
+**Independent LLM host acceptance (cases confirmed-independent /
+identity-unknown / shared-case — the PP4/PS4 proband-independence three
+states; originally mislabeled "P/LP/VUS", corrected by the 2026-11-09
+closeout D): NOT PERFORMED** —
 no independent host credentials in the executing environment; per plan
 this stays unaccepted and the round is not marked overall-accepted.
 Tool-path tests above are pipeline checks, not LLM behavior acceptance.
@@ -879,3 +903,95 @@ serialization is no longer promised after the rounding removal), and
 its "keep one decimal for fractional totals" clause is marked as the
 defect this round removed — corrections are appended inline in that
 plan document, this is the only record system.
+
+## 2026-11-09 acceptance closeout: provenance corrections, build alignment, full-receipt CSpec tests
+
+Round start `1ba32daf` (clean); commits this round: `6d8318c3` (A,
+active-build wrapper + metadata alignment) → `85ddbf0b` (B, consistent
+CSpec success-case details) → `e4119ead` (C, svi_points clauses in SKILL
+steps 4/6) → this record's D commit. Plan:
+`docs/superpowers/plans/2026-11-09-acceptance-closeout.md` (committed
+with A).
+
+**Batch A `6d8318c3`:** the repository ACMG wrapper is now the artifact
+the ACTIVE build entry produces (`cli.cmd_build` →
+`generate_tools.generate_tool_file`), not `generate_coding_api` output;
+`.tool_metadata.json`'s single ACMG entry hash updated to match
+(`build_optimizer.calculate_tool_hash`; the other 2745 entries are
+byte-identical). Two new `test_generator_invariants.py` tests pin both
+checks (AST compare against a temp-dir regeneration; hash recompute with
+no hardcoded value) and were confirmed failing before the backfill.
+
+**Batch B `85ddbf0b`:** the five parameterized gene-centric success
+cases and the unbound-candidate coexistence case now pass explicitly
+matching details and assert the full healthy receipt (bindings preserved,
+non-empty criterion_modifications, `missing_materials == []`, no
+detail_fetch_failed/detail_structure_failed, no partial_failures,
+assertion_method_url present, requested-URL discipline). The new
+assertions were first reproduced failing against the old default fixture
+(5 distinct gaps via the F03 index-vs-detail contradiction); production
+query code untouched. CSpec file 94/94.
+
+**Batch C `e4119ead`:** SKILL.md step 4 now says "seven required fields"
+plus the verbatim optional-`svi_points` clause (met PP1/PP4 only,
+positive finite, sourced raw SVI points; strength stays a descriptive
+label; no other evidence-record keys), and step 6 carries the verbatim
+point-valued-input exception. Step 5's PP4/PS4 three-state flow and all
+calculator boundaries unchanged. A new `_skill_step` extractor in
+`test_acmg_skill_evals.py` requires steps 4 and 6 to EACH name PP1, PP4,
+and svi_points — confirmed failing on the pre-edit document. Claude copy
+synced byte-identical; Codex copy rebuilt via the official sync script
+(temp DEST, targeted backfill), frontmatter normalization preserved;
+evals/ not distributed; contract checks 327/327.
+
+**Batch D (this commit) — provenance corrections:** inline errata in the
+remediation plan, this run doc, and the implementation record: (1) the
+"10 paths / sibling-worktree naming" attribution was wrong — the
+originally approved command's 18 entries all exist and expand to the same
+40-file scope actually executed; the bad paths were an on-disk
+transcription error in the plan document; (2) `212ff57` was a typo for
+`2128ff57` (also in the implementation record's own diff --check line);
+(3) host-acceptance scenarios are the PP4/PS4 proband-independence three
+states (confirmed independent / identity unknown / shared case), not
+"P/LP/VUS"; (4) the metadata explanation conflated the config hash and
+wrapper-content checks, and the prior round's temp-dir regeneration used
+`generate_coding_api` — the real alignment is Batch A here; (5) the
+ec350710 counterexample actually returned **VUS with total_score 6.0**
+(self-contradictory receipt; never Likely Pathogenic; synthetic contract
+counterexample, not a real clinical case) — proven by an isolated re-run
+of the old calculator (receipt archived) and now stated correctly in the
+`_acmg_num` docstring and the test comment block; (6)
+`03-online-cspec/summary.txt` regenerated with correct field names
+(entry.gene, rule_sets[].genes[].symbol/.diseases,
+criterion_modifications, assertion_method_url, specification) — the old
+summary's gene=None / assertion_method=False / raw_specification_fields=0
+were extraction bugs, not API gaps; raw JSON byte-unchanged (md5s
+archived), pre-correction summary archived; (7) META.txt carries the
+erratum; historical stdout/stderr/JUnit/exit receipts untouched.
+
+**Regression (receipts in
+`temp_docs_and_tests/benchmark_tracking/2026-11-09-acceptance-remediation/closeout/`,
+gitignored):** the closeout plan's exact 18-entry command, expanded file
+list recorded before execution (40 files, none missing). Result at the
+pre-D HEAD `e4119ead`: **1110 tests, 1109 passed, 1 skipped
+(pre-existing PyMuPDF skip), 0 failed, exit 0** (+2 over the remediation
+round: exactly the two new generator-invariant tests). Ruff clean on the
+round's five changed Python files; `git diff --check` clean on
+`1ba32daf..HEAD`, `2128ff57..HEAD`, and the uncommitted diff. Frozen
+surfaces unchanged (uv.lock, pyproject.toml, clinvar/clingen/tools/
+registry); metadata diff = exactly one entry; wrapper diff = exactly one
+file; skill diff = exactly the ACMG SKILL.md in three copies; the
+calculator's working-tree diff is provably the `_acmg_num` docstring
+only (byte-identity check after reverting the docstring).
+
+**Acceptance layers this round (not a full-repo claim):**
+1. Code and automation acceptance — the 40-file targeted regression
+   above plus the contract checks; PASS as recorded.
+2. Historical online-receipt re-audit — summary re-extraction from the
+   archived raw JSON; PASS (fields correct, JSON untouched); point-in
+   time 2026-11-09, not a long-term assertion.
+3. Independent LLM host acceptance (confirmed-independent /
+   identity-unknown / shared-case): **NOT PERFORMED** — no independent
+   host credentials in the executing environment; no host installed, no
+   credential search; tool-path tests are not LLM behavior acceptance.
+   The round is not marked overall-accepted.
