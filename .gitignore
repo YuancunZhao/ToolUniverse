@@ -227,3 +227,4 @@ TOOL_SWEEP_TRIAGE.md
 
 # Local-only runtime artifact from test_new_tools.py
 tool_relationship_graph.json
+* 2.*

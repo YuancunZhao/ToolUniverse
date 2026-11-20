@@ -1716,7 +1716,7 @@ def test_gn015_mtdna_rule_set_excluded_for_nuclear_gene(
     assert exclusion["hgnc"]["location"] == hgnc_location
     assert exclusion["hgnc"]["hgnc_id"] == hgnc_id
     assert (
-        "https://cspec.genome.network/cspec/ui/svi/doc/GN015"
+        "https://cspec.genome.network/cspec/ui/svi/doc/GN015?version=1.0"
         in exclusion["sources"]
     )
     assert (
@@ -2030,9 +2030,10 @@ def test_label_derived_version_does_not_gate_exclusion(monkeypatch):
     assert not any("rest.genenames.org" in u for u in requested)
 
 
-def test_approved_plus_withdrawn_mix_excludes(monkeypatch):
-    # Uniqueness counts Approved records only: one Approved exact match
-    # plus a Withdrawn doc is still a unique approved record.
+def test_approved_plus_withdrawn_mix_keeps_candidate(monkeypatch):
+    # The tightened gate requires integer numFound == 1: a response with
+    # one Approved and one Withdrawn doc reports numFound 2, which is not
+    # the single-record confirmation the exclusion demands.
     _patch(
         monkeypatch,
         _index(_gn015_record()),
@@ -2045,10 +2046,10 @@ def test_approved_plus_withdrawn_mix_excludes(monkeypatch):
     result = _tool().run({"gene": "MYOC"})
 
     assert result["status"] == "success"
-    assert result["unresolved_scope_specs"] == []
-    assert result["scope_exclusions"][0]["excluded_rule_set_ids"] == [
-        "135641398"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
     ]
+    assert "scope_exclusions" not in result
 
 
 def test_gn015_empty_rulesets_keeps_candidate_without_hgnc_query(monkeypatch):
@@ -2079,3 +2080,121 @@ def test_hgnc_request_sets_json_accept_header(monkeypatch):
     (url, headers), = requested.hgnc_calls
     assert url == "https://rest.genenames.org/fetch/symbol/MYOC"
     assert headers == {"Accept": "application/json"}
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-20 release tightening: the exclusion gates accept only exact
+# evidence shapes. The index version must BE the string "1.0" (a JSON
+# number 1.0 is not the verified index fact); HGNC must report integer
+# numFound == 1 (missing, non-integer, boolean or multi-record responses
+# keep the candidate); and the location must FULLY match a nuclear
+# chromosome arm or cytogenetic band of 1-22/X/Y -- trailing garbage,
+# translocation shorthand and out-of-range chromosomes are not nuclear
+# confirmations. scope_exclusions cites the fixed-version specification
+# page (GN015?version=1.0) and the HGNC record.
+# --------------------------------------------------------------------------- #
+def test_numeric_index_version_keeps_candidate_without_hgnc_query(monkeypatch):
+    # A JSON number 1.0 is not the string "1.0" the pin was verified
+    # against; coercion through str() would smuggle it in.
+    record = _gn015_record()
+    record["version"] = 1.0  # float, not string
+    requested = _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+    assert not any("rest.genenames.org" in u for u in requested)
+
+
+def _raw_hgnc_route(monkeypatch, num_found):
+    payload = _hgnc_payload([_hgnc_doc()])
+    if num_found is _MISSING:
+        del payload["response"]["numFound"]
+    else:
+        payload["response"]["numFound"] = num_found
+    index_payload = _index(_gn015_record())
+    monkeypatch.setattr(
+        "tooluniverse.clingen_tool.requests.get",
+        lambda url, **_k: _Response(
+            payload if "rest.genenames.org" in url else index_payload, url
+        ),
+    )
+
+
+_MISSING = object()
+
+
+@pytest.mark.parametrize(
+    "num_found",
+    [_MISSING, "1", True, False, 0, 2, 1.0],
+    ids=["missing", "string", "bool-true", "bool-false", "zero", "two", "float"],
+)
+def test_hgnc_numfound_not_integer_one_keeps_candidate(monkeypatch, num_found):
+    _raw_hgnc_route(monkeypatch, num_found)
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "23p45.6",      # chromosome 23 does not exist
+        "0p13.1",       # chromosome 0 does not exist
+        "1z24.3",       # z is not an arm
+        "q24.3",        # no chromosome
+        "1",            # arm missing
+        "1q24.3 extra", # trailing garbage after a valid band
+        "12;17",        # translocation shorthand
+        "1q24.3;17q",   # semicolon-joined
+    ],
+    ids=["chr23", "chr0", "arm-z", "no-chr", "no-arm", "trailing", "transloc",
+         "semicolon"],
+)
+def test_location_not_a_full_nuclear_match_keeps_candidate(monkeypatch, location):
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[_hgnc_doc(location=location)],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+@pytest.mark.parametrize(
+    "location",
+    ["1p36.33-p36.32", "Xp22.33-Yp11.32", "Xq28", "1p", "22q13.2"],
+    ids=["same-chr-range", "cross-chr-range", "band", "arm-only", "chr22-band"],
+)
+def test_full_nuclear_forms_still_exclude(monkeypatch, location):
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[_hgnc_doc(location=location)],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    exclusion = result["scope_exclusions"][0]
+    assert exclusion["reason"].startswith("Rule set 135641398 of GN015")
+    assert (
+        "https://cspec.genome.network/cspec/ui/svi/doc/GN015?version=1.0"
+        in exclusion["sources"]
+    )

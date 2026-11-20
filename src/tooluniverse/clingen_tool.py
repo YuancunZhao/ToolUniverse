@@ -43,15 +43,21 @@ _MTDNA_ONLY_SCOPE = {
     "specification_id": "GN015",
     "version": "1.0",
     "rule_set_id": "135641398",
-    "spec_page_url": "https://cspec.genome.network/cspec/ui/svi/doc/GN015",
+    "spec_page_url": "https://cspec.genome.network/cspec/ui/svi/doc/GN015?version=1.0",
 }
 
-# A positively nuclear cytogenetic location starts with an autosome (1-22)
-# or sex-chromosome (X, Y) token followed by its p/q arm -- e.g. 1q24.3,
-# 19p13.2, Xp22.11. "mitochondria", "reserved", blank and non-string
-# values are NOT a confirmed nuclear location.
+# A positively nuclear cytogenetic location is a FULL match: autosome
+# (1-22) or sex-chromosome (X, Y) + p/q arm + optional band, optionally a
+# range whose second leg may repeat the chromosome -- e.g. 1p, 1q24.3,
+# 19p13.2, 1p36.33-p36.32, Xp22.33-Yp11.32. Anything else -- trailing
+# garbage ("1q24.3 extra"), translocation shorthand ("12;17"),
+# out-of-range chromosomes ("23p45.6"), "mitochondria", "reserved",
+# blank and non-string values -- is NOT a confirmed nuclear location.
+_NUCLEAR_CHROMOSOME = r"(?:[1-9]|1[0-9]|2[0-2]|X|Y)"
+_NUCLEAR_BAND = r"[pq](?:[0-9]{1,2}(?:\.[0-9]{1,2})?)?"
 _NUCLEAR_LOCATION_PATTERN = re.compile(
-    r"^(?:[1-9]|1[0-9]|2[0-2]|X|Y)[pq]", re.IGNORECASE
+    rf"^{_NUCLEAR_CHROMOSOME}{_NUCLEAR_BAND}"
+    rf"(?:-(?:{_NUCLEAR_CHROMOSOME})?{_NUCLEAR_BAND})?$"
 )
 
 # Confirmed live against the Evidence Repository's `classifications` endpoint:
@@ -948,7 +954,12 @@ class ClinGenTool(BaseTool):
         if not isinstance(docs, list):
             return None
         num_found = block.get("numFound")
-        if isinstance(num_found, int) and num_found != len(docs):
+        # bool is an int subclass: a JSON true must not pose as numFound 1.
+        if (
+            not isinstance(num_found, int)
+            or isinstance(num_found, bool)
+            or num_found != 1
+        ):
             return None
         approved = [
             doc
@@ -975,8 +986,9 @@ class ClinGenTool(BaseTool):
         """Evidence-based exclusion of the verified mtDNA-only rule set.
 
         Only the index-verified combination -- GN015 version 1.0 (the
-        explicit index `version` field, never a version inferred from
-        label prose), rule set 135641398, limited by its official page to
+        index `version` field must BE the string "1.0": a JSON number or
+        a version inferred from label prose is not the verified index
+        fact), rule set 135641398, limited by its official page to
         mitochondrial DNA genes -- is judged here. When the queried
         gene's unique Approved HGNC record places it on a nuclear
         chromosome, an mtDNA-only rule set cannot apply, so the exclusion
@@ -989,7 +1001,9 @@ class ClinGenTool(BaseTool):
         """
         if specification_id != _MTDNA_ONLY_SCOPE["specification_id"]:
             return None
-        if version != _MTDNA_ONLY_SCOPE["version"]:
+        if not isinstance(version, str) or (
+            version.strip() != _MTDNA_ONLY_SCOPE["version"]
+        ):
             return None
         if _MTDNA_ONLY_SCOPE["rule_set_id"] not in unresolved_ids:
             return None
@@ -1249,10 +1263,12 @@ class ClinGenTool(BaseTool):
                     remaining_ids = unresolved_ids
                     exclusion = self._cspec_mtdna_scope_exclusion(
                         specification_id,
-                        # The pin is the index's explicit version field;
-                        # `_cspec_version`'s label-prose fallback is
-                        # thinner evidence than the verified index fact.
-                        str(record.get("version") or "").strip(),
+                        # The pin is the index's explicit version field,
+                        # RAW: `_cspec_version`'s label fallback and str()
+                        # coercion are thinner evidence than the verified
+                        # index fact (a JSON number 1.0 must not pass as
+                        # the string "1.0").
+                        record.get("version"),
                         unresolved_ids,
                         gene,
                         hgnc_memo,
