@@ -220,6 +220,14 @@ def _hgnc_doc(
     return {key: value for key, value in doc.items() if value is not None}
 
 
+class _Requested(list):
+    """URL log that also records (url, headers) for HGNC registry calls."""
+
+    def __init__(self):
+        super().__init__()
+        self.hgnc_calls = []
+
+
 def _patch(
     monkeypatch,
     index_payload,
@@ -236,11 +244,12 @@ def _patch(
     lookup must fail the test loudly, not pass silently.
     """
     detail_payloads = detail_payloads if detail_payloads is not None else {}
-    requested = []
+    requested = _Requested()
 
     def fake_get(url, **_kwargs):
         requested.append(url)
         if "rest.genenames.org" in url:
+            requested.hgnc_calls.append((url, _kwargs.get("headers")))
             if fail_hgnc:
                 raise requests.exceptions.Timeout("HGNC timeout")
             if hgnc_docs is None:
@@ -1717,8 +1726,10 @@ def test_gn015_mtdna_rule_set_excluded_for_nuclear_gene(
     assert "mitochondrial" in exclusion["reason"]
     assert hgnc_location in exclusion["reason"]
     # Note honesty: with no pending candidate the response no longer
-    # appends the "Additionally, N unresolved ..." tail.
-    assert "Additionally" not in result["note"]
+    # appends the "Additionally, N unresolved ... may also apply" tail
+    # (the exclusion disclosure that DOES appear is separate).
+    assert "may also apply" not in result["note"]
+    assert "scope_exclusions" in result["note"]
     # Request discipline: index + matched detail + exactly one HGNC query.
     hgnc_queries = [u for u in requested if "rest.genenames.org" in u]
     assert hgnc_queries == [
@@ -1934,3 +1945,137 @@ def test_nuclear_encoded_mitochondrial_gene_keeps_gn014_excludes_gn015(
     assert result["data"][0]["rule_sets"][0]["genes"][0]["symbol"] == "POLG"
     assert result["unresolved_scope_specs"] == []
     assert result["scope_exclusions"][0]["gene"] == "POLG"
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-20 fix-pass: disclosure and evidence-thickness edges surfaced by
+# the whole-branch review.
+# --------------------------------------------------------------------------- #
+def test_note_discloses_exclusion_on_generic_rules_branch(monkeypatch):
+    # A caller reading only `note` must see that a candidate was dropped
+    # on recorded evidence -- the valid-empty verdict is conditional on
+    # that exclusion, not unconditional.
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[
+            _hgnc_doc(symbol="TSC2", location="16p13.3", hgnc_id="HGNC:12363")
+        ],
+    )
+
+    result = _tool().run({"gene": "TSC2"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    assert "scope_exclusions" in result["note"]
+    assert "No Released" in result["note"]
+
+
+def test_note_discloses_exclusion_alongside_match(monkeypatch):
+    requested_records = _patch(
+        monkeypatch,
+        _index(_index_record(), _gn015_record()),
+        detail_payloads={"GN019": _detail_payload()},
+        hgnc_docs=[_hgnc_doc()],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [entry["specification_id"] for entry in result["data"]] == ["GN019"]
+    assert result["unresolved_scope_specs"] == []
+    assert "scope_exclusions" in result["note"]
+    assert "Additionally, 1" in result["note"]
+    del requested_records
+
+
+def test_hgnc_numfound_disagrees_with_docs_keeps_candidate(monkeypatch):
+    # numFound says 2 records match the symbol but only one doc arrived:
+    # the approved record may not be unique, so no exclusion.
+    payload = _hgnc_payload([_hgnc_doc()])
+    payload["response"]["numFound"] = 2  # registry total disagrees with docs
+    index_payload = _index(_gn015_record())
+    monkeypatch.setattr(
+        "tooluniverse.clingen_tool.requests.get",
+        lambda url, **_k: _Response(
+            payload if "rest.genenames.org" in url else index_payload, url
+        ),
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+def test_label_derived_version_does_not_gate_exclusion(monkeypatch):
+    # The pin is the index's explicit `version` field ("1.0"), not a
+    # version inferred from prose in `label` -- inference from prose is
+    # thinner evidence than the verified index fact.
+    record = _gn015_record()
+    del record["version"]
+    record["label"] = "Mitochondrial specification Version 1.0"
+    requested = _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+    assert not any("rest.genenames.org" in u for u in requested)
+
+
+def test_approved_plus_withdrawn_mix_excludes(monkeypatch):
+    # Uniqueness counts Approved records only: one Approved exact match
+    # plus a Withdrawn doc is still a unique approved record.
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[
+            _hgnc_doc(status="Withdrawn", hgnc_id="HGNC:1"),
+            _hgnc_doc(),
+        ],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    assert result["scope_exclusions"][0]["excluded_rule_set_ids"] == [
+        "135641398"
+    ]
+
+
+def test_gn015_empty_rulesets_keeps_candidate_without_hgnc_query(monkeypatch):
+    record = _gn015_record()
+    record["ruleSets"] = []
+    requested = _patch(monkeypatch, _index(record))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    candidates = result["unresolved_scope_specs"]
+    assert [c["specification_id"] for c in candidates] == ["GN015"]
+    assert candidates[0]["rule_set_ids"] == []
+    assert not any("rest.genenames.org" in u for u in requested)
+
+
+def test_hgnc_request_sets_json_accept_header(monkeypatch):
+    requested = _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[_hgnc_doc()],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    (url, headers), = requested.hgnc_calls
+    assert url == "https://rest.genenames.org/fetch/symbol/MYOC"
+    assert headers == {"Accept": "application/json"}
