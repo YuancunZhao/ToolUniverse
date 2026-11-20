@@ -51,7 +51,11 @@ specs = ClinGen_search_cspec(gene="MYOC")
 # (candidates whose gene scope the index does not resolve -- resolve each
 # against its `url` even when data has a match), plus per-entry failure
 # markers (partial_failures / missing_materials / detail_structure_failed
-# mean the specification was not fully read).
+# mean the specification was not fully read). scope_exclusions, when
+# present, lists candidates the tool itself excluded on recorded
+# evidence (GN015 v1.0 rule set 135641398 is mitochondrial-DNA-only and
+# HGNC confirmed the queried gene on a nuclear chromosome) -- those need
+# no re-adjudication.
 spec = specs["data"][0]
 
 result = ACMG_calculate_classification(

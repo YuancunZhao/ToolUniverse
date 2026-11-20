@@ -29,6 +29,29 @@ ACTIONABILITY_PEDIATRIC_URL = (
 EREPO_BASE_URL = "https://erepo.clinicalgenome.org/evrepo/api"
 CSPEC_API_BASE_URL = "https://cspec.genome.network/cspec/api"
 CSPEC_UI_DOC_URL = "https://cspec.genome.network/cspec/ui/svi/doc"
+HGNC_REST_BASE_URL = "https://rest.genenames.org"
+
+# Verified live (2026-11-20) against the CSpec index
+# (https://cspec.genome.network/cspec/api/svis): GN015 version 1.0's only
+# rule set 135641398 carries no gene binding, and the official page
+# (https://cspec.genome.network/cspec/ui/svi/doc/GN015) limits that
+# specification to mitochondrial DNA genes. This is the ONLY unbound
+# candidate whose scope is pre-verified; any new version or any other
+# rule set id stays on the candidate-verification path.
+_MTDNA_ONLY_SCOPE = {
+    "specification_id": "GN015",
+    "version": "1.0",
+    "rule_set_id": "135641398",
+    "spec_page_url": "https://cspec.genome.network/cspec/ui/svi/doc/GN015",
+}
+
+# A positively nuclear cytogenetic location starts with an autosome (1-22)
+# or sex-chromosome (X, Y) token followed by its p/q arm -- e.g. 1q24.3,
+# 19p13.2, Xp22.11. "mitochondria", "reserved", blank and non-string
+# values are NOT a confirmed nuclear location.
+_NUCLEAR_LOCATION_PATTERN = re.compile(
+    r"^(?:[1-9]|1[0-9]|2[0-2]|X|Y)[pq]", re.IGNORECASE
+)
 
 # Confirmed live against the Evidence Repository's `classifications` endpoint:
 #   * `gene`, `caid`, `hgvs` and `variationId` are real server-side filters
@@ -887,6 +910,116 @@ class ClinGenTool(BaseTool):
         )
         return match.group(1) if match else ""
 
+    @staticmethod
+    def _nuclear_cytogenetic_location(location: Any) -> bool:
+        """True only for a positively nuclear cytogenetic location."""
+        if not isinstance(location, str):
+            return False
+        return bool(_NUCLEAR_LOCATION_PATTERN.match(location.strip()))
+
+    def _hgnc_approved_record(self, gene: str) -> Optional[Dict[str, Any]]:
+        """The unique Approved HGNC record for exact `gene`, or None.
+
+        Any transport or shape failure, zero matches, and anything but
+        exactly one Approved doc whose symbol equals `gene` verbatim all
+        return None: the caller keeps the unresolved candidate rather
+        than excluding on thinner evidence.
+        """
+        url = f"{HGNC_REST_BASE_URL}/fetch/symbol/{gene}"
+        try:
+            response = requests.get(
+                url,
+                timeout=self.timeout,
+                headers={"Accept": "application/json"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        block = payload.get("response")
+        if not isinstance(block, dict):
+            return None
+        docs = block.get("docs")
+        if not isinstance(docs, list):
+            return None
+        approved = [
+            doc
+            for doc in docs
+            if isinstance(doc, dict)
+            and str(doc.get("status") or "").strip() == "Approved"
+            and doc.get("symbol") == gene
+        ]
+        if len(approved) != 1:
+            return None
+        return {
+            key: approved[0].get(key)
+            for key in ("symbol", "status", "location", "hgnc_id", "name")
+        }
+
+    def _cspec_mtdna_scope_exclusion(
+        self,
+        specification_id: str,
+        version: str,
+        unresolved_ids: List[str],
+        gene: str,
+        hgnc_memo: Dict[str, Optional[Dict[str, Any]]],
+    ) -> Optional[Dict[str, Any]]:
+        """Evidence-based exclusion of the verified mtDNA-only rule set.
+
+        Only the index-verified combination -- GN015 version 1.0, rule set
+        135641398, limited by its official page to mitochondrial DNA genes
+        -- is judged here. When the queried gene's unique Approved HGNC
+        record places it on a nuclear chromosome, an mtDNA-only rule set
+        cannot apply, so the exclusion (with both source links) is
+        returned for ``scope_exclusions``. Everything else -- mtDNA genes,
+        unknown or non-cytogenetic locations, non-Approved or non-unique
+        records, HGNC failures, new versions, other rule sets -- returns
+        None and leaves the candidate-verification flow untouched. The
+        memo caches the HGNC answer per gene so one search queries the
+        registry at most once.
+        """
+        if specification_id != _MTDNA_ONLY_SCOPE["specification_id"]:
+            return None
+        if version != _MTDNA_ONLY_SCOPE["version"]:
+            return None
+        if _MTDNA_ONLY_SCOPE["rule_set_id"] not in unresolved_ids:
+            return None
+        if gene not in hgnc_memo:
+            hgnc_memo[gene] = self._hgnc_approved_record(gene)
+        record = hgnc_memo[gene]
+        if record is None:
+            return None
+        if not self._nuclear_cytogenetic_location(record.get("location")):
+            return None
+        spec_page_url = _MTDNA_ONLY_SCOPE["spec_page_url"]
+        rule_set_id = _MTDNA_ONLY_SCOPE["rule_set_id"]
+        hgnc_id = record.get("hgnc_id")
+        hgnc_url = (
+            "https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id="
+            f"{hgnc_id}"
+            if isinstance(hgnc_id, str) and hgnc_id.strip()
+            else f"{HGNC_REST_BASE_URL}/fetch/symbol/{gene}"
+        )
+        return {
+            "specification_id": specification_id,
+            "version": version,
+            "excluded_rule_set_ids": [rule_set_id],
+            "gene": gene,
+            "hgnc": record,
+            "reason": (
+                f"Rule set {rule_set_id} of {specification_id} version "
+                f"{version} covers mitochondrial DNA genes only (official "
+                f"specification: {spec_page_url}); HGNC confirms "
+                f"{record.get('symbol')} is {record.get('status')} and "
+                "located on nuclear chromosome "
+                f"{record.get('location')}, so the rule set cannot apply "
+                "to this gene."
+            ),
+            "sources": [spec_page_url, hgnc_url],
+        }
+
     def _cspec_criteria_for_rule_sets(
         self, detail: Dict[str, Any], rule_set_ids: List[str]
     ) -> tuple:
@@ -1003,7 +1136,15 @@ class ClinGenTool(BaseTool):
           * a detail fetch fails for one specification -> the entry is kept,
             marked ``detail_fetch_failed`` with the failure repeated in
             ``partial_failures``, and its ``missing_materials`` names what
-            could not be retrieved.
+            could not be retrieved;
+          * the one index-verified mtDNA-only unbound candidate (GN015
+            version 1.0, rule set 135641398) is excluded from
+            ``unresolved_scope_specs`` only when HGNC confirms the queried
+            gene as a unique Approved record on a nuclear chromosome; the
+            exclusion is recorded in ``scope_exclusions`` with both source
+            links. mtDNA genes, unresolved locations, registry failures,
+            new versions and any other unverified rule set keep the
+            candidate-verification flow.
 
         The API JSON is a structured summary, not the full specification
         prose: every success carries a note directing the caller to read the
@@ -1054,6 +1195,9 @@ class ClinGenTool(BaseTool):
 
             matches: List[Dict[str, Any]] = []
             unresolved_candidates: List[Dict[str, Any]] = []
+            scope_exclusions: List[Dict[str, Any]] = []
+            seen_scope_exclusions: set = set()
+            hgnc_memo: Dict[str, Optional[Dict[str, Any]]] = {}
             partial_failures: Dict[str, str] = {}
             for record in records:
                 if not self._released_cspec(record):
@@ -1087,26 +1231,61 @@ class ClinGenTool(BaseTool):
                 # A Released record whose gene scope cannot be decided from
                 # the index (rule sets without gene lists, or no rule sets
                 # at all) is preserved as a candidate -- the index not
-                # listing genes says nothing about applicability.
+                # listing genes says nothing about applicability. The one
+                # exception is the pre-verified mtDNA-only rule set: when
+                # HGNC confirms the queried gene sits on a nuclear
+                # chromosome, that rule set cannot apply, is removed from
+                # the candidate, and its exclusion is recorded with the
+                # supporting evidence.
                 if unresolved_ids or record.get("ruleSets") == []:
-                    unresolved_candidates.append(
-                        {
-                            "specification_id": specification_id,
-                            "version": self._cspec_version(record) or None,
-                            "vcep": self._cspec_organization(record) or None,
-                            "url": str(
-                                record.get("url")
-                                or f"{CSPEC_UI_DOC_URL}/{specification_id}"
-                            ),
-                            "api_url": (
-                                f"{CSPEC_API_BASE_URL}/"
-                                f"SequenceVariantInterpretation/id/"
-                                f"{specification_id}"
-                            ),
-                            "rule_set_ids": unresolved_ids,
-                            "scope_reason": "gene_binding_unavailable",
-                        }
+                    remaining_ids = unresolved_ids
+                    exclusion = self._cspec_mtdna_scope_exclusion(
+                        specification_id,
+                        self._cspec_version(record),
+                        unresolved_ids,
+                        gene,
+                        hgnc_memo,
                     )
+                    if exclusion is not None:
+                        # A (hypothetically) duplicated index record yields
+                        # the same exclusion decision twice; one record of
+                        # it is the evidence, a second is noise.
+                        exclusion_key = (
+                            exclusion["specification_id"],
+                            exclusion["version"],
+                            tuple(exclusion["excluded_rule_set_ids"]),
+                            exclusion["gene"],
+                        )
+                        if exclusion_key not in seen_scope_exclusions:
+                            seen_scope_exclusions.add(exclusion_key)
+                            scope_exclusions.append(exclusion)
+                        pinned_rule_set_id = _MTDNA_ONLY_SCOPE["rule_set_id"]
+                        remaining_ids = [
+                            rs_id
+                            for rs_id in unresolved_ids
+                            if rs_id != pinned_rule_set_id
+                        ]
+                    if remaining_ids or record.get("ruleSets") == []:
+                        unresolved_candidates.append(
+                            {
+                                "specification_id": specification_id,
+                                "version": self._cspec_version(record)
+                                or None,
+                                "vcep": self._cspec_organization(record)
+                                or None,
+                                "url": str(
+                                    record.get("url")
+                                    or f"{CSPEC_UI_DOC_URL}/{specification_id}"
+                                ),
+                                "api_url": (
+                                    f"{CSPEC_API_BASE_URL}/"
+                                    f"SequenceVariantInterpretation/id/"
+                                    f"{specification_id}"
+                                ),
+                                "rule_set_ids": remaining_ids,
+                                "scope_reason": "gene_binding_unavailable",
+                            }
+                        )
                 if not rule_sets:
                     continue
                 detail_url = (
@@ -1323,6 +1502,8 @@ class ClinGenTool(BaseTool):
                     "any attachments and the assertion method it references."
                 ),
             }
+            if scope_exclusions:
+                result["scope_exclusions"] = scope_exclusions
             if not matches and unresolved_candidates:
                 result["note"] = (
                     f"No explicit gene match for {gene} in the CSpec index, "

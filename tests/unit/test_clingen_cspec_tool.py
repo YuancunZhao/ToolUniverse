@@ -166,13 +166,86 @@ def _tool():
     )
 
 
-def _patch(monkeypatch, index_payload, detail_payloads=None, fail_detail_ids=()):
-    """Route fake requests.get: index payload for /svis, per-spec detail after."""
+def _gn015_record(version="1.0", rule_set_ids=("135641398",)):
+    """Live GN015 index shape (frozen 2026-11-20): Released, Mitochondrial
+    Diseases VCEP, and every rule set carries NO `genes` key at all."""
+    return {
+        "@id": (
+            "https://cspec.genome.network/cspec/api/"
+            "SequenceVariantInterpretation/id/GN015"
+        ),
+        "affiliation": {
+            "@id": (
+                "https://cspec.genome.network/cspec/api/Organization/id/50027"
+            ),
+            "@type": "Organization",
+            "label": "Mitochondrial Diseases Variant Curation Expert Panel",
+            "url": "http://clinicalgenome.org/affiliation/50027",
+        },
+        "ruleSets": [
+            {
+                "@id": (
+                    "https://cspec.genome.network/cspec/api/"
+                    f"RuleSet/id/{rule_set_id}"
+                ),
+                "@type": "RuleSet",
+            }
+            for rule_set_id in rule_set_ids
+        ],
+        "status": "Released",
+        "url": "https://cspec.genome.network/cspec/ui/svi/doc/GN015",
+        "version": version,
+    }
+
+
+def _hgnc_payload(docs):
+    """Live HGNC REST /fetch/symbol response shape (frozen 2026-11-20)."""
+    return {
+        "responseHeader": {"status": 0},
+        "response": {"numFound": len(docs), "start": 0, "docs": list(docs)},
+    }
+
+
+def _hgnc_doc(
+    symbol="MYOC", status="Approved", location="1q24.3", hgnc_id="HGNC:7610"
+):
+    """One HGNC doc; None-valued fields are dropped, not null-filled."""
+    doc = {
+        "symbol": symbol,
+        "status": status,
+        "location": location,
+        "hgnc_id": hgnc_id,
+        "name": f"{symbol} test record",
+    }
+    return {key: value for key, value in doc.items() if value is not None}
+
+
+def _patch(
+    monkeypatch,
+    index_payload,
+    detail_payloads=None,
+    fail_detail_ids=(),
+    hgnc_docs=None,
+    fail_hgnc=False,
+):
+    """Route fake requests.get: index payload for /svis, per-spec detail after.
+
+    `hgnc_docs` supplies the HGNC REST payload when the exclusion path
+    queries the registry; `fail_hgnc` makes that query time out. An HGNC
+    query neither planned for nor configured raises: a spurious registry
+    lookup must fail the test loudly, not pass silently.
+    """
     detail_payloads = detail_payloads if detail_payloads is not None else {}
     requested = []
 
     def fake_get(url, **_kwargs):
         requested.append(url)
+        if "rest.genenames.org" in url:
+            if fail_hgnc:
+                raise requests.exceptions.Timeout("HGNC timeout")
+            if hgnc_docs is None:
+                raise AssertionError(f"unexpected HGNC query: {url}")
+            return _Response(_hgnc_payload(hgnc_docs), url)
         if url.endswith("/cspec/api/svis"):
             if isinstance(index_payload, Exception):
                 raise index_payload
@@ -1549,3 +1622,315 @@ def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
     # "classify under generic" directive.
     assert "unresolved" in result["note"]
     assert "classify under" not in result["note"]
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-20: evidence-based exclusion of the one index-verified mtDNA-only
+# unbound candidate. Live facts frozen above: GN015 version 1.0's only rule
+# set 135641398 carries no gene binding in the index
+# (https://cspec.genome.network/cspec/api/svis), and the official page
+# (https://cspec.genome.network/cspec/ui/svi/doc/GN015) limits the
+# specification to mitochondrial DNA genes. For a queried gene whose unique
+# Approved HGNC record (rest.genenames.org/fetch/symbol/<GENE>) sits on a
+# nuclear chromosome, that rule set cannot apply: it is removed from the
+# candidates and the exclusion is recorded in `scope_exclusions` with both
+# source links. mtDNA genes, unknown/unusual locations, non-Approved or
+# non-unique HGNC records, registry failures, new versions and any other
+# unverified rule sets keep the candidate-verification flow untouched.
+# --------------------------------------------------------------------------- #
+_FROZEN_NUCLEAR_RECEIPTS = [
+    # (gene, spec_id, version, rule_set_id, disease, hgnc_location, hgnc_id)
+    # — spec/rule-set ids and versions are live registry facts
+    # (fetched 2026-11-20); HGNC records are live REST receipts.
+    ("MYOC", "GN019", "2.1", "635003681", "MONDO:0005338",
+     "1q24.3", "HGNC:7610"),
+    ("LDLR", "GN013", "1.2", "135640393", "MONDO:0007750",
+     "19p13.2", "HGNC:6547"),
+    ("BRCA1", "GN092", "1.2", "1530970800", "MONDO:0700268",
+     "17q21.31", "HGNC:1100"),
+]
+
+
+@pytest.mark.parametrize(
+    "gene,spec_id,version,rule_set_id,disease,hgnc_location,hgnc_id",
+    _FROZEN_NUCLEAR_RECEIPTS,
+    ids=[case[0] for case in _FROZEN_NUCLEAR_RECEIPTS],
+)
+def test_gn015_mtdna_rule_set_excluded_for_nuclear_gene(
+    monkeypatch,
+    gene,
+    spec_id,
+    version,
+    rule_set_id,
+    disease,
+    hgnc_location,
+    hgnc_id,
+):
+    match = _index_record(
+        spec_id=spec_id,
+        gene=gene,
+        disease_label=disease,
+        inheritance="Autosomal dominant inheritance",
+        rule_set_id=rule_set_id,
+        version=version,
+    )
+    detail = _detail_payload(spec_id=spec_id, rule_set_id=rule_set_id)
+    detail["version"] = version
+    requested = _patch(
+        monkeypatch,
+        _index(match, _gn015_record()),
+        detail_payloads={spec_id: detail},
+        hgnc_docs=[
+            _hgnc_doc(symbol=gene, location=hgnc_location, hgnc_id=hgnc_id)
+        ],
+    )
+
+    result = _tool().run({"gene": gene})
+
+    assert result["status"] == "success"
+    # The explicit match survives untouched.
+    assert [entry["specification_id"] for entry in result["data"]] == [spec_id]
+    assert result["data"][0]["gene"] == gene
+    assert result["data"][0]["rule_sets"][0]["genes"][0]["symbol"] == gene
+    # GN015 no longer enters the unresolved candidates.
+    assert result["unresolved_scope_specs"] == []
+    # The exclusion is recorded with its evidence and both source links.
+    exclusions = result["scope_exclusions"]
+    assert len(exclusions) == 1
+    exclusion = exclusions[0]
+    assert exclusion["specification_id"] == "GN015"
+    assert exclusion["version"] == "1.0"
+    assert exclusion["excluded_rule_set_ids"] == ["135641398"]
+    assert exclusion["gene"] == gene
+    assert exclusion["hgnc"]["symbol"] == gene
+    assert exclusion["hgnc"]["status"] == "Approved"
+    assert exclusion["hgnc"]["location"] == hgnc_location
+    assert exclusion["hgnc"]["hgnc_id"] == hgnc_id
+    assert (
+        "https://cspec.genome.network/cspec/ui/svi/doc/GN015"
+        in exclusion["sources"]
+    )
+    assert (
+        f"https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id="
+        f"{hgnc_id}" in exclusion["sources"]
+    )
+    assert "mitochondrial" in exclusion["reason"]
+    assert hgnc_location in exclusion["reason"]
+    # Note honesty: with no pending candidate the response no longer
+    # appends the "Additionally, N unresolved ..." tail.
+    assert "Additionally" not in result["note"]
+    # Request discipline: index + matched detail + exactly one HGNC query.
+    hgnc_queries = [u for u in requested if "rest.genenames.org" in u]
+    assert hgnc_queries == [
+        f"https://rest.genenames.org/fetch/symbol/{gene}"
+    ]
+
+
+def test_gn015_excluded_gene_with_no_spec_reaches_generic_rules_branch(
+    monkeypatch,
+):
+    # TSC2 has no Released specification in the live registry (verified
+    # 2026-11-20: no record binds TSC2). With GN015 evidence-excluded and
+    # no match, the valid-empty-result note -- the generic-rules branch --
+    # is the honest outcome of a successful index lookup.
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[
+            _hgnc_doc(symbol="TSC2", location="16p13.3", hgnc_id="HGNC:12363")
+        ],
+    )
+
+    result = _tool().run({"gene": "TSC2"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    assert result["total"] == 0
+    assert result["unresolved_scope_specs"] == []
+    assert result["scope_exclusions"][0]["gene"] == "TSC2"
+    assert "No Released" in result["note"]
+    assert "generic" in result["note"]
+
+
+def test_mt_gene_keeps_gn015_candidate(monkeypatch):
+    # MT-ND1 is mitochondrially encoded (live HGNC receipt: location
+    # "mitochondria"), so the mtDNA-only rule set CAN apply and must stay
+    # a candidate -- GN015 remains discoverable for mtDNA genes.
+    requested = _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[
+            _hgnc_doc(
+                symbol="MT-ND1", location="mitochondria", hgnc_id="HGNC:7455"
+            )
+        ],
+    )
+
+    result = _tool().run({"gene": "MT-ND1"})
+
+    assert result["status"] == "success"
+    assert result["data"] == []
+    candidates = result["unresolved_scope_specs"]
+    assert [c["specification_id"] for c in candidates] == ["GN015"]
+    assert candidates[0]["rule_set_ids"] == ["135641398"]
+    assert candidates[0]["scope_reason"] == "gene_binding_unavailable"
+    assert "scope_exclusions" not in result
+    assert "unresolved" in result["note"]
+    assert "classify under" not in result["note"]
+    assert any("rest.genenames.org" in u for u in requested)
+
+
+def test_hgnc_timeout_keeps_gn015_candidate(monkeypatch):
+    # An HGNC failure is never evidence: the candidate flow continues.
+    _patch(monkeypatch, _index(_gn015_record()), fail_hgnc=True)
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+@pytest.mark.parametrize("location", [None, "", "reserved"])
+def test_hgnc_location_not_confirmed_nuclear_keeps_candidate(
+    monkeypatch, location
+):
+    # Only a positively nuclear cytogenetic location excludes; missing,
+    # blank or non-cytogenetic values are "location unknown".
+    _patch(
+        monkeypatch,
+        _index(_gn015_record()),
+        hgnc_docs=[_hgnc_doc(location=location)],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+@pytest.mark.parametrize(
+    "docs",
+    [
+        [_hgnc_doc(status="Deprecated")],
+        [_hgnc_doc(symbol="myoc")],
+        [_hgnc_doc(), _hgnc_doc(hgnc_id="HGNC:9999999")],
+    ],
+    ids=["not-approved", "symbol-not-exact", "not-unique"],
+)
+def test_hgnc_record_not_unique_approved_keeps_candidate(monkeypatch, docs):
+    _patch(monkeypatch, _index(_gn015_record()), hgnc_docs=docs)
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+
+
+def test_new_gn015_version_stays_candidate_without_hgnc_query(monkeypatch):
+    # The mtDNA-only verification is pinned to index version 1.0; a new
+    # version is unverified and must go through candidate verification --
+    # without spending an HGNC query on it.
+    requested = _patch(monkeypatch, _index(_gn015_record(version="2.0")))
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+    assert not any("rest.genenames.org" in u for u in requested)
+
+
+def test_unverified_rule_set_stays_candidate_without_hgnc_query(monkeypatch):
+    requested = _patch(
+        monkeypatch, _index(_gn015_record(rule_set_ids=("999999",)))
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
+        "GN015"
+    ]
+    assert "scope_exclusions" not in result
+    assert not any("rest.genenames.org" in u for u in requested)
+
+
+def test_gn015_exclusion_removes_only_the_pinned_rule_set(monkeypatch):
+    # If other unresolved rule sets shared the record, only 135641398 is
+    # excluded; the candidate survives carrying the remaining ids.
+    _patch(
+        monkeypatch,
+        _index(_gn015_record(rule_set_ids=("135641398", "777"))),
+        hgnc_docs=[_hgnc_doc()],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    candidates = result["unresolved_scope_specs"]
+    assert [c["specification_id"] for c in candidates] == ["GN015"]
+    assert candidates[0]["rule_set_ids"] == ["777"]
+    assert result["scope_exclusions"][0]["excluded_rule_set_ids"] == [
+        "135641398"
+    ]
+
+
+def test_duplicate_pinned_candidates_query_hgnc_once(monkeypatch):
+    # One HGNC query per search for the pinned candidate, even if a
+    # (hypothetical, damaged) index listed the record twice.
+    requested = _patch(
+        monkeypatch,
+        _index(_gn015_record(), _gn015_record()),
+        hgnc_docs=[_hgnc_doc()],
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    assert len(result["scope_exclusions"]) == 1
+    assert sum("rest.genenames.org" in u for u in requested) == 1
+
+
+def test_nuclear_encoded_mitochondrial_gene_keeps_gn014_excludes_gn015(
+    monkeypatch,
+):
+    # POLG causes mitochondrial disease but is nuclear-encoded (live HGNC:
+    # 15q26.1), so GN014's explicit POLG rule set is found while GN015's
+    # mtDNA-only rule set is evidence-excluded.
+    polg = _index_record(
+        spec_id="GN014",
+        gene="POLG",
+        disease_label="MONDO:0044970",
+        rule_set_id="135641175",
+        version="1.0",
+    )
+    detail = _detail_payload(spec_id="GN014", rule_set_id="135641175")
+    detail["version"] = "1.0"
+    _patch(
+        monkeypatch,
+        _index(polg, _gn015_record()),
+        detail_payloads={"GN014": detail},
+        hgnc_docs=[
+            _hgnc_doc(symbol="POLG", location="15q26.1", hgnc_id="HGNC:9179")
+        ],
+    )
+
+    result = _tool().run({"gene": "POLG"})
+
+    assert result["status"] == "success"
+    assert [entry["specification_id"] for entry in result["data"]] == ["GN014"]
+    assert result["data"][0]["rule_sets"][0]["genes"][0]["symbol"] == "POLG"
+    assert result["unresolved_scope_specs"] == []
+    assert result["scope_exclusions"][0]["gene"] == "POLG"
