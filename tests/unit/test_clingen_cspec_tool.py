@@ -198,63 +198,20 @@ def _gn015_record(version="1.0", rule_set_ids=("135641398",)):
     }
 
 
-def _hgnc_payload(docs):
-    """Live HGNC REST /fetch/symbol response shape (frozen 2026-11-20)."""
-    return {
-        "responseHeader": {"status": 0},
-        "response": {"numFound": len(docs), "start": 0, "docs": list(docs)},
-    }
-
-
-def _hgnc_doc(
-    symbol="MYOC", status="Approved", location="1q24.3", hgnc_id="HGNC:7610"
-):
-    """One HGNC doc; None-valued fields are dropped, not null-filled."""
-    doc = {
-        "symbol": symbol,
-        "status": status,
-        "location": location,
-        "hgnc_id": hgnc_id,
-        "name": f"{symbol} test record",
-    }
-    return {key: value for key, value in doc.items() if value is not None}
-
-
-class _Requested(list):
-    """URL log that also records (url, headers) for HGNC registry calls."""
-
-    def __init__(self):
-        super().__init__()
-        self.hgnc_calls = []
-
-
-def _patch(
-    monkeypatch,
-    index_payload,
-    detail_payloads=None,
-    fail_detail_ids=(),
-    hgnc_docs=None,
-    fail_hgnc=False,
-):
+def _patch(monkeypatch, index_payload, detail_payloads=None, fail_detail_ids=()):
     """Route fake requests.get: index payload for /svis, per-spec detail after.
 
-    `hgnc_docs` supplies the HGNC REST payload when the exclusion path
-    queries the registry; `fail_hgnc` makes that query time out. An HGNC
-    query neither planned for nor configured raises: a spurious registry
+    Scope applicability is decided locally (no registry dependency), so ANY
+    request outside the CSpec index/detail endpoints raises: a spurious
     lookup must fail the test loudly, not pass silently.
     """
     detail_payloads = detail_payloads if detail_payloads is not None else {}
-    requested = _Requested()
+    requested = []
 
     def fake_get(url, **_kwargs):
         requested.append(url)
         if "rest.genenames.org" in url:
-            requested.hgnc_calls.append((url, _kwargs.get("headers")))
-            if fail_hgnc:
-                raise requests.exceptions.Timeout("HGNC timeout")
-            if hgnc_docs is None:
-                raise AssertionError(f"unexpected HGNC query: {url}")
-            return _Response(_hgnc_payload(hgnc_docs), url)
+            raise AssertionError(f"search-time registry query forbidden: {url}")
         if url.endswith("/cspec/api/svis"):
             if isinstance(index_payload, Exception):
                 raise index_payload
@@ -1634,47 +1591,48 @@ def test_cspec_gene_unbound_synthetic_spec_coexists_with_exact_match(
 
 
 # --------------------------------------------------------------------------- #
-# 2026-11-20: evidence-based exclusion of the one index-verified mtDNA-only
+# 2026-11-21: scope-based pre-filtering of the one index-verified mtDNA-only
 # unbound candidate. Live facts frozen above: GN015 version 1.0's only rule
-# set 135641398 carries no gene binding in the index
-# (https://cspec.genome.network/cspec/api/svis), and the official page
-# (https://cspec.genome.network/cspec/ui/svi/doc/GN015) limits the
-# specification to mitochondrial DNA genes. For a queried gene whose unique
-# Approved HGNC record (rest.genenames.org/fetch/symbol/<GENE>) sits on a
-# nuclear chromosome, that rule set cannot apply: it is removed from the
-# candidates and the exclusion is recorded in `scope_exclusions` with both
-# source links. mtDNA genes, unknown/unusual locations, non-Approved or
-# non-unique HGNC records, registry failures, new versions and any other
-# unverified rule sets keep the candidate-verification flow untouched.
+# set 135641398 carries no gene binding in the index, and the official page
+# limits the specification to mitochondrial DNA genes. Applicability is now
+# decided BEFORE candidates are generated, by exact local membership in the
+# 37 HGNC standard symbols of the genes encoded by the human mitochondrial
+# reference genome (rCRS, NC_012920.1): 13 protein-coding + 22 tRNA + 2
+# rRNA genes (verified live against HGNC 2026-11-20: 56 Approved MT-
+# prefixed symbols carry location "mitochondria", exactly 37 of which have
+# a gene locus_type -- the other 19 are regulatory regions / lncRNA). A
+# gene on that list still discovers GN015 as a candidate (its specific
+# applicability is still adjudicated from the official materials); a gene
+# outside it -- including nuclear-encoded mitochondrial-disease genes such
+# as POLG -- never sees GN015 in results, candidates or notes. No registry
+# lookup happens at search time: the previous per-query HGNC verification,
+# its numFound discipline and the scope_exclusions output are gone. New
+# versions and other unverified rule sets in the same document keep the
+# candidate-verification flow untouched.
 # --------------------------------------------------------------------------- #
 _FROZEN_NUCLEAR_RECEIPTS = [
-    # (gene, spec_id, version, rule_set_id, disease, hgnc_location, hgnc_id)
-    # — spec/rule-set ids and versions are live registry facts
-    # (fetched 2026-11-20); HGNC records are live REST receipts.
-    ("MYOC", "GN019", "2.1", "635003681", "MONDO:0005338",
-     "1q24.3", "HGNC:7610"),
-    ("LDLR", "GN013", "1.2", "135640393", "MONDO:0007750",
-     "19p13.2", "HGNC:6547"),
-    ("BRCA1", "GN092", "1.2", "1530970800", "MONDO:0700268",
-     "17q21.31", "HGNC:1100"),
+    # (gene, spec_id, version, rule_set_id, disease) — spec ids, versions,
+    # rule-set ids and disease bindings are live registry facts
+    # (fetched 2026-11-20). None of these genes may see GN015.
+    ("MYOC", "GN019", "2.1", "635003681", "MONDO:0005338"),
+    ("LDLR", "GN013", "1.2", "135640393", "MONDO:0007750"),
+    ("BRCA1", "GN092", "1.2", "1530970800", "MONDO:0700268"),
+    ("POLG", "GN014", "1.0", "135641175", "MONDO:0044970"),
 ]
 
 
 @pytest.mark.parametrize(
-    "gene,spec_id,version,rule_set_id,disease,hgnc_location,hgnc_id",
+    "gene,spec_id,version,rule_set_id,disease",
     _FROZEN_NUCLEAR_RECEIPTS,
     ids=[case[0] for case in _FROZEN_NUCLEAR_RECEIPTS],
 )
-def test_gn015_mtdna_rule_set_excluded_for_nuclear_gene(
-    monkeypatch,
-    gene,
-    spec_id,
-    version,
-    rule_set_id,
-    disease,
-    hgnc_location,
-    hgnc_id,
+def test_mtdna_scope_prefiltered_for_nuclear_gene(
+    monkeypatch, gene, spec_id, version, rule_set_id, disease
 ):
+    # A nuclear gene (including POLG, which causes mitochondrial disease
+    # but is nuclear-encoded at 15q26.1) keeps its explicitly matched
+    # specification and never sees GN015 -- not as a match, not as an
+    # unresolved candidate, not in the note -- with zero registry lookups.
     match = _index_record(
         spec_id=spec_id,
         gene=gene,
@@ -1689,68 +1647,33 @@ def test_gn015_mtdna_rule_set_excluded_for_nuclear_gene(
         monkeypatch,
         _index(match, _gn015_record()),
         detail_payloads={spec_id: detail},
-        hgnc_docs=[
-            _hgnc_doc(symbol=gene, location=hgnc_location, hgnc_id=hgnc_id)
-        ],
     )
 
     result = _tool().run({"gene": gene})
 
     assert result["status"] == "success"
-    # The explicit match survives untouched.
     assert [entry["specification_id"] for entry in result["data"]] == [spec_id]
     assert result["data"][0]["gene"] == gene
     assert result["data"][0]["rule_sets"][0]["genes"][0]["symbol"] == gene
-    # GN015 no longer enters the unresolved candidates.
     assert result["unresolved_scope_specs"] == []
-    # The exclusion is recorded with its evidence and both source links.
-    exclusions = result["scope_exclusions"]
-    assert len(exclusions) == 1
-    exclusion = exclusions[0]
-    assert exclusion["specification_id"] == "GN015"
-    assert exclusion["version"] == "1.0"
-    assert exclusion["excluded_rule_set_ids"] == ["135641398"]
-    assert exclusion["gene"] == gene
-    assert exclusion["hgnc"]["symbol"] == gene
-    assert exclusion["hgnc"]["status"] == "Approved"
-    assert exclusion["hgnc"]["location"] == hgnc_location
-    assert exclusion["hgnc"]["hgnc_id"] == hgnc_id
-    assert (
-        "https://cspec.genome.network/cspec/ui/svi/doc/GN015?version=1.0"
-        in exclusion["sources"]
-    )
-    assert (
-        f"https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id="
-        f"{hgnc_id}" in exclusion["sources"]
-    )
-    assert "mitochondrial" in exclusion["reason"]
-    assert hgnc_location in exclusion["reason"]
-    # Note honesty: with no pending candidate the response no longer
-    # appends the "Additionally, N unresolved ... may also apply" tail
-    # (the exclusion disclosure that DOES appear is separate).
-    assert "may also apply" not in result["note"]
-    assert "scope_exclusions" in result["note"]
-    # Request discipline: index + matched detail + exactly one HGNC query.
-    hgnc_queries = [u for u in requested if "rest.genenames.org" in u]
-    assert hgnc_queries == [
-        f"https://rest.genenames.org/fetch/symbol/{gene}"
+    assert "scope_exclusions" not in result
+    assert "GN015" not in result["note"]
+    assert "mtDNA" not in result["note"]
+    # Request discipline: the index plus exactly the matched detail -- no
+    # HGNC (or any other) registry request happens at search time.
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        f"https://cspec.genome.network/cspec/api/"
+        f"SequenceVariantInterpretation/id/{spec_id}",
     ]
 
 
-def test_gn015_excluded_gene_with_no_spec_reaches_generic_rules_branch(
-    monkeypatch,
-):
+def test_nuclear_gene_with_no_spec_reaches_generic_rules_branch(monkeypatch):
     # TSC2 has no Released specification in the live registry (verified
-    # 2026-11-20: no record binds TSC2). With GN015 evidence-excluded and
-    # no match, the valid-empty-result note -- the generic-rules branch --
-    # is the honest outcome of a successful index lookup.
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[
-            _hgnc_doc(symbol="TSC2", location="16p13.3", hgnc_id="HGNC:12363")
-        ],
-    )
+    # 2026-11-20: no record binds TSC2). With GN015 scope-filtered out and
+    # no match, the valid-empty note -- the generic-rules branch -- is the
+    # honest outcome of a successful index lookup.
+    requested = _patch(monkeypatch, _index(_gn015_record()))
 
     result = _tool().run({"gene": "TSC2"})
 
@@ -1758,26 +1681,30 @@ def test_gn015_excluded_gene_with_no_spec_reaches_generic_rules_branch(
     assert result["data"] == []
     assert result["total"] == 0
     assert result["unresolved_scope_specs"] == []
-    assert result["scope_exclusions"][0]["gene"] == "TSC2"
+    assert "scope_exclusions" not in result
     assert "No Released" in result["note"]
     assert "generic" in result["note"]
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_mt_gene_keeps_gn015_candidate(monkeypatch):
-    # MT-ND1 is mitochondrially encoded (live HGNC receipt: location
-    # "mitochondria"), so the mtDNA-only rule set CAN apply and must stay
-    # a candidate -- GN015 remains discoverable for mtDNA genes.
-    requested = _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[
-            _hgnc_doc(
-                symbol="MT-ND1", location="mitochondria", hgnc_id="HGNC:7455"
-            )
-        ],
-    )
+@pytest.mark.parametrize(
+    "gene,gene_class",
+    [
+        ("MT-ND1", "protein-coding"),
+        ("MT-TL1", "trna"),
+        ("MT-RNR1", "rrna"),
+    ],
+    ids=["MT-ND1", "MT-TL1", "MT-RNR1"],
+)
+def test_mt_encoded_gene_discovers_gn015(monkeypatch, gene, gene_class):
+    # All three classes of mitochondrially encoded genes (protein-coding,
+    # tRNA, rRNA) are inside the rCRS scope, so GN015 remains discoverable
+    # as an unresolved candidate with its rule set intact -- still requiring
+    # official-material adjudication, never auto-applied.
+    del gene_class
+    requested = _patch(monkeypatch, _index(_gn015_record()))
 
-    result = _tool().run({"gene": "MT-ND1"})
+    result = _tool().run({"gene": gene})
 
     assert result["status"] == "success"
     assert result["data"] == []
@@ -1788,68 +1715,62 @@ def test_mt_gene_keeps_gn015_candidate(monkeypatch):
     assert "scope_exclusions" not in result
     assert "unresolved" in result["note"]
     assert "classify under" not in result["note"]
-    assert any("rest.genenames.org" in u for u in requested)
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_hgnc_timeout_keeps_gn015_candidate(monkeypatch):
-    # An HGNC failure is never evidence: the candidate flow continues.
-    _patch(monkeypatch, _index(_gn015_record()), fail_hgnc=True)
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
-    assert "scope_exclusions" not in result
-
-
-@pytest.mark.parametrize("location", [None, "", "reserved"])
-def test_hgnc_location_not_confirmed_nuclear_keeps_candidate(
-    monkeypatch, location
-):
-    # Only a positively nuclear cytogenetic location excludes; missing,
-    # blank or non-cytogenetic values are "location unknown".
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[_hgnc_doc(location=location)],
+def test_mtdna_scope_gate_is_exact_symbol_match(monkeypatch):
+    # The gate is an exact match against the 37 rCRS symbols (the tool
+    # uppercases the query): "mt-nd1" discovers GN015; "MTND1" -- a real
+    # nuclear gene symbol shape but NOT one of the 37 -- does not.
+    requested = _patch(
+        monkeypatch, _index(_gn015_record(), _gn015_record())
     )
 
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
+    result = _tool().run({"gene": "mt-nd1"})
     assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
+        "GN015", "GN015"
     ]
-    assert "scope_exclusions" not in result
 
-
-@pytest.mark.parametrize(
-    "docs",
-    [
-        [_hgnc_doc(status="Deprecated")],
-        [_hgnc_doc(symbol="myoc")],
-        [_hgnc_doc(), _hgnc_doc(hgnc_id="HGNC:9999999")],
-    ],
-    ids=["not-approved", "symbol-not-exact", "not-unique"],
-)
-def test_hgnc_record_not_unique_approved_keeps_candidate(monkeypatch, docs):
-    _patch(monkeypatch, _index(_gn015_record()), hgnc_docs=docs)
-
-    result = _tool().run({"gene": "MYOC"})
-
+    result = _tool().run({"gene": "MTND1"})
     assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
+    assert result["data"] == []
+    assert result["unresolved_scope_specs"] == []
     assert "scope_exclusions" not in result
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        "https://cspec.genome.network/cspec/api/svis",
+    ]
 
 
-def test_new_gn015_version_stays_candidate_without_hgnc_query(monkeypatch):
+def test_mtdna_reference_set_is_the_37_rcrs_gene_symbols():
+    # Frozen live receipt (HGNC, verified 2026-11-20): the genes encoded by
+    # the human mitochondrial reference genome carry exactly these 37 HGNC
+    # Approved symbols (13 protein-coding, 22 tRNA, 2 rRNA). The other 19
+    # Approved mitochondrially-located MT- symbols are regulatory regions
+    # or lncRNA, not reference-genome genes, and are deliberately absent.
+    from tooluniverse.clingen_tool import _MTDNA_REFERENCE_GENOME_GENES
+
+    expected = {
+        # 13 protein-coding
+        "MT-ATP6", "MT-ATP8", "MT-CO1", "MT-CO2", "MT-CO3", "MT-CYB",
+        "MT-ND1", "MT-ND2", "MT-ND3", "MT-ND4", "MT-ND4L", "MT-ND5",
+        "MT-ND6",
+        # 2 rRNA
+        "MT-RNR1", "MT-RNR2",
+        # 22 tRNA
+        "MT-TA", "MT-TC", "MT-TD", "MT-TE", "MT-TF", "MT-TG", "MT-TH",
+        "MT-TI", "MT-TK", "MT-TL1", "MT-TL2", "MT-TM", "MT-TN", "MT-TP",
+        "MT-TQ", "MT-TR", "MT-TS1", "MT-TS2", "MT-TT", "MT-TV", "MT-TW",
+        "MT-TY",
+    }
+    assert _MTDNA_REFERENCE_GENOME_GENES == expected
+    assert len(_MTDNA_REFERENCE_GENOME_GENES) == 37
+
+
+def test_new_gn015_version_stays_candidate_without_registry_query(monkeypatch):
     # The mtDNA-only verification is pinned to index version 1.0; a new
     # version is unverified and must go through candidate verification --
-    # without spending an HGNC query on it.
+    # with no registry lookup spent on it.
     requested = _patch(monkeypatch, _index(_gn015_record(version="2.0")))
 
     result = _tool().run({"gene": "MYOC"})
@@ -1859,10 +1780,10 @@ def test_new_gn015_version_stays_candidate_without_hgnc_query(monkeypatch):
         "GN015"
     ]
     assert "scope_exclusions" not in result
-    assert not any("rest.genenames.org" in u for u in requested)
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_unverified_rule_set_stays_candidate_without_hgnc_query(monkeypatch):
+def test_unverified_rule_set_stays_candidate_without_registry_query(monkeypatch):
     requested = _patch(
         monkeypatch, _index(_gn015_record(rule_set_ids=("999999",)))
     )
@@ -1874,16 +1795,15 @@ def test_unverified_rule_set_stays_candidate_without_hgnc_query(monkeypatch):
         "GN015"
     ]
     assert "scope_exclusions" not in result
-    assert not any("rest.genenames.org" in u for u in requested)
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_gn015_exclusion_removes_only_the_pinned_rule_set(monkeypatch):
+def test_scope_gate_removes_only_the_pinned_rule_set(monkeypatch):
     # If other unresolved rule sets shared the record, only 135641398 is
-    # excluded; the candidate survives carrying the remaining ids.
-    _patch(
-        monkeypatch,
-        _index(_gn015_record(rule_set_ids=("135641398", "777"))),
-        hgnc_docs=[_hgnc_doc()],
+    # scoped out for a non-rCRS gene; the candidate survives carrying the
+    # remaining ids for the original candidate verification.
+    requested = _patch(
+        monkeypatch, _index(_gn015_record(rule_set_ids=("135641398", "777")))
     )
 
     result = _tool().run({"gene": "MYOC"})
@@ -1892,126 +1812,26 @@ def test_gn015_exclusion_removes_only_the_pinned_rule_set(monkeypatch):
     candidates = result["unresolved_scope_specs"]
     assert [c["specification_id"] for c in candidates] == ["GN015"]
     assert candidates[0]["rule_set_ids"] == ["777"]
-    assert result["scope_exclusions"][0]["excluded_rule_set_ids"] == [
-        "135641398"
-    ]
-
-
-def test_duplicate_pinned_candidates_query_hgnc_once(monkeypatch):
-    # One HGNC query per search for the pinned candidate, even if a
-    # (hypothetical, damaged) index listed the record twice.
-    requested = _patch(
-        monkeypatch,
-        _index(_gn015_record(), _gn015_record()),
-        hgnc_docs=[_hgnc_doc()],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert result["unresolved_scope_specs"] == []
-    assert len(result["scope_exclusions"]) == 1
-    assert sum("rest.genenames.org" in u for u in requested) == 1
-
-
-def test_nuclear_encoded_mitochondrial_gene_keeps_gn014_excludes_gn015(
-    monkeypatch,
-):
-    # POLG causes mitochondrial disease but is nuclear-encoded (live HGNC:
-    # 15q26.1), so GN014's explicit POLG rule set is found while GN015's
-    # mtDNA-only rule set is evidence-excluded.
-    polg = _index_record(
-        spec_id="GN014",
-        gene="POLG",
-        disease_label="MONDO:0044970",
-        rule_set_id="135641175",
-        version="1.0",
-    )
-    detail = _detail_payload(spec_id="GN014", rule_set_id="135641175")
-    detail["version"] = "1.0"
-    _patch(
-        monkeypatch,
-        _index(polg, _gn015_record()),
-        detail_payloads={"GN014": detail},
-        hgnc_docs=[
-            _hgnc_doc(symbol="POLG", location="15q26.1", hgnc_id="HGNC:9179")
-        ],
-    )
-
-    result = _tool().run({"gene": "POLG"})
-
-    assert result["status"] == "success"
-    assert [entry["specification_id"] for entry in result["data"]] == ["GN014"]
-    assert result["data"][0]["rule_sets"][0]["genes"][0]["symbol"] == "POLG"
-    assert result["unresolved_scope_specs"] == []
-    assert result["scope_exclusions"][0]["gene"] == "POLG"
-
-
-# --------------------------------------------------------------------------- #
-# 2026-11-20 fix-pass: disclosure and evidence-thickness edges surfaced by
-# the whole-branch review.
-# --------------------------------------------------------------------------- #
-def test_note_discloses_exclusion_on_generic_rules_branch(monkeypatch):
-    # A caller reading only `note` must see that a candidate was dropped
-    # on recorded evidence -- the valid-empty verdict is conditional on
-    # that exclusion, not unconditional.
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[
-            _hgnc_doc(symbol="TSC2", location="16p13.3", hgnc_id="HGNC:12363")
-        ],
-    )
-
-    result = _tool().run({"gene": "TSC2"})
-
-    assert result["status"] == "success"
-    assert result["unresolved_scope_specs"] == []
-    assert "scope_exclusions" in result["note"]
-    assert "No Released" in result["note"]
-
-
-def test_note_discloses_exclusion_alongside_match(monkeypatch):
-    requested_records = _patch(
-        monkeypatch,
-        _index(_index_record(), _gn015_record()),
-        detail_payloads={"GN019": _detail_payload()},
-        hgnc_docs=[_hgnc_doc()],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [entry["specification_id"] for entry in result["data"]] == ["GN019"]
-    assert result["unresolved_scope_specs"] == []
-    assert "scope_exclusions" in result["note"]
-    assert "Additionally, 1" in result["note"]
-    del requested_records
-
-
-def test_hgnc_numfound_disagrees_with_docs_keeps_candidate(monkeypatch):
-    # numFound says 2 records match the symbol but only one doc arrived:
-    # the approved record may not be unique, so no exclusion.
-    payload = _hgnc_payload([_hgnc_doc()])
-    payload["response"]["numFound"] = 2  # registry total disagrees with docs
-    index_payload = _index(_gn015_record())
-    monkeypatch.setattr(
-        "tooluniverse.clingen_tool.requests.get",
-        lambda url, **_k: _Response(
-            payload if "rest.genenames.org" in url else index_payload, url
-        ),
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
     assert "scope_exclusions" not in result
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_label_derived_version_does_not_gate_exclusion(monkeypatch):
+def test_duplicate_gn015_records_absent_for_nuclear_gene(monkeypatch):
+    # A (hypothetically) duplicated index record must not leak GN015 into
+    # a nuclear gene's output; each copy is scoped out independently.
+    requested = _patch(
+        monkeypatch, _index(_gn015_record(), _gn015_record())
+    )
+
+    result = _tool().run({"gene": "MYOC"})
+
+    assert result["status"] == "success"
+    assert result["unresolved_scope_specs"] == []
+    assert "scope_exclusions" not in result
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
+
+
+def test_label_derived_version_does_not_gate_scope(monkeypatch):
     # The pin is the index's explicit `version` field ("1.0"), not a
     # version inferred from prose in `label` -- inference from prose is
     # thinner evidence than the verified index fact.
@@ -2027,32 +1847,13 @@ def test_label_derived_version_does_not_gate_exclusion(monkeypatch):
         "GN015"
     ]
     assert "scope_exclusions" not in result
-    assert not any("rest.genenames.org" in u for u in requested)
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_approved_plus_withdrawn_mix_keeps_candidate(monkeypatch):
-    # The tightened gate requires integer numFound == 1: a response with
-    # one Approved and one Withdrawn doc reports numFound 2, which is not
-    # the single-record confirmation the exclusion demands.
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[
-            _hgnc_doc(status="Withdrawn", hgnc_id="HGNC:1"),
-            _hgnc_doc(),
-        ],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
-    assert "scope_exclusions" not in result
-
-
-def test_gn015_empty_rulesets_keeps_candidate_without_hgnc_query(monkeypatch):
+def test_gn015_empty_rulesets_keeps_candidate(monkeypatch):
+    # An empty ruleSets record carries no rule set id, so the pinned
+    # (GN015, "1.0", 135641398) fact cannot apply: the record keeps the
+    # generic candidate flow for any gene.
     record = _gn015_record()
     record["ruleSets"] = []
     requested = _patch(monkeypatch, _index(record))
@@ -2063,37 +1864,10 @@ def test_gn015_empty_rulesets_keeps_candidate_without_hgnc_query(monkeypatch):
     candidates = result["unresolved_scope_specs"]
     assert [c["specification_id"] for c in candidates] == ["GN015"]
     assert candidates[0]["rule_set_ids"] == []
-    assert not any("rest.genenames.org" in u for u in requested)
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
 
 
-def test_hgnc_request_sets_json_accept_header(monkeypatch):
-    requested = _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[_hgnc_doc()],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert result["unresolved_scope_specs"] == []
-    (url, headers), = requested.hgnc_calls
-    assert url == "https://rest.genenames.org/fetch/symbol/MYOC"
-    assert headers == {"Accept": "application/json"}
-
-
-# --------------------------------------------------------------------------- #
-# 2026-11-20 release tightening: the exclusion gates accept only exact
-# evidence shapes. The index version must BE the string "1.0" (a JSON
-# number 1.0 is not the verified index fact); HGNC must report integer
-# numFound == 1 (missing, non-integer, boolean or multi-record responses
-# keep the candidate); and the location must FULLY match a nuclear
-# chromosome arm or cytogenetic band of 1-22/X/Y -- trailing garbage,
-# translocation shorthand and out-of-range chromosomes are not nuclear
-# confirmations. scope_exclusions cites the fixed-version specification
-# page (GN015?version=1.0) and the HGNC record.
-# --------------------------------------------------------------------------- #
-def test_numeric_index_version_keeps_candidate_without_hgnc_query(monkeypatch):
+def test_numeric_index_version_stays_candidate(monkeypatch):
     # A JSON number 1.0 is not the string "1.0" the pin was verified
     # against; coercion through str() would smuggle it in.
     record = _gn015_record()
@@ -2107,94 +1881,4 @@ def test_numeric_index_version_keeps_candidate_without_hgnc_query(monkeypatch):
         "GN015"
     ]
     assert "scope_exclusions" not in result
-    assert not any("rest.genenames.org" in u for u in requested)
-
-
-def _raw_hgnc_route(monkeypatch, num_found):
-    payload = _hgnc_payload([_hgnc_doc()])
-    if num_found is _MISSING:
-        del payload["response"]["numFound"]
-    else:
-        payload["response"]["numFound"] = num_found
-    index_payload = _index(_gn015_record())
-    monkeypatch.setattr(
-        "tooluniverse.clingen_tool.requests.get",
-        lambda url, **_k: _Response(
-            payload if "rest.genenames.org" in url else index_payload, url
-        ),
-    )
-
-
-_MISSING = object()
-
-
-@pytest.mark.parametrize(
-    "num_found",
-    [_MISSING, "1", True, False, 0, 2, 1.0],
-    ids=["missing", "string", "bool-true", "bool-false", "zero", "two", "float"],
-)
-def test_hgnc_numfound_not_integer_one_keeps_candidate(monkeypatch, num_found):
-    _raw_hgnc_route(monkeypatch, num_found)
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
-    assert "scope_exclusions" not in result
-
-
-@pytest.mark.parametrize(
-    "location",
-    [
-        "23p45.6",      # chromosome 23 does not exist
-        "0p13.1",       # chromosome 0 does not exist
-        "1z24.3",       # z is not an arm
-        "q24.3",        # no chromosome
-        "1",            # arm missing
-        "1q24.3 extra", # trailing garbage after a valid band
-        "12;17",        # translocation shorthand
-        "1q24.3;17q",   # semicolon-joined
-    ],
-    ids=["chr23", "chr0", "arm-z", "no-chr", "no-arm", "trailing", "transloc",
-         "semicolon"],
-)
-def test_location_not_a_full_nuclear_match_keeps_candidate(monkeypatch, location):
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[_hgnc_doc(location=location)],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert [c["specification_id"] for c in result["unresolved_scope_specs"]] == [
-        "GN015"
-    ]
-    assert "scope_exclusions" not in result
-
-
-@pytest.mark.parametrize(
-    "location",
-    ["1p36.33-p36.32", "Xp22.33-Yp11.32", "Xq28", "1p", "22q13.2"],
-    ids=["same-chr-range", "cross-chr-range", "band", "arm-only", "chr22-band"],
-)
-def test_full_nuclear_forms_still_exclude(monkeypatch, location):
-    _patch(
-        monkeypatch,
-        _index(_gn015_record()),
-        hgnc_docs=[_hgnc_doc(location=location)],
-    )
-
-    result = _tool().run({"gene": "MYOC"})
-
-    assert result["status"] == "success"
-    assert result["unresolved_scope_specs"] == []
-    exclusion = result["scope_exclusions"][0]
-    assert exclusion["reason"].startswith("Rule set 135641398 of GN015")
-    assert (
-        "https://cspec.genome.network/cspec/ui/svi/doc/GN015?version=1.0"
-        in exclusion["sources"]
-    )
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]

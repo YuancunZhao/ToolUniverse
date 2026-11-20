@@ -1,7 +1,7 @@
 ---
-
 name: tooluniverse-acmg-variant-classification
-description: "Systematic ACMG/AMP germline small-variant classification with all 28 criteria (PVS1, PS1-4, PM1-6, PP1-5, BA1, BS1-4, BP1-7) under the applicable ClinGen CSpec/VCEP specification where one exists. Evaluates every criterion against raw facts, then calls the deterministic ACMG_calculate_classification calculator (Tavtigian 2020 point system) for the five-tier verdict (Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign) with cited evidence per criterion. Use for variant interpretation, VUS resolution, and pathogenicity assessment. Combines CSpec lookups, ClinVar, gnomAD, computational predictors, and gene-mechanism context."
+description: Systematic ACMG/AMP germline small-variant classification with all 28 criteria (PVS1, PS1-4, PM1-6, PP1-5, BA1, BS1-4, BP1-7) under the applicable ClinGen CSpec/VCEP specification where one exists. Evaluates every criterion against raw facts, then calls the deterministic ACMG_calculate_classification calculator (Tavtigian 2020 point system) for the five-tier verdict (Pathogenic / Likely Pathogenic / VUS / Likely Benign / Benign) with cited evidence per criterion. Use for variant interpretation, VUS resolution, and pathogenicity assessment. Combines CSpec lookups, ClinVar, gnomAD, computational predictors, and gene-mechanism context.
+disable-model-invocation: true
 ---
 
 # ACMG/AMP Germline Small-Variant Classification
@@ -30,16 +30,16 @@ representation), stop formal classification and carry it as a blocking issue.
 Call `ClinGen_search_cspec(gene="<HGNC symbol>")`.
 
 On every successful lookup, inspect both `data` and `unresolved_scope_specs`.
-Resolve every unresolved-scope candidate even when `data` already contains
-an explicit match. An explicit match does not resolve other candidates.
-Candidates the tool has already adjudicated need no re-adjudication: a
-`scope_exclusions` entry is an evidence-based exclusion the tool itself
-made (the pre-verified mitochondrial-DNA-only rule set GN015 v1.0 /
-135641398, removed only after HGNC confirmed the queried gene as a unique
-Approved record on a nuclear chromosome), recorded with its rationale and
-both source links -- rely on that recorded evidence instead of
-re-deriving it, and verify only the candidates that remain in
-`unresolved_scope_specs`.
+Verify the explicitly matched specifications FIRST, then handle the
+candidates that are genuinely unresolved. An explicit match does not resolve
+other candidates. Scope filtering the tool has already applied needs no
+re-derivation: the pre-verified mitochondrial-DNA-only rule set (GN015
+v1.0 / 135641398, limited by its official page to the 37 genes encoded by
+the human mitochondrial reference genome) is decided by exact local symbol
+matching with no registry request -- a query symbol on that 37-symbol list
+still surfaces GN015 as a candidate for official-material adjudication,
+while any other symbol (including nuclear-encoded mitochondrial-disease
+genes such as POLG) never sees GN015 in results, candidates or notes.
 For each candidate, read its `url` with `get_webpage_text_from_url` and
 decide from the official material whether it applies to this gene, disease,
 and inheritance mode: confirmed NOT applicable → exclude it and record the

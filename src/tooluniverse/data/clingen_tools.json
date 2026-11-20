@@ -345,7 +345,7 @@
   },
   {
     "name": "ClinGen_search_cspec",
-    "description": "Find current Released ClinGen CSpec (Sequence Variant Interpretation) specifications for a gene: VCEP-specific ACMG/AMP criterion applicability, per-strength thresholds and downgrades, specification ID and version, assertion-method reference, and rule-set-bound gene-disease-inheritance mapping. Specifications whose gene scope the index does not resolve (no genes listed) are preserved in unresolved_scope_specs as candidates with scope_reason gene_binding_unavailable -- the API not listing genes says nothing about applicability. One pre-verified candidate is adjudicated by the tool itself: GN015 index version string \"1.0\" rule set 135641398 (mitochondrial DNA genes only, per its official page) is removed from the unresolved candidate's rule_set_ids (a candidate carrying other unresolved rule sets remains) when HGNC returns integer numFound 1 with a symbol-exact Approved record whose location fully matches a nuclear chromosome arm or cytoband (1-22/X/Y), with the rationale and both source links recorded in scope_exclusions; mtDNA genes, non-matching or malformed locations, registry failures, numeric or new versions and any other unverified rule set keep the candidate flow. Distinguishes a valid empty result (no Released specification and no unresolved candidates -> use generic ACMG/AMP 2015 + ClinGen SVI rules) from lookup failure. The returned API JSON is a structured summary, not the full specification: read the official page (url field) with get_webpage_text_from_url before classifying. Essential first step of ACMG variant classification.",
+    "description": "Find current Released ClinGen CSpec (Sequence Variant Interpretation) specifications for a gene: VCEP-specific ACMG/AMP criterion applicability, per-strength thresholds and downgrades, specification ID and version, assertion-method reference, and rule-set-bound gene-disease-inheritance mapping. Specifications whose gene scope the index does not resolve (no genes listed) are preserved in unresolved_scope_specs as candidates with scope_reason gene_binding_unavailable -- the API not listing genes says nothing about applicability. One pre-verified candidate is scoped before candidates are generated: GN015 index version string \"1.0\" rule set 135641398 (limited by its official page to the 37 genes encoded by the human mitochondrial reference genome) is removed from the unresolved candidate's rule_set_ids (a candidate carrying other unresolved rule sets remains) whenever the queried symbol is NOT one of those 37 HGNC rCRS gene symbols (13 protein-coding, 22 tRNA, 2 rRNA), decided by exact local matching with no registry request; those 37 symbols still discover GN015 as a candidate needing official-material adjudication, while any other symbol -- including nuclear-encoded mitochondrial-disease genes such as POLG -- never sees GN015 in results, candidates or notes; numeric or new versions and any other unverified rule set keep the candidate flow. Distinguishes a valid empty result (no Released specification and no unresolved candidates -> use generic ACMG/AMP 2015 + ClinGen SVI rules) from lookup failure. The returned API JSON is a structured summary, not the full specification: read the official page (url field) with get_webpage_text_from_url before classifying. Essential first step of ACMG variant classification.",
     "type": "ClinGenTool",
     "parameter": {
       "type": "object",
@@ -488,42 +488,6 @@
               },
               "scope_reason": {
                 "type": "string"
-              }
-            }
-          }
-        },
-        "scope_exclusions": {
-          "type": "array",
-          "description": "Evidence-based exclusions of the pre-verified mtDNA-only unbound candidate (GN015 v1.0 rule set 135641398): removed from unresolved_scope_specs only when HGNC confirms a unique Approved record placing the queried gene on a nuclear chromosome. Each entry carries specification_id, version, excluded_rule_set_ids, gene, the hgnc record, reason, and the two source links. Absent when no exclusion was made.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "specification_id": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              },
-              "excluded_rule_set_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "gene": {
-                "type": "string"
-              },
-              "hgnc": {
-                "type": "object"
-              },
-              "reason": {
-                "type": "string"
-              },
-              "sources": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
               }
             }
           }
