@@ -1742,6 +1742,124 @@ def test_mtdna_scope_gate_is_exact_symbol_match(monkeypatch):
     ]
 
 
+def _gn015_detail():
+    """GN015 detail fixture consistent with the pinned index record: id,
+    version "1.0" and rule set 135641398 all match the frozen shape."""
+    detail = _detail_payload(spec_id="GN015", rule_set_id="135641398")
+    detail["version"] = "1.0"
+    return detail
+
+
+def _conflicting_gn015_record():
+    """Synthetic index damage: MYOC -- nuclear, outside the verified 37-symbol
+    rCRS scope -- explicitly bound inside GN015 v1.0's rule set 135641398,
+    contradicting the specification's official applicability."""
+    record = _gn015_record()
+    record["ruleSets"][0]["genes"] = _index_record(gene="MYOC")["ruleSets"][0][
+        "genes"
+    ]
+    return record
+
+
+@pytest.mark.parametrize(
+    "conflict_position",
+    [None, 0, 1],
+    ids=["conflict-only", "valid-gn019-first", "valid-gn019-last"],
+)
+def test_cspec_pinned_scope_conflict_is_index_error(
+    monkeypatch, conflict_position
+):
+    # An index that explicitly binds the queried gene to the verified
+    # mtDNA-only rule set contradicts the specification's official scope:
+    # that is index damage, decided BEFORE any detail request -- even when
+    # a legitimate GN019 match sits in the same index -- and reported as
+    # the bare error envelope, never as a valid hit or a valid empty.
+    conflict = _conflicting_gn015_record()
+    if conflict_position is None:
+        records = [conflict]
+    elif conflict_position == 1:
+        records = [_index_record(), conflict]
+    else:
+        records = [conflict, _index_record()]
+    requested = _patch(
+        monkeypatch,
+        _index(*records),
+        detail_payloads={"GN015": _gn015_detail(), "GN019": _detail_payload()},
+    )
+
+    result = _tool().run({"gene": " myoc "})
+
+    expected_position = 0 if conflict_position in (None, 0) else 1
+    where = (
+        f"index data[{expected_position}].ruleSets[0].genes[0]"
+    )
+    assert result["status"] == "error"
+    assert set(result.keys()) == {"status", "error"}
+    assert where in result["error"]
+    for token in ("MYOC", "GN015", "1.0", "135641398", "mtDNA"):
+        assert token in result["error"]
+    # Fails before ANY detail fetch despite the legitimate GN019 match.
+    assert requested == ["https://cspec.genome.network/cspec/api/svis"]
+
+
+def test_scope_conflict_is_scoped_to_the_queried_gene(monkeypatch):
+    # The same index carrying the MYOC<->GN015 contradiction does not
+    # affect a query for another gene: LDLR still returns GN013 normally.
+    gn013 = _index_record(
+        spec_id="GN013",
+        gene="LDLR",
+        disease_label="MONDO:0007750",
+        rule_set_id="135640393",
+        version="1.2",
+    )
+    gn013_detail = _detail_payload(spec_id="GN013", rule_set_id="135640393")
+    gn013_detail["version"] = "1.2"
+    requested = _patch(
+        monkeypatch,
+        _index(_conflicting_gn015_record(), gn013),
+        detail_payloads={"GN013": gn013_detail},
+    )
+
+    result = _tool().run({"gene": "LDLR"})
+
+    assert result["status"] == "success"
+    assert [entry["specification_id"] for entry in result["data"]] == ["GN013"]
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        "https://cspec.genome.network/cspec/api/"
+        "SequenceVariantInterpretation/id/GN013",
+    ]
+
+
+def test_scope_conflict_ignores_foreign_binding_for_mt_gene(monkeypatch):
+    # A wrong MYOC binding inside the verified rule set does not poison it
+    # for an in-scope gene: querying MT-ND1 keeps GN015's 135641398 as an
+    # explicit match, and the returned rule set binds only MT-ND1.
+    record = _gn015_record()
+    record["ruleSets"][0]["genes"] = [
+        _index_record(gene="MYOC")["ruleSets"][0]["genes"][0],
+        _index_record(gene="MT-ND1")["ruleSets"][0]["genes"][0],
+    ]
+    requested = _patch(
+        monkeypatch,
+        _index(record),
+        detail_payloads={"GN015": _gn015_detail()},
+    )
+
+    result = _tool().run({"gene": "MT-ND1"})
+
+    assert result["status"] == "success"
+    assert [entry["specification_id"] for entry in result["data"]] == ["GN015"]
+    rule_set = result["data"][0]["rule_sets"][0]
+    assert rule_set["rule_set_id"] == "135641398"
+    assert [bound["symbol"] for bound in rule_set["genes"]] == ["MT-ND1"]
+    assert requested == [
+        "https://cspec.genome.network/cspec/api/svis",
+        "https://cspec.genome.network/cspec/api/"
+        "SequenceVariantInterpretation/id/GN015",
+    ]
+
+
 def test_mtdna_reference_set_is_the_37_rcrs_gene_symbols():
     # Frozen live receipt (HGNC, verified 2026-11-20): the genes encoded by
     # the human mitochondrial reference genome carry exactly these 37 HGNC

@@ -765,7 +765,12 @@ class ClinGenTool(BaseTool):
         specification exists for this gene" -- the exact misreading this
         check exists to prevent. Non-Released records (draft, retired) are
         filtered by status as before and are NOT required to carry full
-        Released detail structure.
+        Released detail structure. Structural damage includes semantic
+        contradiction: an explicit binding of the queried gene to the
+        pre-verified mtDNA-only rule set (GN015 v1.0 / 135641398) when the
+        gene is outside the 37 rCRS symbols cannot be a valid match, so it
+        fails here -- before any detail request -- instead of surfacing as
+        a hit.
         """
         for position, record in enumerate(records):
             where = f"index data[{position}]"
@@ -814,6 +819,30 @@ class ClinGenTool(BaseTool):
                         # under other genes' entries simply does not match.
                         continue
                     g_where = f"{rs_where}.genes[{g_position}]"
+                    # An explicit binding that contradicts the verified
+                    # scope is index damage, not a match: the pre-verified
+                    # mtDNA-only rule set cannot cover a query symbol
+                    # outside the 37 rCRS genes, so an index binding it to
+                    # such a symbol fails the lookup before any detail
+                    # request -- never surfacing as a valid hit.
+                    if ClinGenTool._cspec_id(
+                        rule_set.get("@id")
+                    ) == _MTDNA_ONLY_SCOPE["rule_set_id"] and (
+                        ClinGenTool._cspec_pinned_mtdna_rule_set_inapplicable(
+                            ClinGenTool._cspec_id(spec_ref),
+                            record.get("version"),
+                            gene,
+                        )
+                    ):
+                        return (
+                            f"{g_where} explicitly binds {gene} to rule set "
+                            f"{_MTDNA_ONLY_SCOPE['rule_set_id']} of "
+                            f"specification {_MTDNA_ONLY_SCOPE['specification_id']} "
+                            f"version {_MTDNA_ONLY_SCOPE['version']}, but that "
+                            "rule set's verified scope is limited to the "
+                            "mtDNA genes of the human mitochondrial "
+                            f"reference genome and does not include {gene}"
+                        )
                     binding_error = ClinGenTool._cspec_binding_structure_error(
                         gene_entry, g_where
                     )
